@@ -30,7 +30,8 @@ Mandatory boundaries:
 
 ## 1. Establish the Assignment, Rules, and Baseline
 
-1. If the AP ID is ambiguous, use the clarification tool to ask. Do not select
+1. If the AP ID remains ambiguous after checking the assignment and its
+   references, use the clarification procedure in section 5. Do not select
    an AP yourself or infer execution order solely from its number.
 2. Read applicable `AGENTS.md` files, documentation rules, the selected AP,
    its prerequisites, referenced decisions, and handovers.
@@ -112,6 +113,49 @@ the AP execution record links to it. Do not repeat the same content in all
 three places.
 
 ## 5. Consultation and Change Gate
+
+### Resolve Context Before Asking
+
+Before asking for input, check the selected AP and its relevant referenced
+sources, including existing decisions and approvals. Do not ask questions whose
+answers are already explicit or clearly implicit in that context. Apply the
+established answer and reference its source; do not reopen a settled decision.
+A clearly implied answer does not substitute for a required explicit approval.
+
+Ask only when a genuine unresolved problem requires user or accountable-owner
+input, such as a missing decision, conflicting authoritative sources, or missing
+approval. Do not ask the user to perform checks the agent can carry out itself.
+If the sources conflict or support multiple materially different interpretations,
+do not pretend the answer is clearly implied.
+
+### Structure Necessary Questions
+
+Use the clarification tool to present structured questions:
+
+- Each question must address exactly one topic or decision, with its own answer
+  field. Never bundle independently answerable topics or decisions into one
+  question, field, or combined option.
+- Combine aspects only when they are so tightly coupled that separating them
+  would make the answer less meaningful. A shared AP, artifact, or approval
+  request alone does not justify combining independent decisions.
+- For each question, identify the unresolved point, relevant source references,
+  why input is needed, and which work depends on the answer.
+- Always provide enough context with each question to make the decision, wherever
+  possible, without consulting other documents. Include the relevant current
+  state, constraints, options, and consequences or trade-offs; do not assume the
+  user remembers earlier discussion or knows the referenced IDs.
+- If the necessary context is too extensive to include with the question,
+  summarize the decision-relevant facts inline and provide direct links to the
+  specific source sections containing the remaining context. Bare IDs, unlinked
+  file names, or a generic instruction to read the documentation are insufficient.
+- Provide focused options and a recommendation with rationale where useful;
+  allow another answer.
+- Independent questions may share one structured form, but must remain separate
+  questions and answer fields. Ask dependent follow-up questions only after the
+  prerequisite answer is known.
+- Record the resolution or approval at its canonical location and link it from
+  the execution record. If input is missing, block only the affected work and
+  continue independent approved tasks; never invent an answer or infer consent.
 
 ### Earlier Results or Decisions
 
