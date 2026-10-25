@@ -1,0 +1,60 @@
+# C-06 Identity, Login, and Authorization
+
+[Contract index](../domain-contracts.md) | [Shared conventions](shared-conventions.md) | [Reference cases](reference-cases.md)
+
+Referenced contracts (follow only when relevant): [C-07](c-07-query-live.md).
+
+**Version/status:** 0.1-draft. **Owner:** DOM-05. **Parties:** every protected administrative/query/Gateway/live/worker path. OIDC/SCIM remain extension boundaries, not accelerated Delivery.
+
+| Draft interface | Input -> result |
+| --- | --- |
+| `AuthenticateLocal` / `ResolveSession` | Credentials/session proof, context -> internal Principal or redacted rejection |
+| `ResolveAccessKey` | Key proof -> Principal plus restricting key capabilities; never exceeds owner |
+| `AuthorizeAction` | Principal, operation, concrete target, current domain state -> decision with internally explainable provenance |
+| `BuildAuthorizedReadScope` / `ProjectFields` | Principal, query/Transmission target context, current revisions -> safe query predicate and permitted fields |
+| `ChangeGrants` / `RevokeSession` / `RevokeKey` | Administrative Principal, target, expected revision -> new state and required invalidation |
+| `RequestRecovery` / `IssueRecoveryProof` / `ConsumeRecoveryProof` | Authorized request/issuance/username plus proof -> request status or controlled password-setting path |
+| `LocalRescue` | Local administrative access -> explicit recovery action; no silently replaced account |
+
+**Defined:** Stable internal Principal separate from credentials. Direct/multiple User group grants are additive; read scope A and write scope B remain distinct. API keys can only restrict further. Deleting a restricting scope object never makes a grant unrestricted. No default access for new Principals/guest; guest cannot be deleted; explicitly warn about public write grants.
+
+Evaluate Network/Unit/Unit collection/account scopes and field rights centrally; search AND is separate. Current published target resolutions and Message contributions store Unit directly, including corrected history; pending/stale values do not authorize. Matching email establishes neither identity nor account linkage. New plugin/processing fields are not implicitly readable. Authorization age uses first permitted Unit-appearance evidence as specified below, consistently for details/Delivery/feed.
+
+**Credentials/recovery:** Local password only with permission; setting/changing/recovery do not bypass its exclusion. Changes check old and confirmed new password. Administrators neither know nor set a user's new password; use short-lived one-time proof plus correct username. Do not disclose unknown accounts. Without secure Delivery, recovery creates a request. Only the authorized owner creates personal keys; technical-account keys require target permission. Rotation/revocation/last use remain traceable.
+
+**Consistency/failures:** All output paths check current authoritative state. SQL predicates and field projection share AuthZ semantics; no filtering after already unauthorized pagination. Login/search/sending throttling must not disproportionately block shared locations solely by shared IP. Audit without secrets, rejection without others' details. Display-language selection changes no authorization outcomes.
+
+## AP-02 Grants, Actions and Fields
+
+Grant schema: `subject` (Principal or flat User group), `actions` (explicit nonempty list), one `scope` (kind plus references or explicit all), `fields` for reads, optional `maxAgeSeconds` (absent = unlimited), stable ID/revision. A grant is an additive allow, not an ordered deny language. No mandatory compound/intersection scopes or Organization-specific grant dimension in v1. Organizations remain a correlated query filter; Unit/Unit collection scopes provide the required manageable access.
+
+| Action catalog | Applicable scope / restriction |
+| --- | --- |
+| `message.read`, `message.detail`, `without-unit.read` | all/Network/Unit/Unit collection, evaluated on a concrete Transmission target/Message contribution; without-Unit only all/Network. Detail additionally needs read. |
+| `unit.read/create/update/delete`, `organization.read/create/update/delete`, `unit-collection.read/create/update/delete`, `address-rule.read/create/update/delete`, `suppression.read/create/update/delete` | Unit or Network where meaningful; Organization/Unit collection mutations require all or their explicit manageable member scope and all affected uses. No delete through hidden cross-Network use. |
+| `gateway.read/create/update/delete`, `network.read/create/update/delete`, `grouping.configure` | Network/all; Grouping configuration is installation-wide all only, separately audited. Gateway submits only through its own assigned Network credential. |
+| `account.read/create/update/delete`, `account.delete-own`, `grant.manage` | Account/all; own profile/deletion does not imply managing others' grants. A permission manager can delegate only explicitly granted delegable actions/scopes; no privilege creation through Grant editing. |
+| `password.local`, `recovery.request`, `recovery.issue`, `recovery.consume`, `session.manage-own` | Account/all as applicable; consume additionally proves username/proof. Own-session management cannot revoke other accounts. |
+| `key.create-own`, `key.manage-own`, `key.manage-technical` | Own Account; explicitly scoped technical Account/all technical accounts for technical management. No creating another human's personal key. |
+| `subscription.manage-own`, `subscription.manage-global`, `delivery.read/retry/redeliver` | Own Account or delegated technical Account; affected data/targets still require current permitted scope. Global administration is not global data read. |
+| `rule.preview/activate/reprocess`, `presentation.manage`, `notice.manage` | Network/Unit/all for applicable processing scope; installation notices all. Saving drafts uses `rule.create/update`; reading/removing uses `rule.read/delete`. |
+| `plugin.install`, `plugin.configure`, `plugin.internal-read`, `audit.read`, `operations.manage` | Install is local Operator authority only; configuration all or delegated instance; internal read additionally declares SDK operation/Field sets and requires an effective data grant. Audit Account/Network/all where meaningful; operations all. |
+
+Field sets: `payload` (readable original/representative display), `address` (Address/Function), `unit` (Units/Organization/collection labels), `gateway` (Gateway/Transmission context/instants/markers), `quality`, `derived` (explicit Processing-result schemas) and named `extension.<plugin-id>.<field>`. Canonical comparison values are not a substitute GUI text. Message ID/View time are minimal result metadata; internal Message time is not automatically disclosed. Grant union remains within matching target/contribution context, not unrelated evidence. Hidden co-targets need their own rights; Message access does not expose all receipts.
+
+An Access key contains allowed actions/scopes/fields and optional shorter age/lifetime restrictions; effective rights are owner-rights intersected with the key restriction. Its usage is attributed to the owner plus nonsecret key ID. No key body or custom scope grants rights the owner lacks. New Principals/Guest start with no grants; deletion of scope objects disables affected grants, never removes their restriction.
+
+**Age:** Optional; default unlimited. Among matching read grants choose the largest permitted age, unlimited winning; intersect a restricting key age. Evaluate the first Unit appearance within its permitted scope using the minimum supporting Contribution age anchor (C-07), not global Message time or latest reception. `now - anchor <= maxAgeSeconds` is inclusive. Apply the same rule to feed, details, search and Delivery projections; no field-level clocks. A later repeat for the same Unit does not renew eligibility; a genuinely new Unit appearance has its own age without granting old/hidden evidence. No mandatory per-user age configuration/UI.
+
+## AP-02 Credentials and Recovery
+
+- Passwords: Argon2id with random per-password salt and encoded algorithm/parameters; minimum 12 Unicode scalars, maximum 1024 UTF-8 bytes, no truncation/normalization/composition rules. Initial candidate floor: 19 MiB memory, 2 iterations, parallelism 1, never silently downgraded; AP-03 must validate constrained-host cost/rate limits and AP-04 pins an approved configuration. Increase/rehash on valid login under versioned configuration.
+- Session/key/Recovery-proof secrets: cryptographically random at least 256 bits, hashes only in authoritative storage, one-time secret display. Session cookies Secure/HttpOnly/SameSite=Lax, host-only; TLS mandatory for public credential transport. Cookie writes require CSRF token plus Origin validation; bearer keys use Authorization header, never URL. Sessions expire after 30 days absolute or 7 days inactivity, configurable shorter; password change invalidates other Sessions and outstanding Recovery proofs.
+- Common recovery flow: `RequestRecovery` creates the account-bound Recovery request with a uniform public accepted response, regardless of account existence. `IssueRecoveryProof` follows either authorized manager approval (manager passes the token to the User) or automatic dispatch through an admin-designated recovery-capable integration to a previously verified account-bound contact. Both paths use the same proof record, 30-minute lifetime, username requirement, one-time atomic consumption and local-password capability check. Never log the proof or expose it through ordinary Subscriptions/Delivery history.
+- A trusted email integration may supply recovery initially. SMS/push is possible only through an actually available suitable integration, not an AP-02 promise to implement extra targets. Missing/failed automatic transport leaves an explicit pending request for authorized manager handling; transport uncertainty is not proof that no token was sent. Local administrative rescue always remains possible, explicitly scoped/audited, issuing a short-lived recovery path rather than silently replacing an account or granting permanent bypass.
+- Access key lifetime: instance default 90 days, operator-configurable including unlimited; explicit requested expiry shown before issuance. Self-rotation allowed within owner rights, new secret displayed once; optional old/new overlap at most 24 h, then old key revoked. Revocation/password policy changes immediately increment access revision. Store only nonsecret ID, owner, restrictions, created/expiry/revocation and last-use times.
+- Proof consumption marks a nonsecret consumed receipt until expiry plus 24 h, then removes it; passwords/proof secrets never survive account deletion. Revoked credential receipts need no reusable bearer material.
+- Default throttles (configurable, not capacity promises): login 10 attempts/minute per normalized account key plus 300/minute instance; recovery 3/hour per account plus 60/hour instance; proof consumption 10/minute per request; search 60/minute per Principal/key; outbound starts 60/minute per Subscriber and configured target/provider rate. Use bounded buckets and generic errors; unknown-account buckets behave the same. Shared IP is only a secondary abuse signal, never the sole identity. `RATE_LIMITED` includes safe retry delay.
+
+**Revocation:** Commit revocation plus access-revision change and durable invalidation together. Query/page/stream/attempt checks use current primary authority; no unconditional cache TTL authorizes private output. A response/stream frame authorized and handed off before revocation may arrive later; no byte recall or absolute distributed timing guarantee. New protected work after observing the committed revision must not reuse old rights. AP-03 validates the concrete short-transaction/sending boundary and authority-loss behavior.
+

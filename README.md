@@ -1,6 +1,6 @@
 # GoPager
 
-GoPager accepts alarm telegrams with traceable reception records, assigns recipients to units, groups matching receptions technically, and provides authorized search, live views, and explicitly configured notifications.
+GoPager preserves original Transmissions and exact reported Addresses, groups compatible Payloads into Messages, and stores current Address-rule-based Unit resolution on each target. Shared, rebuildable Message contributions provide first-observed Unit times without duplicating user entries for repeated Gateway receptions. A permitted Representative Transmission supplies the displayed Payload; partial originals remain intact. Search, live views, and Delivery use explicit permissions.
 
 The new product is designed as a modular monolith in Go. This repository separates it from the PagerMon codebase. It currently contains the documentary specification, not a runnable application.
 

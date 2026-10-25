@@ -1,6 +1,6 @@
 # GoPager Target Architecture and Responsibilities
 
-Date: 2026-10-24. Architecture planning baseline, not an implementation description. Product decisions and approval status belong to the [plan](authoritative-plan.md); interfaces belong to the [contract catalog](domain-contracts.md).
+Date: 2026-10-25. Architecture planning baseline, including the user-approved AP-02 evidence/target-resolution/contribution model (D-29), not an implementation description. Product decisions and approval status belong to the [plan](authoritative-plan.md); interfaces belong to the [contract catalog](domain-contracts.md).
 
 ## Technology Decisions
 
@@ -15,7 +15,7 @@ Date: 2026-10-24. Architecture planning baseline, not an implementation descript
 | TECH-05 | Local SQLite file for Lite; PostgreSQL for Full | Relational transactions, shared logical schema with explicit dialect/driver boundaries. No mandatory universal ORM or separate domain data models. | SQLite driver/build size/CGO trade-off, migrations, backend parity. |
 | TECH-06 | PostgreSQL primary as Full write authority | Stateless API/worker roles; established external database HA with fencing instead of custom consensus. Replicas initially serve HA/recovery; only explicitly eventual reads. | Concrete HA operations, failover/lease/commit uncertainty. |
 | TECH-07 | Transactional outbox/job tables in the primary database | Commit domain state and Domain event together; Full claims/leases work, Lite processes it in-process. Wake-up signals are optimization, not truth. No initial mandatory broker. | Claim/fencing, restart, receipt retention, finite retries. |
-| TECH-08 | Language-neutral versioned Wasm SDK, embedded Wazero host | Separate operator-provided artifacts inside the Lite process, no native Go plugin ABI or mandatory plugin processes. No general filesystem or network access; controlled target-specific host functions. | ABI, runtime/toolchain versions, limits/cancellation, secrets/I/O, SDK lifecycle. No guarantee for arbitrary implementation languages. |
+| TECH-08 | Language-neutral versioned Wasm SDK, embedded Wazero host | Prebuilt operator-provided artifacts inside Lite; trusted plugins may receive explicitly approved network/filesystem/command capabilities (D-24), not implicit unrestricted Core-data access. No native Go plugin ABI or mandatory plugin processes; optional approved subprocesses are a documented exception. Not a hostile-code sandbox. | ABI, runtime/toolchain versions, limits/cancellation, secrets/I/O and lifecycle under C-10. No arbitrary-language/library guarantee. |
 | TECH-09 | Database-integrated search baseline | No Lite search daemon. SQLite FTS5 trigram and PostgreSQL `pg_trgm` are candidates, not an already-correct search implementation. | Unicode/case folding/accents/short terms and authorized query parity before index selection. |
 | TECH-10 | Central AuthZ core in Go | No baseline external policy service; one semantic owner for grants, field projection, and current Delivery authorization. | Safe SQL predicates/projections on both backends and revocation during SSE/jobs. |
 
@@ -69,20 +69,20 @@ This decomposition is a documented architecture draft implementing the confirmed
 | Domain / owner role | Owns and writes | Provides / consumes | Not responsible for |
 | --- | --- | --- | --- |
 | DOM-01 Transmission and Gateways | Gateways, authorized Network contexts, Network/Protocol mapping, heartbeats/state, submission receipts, immutable Transmissions and Transmission targets | C-01; uses C-02 Protocol description and C-06 AuthZ, provides evidence to C-03/C-05/C-08 | Unit master data, grant rules, Delivery heuristics; never silently replace unauthorized Network declarations |
-| DOM-02 Protocol model and Grouping | Versioned Payload identity definitions, Grouping rules/configuration, Messages and Message membership as a derived projection | C-02/C-03; reads DOM-01 evidence, publishes Message Domain events through C-08 | Changing original Transmission, incident management, Gateway/Network-bound Payload identity |
+| DOM-02 Protocol model and Grouping | Payload identity definitions, Grouping policy, Messages/internal Message time, exact membership with future comparison extension boundary (D-30), representative preference and aliases | C-02/C-03; coordinates contribution coalescing on merge with DOM-04 and publishes facts through C-08 | Changing original Transmission, Unit-based Grouping, incident management, Gateway/Network-bound Payload identity |
 | DOM-03 Units and domain structure | Units, organizations, Unit collections/memberships, templates, presentation defaults/overrides, Unit-specific Function meanings | C-04; uses C-06, triggers affected corrections through C-05 | Historical versioning of general colors/icons, User groups, assignment evidence |
-| DOM-04 Assignment and correction | Temporal Address rules, conflict checks, versioned assignments, rematch jobs/progress, suppression rules and derived Transmission target state | C-05; reads DOM-01/DOM-03, uses C-02/C-06/C-08 | New Transmissions/Messages during rematching, global Payload masking, separate grant semantics |
+| DOM-04 Assignment and correction | Temporal Address rules, current target Network/Unit/matched-rule resolution, Message contributions with direct Unit/first times/age anchors, Contribution supports, rematch work and suppression | C-05; derives from DOM-01 evidence/current rules, uses C-02/C-06/C-08; sole writer of target resolution and contribution read model | New Transmissions/Messages during rule Rematching, editing original Payload, global Payload masking, mandatory immutable rule histories, separate grant semantics |
 | DOM-05 Identity and access | Internal Principals, credentials/identity bindings, sessions, API-key restrictions, User groups/memberships, grants, recovery/rescue proofs; central authorization/field projection semantics | C-06/C-13; used by every protected operation, coordinates account deletion with C-09 | Automatic email-based account linking, grants through new plugin fields, UI-based authorization |
-| DOM-06 Search, feed, and details | Derived search/read projections and live/cursor state, not a second domain truth | C-07; consumes DOM-01..DOM-05 and their revisions, uses C-06 for counts/facets/SSE too | Separate permission rules, writing assignments/master data, sending unauthorized unprojected Domain events to browsers |
+| DOM-06 Search, feed, and details | Query-derived Unit appearances/View time, authorized representative selection, search/read projections and live/cursor state | C-07; normal reads use Message contributions/direct Unit, not rule-version joins or reception-history scans; diagnostics can read supports/evidence | Separate permissions, independently editing contribution truth, writing target resolutions/master data, private raw Domain event feeds |
 | DOM-07 Domain events and Delivery | Domain event records/outbox, subscriptions, Delivery targets, target/Unit Delivery settings, Delivery jobs and attempts | C-08/C-09; uses C-06/C-07 and C-10 plugin capabilities; Gateway/Message/correction Domain events as triggers | Defining another module's domain state, blanket once-per-Message Delivery, external exactly-once |
-| DOM-08 Processing and presentation | Bounded rule definitions, active versions, previews/errors, derived structured results, presentation configuration | C-11; reads permitted original Payload/projections, may offer explicit reactions through C-08 | Overwriting original Payload identity, arbitrary scripts/loops, granting permissions |
+| DOM-08 Processing and presentation | Bounded Workflows/active versions, previews/errors, source-bound Processing results, presentation configuration and ingest publication barrier | C-11; trusted installed steps follow C-10; level/other fields feed explicit Subscription predicates through C-08/C-09 | Overwriting original Payload identity, arbitrary inline scripts/unbounded loops, granting permissions |
 
 ### Supporting Responsibilities
 
 | Role | Exclusive technical area | Boundary |
 | --- | --- | --- |
 | Integration | Composition root, use-case coordination, shared transaction/revision boundaries, contract versioning, OpenAPI/Domain event integration | No second domain/AuthZ truth; other modules change shared boundaries only by agreement. |
-| Persistence and operations | Dialect adapters, migration execution/order, process roles, infrastructure claims/leases, backup/restore, status/shutdown | Schema object definitions belong to their domain owner; do not independently rewrite another owner's migrations. C-12. |
+| Persistence and operations | Dialect adapters, migration execution/order, process roles, infrastructure claims/leases, status/shutdown and profile transition | Schema objects belong to their domain owner; do not independently rewrite another owner's migrations. Manual Operator Backup/Restore is outside application responsibilities (C-12/D-31). |
 | Plugin host | Wazero adapter, artifact/compatibility checks, capability binding, limits/cancellation, secret transport | Executes only Delivery jobs authorized by DOM-07; does not configure another domain's permissions. C-10. |
 | Frontend | Vue views, navigation/editors/accessibility, client state, English text catalog and locale-aware formatting | Uses C-07/C-11 and administrative APIs; hidden controls are not authorization; no direct SQL/host Functions. |
 
@@ -100,29 +100,34 @@ This decomposition is a documented architecture draft implementing the confirmed
 
 | Use case | Leading coordination | Domain writes / consistency obligation |
 | --- | --- | --- |
-| Accept Transmission | Integration + DOM-01 | Authorize Gateway/Network, ensure idempotency, record Transmission; Message/assignment derivation and Domain event recording have their own owners. Whether derivation belongs to the first commit or is explicitly deferred remains open in C-01/C-03. Never falsely acknowledge 'fully processed'. |
-| Change Address rule / delete Unit | DOM-04 or DOM-03 with integration | Reliably schedule affected rematching and protect unsafe old assignments; publish a consistent new revision. No dangling visible Unit references. The concrete revision mechanism is P-12, not already implemented. |
+| Accept Transmission | Integration + DOM-01 | Store original Payload/targets/receipt, determine single Message, store target resolutions, upsert shared Message contributions and Contribution supports, maintain first times/representative preference and facts. Ten technical target Unit values do not mean ten user assignments. Intake may be acknowledged pending; GUI/Delivery waits for current resolution/required Parsing. |
+| Change Address rule / delete Unit | DOM-04 or DOM-03 with integration | Invalidate affected scope, rematch original Addresses at Observation times, update target resolutions and redistribute supports/rebuild contributions under checked publication. Recompute first times/age anchors without changing membership or original evidence. Rule edit history is not domain validity. |
 | Delete organization | DOM-03 | Determine effective inherited values, preserve them for Units, detach organization; filters/grants follow the new state. No Unit rematch. |
-| Revoke rights / delete account | DOM-05 with DOM-06/DOM-07 | Sessions/keys/subscriptions and live/Delivery decisions use current state. Anonymize historical audit/Delivery fields under C-13; concrete deletion schema remains open. |
+| Revoke rights / delete account | DOM-05 with DOM-06/DOM-07 | Immediately block access/starts; durable domain cleanup follows C-13's field matrix. Pseudonymize historical actor references with distinct non-authenticating Deleted Principal IDs, not an anonymity claim. Failed cleanup never restores access. |
 | Attempt Delivery | DOM-07 + plugin host | Check current Principal, subscription, data/field permissions, and age rules; record attempt/I/O/uncertain outcome separately. C-09 defines the exact authorization/execution boundary. |
-| Apply retention | Operations + respective data owners + integration | Configured limits only, referential integrity, no resurrection through retries/replay. Transmission evidence is immutable, not necessarily retained forever. |
+| Apply retention | Operations + respective data owners + integration | Delete whole Messages by internal Message time/count, with contributions/supports/target resolutions/evidence, not View time. Preserve bounded independent Delivery work where dependencies permit; C-01 retains its accepted post-retention retry exception. |
 
 ## Logical Relationship Model
 
-Draft, not a physical SQL schema. IDs, Protocol-specific cardinalities, data types/constraints, and indexes are frozen with C-01..C-07. EAS target areas are not assumed to be pager Addresses or Units without validation.
+Confirmed logical structure (D-29), not a frozen SQL schema or complete field inventory. Vocabulary is owned by the [glossary](glossary.md). Owner contracts elaborate concrete fields, revision placement, constraints and indexes before AP-04 freeze; no migration or product code is created here. Exact EAS location-code Address rules are in C-05.
 
 ```mermaid
 flowchart TD
     Gateway --> Transmission
-    Network --> Transmission
-    Transmission --> TransmissionTarget
-    Transmission --> MessageMembership
-    MessageMembership --> Message
-    Message --> MessageTarget
-    TransmissionTarget --> MessageTarget
-    TransmissionTarget --> Assignment
-    AddressRule --> Assignment
-    Assignment --> Unit
+    Transmission -->|current membership| Message
+    Transmission -->|originals and derived resolution| TransmissionTarget
+    Message -->|preferred original reference| RepresentativeTransmission[Representative Transmission]
+    RepresentativeTransmission --> Transmission
+    Message --> MessageContribution[Message contribution]
+    TransmissionTarget -->|current derived Unit| Unit
+    TransmissionTarget -->|matched filter| AddressRule[Address rule]
+    AddressRule --> Unit
+    Network --> AddressRule
+    MessageContribution -->|stored Unit| Unit
+    Network --> MessageContribution
+    MessageContribution --> ContributionSupport[Contribution support]
+    ContributionSupport --> Transmission
+    ContributionSupport -->|absent only for targetless input| TransmissionTarget
     Unit --> Organization
     Unit --> UnitCollectionMembership
     UnitCollectionMembership --> UnitCollection
@@ -139,7 +144,30 @@ flowchart TD
     DeliveryJob --> DeliveryAttempt
 ```
 
-`Network -> Transmission` denotes a resolved reference, not a requirement to store unknown Networks as an empty name. Database normalization remains open. An assignment connects a specific observed Transmission target to a Unit under a revision; Message-wide sets cannot replace this relationship.
+The representative box denotes a role/reference to an existing Transmission, not another stored entity.
+
+| Logical record | Stored information / source of truth | Mutability and owner |
+| --- | --- | --- |
+| Transmission | Gateway/Submission, Protocol/declaration, original Payload including partial/deviating variants, original Observation time/offset, Acceptance time, quality/incomplete context; current Message membership and comparison/decision context | DOM-01 originals immutable; DOM-02 owns derived membership/comparison. Original Payload may repeat per reception; lossless physical deduplication is optional. |
+| Transmission target | Exact original Address/Function; stored current Network, direct Unit, matched Address-rule reference and explicit resolution/suppression state | DOM-01 owns original target; DOM-04 alone replaces derived resolution. Unit repetition across Gateways is deliberate technical denormalization, not repeated user assignment. |
+| Message | Logical summary, representative preference, publication/change state and existing origin/alias information | DOM-02; no second original Payload copy or MessageGroup parent required. Units do not determine Grouping. |
+| Message contribution | Message/Network/Protocol/Address/Function/direct Unit or explicit status, first usable time and capped age anchor | DOM-04 rebuildable read model; identity excludes Gateway, rule version and validity segment. Original targets retain each temporal evaluation. |
+| Contribution support | References to contribution, Transmission and original target; no target only for targetless input | DOM-04; at most one current support per usable target, matching Transmission ownership and common Message. No copied technical evidence. |
+| Address rule | Existing temporal selector/mode/Network/Unit definition and edit concurrency state | DOM-04; current rules plus original times enable Rematching. Configuration audit explains edits; immutable version entities/exact old-evaluation replay are not required. |
+
+No contribution is independently edited. Supplied originals -> current target resolution -> shared contribution is the derivation direction. Suppression invalidates/rebuilds affected supports and minima without deleting originals. A multi-target Transmission remains one member of one Message, supports several contributions, and is never split by Unit. Multiple rules/validity segments may yield one contribution if their visible context is identical; different Addresses/Units/Networks do not collapse.
+
+**Master-data preservation:** Gateway, Network and Unit nodes, including the earlier illustrative field diagram, are stubs only. Preserve all C-01/C-04/C-06 requirements: names/configuration, Gateway adapter identity and allowed/default Networks, Network/Protocol context, contact/state/heartbeat/termination, authorization, organizations, multiple Unit collections, colors/icons, templates, fieldwise inherited defaults/overrides, Function meanings and Extension fields. Neither this diagram nor its short table replaces those master-data contracts.
+
+**Displayed Payload:** Message stores a preferred original reference, not a synthesized text. Prefer readable, non-suppressed, exact members not marked incomplete; tie-break by earliest Acceptance time then ascending stable ID. Otherwise show a deterministically selected, visibly qualified fallback. Apply the same rule within each authorized view; hidden fuller evidence cannot supply its text or Processing results. Publish a better representative only after required Processing; this changes content, not first Unit times. A readable variant match must be identified in details if the representative differs.
+
+### Time and Read Paths
+
+- Maintain Contribution time/age anchor; later repeats do not move the first time. Store Message time separately as internal origin/retention key, not a universally readable timestamp.
+- User path: direct contribution Unit/Network/Protocol -> permitted contributions -> query-derived Unit appearances -> time/age predicates -> readable Payload/representative -> one row per Message. View time is the minimum surviving appearance time; sort/cursor use it. Without Unit filter use the same algorithm. No routine rule-version join or full reception-history scan.
+- With Unit A first at 12:00 and Unit B first at 12:05, the unfiltered 12:04..12:06 view shows that Message at 12:05; the Unit-A view for that interval excludes it. An unrestricted view of both shows it once at 12:00. New Gateway copies do not change any of those first times.
+- Administrative reception diagnostics alone use Gateway filters/individual receipt times. Suppression rebuilds affected supports/minima; restricted evidence/age permissions may still require scoped support evaluation. Never expose a hidden stored minimum. Targetless contributions use Network/Protocol context without invented Address/Unit.
+- Direct Unit columns on targets/contributions are approved denormalization, not an optional unmeasured schema experiment. Concrete indexes, SQL layout, revision fields and backend query plans remain owner-package work validated in AP-03. Additional aggregate layers require a demonstrated need.
 
 ## Non-Goals and Boundaries
 
