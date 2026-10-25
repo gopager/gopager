@@ -4,6 +4,8 @@
 
 Referenced contracts (follow only when relevant): [C-07](c-07-query-live.md).
 
+**Traceability:** [REQ-051..060](../requirements-catalog.md#f-access-rights-and-guests), [REQ-061/063..070](../requirements-catalog.md#g-accounts-and-login), [REQ-071..079](../requirements-catalog.md#h-recovery-and-access-keys), [REQ-105/107..110](../requirements-catalog.md#k-installed-web-app-and-security-behavior). Issue references: [P-09/P-10/P-14/P-17](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
+
 **Version/status:** 0.1-draft. **Owner:** DOM-05. **Parties:** every protected administrative/query/Gateway/live/worker path. OIDC/SCIM remain extension boundaries, not accelerated Delivery.
 
 | Draft interface | Input -> result |
@@ -27,6 +29,8 @@ Evaluate Network/Unit/Unit collection/account scopes and field rights centrally;
 ## AP-02 Grants, Actions and Fields
 
 Grant schema: `subject` (Principal or flat User group), `actions` (explicit nonempty list), one `scope` (kind plus references or explicit all), `fields` for reads, optional `maxAgeSeconds` (absent = unlimited), stable ID/revision. A grant is an additive allow, not an ordered deny language. No mandatory compound/intersection scopes or Organization-specific grant dimension in v1. Organizations remain a correlated query filter; Unit/Unit collection scopes provide the required manageable access.
+
+Scope-kind spellings are `all`, `network`, `unit`, `unitCollection`, `account`, `withoutUnit`; applicability/restrictions are defined in the action table below. Action suffix shorthand such as `rule.preview/activate/reprocess` expands to `rule.preview`, `rule.activate`, `rule.reprocess`, not an action containing slashes. The catalog is explicit, not a permission generator for every resource/suffix combination.
 
 | Action catalog | Applicable scope / restriction |
 | --- | --- |
@@ -57,4 +61,3 @@ An Access key contains allowed actions/scopes/fields and optional shorter age/li
 - Default throttles (configurable, not capacity promises): login 10 attempts/minute per normalized account key plus 300/minute instance; recovery 3/hour per account plus 60/hour instance; proof consumption 10/minute per request; search 60/minute per Principal/key; outbound starts 60/minute per Subscriber and configured target/provider rate. Use bounded buckets and generic errors; unknown-account buckets behave the same. Shared IP is only a secondary abuse signal, never the sole identity. `RATE_LIMITED` includes safe retry delay.
 
 **Revocation:** Commit revocation plus access-revision change and durable invalidation together. Query/page/stream/attempt checks use current primary authority; no unconditional cache TTL authorizes private output. A response/stream frame authorized and handed off before revocation may arrive later; no byte recall or absolute distributed timing guarantee. New protected work after observing the committed revision must not reuse old rights. AP-03 validates the concrete short-transaction/sending boundary and authority-loss behavior.
-

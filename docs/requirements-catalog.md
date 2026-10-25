@@ -1,6 +1,6 @@
 # GoPager Domain Requirements Catalog
 
-Date: 2026-10-24. Version: 2.0. 132 stable identifiers; REQ-088 is removed and reserved.
+Date: 2026-10-25. Version: 2.0. Stable identifiers REQ-001..132; withdrawn identifiers remain reserved in their rows.
 
 This document owns user goals and observable acceptance outcomes only. delivery status belongs exclusively to the [authoritative plan](authoritative-plan.md#delivery-scope). Technology choices and domain boundaries belong to the [architecture](architecture.md); contract details to the [contract catalog](domain-contracts.md). Documented requirements are not implementation or operational evidence.
 
@@ -8,16 +8,11 @@ This document owns user goals and observable acceptance outcomes only. delivery 
 
 U = explicit user request; B = originating from existing behavior/documentation, not automatically mandatory or production evidence; Z = later goal. These historical provenance codes remain stable and are not delivery status. 'Authorized users' includes guests, people, and technical users where permissions allow. 'May' presupposes a granted permission, not unrestricted administrator authority.
 
-Imported from the consolidated planning state dated 2026-10-23 with stable IDs and domain statements preserved; product name updated. REQ-121 incorporates the explicit addition of EAS. REQ-122 includes the confirmed shared configurable sliding Grouping window. REQ-097 now includes English-first internationalization preparation per D-20. Historical freedom of technology choice describes the product requirement, not a reopening of the selected architecture. English is the authoritative language of this catalog; no parallel translated catalog is required.
+Source/ref observations belong to [provenance](requirements-evidence.md#source-inventory). Product decision disposition/supersession is indexed by [D-ID](authoritative-plan.md#confirmed-decisions); do not maintain its narrative here. Technical values/algorithms are specified in owner contracts, not inferred from requirement examples.
 
 ## Personas and Main Goals
 
-- Observers, including guests: promptly find and read relevant Messages and recognize changes.
-- Unit/Gateway managers: establish correct Transmission target assignments and visibly functioning Gateways.
-- Delivery users: explicitly select which Domain events go where with which permitted Payload.
-- Account/permission managers: grant, restrict, and revoke access transparently.
-- Operators: resource-efficient simple operation or coherent, scalable HA operation.
-- Extension authors: provide additional Domain events, processing, and Delivery capabilities.
+Persona definitions are in the [glossary](glossary.md#personas-and-roles). Their observable goals are the REQ rows below, not a parallel persona feature list.
 
 ## A. Live Message View
 
@@ -68,11 +63,11 @@ Imported from the consolidated planning state dated 2026-10-23 with stable IDs a
 
 | ID | User goal / story | Observable acceptance outcome | Provenance |
 | --- | --- | --- | --- |
-| REQ-031 | As an operator, I obtain traceably correct Unit matches for Transmission Addresses. | Preserve exact original Address/Function and evaluate at original time. Current target resolutions and rebuildable shared Message contributions retain Unit and context; Contribution supports preserve who reported which target when. Technical per-target Unit repetition does not duplicate user appearances. | U/B; AP-02 D-29 |
+| REQ-031 | As an operator, I obtain traceably correct Unit matches for Transmission Addresses. | Original reports remain traceable, matches use the appropriate original time, and repeated reports do not create duplicate Unit appearances. Storage/derivation is defined by [C-05](contracts/c-05-matching-correction.md#target-resolution-message-contributions-and-ingest-storage). | U/B; AP-02 D-29 |
 | REQ-032 | As a manager, I combine broad and specific assignment rules. | The most specific unambiguous match wins; equally specific or partially overlapping simultaneously valid rules are rejected with a conflict explanation. | U |
 | REQ-033 | As a manager, I limit technical Address-to-Unit assignments in time. | The same technical Address may belong to different Units sequentially; boundary times are unambiguous. Temporal validity concerns this assignment, not historical versions of colors, icons, or general master data. | U, narrowed |
-| REQ-034 | As an operator, historical assignments remain correct. | Rematching evaluates originals at Observation times under current temporal rules, updates target resolution and rebuilds affected contributions/supports/first times. Domain validity is distinct from edit history; no mandatory immutable rule-version entity. Originals and Grouping remain unchanged. | U; AP-02 D-29 |
-| REQ-035 | As a manager, I can make several changes in succession. | When processing is available, relevant rematching is triggered after 60 seconds of inactivity by default; further changes must not extend this delay beyond 300 seconds by default. Both are configurable; starting and fully completing are distinguishable. | U, clarified |
+| REQ-034 | As an operator, historical assignments remain correct. | Changes to temporal rules correct the affected history without changing received originals or Message membership. [C-05](contracts/c-05-matching-correction.md) owns the rematching/storage algorithm. | U; AP-02 D-29 |
+| REQ-035 | As a manager, I can make several changes in succession. | Related changes are collected without indefinitely postponing rematching; starting and fully completing remain distinguishable. Configurable timer/default behavior belongs to [C-05](contracts/c-05-matching-correction.md). | U, clarified |
 | REQ-036 | As an operator, relevant changes or deletion correct affected historical assignments. | A color-only change does not alter assignments; relevant creation/change/deletion misses no potentially affected Message. Unit deletion rematches all affected Messages. Start/completion/failure are visible; rematching creates neither Transmission evidence nor regrouping. | U, confirmed |
 | REQ-037 | As a manager, I assign my own meanings to function/signal codes. | Different organizations/Units may interpret the same received codes differently. | U/B |
 | REQ-038 | As a manager, I use Protocol-specific defaults for multiple Protocols. | Appropriate function/signal labels are offered without assuming a false nationwide standard meaning. | U |
@@ -106,7 +101,7 @@ Imported from the consolidated planning state dated 2026-10-23 with stable IDs a
 | REQ-056 | As a permission manager, I can expose or hide unassigned Messages. | 'Without Unit' requires an explicit grant, not automatic access. | U |
 | REQ-057 | As an operator, I configure fully usable guest access. | Without login, live views, search, and filters work under assigned permissions; initially none are granted. | U |
 | REQ-058 | As an operator, I may also grant guests write capabilities. | The same domain permissions are available; public access receives an explicit warning; the guest subject cannot be deleted. | U |
-| REQ-059 | As a permission manager, I can limit access to recent Message history. | Optional age limits use first permitted Unit-appearance evidence with Observation time capped by Acceptance time; default unlimited. Same semantics apply to search/details/Delivery. A later reception does not renew the same Unit's age, and a new Unit does not authorize old or hidden evidence. | U; AP-02 time decision |
+| REQ-059 | As a permission manager, I can limit access to recent Message history. | Search/details/Delivery apply the same age rights; repeated reports do not renew access to old Unit evidence, and a new Unit grants no access to hidden evidence. The age rule/default belongs to [C-06](contracts/c-06-identity-authorization.md); stored anchors belong to [C-05](contracts/c-05-matching-correction.md). | U; AP-02 time decision |
 | REQ-060 | As a user, I understand my permissions and their provenance. | Effective permissions and direct/User group assignments are explainable. Access follows current Unit assignments, including history, without an extra warning/special audit. Deleting a restricting scope object must not unintentionally make the remainder of a grant unrestricted. | U, clarified |
 
 ## G. Accounts and Login
@@ -158,7 +153,7 @@ Imported from the consolidated planning state dated 2026-10-23 with stable IDs a
 
 | ID | User goal / story | Observable acceptance outcome | Provenance |
 | --- | --- | --- | --- |
-| REQ-091 | As a manager, I process text and reactions in freely composed automations. | Minimum value: parse Payloads, extract by regex, produce administratively configurable structured data, and react using conditions/branches. Flexible composition like n8n/Node-RED/Home Assistant is preferred; basic branches are acceptable initially if effort would be disproportionate. The targeted legacy parser/card inspection is functional provenance, not a mandate to adopt code/runtime or a parity claim; it supersedes earlier not-found wording. Regex execution remains bounded. Evaluate suitable builder libraries during technology/frontend selection under C-11 before implementation approval. | U |
+| REQ-091 | As a manager, I process text and reactions in freely composed automations. | Minimum value: parse Payloads, extract by regex, produce administratively configurable structured data, and react using conditions/branches. Flexible composition like n8n/Node-RED/Home Assistant is preferred; basic branches are acceptable initially if effort would be disproportionate. Runtime/editor boundaries belong to [C-11](contracts/c-11-processing-presentation.md); legacy inspection is [provenance only](requirements-evidence.md#legacy-source-observation). | U |
 | REQ-092 | As a manager, I test processing rules using examples. | Preview explains results/errors without silently changing real Message data or settings. | B |
 | REQ-093 | As a manager, I recognize the active processing version and can return to a known version. | Saving and actual activation are clear; selecting an earlier version is traceable. No mandatory multistage approval workflow. | B |
 | REQ-094 | As a manager, I design Message presentation. | permitted Payload can be arranged, highlighted, and displayed conditionally; presentation grants no additional data permissions. | U/B |
@@ -204,7 +199,7 @@ Imported from the consolidated planning state dated 2026-10-23 with stable IDs a
 | ID | User goal / story | Observable acceptance outcome | Provenance |
 | --- | --- | --- | --- |
 | REQ-121 | As an operator, I use POCSAG, FLEX, ZVEI, and EAS protocols with their respective characteristics. | Original submitted Payload, multiple targets and function/signal codes are preserved, including accepted partial/deviating receptions. The server does not become a raw-frame decoder/reassembler. For EAS, header fields are completed Payload and areas are targets; audio/video remains later work. Further Protocols are not implicit. | U/B; EAS and AP-02 original-preservation clarification |
-| REQ-122 | As an observer, I see technically combined Transmissions as one Message. | Payload-identical Transmissions with the same Payload form (declared per Protocol definition; compatible Protocols such as POCSAG/FLEX text, numeric, or tone-only may match) within the Grouping window may appear together across independent Networks. The window slides along reported Observation instants of the Message members; its duration is shared and configurable (default 30 seconds, inclusive boundary, 0 disables Grouping); Messages bridged by a later Transmission are merged, with absorbed Message IDs forwarding to the surviving Message. Payload identity is defined per Protocol definition (C-02). The Message does not claim a common operational incident; individual permitted Transmissions, Networks, and Transmission targets remain distinguishable. | U, current clarification |
+| REQ-122 | As an observer, I see technically combined Transmissions as one Message. | Compatible Payload-identical reports can form one Message across Networks while permitted originals/targets remain distinguishable. A Message is not an operational incident. [C-02](contracts/c-02-protocol-payload.md) owns compatibility/comparison; [C-03](contracts/c-03-message-grouping.md) owns configurable window/defaults, chain/merge rules and aliases. | U, current clarification |
 | REQ-123 | As a manager, I exclude unwanted Transmission targets from normal operation using suppression filters. | Data remains stored. Suppressed Transmission targets appear in neither normal views, search, details, nor Delivery; mixed Messages retain other usable Transmission targets. With no non-suppressed Transmission targets, the Message does not appear there. No deletion/discarding or separate Payload masking. Lifting suppression can expose existing data again but is not a new Transmission. | U |
 | REQ-124 | As an observer, I recognize an Address assignment marked as encrypted. | A domain label claims neither available decryption nor automatic access to secret Payload. | B |
 | REQ-125 | As an operator, I can later offer voluntary account registration. | Deferred from the initial release. Later requests create no automatic data permissions. | B/Z |

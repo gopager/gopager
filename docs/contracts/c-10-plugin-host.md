@@ -4,6 +4,8 @@
 
 Referenced contracts (follow only when relevant): [C-06](c-06-identity-authorization.md), [C-09](c-09-delivery.md).
 
+**Traceability:** [REQ-083..084/089..090](../requirements-catalog.md#i-domain-events-extensions-and-deliveries), [REQ-107](../requirements-catalog.md#k-installed-web-app-and-security-behavior), [REQ-129](../requirements-catalog.md#m-additional-domain-capabilities). Issue references: [P-05..P-07/P-11](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
+
 **Version/status:** 0.1-draft. **Owner:** Plugin host; DOM-07 owns Delivery/subscription semantics, integration owns SDK contract. **Producers/consumers:** Operator supplies artifacts; host checks/activates; modules produce/handle explicit Domain events or provide allowed targets.
 
 Draft interfaces: `InspectModule(artifact) -> compatibility`; `ActivateModule(moduleRef, configurationRevision) -> lifecycleStatus`; `InvokeCapability(invocationContext, projectedInput) -> boundedResult`; `DisableModule(moduleRef) -> status`; `DeclareExtensionFields(manifest) -> validated definitions`. Manifest/SDK shape below is documentary, not an approved compiled ABI.

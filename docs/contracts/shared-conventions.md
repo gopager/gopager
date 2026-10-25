@@ -36,4 +36,6 @@ These are selected documentary contract values, explicitly confirmed for AP-02, 
 
 # Freeze Requirements
 
-Per contract: concrete data/error/version forms, named ownership, producer/consumer agreement, current permission/field projection, time/revision, idempotency/retention, transaction/failure boundaries, and concrete positive/negative fixtures. Resolve P-08/P-12/P-14 and relevant technical validation before affected implementation packages. Define language-independent codes and English text/parameter mapping for C-07/C-11 without requiring additional translations. External REST/SDK contracts get machine-readable artifacts only after these gates; this documentation does not pretend they exist.
+This is the shared contract-completeness checklist: concrete data/error/version forms, named ownership, producer/consumer agreement, current permission/field projection, time/revision, idempotency/retention, transaction/failure boundaries, and concrete positive/negative fixtures. Include language-independent codes and English text/parameter mapping for C-07/C-11 without requiring additional translations.
+
+Open-issue status and approval conditions are owned by the [plan](../authoritative-plan.md#open-issues-and-risks); [AP-04](../work-packages/ap-04-scope-freeze.md) owns the freeze tasks and machine-readable artifact handover. Satisfying this checklist alone grants no approval.

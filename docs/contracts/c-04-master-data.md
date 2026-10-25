@@ -4,6 +4,8 @@
 
 Referenced contracts (follow only when relevant): [C-05](c-05-matching-correction.md), [C-10](c-10-plugin-host.md).
 
+**Traceability:** [REQ-019..020](../requirements-catalog.md#b-search-filters-and-details), [REQ-021..030](../requirements-catalog.md#c-units-organizations-and-defaults), [REQ-095](../requirements-catalog.md#j-processing-presentation-and-usability), [REQ-132](../requirements-catalog.md#m-additional-domain-capabilities). Documentary coverage: [AP-02](../work-packages/ap-02-domain-contracts.md#documentary-completion-and-coverage); freeze: [AP-04](../work-packages/ap-04-scope-freeze.md).
+
 **Version/status:** 0.1-draft. **Owner:** DOM-03. **Parties:** authorized management; DOM-04/DOM-06/DOM-07 consume current master data. **Draft interfaces:** `CreateUnit`, `ChangeUnit`, `DeleteUnit`, `DeleteOrganization`, `ChangeUnitCollectionMembership`, `PreviewBulkChange`; each takes Principal, domain input, and expected revision for changes. Results: new reference/revision or authorized conflict/preview state.
 
 **Defined:** Units have their own identity, may belong to several Unit collections, and are not necessarily subordinate to one Network. Organization, color, icon, templates, and selective overrides remain recognizable; returning to organization defaults is possible. Formation membership alone is not evidence of co-alerting. No unrestricted multi-parent default graph.
@@ -22,4 +24,3 @@ Referenced contracts (follow only when relevant): [C-05](c-05-matching-correctio
 - `PreviewBulkChange` returns caller-visible per-item validation and the exact expected revisions. Execution rechecks each item and permission; all-or-nothing transaction, no partial writes. Hidden shared use produces a generic forbidden/conflict outcome, not foreign identifiers.
 - `DeleteUnit` atomically marks the Unit deleted, disables/removes its rules from the current rule set, records affected correction scope/revision and durable Rematch work. Current grants on that ID become ineffective, not global. Physical cleanup follows successful reference correction. Cosmetic edits never schedule Rematching.
 - `DeclareExtensionFields` is owned by C-10, storage by DOM-03: definition has plugin namespace/version, type, validation/default, sensitivity/read and write capability. Unknown/new fields are inaccessible by default. Schema incompatibility blocks activation rather than coercing saved values.
-

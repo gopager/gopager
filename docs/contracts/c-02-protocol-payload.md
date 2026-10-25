@@ -4,6 +4,8 @@
 
 Referenced contracts (follow only when relevant): [C-01](c-01-transmission-acceptance.md), [C-03](c-03-message-grouping.md), [C-05](c-05-matching-correction.md), [C-06](c-06-identity-authorization.md), [C-07](c-07-query-live.md).
 
+**Traceability:** [REQ-020](../requirements-catalog.md#b-search-filters-and-details), [REQ-031..032/037..038](../requirements-catalog.md#d-correct-assignment-and-history), [REQ-121..122](../requirements-catalog.md#m-additional-domain-capabilities). Issue references: [P-08/P-09](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
+
 **Version/status:** 0.1-draft, amended for D-29. **Owner:** DOM-02; DOM-01 owns submitted originals. **Parties:** Gateway submits finalized Transmission reports; ingest, Assignment and Grouping consume them. **Failure:** Missing required fields or invalid declared-form data are rejected, not treated as empty/certain. A valid report of partial reception is different and must be retained.
 
 The Gateway contract carries declared Protocol, original reported Payload, zero or more targets with Function/signal attributes, context and optional quality metrics. Finalizing this report does not certify reception completeness. EAS submits supported header Payload with areas as targets; POCSAG/FLEX/SMTP may report multiple targets in one report. No decoder/frame/checksum/reassembly internals are added to the server contract.

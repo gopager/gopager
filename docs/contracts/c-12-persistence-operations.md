@@ -4,6 +4,8 @@
 
 Referenced contracts (follow only when relevant): [C-01](c-01-transmission-acceptance.md), [C-08](c-08-events-jobs.md), [C-09](c-09-delivery.md).
 
+**Traceability:** [REQ-111..112/114..120](../requirements-catalog.md#l-operations-data-volume-and-evolution), [REQ-127 and removed REQ-126](../requirements-catalog.md#m-additional-domain-capabilities). Issue references: [P-01/P-03/P-04/P-15/P-20/P-21](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
+
 **Version/status:** 0.1-draft. **Owner:** Operations/persistence with integration and domain schema owners. **Parties:** Lite/Full app, operator, authoritative store, roles, restart.
 
 Draft interfaces: `ReadOperationalStatus -> safeStatus`; `RunRetention(configuredPolicy) -> progress`; `RequestShutdown -> drainStatus`. Capabilities, not fixed CLI commands/API endpoints. D-31 excludes application Backup/Restore operations entirely.

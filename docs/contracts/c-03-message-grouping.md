@@ -4,6 +4,8 @@
 
 Referenced contracts (follow only when relevant): [C-01](c-01-transmission-acceptance.md), [C-02](c-02-protocol-payload.md), [C-06](c-06-identity-authorization.md), [C-07](c-07-query-live.md), [C-08](c-08-events-jobs.md), [C-09](c-09-delivery.md), [C-11](c-11-processing-presentation.md), [C-12](c-12-persistence-operations.md).
 
+**Traceability:** [REQ-001..002](../requirements-catalog.md#a-live-message-view), [REQ-113](../requirements-catalog.md#l-operations-data-volume-and-evolution), [REQ-122](../requirements-catalog.md#m-additional-domain-capabilities). Issue reference: [P-08](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
+
 **Version/status:** 0.1-draft. **Owner:** DOM-02. **Producer:** stored Transmission evidence with C-02 identity. **Consumers:** DOM-06 and C-08 Domain events. **Draft interface:** `AssignTransmissionToMessage(context, transmissionRef, payloadIdentity, groupingPolicyRevision) -> membership, messageRef, changeKind (created | joined | merged, with absorbed Message refs)`.
 
 **Defined:** GoPager groups only exact canonical Payload matches across compatible Protocols, Gateways and Networks (D-30). Preserve every original and target, including partial receptions; different canonical values remain separate. The Gateway does not submit authoritative membership. Network/Gateway alone do not split a Message; Unit resolution is independent. One shared Grouping policy does not assert a common real-world incident.
@@ -29,6 +31,8 @@ The server performs all comparisons from submitted Transmissions; a Gateway may 
 **AP-02 Message-time clarification:** Store internal `messageTime` as the minimum Observation time across members, atomically corrected on older late join/merge. It supports origin/retention, not normal GUI sort or authorization age. C-07 computes `viewTime` only from permitted matching Unit appearances; the former hidden-member timestamp exception is withdrawn. C-12 still deletes a whole Message. AP-01 chain semantics remain unchanged.
 
 **Representative selection:** No mandatory second original Payload copy. Among usable readable exact members prefer those not marked incomplete, then earliest Acceptance time and ascending stable ID. Otherwise use the same tie-break and visibly qualify the fallback. Repeat selection within readable evidence if the stored preference is inaccessible. No longest-text assumption, concatenation or synthetic completion. A canonically different fuller text remains another Message, not a representative replacement. A better original representation within the same identity may update display without resetting Unit times.
+
+The semantic reference name is `representativeTransmissionId`; this fixes spelling, not a physical column layout. Absence of an Incomplete marker is not evidence of reception correctness.
 
 **Comparison extension boundary:** C-02 owns comparison; this contract consumes exact match results and owns temporal membership/merge and atomic publication. Retain original evidence and match kind `exact`; do not implement future fuzzy scans, scores, split/reference events or new heuristic jobs now. A future non-exact comparator requires explicit approval of candidate discovery, temporal constraints, re-evaluation, split/reference/Delivery semantics and concurrency; exact per-identity serialization alone would not validate that extension.
 

@@ -1,23 +1,23 @@
 # GoPager Target Architecture and Responsibilities
 
-Date: 2026-10-25. Architecture planning baseline, including the user-approved AP-02 evidence/target-resolution/contribution model (D-29), not an implementation description. Product decisions and approval status belong to the [plan](authoritative-plan.md); interfaces belong to the [contract catalog](domain-contracts.md).
+Date: 2026-10-25. This file owns technology selections/rationale, topology, module/data ownership and dependency rules. Boundary behavior belongs to [owner contracts](domain-contracts.md); decision disposition/approval belongs to the [plan](authoritative-plan.md). Diagrams are relationship maps, never complete schemas.
 
 ## Technology Decisions
 
 'Selected' means a reasoned planning decision inherited from the original plan, not a successful spike or a fixed package version. Go and the modular monolith were also directly confirmed by the user. Exact versions other than Vue 3, SQL drivers, Wasm ABI, UI component library, and build tools are not selected.
 
-| ID | Selection | Rationale / boundary | Validation still required |
+| ID | Selection | Rationale / boundary | Evidence/gate owner |
 | --- | --- | --- | --- |
-| TECH-01 | Go, modular monolith, single backend binary | Single-process Lite without installing a separate runtime; standard library first (`net/http`, `database/sql`, `context`), few justified dependencies, no heavy application framework. No claimed benchmark advantage. | Go version, target platforms, reproducible build in AP-03. |
-| TECH-02 | Shared codebase and backend artifact for Lite/Full | Lite combines API, live views, ingest, plugin host, and jobs; Full may distribute the same capabilities across API/worker roles. No mandatory microservices or second Lite application. | Role startup, shutdown, resource profile. |
-| TECH-03 | Vue 3 + TypeScript, statically built and embedded in the backend | Independent client/server development, deployment without a mandatory separate web server or frontend process. Build tools may be development dependencies. | Toolchain/versions, asset/API versioning, responsive and accessible UI. |
-| TECH-04 | REST/JSON, versioned OpenAPI contract; SSE for live updates | Explicit query/command API; live communication is primarily server-to-browser. No WebSocket without a bidirectional product need. | API/error/cursor/SSE resume and revocation contract C-07. |
-| TECH-05 | Local SQLite file for Lite; PostgreSQL for Full | Relational transactions, shared logical schema with explicit dialect/driver boundaries. No mandatory universal ORM or separate domain data models. | SQLite driver/build size/CGO trade-off, migrations, backend parity. |
-| TECH-06 | PostgreSQL primary as Full write authority | Stateless API/worker roles; established external database HA with fencing instead of custom consensus. Replicas initially serve HA/recovery; only explicitly eventual reads. | Concrete HA operations, failover/lease/commit uncertainty. |
-| TECH-07 | Transactional outbox/job tables in the primary database | Commit domain state and Domain event together; Full claims/leases work, Lite processes it in-process. Wake-up signals are optimization, not truth. No initial mandatory broker. | Claim/fencing, restart, receipt retention, finite retries. |
-| TECH-08 | Language-neutral versioned Wasm SDK, embedded Wazero host | Prebuilt operator-provided artifacts inside Lite; trusted plugins may receive explicitly approved network/filesystem/command capabilities (D-24), not implicit unrestricted Core-data access. No native Go plugin ABI or mandatory plugin processes; optional approved subprocesses are a documented exception. Not a hostile-code sandbox. | ABI, runtime/toolchain versions, limits/cancellation, secrets/I/O and lifecycle under C-10. No arbitrary-language/library guarantee. |
-| TECH-09 | Database-integrated search baseline | No Lite search daemon. SQLite FTS5 trigram and PostgreSQL `pg_trgm` are candidates, not an already-correct search implementation. | Unicode/case folding/accents/short terms and authorized query parity before index selection. |
-| TECH-10 | Central AuthZ core in Go | No baseline external policy service; one semantic owner for grants, field projection, and current Delivery authorization. | Safe SQL predicates/projections on both backends and revocation during SSE/jobs. |
+| TECH-01 | Go, modular monolith, single backend binary | Single-process Lite without installing a separate runtime; standard library first (`net/http`, `database/sql`, `context`), few justified dependencies, no heavy application framework. No claimed benchmark advantage. | [AP-03 T010/T014](work-packages/ap-03-technical-validation.md) |
+| TECH-02 | Shared codebase and backend artifact for Lite/Full | Lite composes roles; Full may distribute the same capabilities. Topology is shown below. | [P-20/P-21](authoritative-plan.md#open-issues-and-risks) |
+| TECH-03 | Vue 3 + TypeScript, statically built and embedded in the backend | Independent client/server development, deployment without a mandatory separate web server or frontend process. Build tools may be development dependencies. | [AP-13](work-packages/ap-13-frontend.md), [C-07](contracts/c-07-query-live.md) |
+| TECH-04 | REST/JSON, versioned OpenAPI contract; SSE for live updates | Explicit query/command API; live communication is primarily server-to-browser. No WebSocket without a bidirectional product need. | [P-10/P-15](authoritative-plan.md#open-issues-and-risks), [C-07](contracts/c-07-query-live.md) |
+| TECH-05 | Local SQLite file for Lite; PostgreSQL for Full | Relational transactions, shared logical schema with explicit dialect/driver boundaries. No mandatory universal ORM or separate domain data models. | [AP-03 T010](work-packages/ap-03-technical-validation.md), [P-01/P-03](authoritative-plan.md#open-issues-and-risks) |
+| TECH-06 | PostgreSQL primary as Full write authority | Stateless API/worker roles; established external database HA rather than custom consensus. Authority/replica behavior is specified in C-12. | [P-04/P-20](authoritative-plan.md#open-issues-and-risks), [C-12](contracts/c-12-persistence-operations.md) |
+| TECH-07 | Transactional outbox/job tables in the primary database | Avoids a mandatory separate broker; integrates with the shared database transaction boundary. Job/event behavior belongs to [C-08](contracts/c-08-events-jobs.md). | [P-04/P-11](authoritative-plan.md#open-issues-and-risks) |
+| TECH-08 | Language-neutral versioned Wasm SDK, embedded Wazero host | Embeddable extension runtime without native Go plugin ABI or mandatory plugin processes. Trust, capabilities and optional subprocess exception are defined only in [C-10](contracts/c-10-plugin-host.md). | [P-05..P-07](authoritative-plan.md#open-issues-and-risks) |
+| TECH-09 | Database-integrated search baseline | No Lite search daemon. SQLite FTS5 trigram and PostgreSQL `pg_trgm` are candidates, not an already-correct search implementation. | [P-15](authoritative-plan.md#open-issues-and-risks), [C-07 search representation](contracts/c-07-query-live.md) |
+| TECH-10 | Central AuthZ core in Go | No baseline external policy service; one semantic owner for grants, field projection, and current Delivery authorization. | [P-10](authoritative-plan.md#open-issues-and-risks), [C-06](contracts/c-06-identity-authorization.md) |
 
 A broker, cache, separate search index, or policy service may become a later Full optimization with demonstrated benefit, not a speculative baseline component. SQLite WAL permits only one concurrent writer; short transactions and local storage are prerequisites. No WAL on a shared network filesystem and no multi-host SQLite HA.
 
@@ -29,21 +29,20 @@ Rust with Wasm was considered for memory control and strong concurrency guarante
 
 ## Language and Internationalization
 
-English is the authoritative language for planning, documentation, identifiers, comments, interface documentation, and default Localized text. Internationalization readiness is required from the first implementation; additional translations are not required yet. Extend REQ-097 rather than allocating a duplicate requirement.
+This section allocates responsibilities, not another copy of [REQ-097](requirements-catalog.md#j-processing-presentation-and-usability) or the language/text contracts.
 
-- Frontend ownership: centralize user-facing labels, validation/error text, status text, accessibility labels, and built-in presentation text behind stable text keys and an English text catalog. Support parameter interpolation and pluralization; do not assemble sentences by concatenating translated fragments.
-- Integration/API ownership: expose stable machine-readable error/status codes and structured parameters. Any human-readable fallback is English and is not a client parsing contract. Locale must not change field names, enum/Domain event values, IDs, authorization, or wire-format values. Do not translate Payload or operator-authored names/templates automatically.
-- Keep interface language independent of user-selected formatting locale. Format dates, numbers, time zones, and relative times through centralized locale-aware facilities; preserve locale-independent storage/API representations and explicit time semantics.
-- English is the only initially required catalog and fallback language. Choose a Vue-compatible i18n facility during AP-02/AP-13 planning; no library/version, additional language catalog, language-pack loading system, or language-selector UI is selected here.
-- AP-13 owns frontend catalogs and formatting integration; AP-09 owns API code/parameter compatibility; AP-12 owns built-in processing/presentation Localized text. The integration owner coordinates shared keys/schema boundaries. Validate key completeness, interpolation/plurals, English fallback, independent formatting preferences, accessibility text, and layout resilience without requiring a second translated catalog.
-
-This is preparation work for the future implementation, not a claim that an i18n runtime already exists. It neither approves unrelated product scope nor makes automatic translation a feature.
+| Responsibility | Owner | Authoritative boundary |
+| --- | --- | --- |
+| Frontend text catalog, formatting integration and Vue-compatible i18n selection | Frontend / AP-13 | [C-11 text mappings/preferences](contracts/c-11-processing-presentation.md#text-key-mapping-and-remaining-technical-evidence) |
+| API error/code/parameter compatibility | DOM-06 / AP-09 | [C-07](contracts/c-07-query-live.md) |
+| Built-in processing/presentation text | DOM-08 / AP-12 | [C-11](contracts/c-11-processing-presentation.md) |
+| Shared key/schema compatibility | Integration | [Shared conventions](contracts/shared-conventions.md) |
 
 ## Operating Profiles
 
-Lite and Full share domain operations, contracts, and permissions. Lite combines roles in exactly one OS process; a SQLite file is not a separate database daemon. Frontend assets and Wazero are part of the application artifact/process. Containers are a delivery option, not an additional mandatory runtime for bare-metal use.
+TECH-02 defines the shared artifact: Lite composes API/live/ingest/plugin/jobs in one process; Full may distribute API/live and worker roles. Frontend assets and Wazero are embedded. SQLite is a local file; PostgreSQL is an external Full component. Containers are a deployment option, not a mandatory bare-metal runtime. Optional plugin subprocesses follow [C-10](contracts/c-10-plugin-host.md).
 
-Full may replicate API/live and worker roles horizontally. PostgreSQL is authoritative; local caches or an open SSE connection do not confer write or authorization authority. One application container may include all roles; Full HA requires additional database/operational components. Replica reads must not make revocation or Delivery checks stale. Unclear authority visibly pauses acceptance and Delivery.
+This topology does not establish database HA. Operational authority/replica/failure behavior is defined in [C-12](contracts/c-12-persistence-operations.md), not repeated here.
 
 ```mermaid
 flowchart LR
@@ -98,18 +97,18 @@ This decomposition is a documented architecture draft implementing the confirmed
 
 ## Shared Use Cases
 
-| Use case | Leading coordination | Domain writes / consistency obligation |
+| Use case | Leading coordination | Authoritative behavior |
 | --- | --- | --- |
-| Accept Transmission | Integration + DOM-01 | Store original Payload/targets/receipt, determine single Message, store target resolutions, upsert shared Message contributions and Contribution supports, maintain first times/representative preference and facts. Ten technical target Unit values do not mean ten user assignments. Intake may be acknowledged pending; GUI/Delivery waits for current resolution/required Parsing. |
-| Change Address rule / delete Unit | DOM-04 or DOM-03 with integration | Invalidate affected scope, rematch original Addresses at Observation times, update target resolutions and redistribute supports/rebuild contributions under checked publication. Recompute first times/age anchors without changing membership or original evidence. Rule edit history is not domain validity. |
-| Delete organization | DOM-03 | Determine effective inherited values, preserve them for Units, detach organization; filters/grants follow the new state. No Unit rematch. |
-| Revoke rights / delete account | DOM-05 with DOM-06/DOM-07 | Immediately block access/starts; durable domain cleanup follows C-13's field matrix. Pseudonymize historical actor references with distinct non-authenticating Deleted Principal IDs, not an anonymity claim. Failed cleanup never restores access. |
-| Attempt Delivery | DOM-07 + plugin host | Check current Principal, subscription, data/field permissions, and age rules; record attempt/I/O/uncertain outcome separately. C-09 defines the exact authorization/execution boundary. |
-| Apply retention | Operations + respective data owners + integration | Delete whole Messages by internal Message time/count, with contributions/supports/target resolutions/evidence, not View time. Preserve bounded independent Delivery work where dependencies permit; C-01 retains its accepted post-retention retry exception. |
+| Accept Transmission | Integration + DOM-01/DOM-02/DOM-04/DOM-08 | [C-01 intake](contracts/c-01-transmission-acceptance.md), [C-03 membership](contracts/c-03-message-grouping.md), [C-05 derivation](contracts/c-05-matching-correction.md), [C-11 publication](contracts/c-11-processing-presentation.md) |
+| Change Address rule / delete Unit | DOM-04 or DOM-03 with integration | [C-05 correction](contracts/c-05-matching-correction.md), [C-04 deletion](contracts/c-04-master-data.md) |
+| Delete organization | DOM-03 | [C-04](contracts/c-04-master-data.md) |
+| Revoke rights / delete account | DOM-05 with DOM-06/DOM-07 | [C-06 revocation](contracts/c-06-identity-authorization.md), [C-13 cleanup](contracts/c-13-account-lifecycle.md) |
+| Attempt Delivery | DOM-07 + plugin host | [C-09 attempt boundary](contracts/c-09-delivery.md), [C-10 invocation](contracts/c-10-plugin-host.md) |
+| Apply retention | Operations + data owners + integration | [C-12 retention](contracts/c-12-persistence-operations.md), [C-09 dependencies](contracts/c-09-delivery.md) |
 
 ## Logical Relationship Model
 
-Confirmed logical structure (D-29), not a frozen SQL schema or complete field inventory. Vocabulary is owned by the [glossary](glossary.md). Owner contracts elaborate concrete fields, revision placement, constraints and indexes before AP-04 freeze; no migration or product code is created here. Exact EAS location-code Address rules are in C-05.
+Confirmed relationship direction under [D-29](authoritative-plan.md#d-29), not a SQL schema or field inventory. The diagram is the relationship map; the table routes records to exclusive writers and their owning contract. Required stored/reconstructable information, concrete fields/types/keys, revisions, constraints and indexes are specified only in those contracts. Normalization/deduplication may not lose required information. Vocabulary is owned by the [glossary](glossary.md).
 
 ```mermaid
 flowchart TD
@@ -146,29 +145,29 @@ flowchart TD
 
 The representative box denotes a role/reference to an existing Transmission, not another stored entity.
 
-| Logical record | Stored information / source of truth | Mutability and owner |
+| Logical record / portion | Exclusive writer | Authoritative record detail |
 | --- | --- | --- |
-| Transmission | Gateway/Submission, Protocol/declaration, original Payload including partial/deviating variants, original Observation time/offset, Acceptance time, quality/incomplete context; current Message membership and comparison/decision context | DOM-01 originals immutable; DOM-02 owns derived membership/comparison. Original Payload may repeat per reception; lossless physical deduplication is optional. |
-| Transmission target | Exact original Address/Function; stored current Network, direct Unit, matched Address-rule reference and explicit resolution/suppression state | DOM-01 owns original target; DOM-04 alone replaces derived resolution. Unit repetition across Gateways is deliberate technical denormalization, not repeated user assignment. |
-| Message | Logical summary, representative preference, publication/change state and existing origin/alias information | DOM-02; no second original Payload copy or MessageGroup parent required. Units do not determine Grouping. |
-| Message contribution | Message/Network/Protocol/Address/Function/direct Unit or explicit status, first usable time and capped age anchor | DOM-04 rebuildable read model; identity excludes Gateway, rule version and validity segment. Original targets retain each temporal evaluation. |
-| Contribution support | References to contribution, Transmission and original target; no target only for targetless input | DOM-04; at most one current support per usable target, matching Transmission ownership and common Message. No copied technical evidence. |
-| Address rule | Existing temporal selector/mode/Network/Unit definition and edit concurrency state | DOM-04; current rules plus original times enable Rematching. Configuration audit explains edits; immutable version entities/exact old-evaluation replay are not required. |
+| Transmission originals / original targets / Gateway / Network | DOM-01 | [C-01](contracts/c-01-transmission-acceptance.md), [C-02 Protocol forms](contracts/c-02-protocol-payload.md) |
+| Membership / Message / representative / aliases | DOM-02 | [C-03](contracts/c-03-message-grouping.md) |
+| Unit / organization / collection / defaults | DOM-03 | [C-04](contracts/c-04-master-data.md) |
+| Derived target resolution / contributions / supports / Address rules / suppression | DOM-04 | [C-05](contracts/c-05-matching-correction.md#target-resolution-message-contributions-and-ingest-storage) |
+| Principal / credential / grant / User group / cleanup | DOM-05 | [C-06](contracts/c-06-identity-authorization.md), [C-13](contracts/c-13-account-lifecycle.md) |
+| Query result / Unit appearance / View time | DOM-06 projection, not domain truth writes | [C-07](contracts/c-07-query-live.md) |
+| Domain event / job / Subscription / Delivery input / attempt | DOM-07 mechanics; producing domain owns fact meaning | [C-08](contracts/c-08-events-jobs.md), [C-09](contracts/c-09-delivery.md) |
+| Workflow / result / presentation configuration | DOM-08 | [C-11](contracts/c-11-processing-presentation.md) |
+| Plugin / Secret / Extension definitions | Plugin host | [C-10](contracts/c-10-plugin-host.md) |
 
-No contribution is independently edited. Supplied originals -> current target resolution -> shared contribution is the derivation direction. Suppression invalidates/rebuilds affected supports and minima without deleting originals. A multi-target Transmission remains one member of one Message, supports several contributions, and is never split by Unit. Multiple rules/validity segments may yield one contribution if their visible context is identical; different Addresses/Units/Networks do not collapse.
+Derivation direction is originals -> current resolution -> contribution read model. Gateway/Network/Unit diagram nodes are stubs: their complete capabilities remain in the linked master-data contracts; omission from the diagram removes nothing.
 
-**Master-data preservation:** Gateway, Network and Unit nodes, including the earlier illustrative field diagram, are stubs only. Preserve all C-01/C-04/C-06 requirements: names/configuration, Gateway adapter identity and allowed/default Networks, Network/Protocol context, contact/state/heartbeat/termination, authorization, organizations, multiple Unit collections, colors/icons, templates, fieldwise inherited defaults/overrides, Function meanings and Extension fields. Neither this diagram nor its short table replaces those master-data contracts.
-
-**Displayed Payload:** Message stores a preferred original reference, not a synthesized text. Prefer readable, non-suppressed, exact members not marked incomplete; tie-break by earliest Acceptance time then ascending stable ID. Otherwise show a deterministically selected, visibly qualified fallback. Apply the same rule within each authorized view; hidden fuller evidence cannot supply its text or Processing results. Publish a better representative only after required Processing; this changes content, not first Unit times. A readable variant match must be identified in details if the representative differs.
+**Displayed Payload ownership:** [C-03](contracts/c-03-message-grouping.md) owns representative preference/selection; [C-07](contracts/c-07-query-live.md) owns its authorized query projection and variant details; [C-11](contracts/c-11-processing-presentation.md) owns source-bound Processing/publication. This model does not define a second selection algorithm.
 
 ### Time and Read Paths
 
-- Maintain Contribution time/age anchor; later repeats do not move the first time. Store Message time separately as internal origin/retention key, not a universally readable timestamp.
-- User path: direct contribution Unit/Network/Protocol -> permitted contributions -> query-derived Unit appearances -> time/age predicates -> readable Payload/representative -> one row per Message. View time is the minimum surviving appearance time; sort/cursor use it. Without Unit filter use the same algorithm. No routine rule-version join or full reception-history scan.
-- With Unit A first at 12:00 and Unit B first at 12:05, the unfiltered 12:04..12:06 view shows that Message at 12:05; the Unit-A view for that interval excludes it. An unrestricted view of both shows it once at 12:00. New Gateway copies do not change any of those first times.
-- Administrative reception diagnostics alone use Gateway filters/individual receipt times. Suppression rebuilds affected supports/minima; restricted evidence/age permissions may still require scoped support evaluation. Never expose a hidden stored minimum. Targetless contributions use Network/Protocol context without invented Address/Unit.
+- Write path: original evidence -> current target resolution -> shared contributions/supports. [C-05](contracts/c-05-matching-correction.md) owns contribution minima, age anchors and correction; [C-03](contracts/c-03-message-grouping.md) owns internal Message time.
+- User read path: direct contribution Unit/Network/Protocol -> permitted contributions -> query-derived Unit appearances -> time/age predicates -> readable Payload/representative -> one row per Message. No routine rule-version join or full reception-history scan. The precise algorithm, intervals, sort/cursor and diagnostic exceptions belong to [C-07](contracts/c-07-query-live.md#time-selection-and-one-row-message-results); concrete time cases belong to [F-11a..F-11i](contracts/reference-cases.md).
+- Restricted evidence/age permissions may require scoped support evaluation rather than the stored aggregate alone; [C-06](contracts/c-06-identity-authorization.md) owns authorization semantics.
 - Direct Unit columns on targets/contributions are approved denormalization, not an optional unmeasured schema experiment. Concrete indexes, SQL layout, revision fields and backend query plans remain owner-package work validated in AP-03. Additional aggregate layers require a demonstrated need.
 
 ## Non-Goals and Boundaries
 
-No legacy adapter, automatic legacy-data migration, incident/personnel management, custom database consensus, or in-app plugin marketplace. No arbitrary polyglot runtime or sandbox guarantee. OIDC/SCIM/PWA and other delivery phases are defined only in the [delivery scope](authoritative-plan.md#delivery-scope), not brought forward by technical preparation. Internationalization readiness does not require additional translations.
+Product exclusions/delivery phase are owned by the [plan](authoritative-plan.md#delivery-scope) and its D-ID owner links. This architecture does not bring deferred scope forward. Runtime trust/support boundaries belong to [C-10](contracts/c-10-plugin-host.md) and [C-12](contracts/c-12-persistence-operations.md).

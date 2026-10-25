@@ -2,9 +2,7 @@
 
 [Package index](../work-packages.md) | [Contract index](../domain-contracts.md) | [Shared execution rules](shared-rules.md)
 
-Related package references (not additional prerequisites): [AP-01](ap-01-protocols-grouping.md), [AP-02](ap-02-domain-contracts.md), [AP-03](ap-03-technical-validation.md), [AP-04](ap-04-scope-freeze.md), [AP-05](ap-05-runtime-persistence.md), [AP-06](ap-06-transmission-messages.md), [AP-07](ap-07-identity-authorization.md), [AP-08](ap-08-master-data-correction.md), [AP-09](ap-09-query-live.md), [AP-10](ap-10-events-delivery.md), [AP-11](ap-11-plugins.md), [AP-12](ap-12-processing-presentation.md), [AP-13](ap-13-frontend.md), [AP-14](ap-14-later-extensions.md), [AP-15](ap-15-operations.md), [AP-16](ap-16-integration-evidence.md).
-
-This is traceability, **not a second delivery-status table**. Package assignment means intended contribution, not approval/completion. All evidence below is future; none of these implementations exists yet. AP-01..AP-04 additionally govern respective contract/approval prerequisites; AP-16 governs approved delivery evidence.
+This file owns REQ-to-package coverage and planned evidence categories, **not a second requirement, task or delivery-status table**. Open the [catalog](../requirements-catalog.md) for REQ text, the [package directory](../work-packages.md#package-directory) for AP files, the [plan](../authoritative-plan.md#delivery-scope) for scope/approval and [execution records](../execution/README.md) for actual results. Package assignment means intended contribution, not approval/completion. AP-01..AP-04 additionally govern respective contract/approval prerequisites; AP-16 governs approved delivery evidence.
 
 | REQ | Packages | Planned evidence |
 | --- | --- | --- |

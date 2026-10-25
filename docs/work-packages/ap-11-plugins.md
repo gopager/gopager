@@ -2,7 +2,13 @@
 
 [Package index](../work-packages.md) | [Contract index](../domain-contracts.md) | [Shared execution rules](shared-rules.md) | [Requirement mapping](requirement-mapping.md)
 
-Related package references (not additional prerequisites): [AP-03](ap-03-technical-validation.md), [AP-10](ap-10-events-delivery.md).
+## Session Context
+
+- **Start and authority:** [session procedure](shared-rules.md#session-start), [scope/approval record](../authoritative-plan.md#workflow-and-approval-gates).
+- **Requirements:** [plugins/targets](../requirements-catalog.md#i-domain-events-extensions-and-deliveries), [security](../requirements-catalog.md#k-installed-web-app-and-security-behavior), [Unit target settings](../requirements-catalog.md#m-additional-domain-capabilities).
+- **Architecture:** [TECH-08](../architecture.md#technology-decisions), [plugin-host responsibilities](../architecture.md#supporting-responsibilities), [operating profiles](../architecture.md#operating-profiles).
+- **Owner contracts:** [C-09](../contracts/c-09-delivery.md), [C-10](../contracts/c-10-plugin-host.md), [C-06 SDK authorization](../contracts/c-06-identity-authorization.md); [shared limits](../contracts/shared-conventions.md).
+- **Cases and prerequisite outputs:** [F-18/F-20](../contracts/reference-cases.md), [F-34/F-36](../contracts/ap-02-boundary-cases.md); [AP-03 runtime/ABI evidence](ap-03-technical-validation.md), [AP-10 invocation boundary](ap-10-events-delivery.md), [AP-04 freeze](ap-04-scope-freeze.md). Record real provider access/results in the [execution record](../execution/README.md).
 
 **Owner:** Plugin host; separate owner per target; integration owns shared SDK. **Contract gate:** Validated C-09/C-10. **REQ:** REQ-084, REQ-089..090, REQ-107, REQ-129. **Prerequisites:** AP-10 and AP-03 evidence. **Exclusive target scopes:** `internal/pluginhost/`, `sdk/`, separate artifact sources `plugins/pushover/`, `plugins/telegram/`, `plugins/email/`, `plugins/webhook/`. Paths do not predetermine programming language/build tools.
 

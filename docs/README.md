@@ -1,56 +1,56 @@
 # GoPager Documentation
 
-Date: 2026-10-24. This documentation is the authoritative specification of the new product in its own repository. It describes a target state, not evidence of an existing implementation or qualified deployment.
-
 ## Document Authority
+
+One fact has one maintained definition. Other documents link to it; they do not reproduce its fields, defaults, algorithms, status lists or acceptance text. Document titles and IDs may recur as navigation, not as competing specifications.
 
 | Information | Single authoritative location | Maintenance responsibility |
 | --- | --- | --- |
-| User goals and observable acceptance outcomes | [Requirements catalog](requirements-catalog.md) | Product ownership |
-| Decisions, delivery scope, open issues, and approval gates | [Authoritative plan](authoritative-plan.md) | Product and integration ownership |
-| Technologies, domain boundaries, data ownership, and dependencies | [Architecture](architecture.md) | Architecture ownership |
-| Contracts, interfaces and invariants | [Contract index](domain-contracts.md) -> individual [C-ID files](contracts/) | Respective contract owner; integration for shared boundaries |
-| Shared contract conventions and reference cases | [Shared conventions](contracts/shared-conventions.md), [reference cases](contracts/reference-cases.md) | Integration / respective case owner |
-| Work packages, write scopes and dependencies | [Package index](work-packages.md) -> individual [AP-ID files](work-packages/) | Integration and respective package owner |
-| Shared execution gates and requirement-to-package traceability | [Execution rules](work-packages/shared-rules.md), [requirement mapping](work-packages/requirement-mapping.md) | Integration / respective package owner |
-| Provenance and limits of evidence | [Evidence notes](requirements-evidence.md) | Documentation ownership |
-| Binding domain vocabulary and logical stored information | [Glossary](glossary.md) | Integration ownership; draft until AP-04 freeze |
+| User goals and observable outcomes (REQ-IDs) | [Requirements catalog](requirements-catalog.md) | Product |
+| Product priorities, decision disposition/supersession (D-IDs), delivery scope, open gates (P-IDs), scope/execution approvals | [Authoritative plan](authoritative-plan.md) | Product / integration |
+| Selected technologies and rationale (TECH-IDs), module/data ownership, topology and allowed dependencies | [Architecture](architecture.md) | Architecture / integration |
+| Interface signatures, fields/types, state transitions, algorithms, permissions, errors, defaults/limits and compatibility | Respective [C-ID owner file](domain-contracts.md#contract-register); only genuinely cross-contract rules in [shared conventions](contracts/shared-conventions.md) | Contract owner / integration |
+| Concrete input/expected-output examples (F-IDs) | [Core cases](contracts/reference-cases.md), [boundary cases](contracts/ap-02-boundary-cases.md) | Case's contract owner |
+| Domain term meanings, prohibited terms and rename history | [Glossary](glossary.md) | Integration |
+| Stable task definition, REQ/C context, role, prerequisites, proposed write scope, acceptance and non-goals | Respective [AP file](work-packages.md#package-directory) | Planning / integration |
+| Named assignee, actual execution state, approved write-scope binding, commands/results, blockers and artifact handovers | Respective [execution record](execution/README.md) | Executing owner / integration |
+| Shared session and immutable-AP workflow | [Execution rules](work-packages/shared-rules.md) | Integration |
+| REQ-to-package coverage and planned evidence categories | [Requirement mapping](work-packages/requirement-mapping.md) | Integration |
+| External source provenance, reuse assessment and documentation-review evidence | [Source/evidence notes](requirements-evidence.md) | Documentation / assessing owner |
+| Human navigation | Root [README](../README.md), [package directory](work-packages.md), [contract directory](domain-contracts.md) | Documentation |
+| Agent entry route | [AGENTS.md](../AGENTS.md) | Integration; links only, no duplicate rules |
 
-Responsibilities are technical roles, not named people yet. Assign a role to a specific person or agent before assigning its work package. Until then, no exclusive write scope has a named assignee.
+Roles are not named assignees. An assignee or a completed task does not grant scope/execution approval; approvals belong only to the plan.
 
 ## Project Language
 
-English is the authoritative project language for specifications, documentation, code identifiers, code comments, interfaces, and default product text. Maintain these planning documents in English only; no parallel German specification or translated documentation set is required.
-
-Prepare the product for internationalization from the first implementation: separate user-facing Localized text from logic through stable text keys and an English text catalog, support parameterized Localized text and pluralization, and keep UI language separate from locale-dependent formatting. English is the only required language initially. Additional translations, language packs, and a language-selection UI are not required. Details and ownership belong to the [architecture](architecture.md#language-and-internationalization), C-07/C-11, and AP-13; this documentation does not claim an implemented i18n runtime.
+English is the language of repository artifacts, code identifiers/comments and interface documentation; no parallel translated specification is maintained. Product-language/i18n requirements belong to [REQ-097](requirements-catalog.md#j-processing-presentation-and-usability); responsibility routing belongs to the [architecture](architecture.md#language-and-internationalization).
 
 ## Status Terms
 
-- **Confirmed:** explicit product decision; downstream drafts must not reopen it.
-- **Selected, validation pending:** architecture planning decision, not a successful technical validation.
-- **Draft:** documented proposal for a boundary or representation, not a frozen contract.
-- **Open/blocker:** missing decision or evidence, with affected contracts and packages identified.
-- **Approved:** separately documented approval with contract version, scope, and evidence; creating a file does not grant approval.
-- **Documented:** the documentation records project content in the repository; this says nothing about product completion.
+- **Confirmed:** explicitly decided; drafts may not reopen it.
+- **Selected, validation pending:** technical planning baseline, not successful validation.
+- **Draft:** proposed contract representation, not frozen.
+- **Open/blocker:** missing decision/input/evidence assigned to an owner.
+- **Approved:** recorded authority with exact scope/version/evidence.
+- **Documented:** recorded specification, not implemented behavior.
 
-All contract versions are currently `0.1-draft`. Confirmed invariants remain binding; concrete fields/interface shape are not frozen. Implementation packages are blocked. [AP-02](work-packages/ap-02-domain-contracts.md) records documentary coverage/completion, not runtime or approval evidence; status remains owned by the [plan](authoritative-plan.md#workflow-and-approval-gates). The D-29 model preserves originals, current target resolution and rebuildable Message contributions with permitted representative selection. Diagram stubs never replace full master-data requirements. D-30 defers heuristics entirely; D-31 excludes application Backup/Restore logic.
+Actual contract state is in its C-ID file, execution state in its execution record and approval in the plan. AP checkmarks predating the immutable-AP workflow are historical planning marks, not a current status source.
 
 ## Change Rules
 
-1. Record new user decisions in the authoritative plan first, then update affected owner documents in the same change.
-2. Keep stable REQ IDs; reserve removed IDs rather than reusing them. Maintain delivery status only in the plan.
-3. Each technical statement has one owner. Other documents reference it rather than maintaining divergent copies. A conflict blocks approval of the affected contract until resolved.
-4. Contract changes identify version, producers/consumers, impact, and affected packages. No package owner independently changes shared authorization or transaction semantics.
-5. Implementation claims require actual tests or operational evidence. Planned examples and validation commands are not test results.
-6. Do not infer unapproved defaults, size limits, SLA, RPO/RTO, or hardware promises from architecture assumptions.
-7. PagerMon source code remains external provenance. Reuse requires a separate evidence assessment; there is no legacy compatibility promise.
-8. Write project artifacts in English and preserve stable technical IDs across language changes. Preparing i18n does not require additional translations or translating received Payload and operator-authored data.
-9. Names follow the [glossary](glossary.md), the single authoritative source for names. New names, detected collisions, and renames are recorded there (rename log: old name, new name, meaning, reason, package) by the package that finds them, and that package re-checks and updates all documents, code, schemas, API/event definitions, tests, and UI texts referring to the affected names, or records remaining occurrences as an owned follow-up (glossary maintenance rules).
+1. Locate the owner in the matrix before editing. Do not add a summary of the same rule to another document, even if that document is a convenient entry point.
+2. A product decision gets a stable D-ID/disposition and owner link in the plan; the chosen behavior is specified only in the linked owner. A technology selection/rationale is recorded under its TECH-ID in the architecture. Implementation-local choices are recorded beside the owning contract/interface or code, with rationale when non-obvious, not in a parallel decision diary.
+3. Preserve stable REQ/D/P/C/AP/T/F/TECH IDs. Reserve removed IDs. Delivery phase and approval are never inferred from requirements, files or checkmarks.
+4. Contract updates identify owner, version/status, changed surface, producers/consumers and affected packages. Keep data/error/time/revision/idempotency/transaction rules at that boundary; shared authorization or commit semantics require integration agreement. Frozen contract changes require renewed approval of affected scope.
+5. Treat the current AP as read-only during its execution. Record execution information under [execution records](execution/README.md); adapt only affected not-yet-started downstream APs when a concrete finding requires it, following the [amendment procedure](work-packages/shared-rules.md#downstream-amendments).
+6. Update owner content and incoming references in the same change. Conflicting owners block approval; do not silently pick a weaker rule or an unapproved default.
+7. Evidence must distinguish planned cases from executed commands and results. No inferred product completion, SLA, capacity, RPO/RTO or hardware certification.
+8. Names and propagation follow the [glossary maintenance rules](glossary.md#maintenance-rules). External code adoption follows the [reuse assessment](requirements-evidence.md#evidence-assessment-for-deliberate-reuse).
+9. Once generated API/schema/SDK artifacts become authoritative, record their exact path/version in the owning C-ID file and replace corresponding hand-maintained detail with links. Never keep two independently editable definitions of the same schema.
 
 ## Reading Order
 
-Start with the assigned AP file via the [package index](work-packages.md), its [shared execution rules](work-packages/shared-rules.md), and its C-/REQ-/P-IDs. Use the [contract index](domain-contracts.md) to open only relevant C-ID files and [shared conventions](contracts/shared-conventions.md); follow referenced contracts only for the boundary being changed. Use the separate [requirement mapping](work-packages/requirement-mapping.md) for traceability lookups. Read relevant requirement rows, glossary entries and current plan decisions/status rather than every document. The [architecture](architecture.md) owns the shared model/dependencies. Historical [evidence notes](requirements-evidence.md) are needed for provenance questions, not routine implementation context.
+For assigned work, the AP file is sufficient as the initial context: follow its **Session Context** and the [shared start procedure](work-packages/shared-rules.md#session-start), including the execution record. Do not preload all contracts or rely on prior chat.
 
-The contract index is navigation, not duplicated specification. Each contract has a stable C-ID, descriptive file name, owner/status, searchable headings and links to referenced contracts. [Reference cases](contracts/reference-cases.md) and [AP-02 boundary cases](contracts/ap-02-boundary-cases.md) retain stable F-IDs for targeted lookup. Markdown remains suitable for these prose contracts; actual machine-readable API/schema artifacts belong to their existing approval gates, not a parallel hand-maintained copy of the prose. Other suitable formats may be used when they become the authoritative artifact for that information.
-
-Keep new material in its owner file; link instead of copying it into the index, plan and package descriptions. Split further by cohesive responsibility when a file grows, preserving IDs and updating links/write scopes. Do not combine unrelated contracts merely to minimize file count. The root README is an entry point, not a second scope or task list.
+For a lookup, choose the owner above. D/P/TECH IDs route decisions and gates; C-ID files expose interface details; F-IDs locate examples. History is provenance, never an alternative specification.

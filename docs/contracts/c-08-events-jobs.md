@@ -4,6 +4,8 @@
 
 Referenced contracts (follow only when relevant): [C-01](c-01-transmission-acceptance.md), [C-09](c-09-delivery.md), [C-11](c-11-processing-presentation.md).
 
+**Traceability:** [REQ-049](../requirements-catalog.md#e-transmission-networks-and-gateways), [REQ-081](../requirements-catalog.md#i-domain-events-extensions-and-deliveries), [REQ-113..114/117](../requirements-catalog.md#l-operations-data-volume-and-evolution). Issue references: [P-01/P-04/P-11/P-12](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
+
 **Version/status:** 0.1-draft. **Owner:** DOM-07 for mechanics, producing domain for Domain event meaning, integration for commit boundary. **Producers/consumers:** Gateway/Message/assignment/configuration changes -> explicit live/rematch/Delivery work.
 
 Draft interfaces: `AppendDomainEvent(transaction, producer, DomainEvent) -> domainEventRef`; `ClaimJob(context, role, workerRef) -> leasedWork`; `CompleteJob(leaseRef, result)`; `RescheduleJob(leaseRef, classifiedFailure)`. Proposed Domain event fields: Domain event ID, type/schema version, producer, domain reference/revision, domain/recorded times, causality/idempotency reference, access-classified Payload. Exact envelope/required fields are not frozen.
@@ -16,7 +18,7 @@ Draft interfaces: `AppendDomainEvent(transaction, producer, DomainEvent) -> doma
 
 ## AP-02 Recorded Facts and Work
 
-Required envelope: `schemaVersion: 1`, `domainEventId` UUID, `type` from glossary registry, producer domain/plugin identity/version, `aggregateRef` type/ID, `aggregateRevision`, `occurredAt` domain fact time, `recordedAt` commit-associated primary time, optional `causationId` and `correlationId`, `data`, `classification`, `replayMode` (normal or explicit historical reprocessing). Domain event data is internal recorded context, not already-authorized outbound Payload. A schema change adding an optional field is backward compatible; new meaning/required field uses a new schema version. Unknown versions are visibly blocked, never skipped as successfully handled.
+Required envelope: `schemaVersion: 1`, `domainEventId` UUID, `type` from the type table below, producer domain/plugin identity/version, `aggregateRef` type/ID, `aggregateRevision`, `occurredAt` domain fact time, `recordedAt` commit-associated primary time, optional `causationId` and `correlationId`, `data`, `classification`, `replayMode` (normal or explicit historical reprocessing). Domain event data is internal recorded context, not already-authorized outbound Payload. A schema change adding an optional field is backward compatible; new meaning/required field uses a new schema version. Unknown versions are visibly blocked, never skipped as successfully handled.
 
 | Type / producer | Required data and effect |
 | --- | --- |

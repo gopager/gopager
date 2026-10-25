@@ -4,6 +4,8 @@
 
 Referenced contracts (follow only when relevant): [C-02](c-02-protocol-payload.md), [C-05](c-05-matching-correction.md).
 
+**Traceability:** [REQ-041..050](../requirements-catalog.md#e-transmission-networks-and-gateways), [REQ-108](../requirements-catalog.md#k-installed-web-app-and-security-behavior), [REQ-113..114](../requirements-catalog.md#l-operations-data-volume-and-evolution). Issue references: [P-01/P-03/P-08/P-09](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
+
 **Version/status:** 0.1-draft; not approved for implementation. **Owner:** DOM-01; integration owns the shared commit boundary. **Parties:** authorized Gateway/Gateway manager; downstream DOM-02/DOM-04/DOM-07.
 
 | Draft interface | Input | Result / effect |
@@ -11,6 +13,8 @@ Referenced contracts (follow only when relevant): [C-02](c-02-protocol-payload.m
 | `SubmitTransmission` | Context, authorized Gateway identity, submission identity, completed C-02 Transmission, mandatory Observation timestamp with explicit UTC offset or UTC designator, optional Gateway Network identifier, Transmission targets/Addresses, and already-evaluated quality metrics | Acceptance receipt/Transmission reference and an honest acceptance/processing state |
 | `ReportGatewayState` | Context, Gateway identity, heartbeat or explicit termination | Separate contact/Transmission/state evidence, state Domain event if appropriate |
 | `ConfigureGatewayNetworks` | Administrative Principal, expected revision, allowed Network contexts | Authorized new revision without retroactive mutation of Transmission evidence |
+
+Gateway contact, heartbeat and termination history must remain stored or exactly reconstructable so authorized administrators can distinguish which Gateways produced evidence for a Message and whether a Gateway had problems. State projection remains subject to C-06/C-07.
 
 **Defined:** A Network has one domain Protocol; a Gateway may submit for multiple allowed Networks. An authorized unambiguous declaration precedes inference; reject unauthorized declarations rather than silently redirecting. An absent declaration (resolved by inference or the default Network) and an unauthorized declaration (rejected) are different outcomes. Simple single-Network Gateways need no artificial frequency ranges.
 

@@ -1,23 +1,50 @@
 # Execution and Ownership Rules
 
-[Package index](../work-packages.md) | [Contract index](../domain-contracts.md) | [Requirement mapping](requirement-mapping.md)
+[Document authority](../README.md#document-authority) | [Package directory](../work-packages.md) | [Execution records](../execution/README.md)
 
-Related package references (not additional prerequisites): [AP-01](ap-01-protocols-grouping.md), [AP-02](ap-02-domain-contracts.md), [AP-03](ap-03-technical-validation.md), [AP-04](ap-04-scope-freeze.md), [AP-09](ap-09-query-live.md), [AP-12](ap-12-processing-presentation.md), [AP-13](ap-13-frontend.md), [AP-14](ap-14-later-extensions.md).
+## Session Start
 
-- **Historical clarification closure:** AP-01 closed on 2026-10-25 for its original exact-Grouping scope. The D-29 impact review amended C-01..C-03 and reference cases; D-30 subsequently deferred all heuristic semantics. Exact comparison extensibility remains AP-02 T009; no heuristic freeze blocker is retained.
-- **Documentary contract handover:** AP-02 coverage/closure is recorded in its owner file and the plan. D-28 times, D-29 model, D-30 exact-only comparison and D-31 external Backup/Restore boundary are reflected in owner contracts. Diagram stubs never narrow Gateways/Networks/Units. Technical evidence, physical schema details and scope/freeze approval retain their own gates; they are not AP-02 implementation claims.
-- **Validation planned:** AP-03 contains a documentary validation plan. Executable spikes require their own authorization; none have been run.
-- **Approval pending:** AP-04 is a gate, not an automatic status change after creating documentation.
-- **Blocked:** all product implementation packages; freeze prerequisites/contract versions first. AP-14 records deliberately later goals without bringing them forward.
-- Roles have no named assignee yet. Integration exclusively owns shared schema/contract/build/composition boundaries. No named or parallel write approval exists yet.
-- Target paths below are proposed future write scopes, not existing packages or an already-created Go structure. AP-04 confirms them before execution; no module path/toolchain is predetermined.
-- Contracts live in individual `docs/contracts/c-*.md` owner files; `docs/domain-contracts.md` is only their index. Shared conventions and F-ID cases have dedicated files there. Open the assigned C-ID files, then follow only relevant dependencies; do not load the entire contract collection by default. Coordinate shared index/conventions/model changes sequentially. Independent implementation remains gated.
-- Do not infer passing tests/product completion from future test files. Acceptance requires executed evidence; currently there is only Markdown.
-- **Names (D-21):** the [glossary](../glossary.md) is the single authoritative source for names. Every package that needs a new name adds it to the glossary; every package that detects a collision or needs a rename records it in the glossary rename log (old name, new name, meaning, reason, package) and must then re-check and update all documents, code, schemas/migrations, API/event definitions, tests, fixtures, and UI texts referring to the affected names, or record remaining occurrences as an owned follow-up. A package is not accepted while it introduces names missing from the glossary.
-- All project artifacts use English. Under D-20/REQ-097, prepare i18n during initial implementation: stable text keys, English text catalog/fallback, parameters/plurals, locale-aware formatting, and language-independent API codes. Additional translations/language packs are not required. AP-09 owns API boundaries, AP-12 built-in processing Localized text, AP-13 frontend catalog/formatting, and integration shared compatibility.
+1. Open the assigned AP's **Session Context**, tasks, prerequisites, write scope, acceptance and non-goals. Treat its current contents as the baseline, not a scratchpad or progress log.
+2. Read the [authority/change rules](../README.md#change-rules), relevant [glossary](../glossary.md) entries and [naming maintenance](../glossary.md#maintenance-rules).
+3. Check [scope](../authoritative-plan.md#delivery-scope), [P-ID gates](../authoritative-plan.md#open-issues-and-risks) and [approval](../authoritative-plan.md#workflow-and-approval-gates). Open relevant D-ID owner links and the C-ID versions; creating documentation or marking a task does not grant approval.
+4. Read the AP-linked REQ sections, TECH/architecture boundaries, owner contracts, [shared conventions](../contracts/shared-conventions.md) and F-ID cases for the slice. Follow only relevant contract dependencies.
+5. Open this AP's [execution record](../execution/README.md#record-location) and those of prerequisite producers. If no record exists, there is no recorded execution handover; do not infer readiness from an AP checkbox. Create the current record before execution, not placeholder records for every future AP.
+6. Inspect actual source/manifests/artifacts. Verify named assignee, approved scope/version binding, prerequisite outputs and runnable focused checks. Executable experiments require AP-03 authorization; documentary work does not require already-frozen contracts. Missing approval/input is a blocker, not permission to invent a default.
 
-# Validation Commands and Remaining Gates
+## Immutable AP Baseline
 
-There is no Go module, frontend manifest, test configuration, or CI yet. Do not invent currently executable build/test commands. AP-04 records actual focused commands per approved package once available; `go test ./...` is only a future overall check after creating the Go module and replaces neither real PostgreSQL nor browser/provider/HA evidence. I18n checks will validate the English-only catalog, mappings, fallback, interpolation/plurals, formatting separation, and layout, without requiring additional translated files.
+Do not edit the AP being executed, including task wording/checkmarks, status, commands, results or write scope. Its task definitions and acceptance remain the reference against which execution is judged.
 
-The task list is deliberately not labeled a fully approved, immediately executable implementation plan: missing domain decisions, technical evidence, and scope approval are real gates. Documentary completeness is checked through IDs/links/ownership/status, not fictional runtime outcomes. Translation of planning data does not approve any blocked package.
+Keep execution state, actual assignee/scope binding, commands/results, blockers, deviations and output references only in the [execution record](../execution/README.md). Do not copy task descriptions, contract decisions or planned case definitions into it: use T/C/D/F/REQ IDs and links to owners.
+
+If the current AP's baseline cannot be satisfied, record the discrepancy and block the affected work. Product/integration must explicitly resolve the owner contract/scope or commission a separate planning revision; the executing session must not silently rewrite its own acceptance. This also applies when a prerequisite or write-scope assumption proves wrong.
+
+Legacy checked tasks in AP-01/AP-02 remain untouched as historical marks. Their documentary execution outcomes are indexed under [execution records](../execution/README.md), independently of implementation approval.
+
+## Downstream Amendments
+
+Only a concrete finding from the current execution justifies changing a following AP:
+
+1. Identify the affected future task/input/interface and its owning contract or architecture decision.
+2. Record finding, evidence link, affected AP/task and owner in the current execution record. Store the actual decision/contract detail only in its authoritative source.
+3. Amend only the affected **not-yet-started** downstream AP, preserving stable IDs and linking to that owner detail. "Downstream" means an actual consumer, not merely a higher AP number. A concurrently active/completed AP is not editable under this exception.
+4. Record the amendment path and rationale reference in the producer's handover, notify integration/consumer, and obtain approval if scope/version changes. The consumer checks this handover before starting.
+
+This rule does not permit implementation of an unapproved extension or a silent expansion of write scope.
+
+## Implementation Decisions and Interface Handover
+
+- Put chosen boundary behavior, complete interface forms, field/error/time/revision/idempotency/transaction rules and compatibility in the owning C-ID file, following [shared conventions](../contracts/shared-conventions.md#freeze-requirements).
+- Record technology selection, exact selected versions and rationale in the architecture's owning TECH section; reference executable version pins rather than maintaining competing literals once manifests exist.
+- Record product decision disposition/approval in the plan with a direct owner link. New defaults, changed permissions or changed product behavior require that approval, not just an implementation note.
+- Keep private implementation mechanics in code/tests; document only externally required usage or non-obvious rationale. Do not create an additional interface catalog that copies contract signatures.
+- An owner contract must link actual OpenAPI/schema/SDK artifacts when introduced, identify their authority/version and replace duplicated prose schema detail with references. Producers and consumers must agree on the same artifact.
+- The execution record links to changed owners, exact approved contract versions and actual output artifacts. It contains no second definition of a decision or interface.
+
+## Execution and Verification
+
+Integration coordinates shared composition/build/schema-registration boundaries under the [architecture](../architecture.md#supporting-responsibilities); domain owners retain their schema objects. Parallel work needs explicit disjoint scope approval.
+
+Use existing actual test/build tooling. Record exact focused commands, versions/environment, observed exit/results and limits in the execution record. Do not invent runnable commands for absent modules/toolchains. Overall Go tests do not replace real PostgreSQL, HTTP/browser/provider or operational evidence.
+
+Document-only verification checks links/anchors, IDs, ownership, preserved acceptance and the current AP's unchanged diff. End with a persisted handover of artifacts/results and unresolved blockers; a chat-only report is not a handover.

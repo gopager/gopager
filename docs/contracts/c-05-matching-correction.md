@@ -4,6 +4,8 @@
 
 Referenced contracts (follow only when relevant): [C-01](c-01-transmission-acceptance.md), [C-06](c-06-identity-authorization.md), [C-09](c-09-delivery.md).
 
+**Traceability:** [REQ-021](../requirements-catalog.md#c-units-organizations-and-defaults), [REQ-031..040](../requirements-catalog.md#d-correct-assignment-and-history), [REQ-123..124](../requirements-catalog.md#m-additional-domain-capabilities). Issue references: [P-08..P-10/P-12](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
+
 **Version/status:** 0.1-draft. **Owner:** DOM-04. **Producers:** temporal Address rules, Transmission targets, relevant master-data Domain events. **Consumers:** DOM-06/DOM-07 using central C-06 evaluation.
 
 | Draft interface | Input / result | Obligation |
@@ -37,6 +39,8 @@ Suppression is Transmission-target-specific. No normal Message view without usab
 Address rules retain domain validity intervals and ordinary edit concurrency control. No immutable Address-rule-version entity is required: configuration audit records changes, while Rematching uses current rules at original Observation times. Exact replay of every earlier evaluation is not promised. A removed rule must not leave stale Unit authority; reference cleanup and invalidation are coordinated.
 
 A Message contribution is the stored, rebuildable read model: Message, Network/Protocol, concrete Address/Function, direct Unit or explicit status, Contribution time and Contribution age anchor. Logical identity is those context dimensions, not Gateway, rule edit version or contiguous validity segment. Different Addresses remain different contributions even for the same Unit. Different rules/segments resolving to the same visible context can share one contribution; exact temporal evaluation remains on each original target. Unit changes across a validity boundary produce distinct Unit contributions, without discarding provenance.
+
+Semantic reference names are `contributionId` and `addressRuleId`; these are not a frozen physical field inventory or an immutable rule-version reference.
 
 Contribution supports reference contribution + Transmission + original target, with no target only for a targetless Transmission. Enforce at most one current support per usable target, target ownership by the referenced Transmission, and common Message membership. Suppressed/unready targets do not support the normal read model; unsupported contributions are removed. One Transmission can support many contributions, and many Transmissions can support one. Targetless support uniqueness and nullable-key equality need explicit constraints in the concrete schema.
 

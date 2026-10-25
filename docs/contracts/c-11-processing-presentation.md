@@ -6,6 +6,8 @@ Referenced contracts (follow only when relevant): [C-03](c-03-message-grouping.m
 
 Targeted sections: [Workflow schema/evaluation](#workflow-definition-and-results), [publication/activation/reprocessing](#ingest-publication-activation-and-reprocessing), [presentation/configuration](#presentation-and-configuration), [English key mapping](#text-key-mapping-and-remaining-technical-evidence). Concrete checks: [F-37/F-38](ap-02-boundary-cases.md).
 
+**Traceability:** [REQ-091..097/099..100](../requirements-catalog.md#j-processing-presentation-and-usability). Issue reference: [P-16](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
+
 **Version/status:** 0.1-draft. **Owner:** DOM-08; frontend consumes permitted configuration/results. **Producers:** authorized administrative rules and sample/Transmission Payload. **Consumers:** presentation and explicit Domain event reactions.
 
 Draft interfaces: `PreviewRules(Principal, draft, sample) -> derivedFields, explanation, errors` without live effects; `SaveRuleVersion(Principal, expectedRevision, definition) -> savedVersion`; `ActivateRuleVersion` / `SelectPreviousVersion` -> traceable active state; `EvaluateRules(context, version, Payload) -> boundedDerivedResult`; `RenderAuthorizedPayload(projectedFields, presentationConfig) -> safeViewModel`.

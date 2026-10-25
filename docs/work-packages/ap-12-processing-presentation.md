@@ -2,7 +2,13 @@
 
 [Package index](../work-packages.md) | [Contract index](../domain-contracts.md) | [Shared execution rules](shared-rules.md) | [Requirement mapping](requirement-mapping.md)
 
-Related package references (not additional prerequisites): [AP-07](ap-07-identity-authorization.md), [AP-09](ap-09-query-live.md), [AP-10](ap-10-events-delivery.md), [AP-13](ap-13-frontend.md).
+## Session Context
+
+- **Start and authority:** [session procedure](shared-rules.md#session-start), [scope/approval record](../authoritative-plan.md#workflow-and-approval-gates).
+- **Requirements:** [processing/presentation/i18n](../requirements-catalog.md#j-processing-presentation-and-usability); select the REQ IDs below.
+- **Architecture:** [DOM-08 ownership](../architecture.md#domains-and-data-ownership), [ingest publication coordination](../architecture.md#shared-use-cases), [i18n responsibilities](../architecture.md#language-and-internationalization).
+- **Owner contracts:** [C-11](../contracts/c-11-processing-presentation.md), [C-08](../contracts/c-08-events-jobs.md), [C-09](../contracts/c-09-delivery.md), [C-10 installed steps](../contracts/c-10-plugin-host.md), [C-06 field rights](../contracts/c-06-identity-authorization.md); [shared limits](../contracts/shared-conventions.md).
+- **Cases and staged handovers:** [F-21/F-26](../contracts/reference-cases.md), [F-37/F-38](../contracts/ap-02-boundary-cases.md); [AP-05 foundation](ap-05-runtime-persistence.md), [AP-07 AuthZ](ap-07-identity-authorization.md), [AP-06 ingest consumer](ap-06-transmission-messages.md), [AP-09 read integration](ap-09-query-live.md), [AP-10 reactions](ap-10-events-delivery.md), [AP-13 UI consumer](ap-13-frontend.md), [AP-04 freeze](ap-04-scope-freeze.md). Only the slices in **Prerequisites** below are required.
 
 **Owner:** DOM-08. **Contract gate:** C-11, C-08/C-09 reaction boundary. **REQ:** REQ-091..097, REQ-099..100. **Prerequisites by slice:** AP-05/AP-07 for T043's backend evaluator/configuration kernel; AP-09 for read/presentation integration; AP-10 for real Domain event reactions. T043 consumes frozen Transmission/target/result interfaces and fixtures, not an already-built feed. **Exclusive target scopes:** `internal/processing/`, rule/presentation schemas and own tests; UI through AP-13 only.
 
@@ -12,4 +18,4 @@ Related package references (not additional prerequisites): [AP-07](ap-07-identit
 
 **Acceptance:** Minimum value without original mutation, privilege expansion, or unrestricted scripts; built-in product text prepared for localization, not automatic Payload translation. **Non-goals:** Complete n8n/Node-RED clone or unverified `essen.js` parity.
 
-**AP-02 dependency handover:** The ingest barrier must not create AP-06 -> whole AP-12 -> AP-09 -> AP-06 circular execution. Schedule the standalone T043 kernel first, wire its frozen interface in AP-06, then integrate presentation/query/reactions. This clarifies future execution order only; no AP-12 task was executed or checked off.
+**Output handover:** T043's standalone evaluator/revision/result interface goes to [AP-06](ap-06-transmission-messages.md) before ingest publication wiring. Presentation/query/reaction integration follows AP-06/AP-09/AP-10. The feed/frontend is not a prerequisite for the kernel.
