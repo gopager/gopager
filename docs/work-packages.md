@@ -22,7 +22,7 @@ Use the [requirement mapping](work-packages/requirement-mapping.md) for cross-pa
 | [AP-08](work-packages/ap-08-master-data-correction.md) | Master data and correction |
 | [AP-09](work-packages/ap-09-query-live.md) | Search, REST and SSE |
 | [AP-10](work-packages/ap-10-events-delivery.md) | Domain events and Delivery core |
-| [AP-11](work-packages/ap-11-plugins.md) | SDK, plugin host and four targets |
+| [AP-11](work-packages/ap-11-plugins.md) | SDK, plugin host and initial targets |
 | [AP-12](work-packages/ap-12-processing-presentation.md) | Processing and presentation |
 | [AP-13](work-packages/ap-13-frontend.md) | Vue frontend |
 | [AP-14](work-packages/ap-14-later-extensions.md) | Later extension boundaries |

@@ -4,7 +4,7 @@ Date: 2026-10-25. This file owns technology selections/rationale, topology, modu
 
 ## Technology Decisions
 
-'Selected' means a reasoned planning decision inherited from the original plan, not a successful spike or a fixed package version. Go and the modular monolith were also directly confirmed by the user. Exact versions other than Vue 3, SQL drivers, Wasm ABI, UI component library, and build tools are not selected.
+'Selected' means a reasoned planning decision inherited from the original plan, not a successful spike or a fixed package version. Go and the modular monolith were also directly confirmed by the user. Exact foundation versions are now approved in the [AP-05 selection](#ap-05-foundation-version-selection); SQLite drivers, Wasm ABI, UI component library and frontend build tools remain unselected.
 
 | ID | Selection | Rationale / boundary | Evidence/gate owner |
 | --- | --- | --- | --- |
@@ -20,6 +20,14 @@ Date: 2026-10-25. This file owns technology selections/rationale, topology, modu
 | TECH-10 | Central AuthZ core in Go | No baseline external policy service; one semantic owner for grants, field projection, and current Delivery authorization. | [P-10](authoritative-plan.md#open-issues-and-risks), [C-06](contracts/c-06-identity-authorization.md) |
 
 A broker, cache, separate search index, or policy service may become a later Full optimization with demonstrated benefit, not a speculative baseline component. SQLite WAL permits only one concurrent writer; short transactions and local storage are prerequisites. No WAL on a shared network filesystem and no multi-host SQLite HA.
+
+### AP-05 Foundation Version Selection
+
+**TECH-01/05/06; D-35; status: approved 2026-10-26 for AP-05 only.** Exact initial implementation tuple: Go `1.26.2`, `github.com/jackc/pgx/v5 v5.11.0` through its `stdlib` adapter and Go `database/sql`, PostgreSQL `18.0`. The reproducible local test image is `postgres:18.0-alpine` at OCI index digest `sha256:48c8ad3a7284b82be4482a52076d47d879fd6fb084a1cbfccbd551f9331b0e40`; this pins the test fixture, not a requirement that Operators deploy Alpine containers. AP-03 characterized these exact candidates; the user separately approved their production selection under [D-35](authoritative-plan.md#ap-04-foundation-freeze-decision). No claim of latest versions, vulnerability certification or product runtime validation follows.
+
+Use the standard library for startup/configuration, HTTP status handlers, structured logging and test harnesses; no application framework, ORM or migration dependency is selected. `go.mod`/`go.sum` become executable dependency authorities in AP-05 and this section then links them rather than maintaining competing pins. New dependencies/version changes require their own rationale and affected compatibility checks; no silent switch to another tuple. SQLite driver, Wazero/SDK tuple, Unicode/search implementation and frontend tools remain unselected by this foundation approval.
+
+The application consumes store-neutral transaction/repository interfaces under [C-12](contracts/c-12-persistence-operations.md#ap-05-foundation-boundary); pgx/SQL handles, dialects and migration SQL stay in infrastructure. AP-05 owns only platform schema objects. Domain owners later register their own migrations through integration, without copying AP-03 probe tables into production.
 
 ### Alternatives Considered
 
@@ -40,6 +48,8 @@ This section allocates responsibilities, not another copy of [REQ-097](requireme
 
 ## Operating Profiles
 
+**AP-04 delivery amendment:** Under [D-32](authoritative-plan.md#ap-04-scope-decision), implement Full/PostgreSQL first. Lite below describes the retained target topology, not a first-release runtime obligation. Domain/application services must not depend on PostgreSQL-specific driver types, dialect SQL or multi-process-only communication. Infrastructure adapters own dialects, transaction execution, migrations and store-specific queries behind consumer-driven interfaces; application composition must permit in-process roles. Later Lite adds alternative adapters/composition without changing domain ownership or the logical Message model. Do not implement a speculative SQLite adapter now or promise parity before testing it. Review these boundaries with PostgreSQL-backed integration tests now; run the same domain conformance cases against SQLite when that adapter is introduced.
+
 TECH-02 defines the shared artifact: Lite composes API/live/ingest/plugin/jobs in one process; Full may distribute API/live and worker roles. Frontend assets and Wazero are embedded. SQLite is a local file; PostgreSQL is an external Full component. Containers are a deployment option, not a mandatory bare-metal runtime. Optional plugin subprocesses follow [C-10](contracts/c-10-plugin-host.md).
 
 This topology does not establish database HA. Operational authority/replica/failure behavior is defined in [C-12](contracts/c-12-persistence-operations.md), not repeated here.
@@ -56,7 +66,7 @@ flowchart LR
     Jobs --> Workers[GoPager Worker]
     Workers --> Modules
     Workers --> Host[Controlled Wazero host]
-    Host --> Targets[Pushover / Telegram / Email / Webhook]
+    Host --> Targets[Pushover / Webhook]
 ```
 
 The diagram shows capabilities, not separate mandatory processes. The browser receives authorized projections only, never direct database/outbox or plugin Payloads.

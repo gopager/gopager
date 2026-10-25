@@ -10,7 +10,8 @@ Referenced contracts (follow only when relevant): [C-06](c-06-identity-authoriza
 
 | Draft interface | Input -> result |
 | --- | --- |
-| `ConfigureDeliveryTarget` | Principal, plugin type, expected revision, target-specific configuration/secret references -> separate instance and redacted status |
+| `ConfigureDeliveryTarget` | Authorized administrator/Operator, plugin type, expected revision, administrative configuration/Secret references -> separate instance and redacted status |
+| `ConfigurePersonalRecipient` | Owning User, administratively configured target, expected revision, declared personal recipient fields/Secret references -> instance-bound personal recipient and redacted status |
 | `ChangeSubscription` | Owner, expected revision, Domain event selection, filters, target, Payload selection -> explicit active/paused configuration |
 | `PrepareDeliveryAttempt` | Job/Domain event reference -> currently authorized projection, target configuration, attempt permission or cancellation reason |
 | `RecordDeliveryOutcome` | Attempt, controlled provider result -> accepted, retry pending, failed/expired, or uncertain |
@@ -32,7 +33,7 @@ Subscription: ID/revision, owning Subscriber, personal/global kind, explicit non
 
 Hidden/unreadable operands produce an indeterminate value, propagated through negation and boolean composition; only a definite true matches. In particular `NOT(hiddenField = x)` is not true. For readable optional fields, presence can explicitly test absence; malformed typed comparisons are validation errors, not coerced strings or silent defaults.
 
-**Target selection:** A Subscription can select one or several configured target instances, including a provider-side channel or collection such as Telegram channel/chat or Pushover group key. A dynamic selector may select from an explicitly delegated configured target pool using permitted structured data; it cannot turn untrusted Payload into an arbitrary undelegated URL/contact/Secret. An admin may explicitly configure a template-driven external destination under the Integration's trusted transport policy and delegated data rights; that is deliberate configuration, not an implicit global Unit mapping.
+**Target selection:** A Subscription can select one or several configured target instances, including a provider-side channel or collection such as Telegram channel/chat or Pushover group key. Personal recipient selection follows the [configuration-authority boundary](#configuration-authority); subscription rights never create an integration. A dynamic selector may select from an explicitly delegated configured target pool using permitted structured data; it cannot turn untrusted Payload into an arbitrary undelegated URL/contact/Secret. An admin may explicitly configure a template-driven external destination under the Integration's trusted transport policy and delegated data rights; that is deliberate configuration, not an implicit global Unit mapping.
 
 **Overrides:** Unit-specific Extension fields have plugin-declared type/validation and explicit permission. Mapping/precedence is declared by the Subscription: common target configuration, then Subscription mapping, then explicitly selected Unit fields. Conflicting values from multiple relevant Units must be resolved by an explicit split-per-Unit or explicit configured selection, never map iteration order. Split Deliveries contain only the corresponding permitted data, with split identity in deduplication. Provider/channel/Secret changes remain separately authorized target configuration, not a Unit-field shortcut.
 
@@ -46,6 +47,30 @@ Hidden/unreadable operands produce an indeterminate value, propagated through ne
 | Plugin asks for other Units/Core data | Manifest declaration plus approved instance capability and current Principal data grants; result projected through C-06. An undeclared call fails `CAPABILITY_UNDECLARED`. |
 
 This matrix is binding even if AP-03 later requires a different SDK mechanism. Do not implement all variants speculatively. Message retention only cancels work whose actual dependencies disappeared; it does not cancel a self-contained Delivery just because the original Message was deleted.
+
+## Configuration Authority
+
+**AP-04 D-33 clarification, 2026-10-26; DOM-07 with plugin-host/integration ownership; draft, not frozen.** Every integration requires configuration by an authorized administrator or Operator before Users can use it. Administrative authority is checked through C-06 (`plugin.configure` for all or a delegated instance); personal subscription rights do not grant it. Installing/updating plugin code remains Operator-only under C-10.
+
+Administrative configuration owns provider/application credentials, enabled capabilities, message format/templates, transport/authentication settings and security policy. The administrator/Operator is responsible for selecting appropriate settings and consciously accepting configured external-transport risks. This responsibility does not grant access to other Principals' data or disable Core authorization, Secret redaction or the existing transport rules.
+
+Where an integration supports individually addressable recipients, its declared schema may expose personal recipient fields. Users can supply/change their own recipient identifier or credential and configure their own Subscriptions using that administratively configured integration, within current data/target permissions. Personal settings are bound to the owning User and target instance; they cannot change administrative settings, another User's recipient or provider/application Secrets. Subscription mappings and Unit-field overrides cannot promote a personal field into an administrative override. Integrations without individual recipient support expose no such personal-recipient configuration; permitted Subscriptions still use administratively configured targets.
+
+Each property's administrative or personal configurability must be declared in the plugin manifest under [C-10's configuration-field contract](c-10-plugin-host.md#manifest-configuration-fields), which also owns SDK/API enforcement and invalid-declaration handling.
+
+**Pushover:** The administrator/Operator supplies the application API token and defines the message format. Each User may supply their own Pushover User key and select their own Subscriptions. The personal User key does not create another application configuration or reveal/replace its application token. Both credentials use C-10 Secret handling; ordinary views return redacted status, not stored Secret values.
+
+Missing/inactive administrative configuration prevents use with a visible configuration failure; no personal credential creates a fallback integration. Personal-recipient changes are revisioned target configuration and participate in the existing current-authorization/configuration checks before each new attempt. Concrete field schemas and validation/error fixtures remain freeze requirements. This clarification does not select an additional persistent entity or physical SQL schema.
+
+## Initial Target Capabilities
+
+**AP-04 D-33 amendment; DOM-07 with plugin-host/integration ownership; draft, not frozen.** Pushover and Webhook are the initial target plugins. The capability set belongs to [REQ-090](../requirements-catalog.md#i-domain-events-extensions-and-deliveries), delivery timing to the [plan](../authoritative-plan.md#ap-04-scope-decision). Neither installed Gateway behavior nor existing provider fixtures define this API.
+
+Webhook target configuration must distinguish the destination, selected method, input encoding, authentication mode and versioned Secret references. All invocations use this contract's current authorized Delivery input and attempt/uncertainty rules plus [C-10 transport protections](c-10-plugin-host.md#ap-02-secrets-and-external-transport); none of the new options relaxes them.
+
+**Configurable GET input (explicit D-33 follow-up):** Support deliberate target-specific selection of query parameters or request body for legacy endpoints. Neither location is inferred from arbitrary Payload or silently changed after a failure. Body compatibility is endpoint-specific; do not promise universal GET-body interoperability. Query transport of sensitive input requires an explicit Operator-approved risk policy and a visible explanation that destinations/proxies may log URLs. Ordinary subscription configuration does not by itself grant that policy. Input still comes only from the current authorized Delivery projection and the configured target's declared fields; operator risk acceptance is not access to another Principal's data. Do not emit dynamic query values, credentials or complete request URLs in GoPager logs/errors/status; use redacted target/attempt references. Explicit bearer/basic modes use authentication headers, not an automatic credential-to-query conversion. Existing C-10 TLS/destination/redirect rules still apply. External endpoint/intermediary logging is outside GoPager's control and cannot be promised safe by this configuration.
+
+Before freeze, specify concrete validation/errors and positive/negative fixtures for method/encoding/input-location combinations, form value typing, multipart fields, authentication headers, and the exact HMAC signed bytes/header/replay policy. GET configuration must explain body compatibility and query exposure; a failed/uncertain attempt never triggers a secret-bearing location/method fallback. No arbitrary default signing algorithm, URL serialization or success-shaped fallback is selected here.
 
 ## AP-02 Attempt State, Authorization and Retry
 

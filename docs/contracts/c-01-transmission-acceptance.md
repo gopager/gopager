@@ -6,7 +6,7 @@ Referenced contracts (follow only when relevant): [C-02](c-02-protocol-payload.m
 
 **Traceability:** [REQ-041..050](../requirements-catalog.md#e-transmission-networks-and-gateways), [REQ-108](../requirements-catalog.md#k-installed-web-app-and-security-behavior), [REQ-113..114](../requirements-catalog.md#l-operations-data-volume-and-evolution). Issue references: [P-01/P-03/P-08/P-09](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
-**Version/status:** 0.1-draft; not approved for implementation. **Owner:** DOM-01; integration owns the shared commit boundary. **Parties:** authorized Gateway/Gateway manager; downstream DOM-02/DOM-04/DOM-07.
+**Version/status:** 0.1-draft except the separately frozen [AP-05 intake-commit boundary](#ap-05-intake-commit-boundary); the Submission/API contract is not approved for implementation. **Owner:** DOM-01; integration owns the shared commit boundary. **Parties:** authorized Gateway/Gateway manager; downstream DOM-02/DOM-04/DOM-07.
 
 | Draft interface | Input | Result / effect |
 | --- | --- | --- |
@@ -46,3 +46,11 @@ The Submission preserves original reported Payload, targets and context unchange
 **AP-02 handover completed:** Common schemas specify JSON, identifiers, limits and contact timeouts. Receipt fields: `submissionId`, `transmissionId`, `acceptanceTime`, `processingStatus`, and `messageId` only if derived and authorized. Intake commit yields `accepted` with `processingStatus: pending`; it never implies publication or completed Parsing. `completed` means Grouping, current target resolutions and Message contributions and selected Workflows have finished; `failed` is inspectable/retriable internally, not a silently successful projection. AP-03 may validate a synchronous fast path under the same states; it cannot publish half-processed data. Commit durability/precision/backend strategy remains AP-03, not an executed AP-02 experiment.
 
 **Rejection when storage is unavailable:** C-01's required Operational log/Domain event accompanies a durable rejection when storage permits. If the store itself is unavailable, return storage/authority error and emit a redacted process diagnostic; do not claim the Operational Domain event was committed or invent successful rejection persistence. Authentication failures do not disclose a foreign Gateway/Network. This makes the rejection invariant implementable during disk/primary failure.
+
+## AP-05 Intake-commit Boundary
+
+**Version/status:** intake-commit 1.0, frozen for AP-05 under D-35 on 2026-10-26; all Submission wire/schema/Protocol/Observation-time choices above remain draft. **Owner:** DOM-01 with integration. **Producer:** later authenticated intake repository; **consumer:** AP-05 transaction adapter and later C-08 producer adapters. Vocabulary: glossary G-1.0.
+
+Intake persistence joins [C-12's transaction capability](c-12-persistence-operations.md#transaction-and-repository-participation). Future receipt/original evidence and required durable follow-up work must commit together; successful receipt means the recorded intake stage only. No receipt/`accepted` response is published before successful commit. Known rollback leaves no partial intake/outbox state; possible commit returns `COMMIT_UNCERTAIN` for same-operation lookup under current Gateway authority. The platform never generates a new Submission identity or reruns the callback to hide uncertainty.
+
+AP-05 tests this boundary using explicitly synthetic repository participants, not production Transmission tables or an ingest API. Cases [F-46c/F-46d](reference-cases.md#ap-05-foundation-cases) bind atomicity and uncertainty. This partial freeze does not settle Observation precision, generate OpenAPI, implement Gateway authentication or transfer DOM-01 schema ownership.

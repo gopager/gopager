@@ -1,6 +1,8 @@
 # GoPager Glossary
 
-Date: 2026-10-25. Status: **draft** (AP-01/AP-02); binding vocabulary for all documents, frozen together with the contracts in AP-04. Decisions and provenance: [plan](authoritative-plan.md), [evidence notes](requirements-evidence.md).
+Date: 2026-10-26. Status: **G-1.0, frozen for the AP-05 foundation slice** under AP-04/D-35; original AP-01/AP-02 meanings and history are preserved. Decisions and provenance: [plan](authoritative-plan.md), [evidence notes](requirements-evidence.md).
+
+**AP-04 version binding:** G-1.0, approved by the user on 2026-10-26 for the D-35 AP-05 foundation slice only. Existing term meanings and naming history are unchanged. Contract-specific types/configuration fields remain at their C-ID owners. Other contract slices do not gain freeze approval from this vocabulary binding; later meaning changes require a new glossary version and affected-consumer review.
 
 This glossary owns **domain term meanings**, not interface schemas or implementation algorithms. Code/API/UI names derive from these terms; exact wire identifiers and their behavior are owned together in the [contract registry routes](#ap-02-identifier-registry). UI labels may be localized without introducing new meanings. Terms in the [prohibited terms](#prohibited-and-restricted-terms) list are not domain names.
 
@@ -18,6 +20,7 @@ This glossary owns **domain term meanings**, not interface schemas or implementa
 | **Network resolution** | Server-side derivation of a Transmission's Network. Precedence, states and rematching boundary: [C-01](contracts/c-01-transmission-acceptance.md). | Grouping |
 | **Protocol** | The radio or transport protocol (POCSAG, FLEX, ZVEI, EAS, SMTP-based formats). | Payload form |
 | **Protocol definition** | Server-side, versioned description of a Protocol: which submitted fields are Payload, which are Address/Function, and how each protocol message type maps to a Payload form and Canonical payload. | Protocol |
+| **FLEX short signal** | A FLEX Short Message carrying a Source code rather than normal text. Protocol meaning and comparison are owned by DOM-02 in [C-02](contracts/c-02-protocol-payload.md#ap-04-flex-clarification); introduced by AP-04/D-34. | Tone-only call, Gateway/source identity |
 | **Group call** | Protocol feature in which one Emission addresses several Addresses (for example FLEX group messaging, Swissphone Express-Alarm (product feature name), SMTP with several targets in the body). Results in one Transmission per receiving Gateway with several Transmission targets. | Message, User group, Unit collection |
 
 ## Transmission and Payload
@@ -231,3 +234,4 @@ These rules bind every work package and every agent or person working on GoPager
 | 2026-10-25 | Address-rule version as mandatory entity | Address rule with validity and configuration audit | Domain validity remains required; immutable edit-version storage and exact old evaluation replay are not required. | AP-02 |
 | 2026-10-25 | Assignment time/age anchor; assignmentId; addressRuleVersion | Contribution time/age anchor; contributionId; addressRuleId | Naming follows the new read model and mutable matched filter. Historical entries above remain provenance. | AP-02 |
 | 2026-10-25 | Restore hold; CreateBackup/RestoreBackup/AcknowledgeRestoreHold | No application feature; manual Operator Backup/Restore | D-31 excludes the former application lifecycle and credential-invalidation proposal, without removing ordinary restart/job consistency. | AP-02 |
+| 2026-10-25 | FLEX Source-code variants implicitly treated as tone-only | FLEX short signal | D-34 distinguishes signal-bearing Payload from empty tone-only Payload; C-02 owns its wire/form mapping. Earlier execution evidence is preserved. | AP-04 |

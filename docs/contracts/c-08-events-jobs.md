@@ -6,13 +6,21 @@ Referenced contracts (follow only when relevant): [C-01](c-01-transmission-accep
 
 **Traceability:** [REQ-049](../requirements-catalog.md#e-transmission-networks-and-gateways), [REQ-081](../requirements-catalog.md#i-domain-events-extensions-and-deliveries), [REQ-113..114/117](../requirements-catalog.md#l-operations-data-volume-and-evolution). Issue references: [P-01/P-04/P-11/P-12](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
-**Version/status:** 0.1-draft. **Owner:** DOM-07 for mechanics, producing domain for Domain event meaning, integration for commit boundary. **Producers/consumers:** Gateway/Message/assignment/configuration changes -> explicit live/rematch/Delivery work.
+**Version/status:** 0.1-draft except the separately frozen [AP-05 transaction participation](#ap-05-transaction-participation). **Owner:** DOM-07 for mechanics, producing domain for Domain event meaning, integration for commit boundary. **Producers/consumers:** Gateway/Message/assignment/configuration changes -> explicit live/rematch/Delivery work.
 
 Draft interfaces: `AppendDomainEvent(transaction, producer, DomainEvent) -> domainEventRef`; `ClaimJob(context, role, workerRef) -> leasedWork`; `CompleteJob(leaseRef, result)`; `RescheduleJob(leaseRef, classifiedFailure)`. Proposed Domain event fields: Domain event ID, type/schema version, producer, domain reference/revision, domain/recorded times, causality/idempotency reference, access-classified Payload. Exact envelope/required fields are not frozen.
 
 **Defined:** Domain state and required Domain event/work are atomic in the primary store. Outbox state is truth; wake-up/pubsub is optimization only. Do not deliver a Domain event as committed before commit. The AP-02 table below defines type names and per-aggregate ordering; no hidden once-per-Message default or global provider order.
 
 **Recovery:** Claims/leases distinguish concurrent workers and superseded owners; an expired worker cannot blindly overwrite current job state. Internal restart may duplicate processing and requires idempotent consumers. Provider I/O retains C-09 uncertainty, not exactly-once guaranteed by a job lease. Not all jobs inherit one retry algorithm.
+
+## AP-05 Transaction Participation
+
+**Version/status:** transaction-participation 1.0, frozen for AP-05 under D-35 on 2026-10-26; the event/job engine and its wire/schema details remain 0.1-draft. **Owner:** DOM-07 mechanics, producing domain meaning, integration commit boundary. **Producers/consumers:** domain repository and outbox repository adapters in one C-12 transaction; later worker/consumer implementation. Vocabulary: glossary G-1.0.
+
+`AppendDomainEvent` accepts the caller's [opaque transaction capability](c-12-persistence-operations.md#transaction-and-repository-participation), not a second connection or independently committed transaction. State and required fact/work persist atomically; failure of either participant aborts the unit. Downstream dispatch/wakeup may occur only after a known committed result; a wakeup is optional and never replaces durable work. A callback is never silently replayed by the platform. Unknown commit outcome remains uncertain and uses operation-owned receipt/dedup lookup before new work.
+
+The platform supplies cancellable primary-store operations and current-clock/CAS test seams, not a globally ordered job engine. Any later claim/renew/complete repository must atomically check matching positive Fencing token plus unexpired primary-clock deadline under the existing shared lease rules; a controllable test clock does not replace production primary authority. AP-05 demonstrates the primitive through synthetic rows and [F-46e](reference-cases.md#ap-05-foundation-cases), without creating production event/job tables, claiming Delivery correctness or transferring schema ownership.
 
 **Permissions:** Recording a Domain event does not replace current consumer/Delivery authorization. Raw Payloads are not browser/plugin grants. Retain rematch/retention/Delivery receipts so ordinary replay/restart does not revive deleted or expired work. Manual restoration of older store state is the Operator's responsibility under C-12/D-31. Domain event type/schema codes are language-independent.
 

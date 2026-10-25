@@ -34,6 +34,16 @@ These are selected documentary contract values, explicitly confirmed for AP-02, 
 
 **Revision checks without overengineering:** Use one authoritative access/configuration revision and an affected Assignment scope revision, with ordinary primary-store transactions. Unchanged revisions permit reuse of prepared safe projections; changed relevant revisions require re-evaluation. No distributed per-field consensus or historical permission engine. Revisions are internal proof, not public counters leaking hidden changes. Full instances losing current authority pause private output and attempts; already handed-off bytes/effects are not recallable.
 
+## AP-05 Foundation Conventions
+
+**Version 1.0, frozen for AP-05 under D-35 on 2026-10-26; owner integration; vocabulary G-1.0.** Applies only to the platform interfaces named in C-12 and their C-01/C-08 transaction participation, not the unfrozen REST/Protocol/domain schemas above.
+
+- Go calls take `context.Context`; cancellation and deadlines propagate to store operations. No callback may extend its caller's deadline. `context.Canceled` and `context.DeadlineExceeded` remain distinguishable causes; uncertainty after possible commit is never reduced to a cancellation implying rollback.
+- Store-generated operational timestamps use UTC microsecond precision, serialized as RFC 3339 with `Z` when exposed. Read/compare the primary store's actual current time for authority/leases, not a transaction-start timestamp cached across a wait or a Worker's wall clock. This does not choose precision, range or rounding for Gateway Observation time, Grouping, or Address-rule validity.
+- Store/configuration revisions, migration versions and Fencing tokens are positive signed 64-bit integers, checked before increment; exhaustion is a visible `RESOURCE_LIMIT`, not wraparound. Public JSON uses decimal strings above the safe-integer range. Migration/checksum/status values and machine codes never vary with display language.
+- Platform failures carry a stable code from C-07, safe structured parameters, English fallback and wrapped private cause. Public parameters/logs never contain DSNs, credentials, SQL text with values or private callback data. Retry classification distinguishes known rollback/retryable transaction conflict from `COMMIT_UNCERTAIN`; uncertainty requires operation-specific lookup, not automatic callback re-execution.
+- The platform exposes no private domain read or bootstrap/admin API in this slice. Later authorization consumers must bind current C-06 checks; startup/readiness alone never grants domain access. Platform status is limited by C-12.
+
 # Freeze Requirements
 
 This is the shared contract-completeness checklist: concrete data/error/version forms, named ownership, producer/consumer agreement, current permission/field projection, time/revision, idempotency/retention, transaction/failure boundaries, and concrete positive/negative fixtures. Include language-independent codes and English text/parameter mapping for C-07/C-11 without requiring additional translations.

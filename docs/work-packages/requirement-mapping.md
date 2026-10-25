@@ -95,7 +95,7 @@ This file owns REQ-to-package coverage and planned evidence categories, **not a 
 | REQ-087 | AP-10, AP-13 | Authorized deliberate repeat with duplicate risk |
 | REQ-088 | No implementation package | Reserved identifier, no legacy adapter |
 | REQ-089 | AP-11, AP-13 | Operator lifecycle/compatibility/error status |
-| REQ-090 | AP-11 | Versioned SDK and four separate target modules |
+| REQ-090 | AP-11 | Versioned SDK and initial targets under D-33; deferred target tasks remain reserved |
 | REQ-091 | AP-12, AP-13 | Bounded extraction/structure/conditions |
 | REQ-092 | AP-12, AP-13 | Preview without real side effects |
 | REQ-093 | AP-12, AP-13 | Saved/active/previous version |
@@ -120,11 +120,11 @@ This file owns REQ-to-package coverage and planned evidence categories, **not a 
 | REQ-112 | AP-06, AP-15 | Potentially removed history visible |
 | REQ-113 | AP-05, AP-06, AP-10 | F-01/F-02 retry versus independent Transmission |
 | REQ-114 | AP-05, AP-06, AP-15 | Honest acceptance point/commit uncertainty |
-| REQ-115 | AP-05, AP-15 | Shared Lite process/artifact |
-| REQ-116 | AP-05, AP-15 | Documented conditional crash-loss behavior |
+| REQ-115 | AP-05, AP-15 | D-32 architecture preparation; Lite runtime evidence later |
+| REQ-116 | AP-05, AP-15 | Retained Lite conditional crash-loss contract; runtime evidence later under D-32 |
 | REQ-117 | AP-05, AP-10, AP-15 | Joint Full roles/database/live/worker qualification |
 | REQ-118 | AP-05, AP-15 | Combined app container, separate supplementary services |
-| REQ-119 | AP-15 | Demonstrated Lite->Full transition |
+| REQ-119 | AP-15 | D-32 transition boundary review now; executable Lite->Full evidence later |
 | REQ-120 | AP-05, AP-15, AP-16 | Setup without default credentials, status/shutdown/update |
 | REQ-121 | AP-01, AP-06 | Four Protocol models/fixtures |
 | REQ-122 | AP-01, AP-06 | Sliding cross-Network Payload Grouping |

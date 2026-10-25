@@ -6,7 +6,7 @@ Referenced contracts (follow only when relevant): [C-03](c-03-message-grouping.m
 
 **Traceability:** [REQ-001..010](../requirements-catalog.md#a-live-message-view), [REQ-011..020](../requirements-catalog.md#b-search-filters-and-details), [REQ-027/029](../requirements-catalog.md#c-units-organizations-and-defaults), [REQ-055..060](../requirements-catalog.md#f-access-rights-and-guests), [REQ-097..100](../requirements-catalog.md#j-processing-presentation-and-usability). Issue references: [P-08..P-10/P-12/P-15](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
-**Version/status:** 0.1-draft. **Owner:** DOM-06; integration owns OpenAPI/Domain event boundary; C-06 exclusively owns permission semantics. **Parties:** Vue/API consumers receive authorized projections, not internal database objects.
+**Version/status:** 0.1-draft except the separately frozen [AP-05 platform error binding](#ap-05-platform-error-binding). **Owner:** DOM-06; integration owns OpenAPI/Domain event boundary; C-06 exclusively owns permission semantics. **Parties:** Vue/API consumers receive authorized projections, not internal database objects.
 
 Draft operations: `QueryMessages(Principal, filters, timeAnchor, cursor) -> page`; `GetMessageDetail(Principal, MessageRef) -> projection`; `ListFilterOptions(Principal, context) -> safeOptions`; `OpenLiveView(Principal, viewDefinition, resumeState) -> authorizedChangesOrResync`; `ResolveMessageAlias(Principal, MessageRef) -> permitted surviving MessageRef or NOT_FOUND`. Concrete endpoint paths/OpenAPI remain AP-09 after AP-04; wire semantics below are complete documentary drafts.
 
@@ -63,6 +63,12 @@ The semantic application field name is `resumeToken`; its SSE transport remains 
 Initial page and stream handoff share a consistent cutoff/change position so a commit cannot vanish between them. On resync the client atomically replaces/reconciles its loaded ID set, removing revoked/deleted/merged entries; fresh status only after completion. No initial live-age limit. Disconnected/noncurrent views visibly lose freshness. Recheck access at every output batch, bounded work 30 s; heartbeat every 15 s has no private data. Bounded stream queue 256 frames/1 MiB; slow consumer receives safe resync/close, not silent frame loss or unbounded buffering. Multiple tabs and shared IPs are supported within per-Principal rather than one-per-IP limits.
 
 ## AP-02 Errors and Localized Text
+
+### AP-05 Platform Error Binding
+
+**Version/status:** platform-errors 1.0, frozen for AP-05 under D-35 on 2026-10-26. **Owner:** DOM-06/integration; **producer:** platform failure adapter; **consumers:** Operator diagnostics and later authorized API adapters. Glossary G-1.0 applies. Only the selected existing code/English fallback/allowed-parameter semantics in the table below are frozen for the AP-05 platform slice; REST routes, query/search/live schemas and their implementation remain draft. Platform health responses use C-12's boolean-only schema, not a new error endpoint.
+
+AP-05 uses `INVALID_INPUT`, `REVISION_CONFLICT`, `INCOMPATIBLE_VERSION`, `RESOURCE_LIMIT`, `STORAGE_UNAVAILABLE`, `AUTHORITY_UNAVAILABLE`, `COMMIT_UNCERTAIN` and `INTERNAL_ERROR` with `error.<CODE>` keys and redacted English fallback. `COMMIT_UNCERTAIN` is never classified as safe for blind callback retry. Typed platform parameters are limited to safe field/constraint/limit categories and an existing caller-owned operation reference where available; the platform must not invent an operation ID or expose SQL/DSN/private cause. Public HTTP error envelopes are not implemented by this foundation slice. [F-46d/F-46f](reference-cases.md#ap-05-foundation-cases) cover classification, redaction and display-language independence.
 
 REST error body: `schemaVersion`, `code`, typed `parameters`, `textKey`, safe English `fallback`, random `requestId`, `retryable`, optional `retryAfterSeconds`. HTTP status is transport semantics, not a parser for fallback text. Validation parameters may name an input field/max/value category, not echo confidential values or invisible IDs. Authenticated detail invisibility and nonexistence have identical response shape.
 
