@@ -13,6 +13,9 @@ This glossary is the **single authoritative source for names** (domain terms, an
 | **Gateway adapter** | Software type that decodes Emissions (frames, checksums, fragment reassembly, SMTP parsing) and submits completed Transmissions, for example a multimon-based adapter. Never interprets payload meaning, resolves Units, or groups. | Gateway (a running instance) |
 | **Gateway** | A registered, authenticated running instance of a Gateway adapter, authorized for one or more Networks. Has its own state (contact, heartbeat, termination). | Receiver hardware, Subscriber |
 | **Network** | A logical radio network or channel with exactly one Protocol, in whose context a Gateway submits Transmissions. | Protocol |
+| **Gateway Network identifier** | Gateway-local identifier with which a Submission may declare its Network; the Gateway's configuration maps it to exactly one assigned Network. | Network (the server entity) |
+| **Default Network** | The one Network per Gateway and Protocol used when Network resolution finds no unique Network; mandatory if the Gateway has several Networks of that Protocol. No global fallback Network exists. | Network |
+| **Network resolution** | Server-side, derived determination of a Transmission's Network: `declared`, `inferred-single`, `inferred-address`, or `default` (C-01). Only Networks assigned to the Gateway are used. Recomputed by Rematching; never changes Transmission evidence. | Grouping |
 | **Protocol** | The radio or transport protocol (POCSAG, FLEX, ZVEI, EAS, SMTP-based formats). | Payload form |
 | **Protocol definition** | Server-side, versioned description of a Protocol: which submitted fields are Payload, which are Address/Function, and how each protocol message type maps to a Payload form and Canonical payload. | Protocol |
 | **Group call** | Protocol feature in which one Emission addresses several Addresses (for example FLEX group messaging, Swissphone Express-Alarm (product feature name), SMTP with several targets in the body). Results in one Transmission per receiving Gateway with several Transmission targets. | Message, User group, Unit collection |
@@ -22,9 +25,9 @@ This glossary is the **single authoritative source for names** (domain terms, an
 | Term | Definition | Not to be confused with |
 | --- | --- | --- |
 | **Submission** | One transport operation by which a Gateway delivers one Transmission to GoPager, identified by a **Submission ID**. A **Retry** repeats the same Submission and never creates a second Transmission. | Transmission |
-| **Transmission** | Immutable record that one Gateway received one Emission, with the same name on Gateway and server side: Gateway, Network, Protocol, Observation time, Payload, Transmission targets, optional quality metrics and incomplete marker. One Emission received by three Gateways yields three Transmissions. | Emission, Message |
+| **Transmission** | Immutable record that one Gateway received one Emission, with the same name on Gateway and server side: Gateway, Protocol, optional Gateway Network identifier, Observation time, Payload, Transmission targets, optional quality metrics and incomplete marker. Its resolved Network is derived (Network resolution). One Emission received by three Gateways yields three Transmissions. | Emission, Message |
 | **Payload** | The completed original information carried by a Transmission as submitted (text, numeric digits, tone-only, ZVEI double tone or its absence, EAS header fields). Stored unchanged. | Message, Canonical payload |
-| **Payload form** | Protocol-independent kind of Payload declared by Protocol definitions: `text`, `numeric`, `tone-only`, `zvei-signal`, `eas-header` (extensible by versioned definition). | Protocol |
+| **Payload form** | Protocol-independent kind of Payload declared by Protocol definitions: `text`, `numeric`, `tone-only`, `zvei-signal`, `eas-header`, `binary` (extensible by versioned definition). | Protocol |
 | **Canonical payload** | Payload form plus normalized value used solely for comparison (for example line breaks normalized, terminators removed). Two Transmissions have equal **Payload identity** if their Canonical payloads are equal. | Payload (original), search normalization |
 | **Address** | A target address of an Emission as reported in a Transmission: POCSAG RIC, FLEX capcode, ZVEI five-tone sequence, EAS location code, or protocol equivalent. | Unit, Delivery target |
 | **Function** | Address attribute such as POCSAG function bits/subaddress. Its meaning depends on the address rule (function bit or subaddress) and the Unit (**Function meaning**); never part of Payload identity. | Payload |
@@ -69,6 +72,8 @@ This glossary is the **single authoritative source for names** (domain terms, an
 | **Delivery plugin** | Separately provided Wasm module executed by the plugin host that performs Deliveries to one kind of Delivery target (for example Pushover, Telegram messenger, email, webhook). | Gateway adapter |
 | **Delivery** | One outbound communication to one Delivery target caused by a Subscription; executed through **Delivery jobs** and **Delivery attempts**. | Message, Transmission |
 | **Domain event** | Internal, recorded fact about a state change (for example Message created, Transmission joined Message, Messages merged). | EAS event code, operational incident |
+| **Operational Domain event** | Domain event about an operational problem that administrators can subscribe Deliveries to, for example rejected Submission, implausible Observation time, or ambiguous Network. | Incident, Gateway state |
+| **Operational log** | Administrator-visible record of operational problems (rejected Submissions, implausible Observation times, ambiguous Networks). Separate from the audit trail of configuration changes. | Audit trail, Transmission evidence |
 
 ## Personas and Roles
 
@@ -89,6 +94,7 @@ Personas describe who uses GoPager in requirements; they are not permissions. Pe
 | Term | Definition |
 | --- | --- |
 | **Observation time** | Time at which the Gateway received the Emission, reported with mandatory UTC offset or UTC designator; the only time basis for Grouping. |
+| **Clock-skew tolerance** | Configurable amount by which an Observation time may lie after server time before the Transmission is marked `observation-time-implausible` (default 15 minutes); it never causes rejection. | Grouping window |
 | **Acceptance time** | Time at which GoPager accepted the Submission. Never substitutes Observation time. |
 | **Validity time** | Domain validity period of configuration such as Address rules. |
 | **Revision** | Version of mutable configuration or derived projection state. |
@@ -120,11 +126,13 @@ Personas describe who uses GoPager in requirements; they are not permissions. Pe
 
 The physical data model is not prescribed and may normalize or deduplicate. The following information must be stored or exactly reconstructable:
 
-1. **Transmission evidence (immutable):** Gateway, Network, Protocol, Submission ID, Observation time with its offset, Acceptance time, original Payload, all Transmission targets with Functions, Quality metrics, and Incomplete marker. Original Payload may be stored by reference to an identical Payload if the original remains reconstructable.
+1. **Transmission evidence (immutable):** Gateway, Protocol, Gateway Network identifier if declared, Submission ID, Observation time with its offset, Acceptance time, original Payload, all Transmission targets with Functions, Quality metrics, and Incomplete marker. Original Payload may be stored by reference to an identical Payload if the original remains reconstructable.
 2. **Messages:** Canonical payload with identity-rule version, Message memberships (Transmission, policy revision, match kind), Message aliases with merge history.
 3. **Message targets:** distinct Addresses with Functions per Message, traceable to the Transmissions that reported them; may be stored or derived from Transmission targets.
 4. **Assignments:** Transmission target to Unit with Address-rule revision (C-05).
-5. **Gateway state history:** contact, heartbeat, and termination over time, so administrators can tell which authorized Gateways of a Network did or did not produce a Transmission for a Message and whether a Gateway had problems.
+5. **Derived Transmission attributes:** resolved Network with resolution method (candidate Networks are recomputed, not stored); `observation-time-implausible` marker.
+6. **Gateway state history:** contact, heartbeat, and termination over time, so administrators can tell which authorized Gateways of a Network did or did not produce a Transmission for a Message and whether a Gateway had problems.
+7. **Operational log:** rejected Submissions (Gateway, Submission ID, error code, time; no Payload content) and other operational problems. Rejected Submissions are not Transmissions.
 
 Users primarily see Messages with their Message targets and resolved Units; administrators additionally see Transmissions per Gateway. Projection rules (C-06/C-07) apply to all of them.
 
