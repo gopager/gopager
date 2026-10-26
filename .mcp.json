@@ -1,0 +1,8 @@
+{
+	"mcpServers": {
+		"go-pkgs": {
+			"url": "https://pkgsite-mcp.fly.dev/mcp",
+			"type": "http"
+		}
+	}
+}

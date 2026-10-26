@@ -19,12 +19,23 @@ One fact has one maintained definition. Other documents link to it; they do not 
 | External source provenance, reuse assessment and documentation-review evidence | [Source/evidence notes](requirements-evidence.md) | Documentation / assessing owner |
 | Human navigation | Root [README](../README.md), [package directory](work-packages.md), [contract directory](domain-contracts.md) | Documentation |
 | Agent entry route | [AGENTS.md](../AGENTS.md) | Integration; links only, no duplicate rules |
+| Repository-wide library reuse policy | [Library reuse](#library-reuse) | Architecture / integration |
 
 Roles are not named assignees. An assignee or a completed task does not grant scope/execution approval; approvals belong only to the plan.
 
 ## Project Language
 
 English is the language of repository artifacts, code identifiers/comments and interface documentation; no parallel translated specification is maintained. Product-language/i18n requirements belong to [REQ-097](requirements-catalog.md#j-processing-presentation-and-usability); responsibility routing belongs to the [architecture](architecture.md#language-and-internationalization).
+
+## Library Reuse
+
+This mandatory policy applies to every repository activity and every work package, including tests, tooling and infrastructure. Before implementing substantial functionality, actively look for mature libraries and prefer a suitable, well-maintained library over rebuilding that functionality. The standard library counts as reuse.
+
+Write only the necessary custom functionality when no suitable library exists, suitable candidates are insufficiently maintained, their dependency footprint is unnecessarily large, or the useful subset is too small to justify the dependency. Assess suitability against the actual required behavior, maintenance, dependency footprint and integration cost; do not assume that fewer dependencies or custom code is inherently better.
+
+For Go, prefer the `go-pkgs` MCP tools for package discovery and current package/version facts. If unavailable or inconclusive, record that limitation and use authoritative upstream documentation/source and local toolchain documentation; do not invent package facts or treat an unavailable lookup as proof that no library exists.
+
+Record substantial selections and justified exceptions with alternatives and evidence at the existing technology/implementation owner; link them from the current execution record. Reassess existing in-progress work when this policy exposes unnecessary reinvention. A new library does not bypass frozen-contract, version, scope or approval gates. Approval and origin: [D-36](authoritative-plan.md#repository-wide-library-policy-decision).
 
 ## Status Terms
 

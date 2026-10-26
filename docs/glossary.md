@@ -4,6 +4,8 @@ Date: 2026-10-26. Status: **G-1.0, frozen for the AP-05 foundation slice** under
 
 **AP-04 version binding:** G-1.0, approved by the user on 2026-10-26 for the D-35 AP-05 foundation slice only. Existing term meanings and naming history are unchanged. Contract-specific types/configuration fields remain at their C-ID owners. Other contract slices do not gain freeze approval from this vocabulary binding; later meaning changes require a new glossary version and affected-consumer review.
 
+**D-40 domain addendum, 2026-10-26:** The user's removal of enduring Message identity/alias requirements updates the Message merge entry and rename history below. This is a domain-only clarification outside the frozen platform vocabulary; the G-1.0 foundation binding and earlier execution evidence remain historical and unchanged.
+
 This glossary owns **domain term meanings**, not interface schemas or implementation algorithms. Code/API/UI names derive from these terms; exact wire identifiers and their behavior are owned together in the [contract registry routes](#ap-02-identifier-registry). UI labels may be localized without introducing new meanings. Terms in the [prohibited terms](#prohibited-and-restricted-terms) list are not domain names.
 
 ## Radio and Gateway Side
@@ -46,7 +48,7 @@ This glossary owns **domain term meanings**, not interface schemas or implementa
 | **Grouping** | Server process linking Transmissions into Messages. Comparison/membership rules: [C-02](contracts/c-02-protocol-payload.md)/[C-03](contracts/c-03-message-grouping.md). | Rematching, User group, Unit collection, Group call |
 | **Grouping window (`W`)** | Maximum gap between Observation times of linked Transmissions. | — |
 | **Message membership** | Current relation from a Transmission to its Message. Context/representation: [C-03](contracts/c-03-message-grouping.md). | User group membership, Contribution support |
-| **Message merge** | Combining Messages when a Transmission links to several of them; absorbed Messages become **Message aliases** forwarding to the surviving Message. | — |
+| **Message merge** | Combining Messages when a Transmission links to several of them. Enduring Message IDs, aliases and old/new ID mappings are not required under D-40; C-03 owns grouping behavior. | — |
 | **Message target** | Derived Address/Function summary of Message contributions, not another stored target/Unit mapping. Network/Protocol and resolution context distinguish otherwise equal Addresses. | Transmission target, Delivery target, Unit appearance |
 | **Representative Transmission** | Original member selected to supply displayed Payload. Preference/tie-break: [C-03](contracts/c-03-message-grouping.md); readable projection: [C-07](contracts/c-07-query-live.md). | Canonical payload, Message time, permission |
 | **Message time** | Internal Message-origin timestamp. Calculation: [C-03](contracts/c-03-message-grouping.md); retention use: [C-12](contracts/c-12-persistence-operations.md). | View time, Acceptance time |
@@ -209,6 +211,7 @@ These rules bind every work package and every agent or person working on GoPager
 
 | Date | Old name(s) | New name | Meaning / reason | Package |
 | --- | --- | --- | --- | --- |
+| 2026-10-26 | Mandatory Message aliases / enduring Message identity | Message merge without identity-continuity requirement | D-40 withdraws old-link and ID-mapping requirements; authorization-relevant identities and operation-specific deduplication are unaffected. | AP-05 |
 | 2026-10-25 | Reception, Observation (noun) | Transmission | Record that one Gateway received one Emission; same name on Gateway and server side. | AP-01 |
 | 2026-10-25 | Transmission (physical send) | Emission | Physical radio/SMTP send event, freed "Transmission" for the record. | AP-01 |
 | 2026-10-25 | Source, Ingest module, Ingester | Gateway / Gateway adapter | Running instance / software type; "Receiver" rejected (collides with recipient and receiver hardware). | AP-01 |
