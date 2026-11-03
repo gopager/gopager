@@ -20,7 +20,7 @@ The [AP-04 protocol cases F-42..F-44](#ap-04-protocol-cases) are approved D-34 a
 | F-03 | Same Payload form and value from two authorized Gateways/Networks, with different Transmission targets | The server may perform Grouping to link the Transmissions into one Message across Gateways/Networks while retaining both Transmission/Network references and each Transmission's Transmission targets. The server—not either Gateway—determines Payload equality and Message membership. |
 | F-04 | Identical alphanumeric text via POCSAG and FLEX; POCSAG address-only Transmission and FLEX tone-only Transmission; POCSAG numeric "123" and FLEX numeric "123"; numeric "123" vs text "123"; ZVEI vs POCSAG | Text/text, tone-only/tone-only, and numeric/numeric match across POCSAG and FLEX (same canonical form and value). Numeric never matches text. ZVEI has no shared form with POCSAG and cannot form a Message with it. |
 | F-05 | Identical Payload with reported Observation instants t0, t0+25 s, and t0+50 s (`W` = 30 s default); timestamps include UTC offsets or the UTC designator | Grouping compares the reported instants, normalizing offsets; server acceptance times do not affect the result. Each gap is within `W`, so all three join one Message although t0+50 s is more than `W` after t0 (sliding window, no fixed expiry from t0). |
-| F-06 | Matching Transmission exactly `W` (30 s) after the nearest member, and another 30 s + 1 ms after it | Inclusive boundary: exactly `W` joins the Message; beyond `W` starts a new Message. |
+| F-06 | Matching Transmissions with normalized whole-second Observation instants exactly `W` (30 s) and `W + 1 s` after the nearest member | Inclusive boundary: exactly `W` joins the Message; `W + 1 s` starts a new Message. Fractional input before the boundary is covered by the D-42 [F-47](#ap-04-observation-precision-case) case. |
 | F-07 | Messages G1 (member at 0 s) and G2 (member at 50 s) exist with `W` = 30 s; then a late Transmission at 25 s; separately, a Transmission reported two years in the past linking to a retained Message | 25 s links both into one current Message; D-40 requires neither a particular surviving ID nor alias forwarding or an ID mapping. One merge fact and the new member's joined fact commit together (C-08), without a new created fact. Membership equals 0/25/50 order, irrespective of Message ID. A two-year-old observation can link retained evidence; no lateness cut-off. |
 | F-07a | Identical Payload observed every 20 s from t0 to t0+600 s; and the same with `W` = 0 | With `W` = 30 s all Transmissions form one Message (no maximum Message age). With `W` = 0 every Transmission is its own Message. |
 | F-07b | `W` is reduced from 30 s to 10 s while a Message contains members at 0 s and 25 s; then a new Transmission at 35 s; separately, a Message A (member at 0 s) and B (member at 20 s) exist under `W` = 10 s, then `W` is raised to 30 s | v1: the existing Message is not split or recomputed. 35 s is 10 s from 25 s and joins under the new revision. After raising `W`, A and B are not merged by the change itself; they merge only if a later Transmission links to both. Regrouping on configuration change is a later investigation item. |
@@ -68,6 +68,62 @@ Approved D-34 additions; owner DOM-02 with DOM-01. These are backend contract ca
 | F-42 / [C-02](c-02-protocol-payload.md#ap-04-flex-clarification) | Finalized FLEX short numeric `123` and ordinary numeric `123`; short signals with codes 2 and 3; two short signals code 2 with different message numbers; code 8 or missing code in a declared short signal | Numeric values have equal canonical identity. Codes 2 and 3 differ. Equal code 2 matches regardless of message number, which remains an attribute. No short signal matches empty tone-only or text/numeric `2`. Invalid/missing signal code rejects with `INVALID_INPUT`, never silently becomes tone-only. Membership still uses C-03's time/window rules. |
 | F-43 / [C-02](c-02-protocol-payload.md#ap-04-flex-clarification) | Target decimal address `2101249`; defined long information-service address `4280000001`; extended CAPCODE notation supplied in the integer field; ordinary-target values `0`, `1933313`, `2031615` or `4297068543` | Defined addresses retain exact numeric value and appropriate protocol class; the second value must not wrap at 32 bits or become an ordinary pager address. Extended notation and unused/illegal/reserved ordinary-target values reject with `INVALID_INPUT`; no truncation or reinterpretation as another recipient. |
 | F-44 / [C-02](c-02-protocol-payload.md#ap-04-flex-clarification), [C-01](c-01-transmission-acceptance.md) | One finalized group report contains known members A/B; separately a report has only Temporary Address `2029568` after missed enrollment; a common programmed group address has no member evidence; raw decoder fragments/control instructions are submitted as if user messages | A/B remain two targets of one Transmission; the server does not invent a separate Transmission per target. Unknown-member fallback retains the reported group address without claiming A/B or full membership. A common group address alone cannot disclose its programmed members. Raw fragments/control records fail the finalized report boundary; finalized incomplete reports remain permitted under existing validation/Incomplete-marker rules. |
+
+## AP-04 Observation Precision Case
+
+**F-47 / D-42** is an AP-04 freeze fixture for C-01/C-03/C-05. It is a new case and does not alter F-01a or earlier AP evidence.
+
+| Case | Concrete input | Expected result |
+| --- | --- | --- |
+| F-47 | Two independent, Payload-identical Transmissions arrive with Observation times `2026-10-26T12:00:00.900Z` and `2026-10-26T12:00:30.900Z`, under `W=30s`; a separate Address rule begins at `2026-10-26T12:00:00.500Z` and an Observation time is `2026-10-26T12:00:00.900Z`. Repeat the second Submission with time `12:00:30.100Z` and the same Submission ID and UTC offset. | The first stored/compared instant is `12:00:00Z`, not rounded; the second is `12:00:30Z` and joins at the inclusive `W` boundary. The Address-rule match uses the truncated instant, which is before the `12:00:00.500Z` rule start. `.000` remains equivalent to the whole-second spelling. The repeat returns the existing receipt/Transmission and creates no new evidence because all other content and offset match after fractional digits are discarded. |
+
+## AP-04 Unicode Payload Identity Case
+
+**F-48 / D-44** is an AP-04 fixture for C-02/C-03. Original Payload preservation is asserted independently from comparison normalization.
+
+| Case | Concrete input | Expected result |
+| --- | --- | --- |
+| F-48 | Two otherwise compatible text Transmissions within `W` carry respectively precomposed `é` (`U+00E9`) and decomposed `e` + combining acute accent (`U+0065 U+0301`). A second pair carries circled digit one (`U+2460`) and ASCII `1`. | The first pair has equal NFC comparison values and can join one Message under C-03; each original Payload remains unchanged. The second pair remains distinct because NFC does not apply compatibility normalization. Text comparison remains case-sensitive; no C-07 search normalization is applied. |
+
+## AP-06 Gateway Authentication Case
+
+**F-49 / D-45/D-47** is a planned AP-06 fixture for C-01/C-06. It tests authentication and authorization; it does not claim confidentiality or replay protection for HTTP.
+
+| Case | Concrete input | Expected result |
+| --- | --- | --- |
+| F-49 | Issue a Gateway A credential with `gateway.update`, inspect status with `gateway.read`, and attempt issuance without permission. Send a valid Gateway A Bearer credential, an invalid or revoked credential, a duplicate Authorization header, and Gateway A's valid credential with a caller-supplied identity for Gateway B or an unassigned Network. Issue one replacement, authenticate with it, then try the predecessor. Attempt a second pending replacement; separately lose the one-time secret response, inspect and revoke its pending credential by nonsecret ID. Repeat a captured valid request and retry an identical C-01 Submission using the same Submission ID. | Only authorized administrators issue/revoke; status reveals nonsecret IDs/state but no token/hash. The token is returned once and cannot be retrieved after a lost response. The valid credential authenticates only Gateway A; caller-supplied identity does not change it. Invalid/revoked credentials fail generically without domain mutation. A credential cannot authorize an unassigned Network. Both credentials work before cutover; the replacement's first authenticated request atomically revokes its predecessor, and the old credential fails afterwards. A second pending replacement is rejected. Direct HTTP accepts the credential but exposes it to on-path observers; no transport replay protection or response authentication is claimed. Repeated Submission IDs follow C-01 idempotency; F-49 does not require general replay rejection. |
+
+## AP-06 Grouping Window Range Case
+
+**F-50 / D-46/D-49/D-51** is a planned AP-06 fixture for C-03. D-51 supersedes D-46's no-additional-cap rule. It exercises the whole-second precision, JSON integer range and boundary behavior; it does not validate production database duration/concurrency behavior.
+
+| Case | Concrete input | Expected result |
+| --- | --- | --- |
+| F-50 | Exercise JSON integer `W=0` with two independent Transmissions at equal and distinct Observation instants; exercise the inclusive boundary with `W=30` seconds and instants 30 seconds apart; submit the maximum valid `W=9007199254740991` seconds with two valid RFC 3339 Observation instants at opposite ends of the supported four-digit-year range; submit `9007199254740992`, `-1`, `0.5` and `"30"`. | `W=0` gives each Transmission its own Message regardless of whether instants are equal; the 30-second boundary is inclusive. The maximum valid value compares without overflow and encompasses the tested valid instants. Out-of-range, negative, fractional or string values are rejected as invalid, not clamped or wrapped. |
+
+## AP-06 Grouping Policy Revision Case
+
+**F-51 / C-03/C-06** is a planned AP-06 fixture for policy authorization and concurrency.
+
+| Case | Concrete input | Expected result |
+| --- | --- | --- |
+| F-51 | Two authorized administrators concurrently change `W` from revision `r` using the same `expectedRevision`; an ingest decision captures `r` while the winning update commits, and another decision begins after the update. Separately attempt the change without `grouping.configure` at `all` scope. | Exactly one configuration update succeeds; the stale update returns `REVISION_CONFLICT` without changing policy. The in-flight decision completes under its captured revision and the later decision uses the new value. Unauthorized changes are rejected without mutation. Membership is never regrouped merely by changing `W`. |
+
+## AP-06 Original Target Reference Case
+
+**F-52 / D-53** is a planned C-01/C-05 fixture, not an executed test.
+
+| Case | Concrete input | Expected result |
+| --- | --- | --- |
+| F-52 | Transmission A has two identical Address/Function entries at positions 0 and 1; B has a different target at position 0; C has no targets. Resolve and suppress A's positions independently, correct their Unit resolution and merge their Message. Submit positions -1, 0.5 and 2 for A, and try using A's target as a support for B. Retry C's targetless support insertion. | A's original entries remain distinct, unchanged and at their original positions; usable entries may support the same contribution without duplicate supports. A's reference cannot be attached to B. Invalid positions fail with `INVALID_INPUT`; inaccessible/missing evidence uses `NOT_FOUND`. Only C permits a null target position, and it has at most one current targetless support. Correction/merge changes no original position. |
+
+## AP-07 Detail Field Authorization Case
+
+**F-53 / D-55** is a planned C-06 identity-core 1.1 fixture; execution evidence belongs to AP-07.
+
+| Case | Concrete input | Expected result |
+| --- | --- | --- |
+| F-53 | On the same contribution context, R grants `message.read`/`payload` and D grants `message.detail` without fields. Separately remove R, restrict R to an expired age or a different target, or restrict a key to `message.detail` alone. | R plus D permits the already-readable payload in details without duplicate fields on D. Detail alone, expired read scope, cross-target composition and a key without `message.read` never authorize that output. Detail scope/age and the restricting key still apply. |
 
 ## AP-04 Plugin Configuration Cases
 

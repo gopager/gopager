@@ -1,19 +1,20 @@
-# AP-15 Operations and Profile Transition
+# AP-15 Operations and Profile Evidence
 
-[Package index](../work-packages.md) | [Contract index](../domain-contracts.md) | [Shared execution rules](shared-rules.md) | [Requirement mapping](requirement-mapping.md)
+[Execution path](../work-packages.md#revised-execution-path) | [Contract index](../domain-contracts.md) | [Shared execution rules](shared-rules.md)
 
 ## Session Context
 
-- **Start and authority:** [session procedure](shared-rules.md#session-start), [scope/approval record](../authoritative-plan.md#workflow-and-approval-gates), [planning load profiles](../authoritative-plan.md#operating-assumptions).
-- **Requirements:** [operations/profile transition](../requirements-catalog.md#l-operations-data-volume-and-evolution), [load-profile consideration and removed Backup/Restore scope](../requirements-catalog.md#m-additional-domain-capabilities); select the REQ IDs below, preserving removed REQ-126.
-- **Architecture:** [operating profiles](../architecture.md#operating-profiles), [TECH-01/02/05/06/07](../architecture.md#technology-decisions), [operations/schema ownership](../architecture.md#supporting-responsibilities).
-- **Owner contracts:** [C-12](../contracts/c-12-persistence-operations.md), [C-13](../contracts/c-13-account-lifecycle.md), [C-01](../contracts/c-01-transmission-acceptance.md), [C-08](../contracts/c-08-events-jobs.md), [C-09](../contracts/c-09-delivery.md); [shared conventions](../contracts/shared-conventions.md).
-- **Cases and prerequisite outputs:** [F-19/F-23/F-25](../contracts/reference-cases.md), [F-39..F-41](../contracts/ap-02-boundary-cases.md); [AP-05](ap-05-runtime-persistence.md), [AP-06](ap-06-transmission-messages.md), [AP-07](ap-07-identity-authorization.md), [AP-08](ap-08-master-data-correction.md), [AP-09](ap-09-query-live.md), [AP-10](ap-10-events-delivery.md), [AP-11](ap-11-plugins.md), [AP-12](ap-12-processing-presentation.md), [AP-04 freeze](ap-04-scope-freeze.md); [execution/evidence records](../execution/README.md).
+- **Authority:** [session procedure](shared-rules.md#session-start), [D-97 ordered AP renumbering approval](../authoritative-plan.md#ordered-ap-renumbering-decision), [scope/approval record](../authoritative-plan.md#workflow-and-approval-gates).
+- **Source scope:** Historical [source AP-15 T050..T052](source-ap-15-operations.md), preserving its approved topology amendment and deferred Lite timing.
+- **Requirements and owners:** [REQ-111..120/127](../requirements-catalog.md#l-operations-data-volume-and-evolution), [C-01](../contracts/c-01-transmission-acceptance.md), [C-08](../contracts/c-08-events-jobs.md), [C-09](../contracts/c-09-delivery.md), [C-12](../contracts/c-12-persistence-operations.md), [C-13](../contracts/c-13-account-lifecycle.md).
+- **Owner:** Operations/integration and domain schema owners.
+- **Prerequisites:** AP-06 through AP-14; operational boundaries and applicable AP-04 approvals remain authoritative.
+- **Write scope:** `internal/operations/`, packaging/operator documentation, and assigned operational evidence; shared platform changes stay with the approved integration owner.
 
-**Owner:** Operations/integration and domain schema owners. **Contract gate:** C-12/C-13, C-01/C-08/C-09 restart/idempotency/attempt boundaries. **REQ:** REQ-111..120, REQ-127; REQ-126 removed under D-31. **Prerequisites:** AP-05..AP-12. **Exclusive target scopes:** `internal/operations/`, future `packaging/` and deployment/operator artifacts. Platform/root changes by AP-05 integration owner only; define new operations documents before package approval.
+- [ ] T081 [AP-15] Implement/document storage status, configured retention, setup without default credentials, shutdown, and update/migration workflows.
+- [ ] T082 [AP-15] Demonstrate approved Full authority, lease/failover, disk/crash/restart, and external-effect recovery boundaries.
+- [ ] T083 [AP-15] Record the approved Lite/Full transition boundary without implementing deferred Lite runtime or executable transition scope.
 
-- [ ] T050 [AP-15] Implement/document storage status, configured retention, setup without default credentials, orderly shutdown, update/migration workflows; use English project/operator text and stable machine-readable status codes.
-- [ ] T051 [AP-15] Under [D-32](../authoritative-plan.md#ap-04-scope-decision), review the architecture's later Lite->Full transition boundary for preserving IDs, grants, configuration, history, pending work and Secret references. Executable Lite->Full transition implementation/tests are deferred, not Phase-1 completion evidence. No application Backup/Restore subsystem (D-31).
-- [ ] T052 [AP-15] Demonstrate Full authority/lease/failover boundaries and applicable disk failure/crash/restart cases, F-19/F-23/F-25. Under [D-32](../authoritative-plan.md#ap-04-scope-decision), the single-process Lite demonstration is deferred. Ordinary restart must not duplicate recorded external effects; manual old-backup risks belong to the Operator.
+**Acceptance:** Operators receive truthful machine-readable state and reproducible evidence for approved operational claims.
 
-**Acceptance:** Traceable Full restart/authority evidence and reviewed future profile-transition boundaries under [D-32](../authoritative-plan.md#ap-04-scope-decision), honest acceptance state, no silent retention. Executable Lite-to-Full transition and Lite runtime evidence are later. **Non-goals:** Application Backup/Restore or restore detection/reconciliation, custom consensus, quantitative RPO/RTO/SLA, unverified hardware support.
+**Non-goals:** Application Backup/Restore, executable Lite-to-Full transition, unsupported hardware certification, quantitative SLA/RPO/RTO, or custom consensus.

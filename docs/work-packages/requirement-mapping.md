@@ -2,9 +2,9 @@
 
 [Package index](../work-packages.md) | [Contract index](../domain-contracts.md) | [Shared execution rules](shared-rules.md)
 
-This file owns REQ-to-package coverage and planned evidence categories, **not a second requirement, task or delivery-status table**. Open the [catalog](../requirements-catalog.md) for REQ text, the [package directory](../work-packages.md#package-directory) for AP files, the [plan](../authoritative-plan.md#delivery-scope) for scope/approval and [execution records](../execution/README.md) for actual results. Package assignment means intended contribution, not approval/completion. AP-01..AP-04 additionally govern respective contract/approval prerequisites; AP-16 governs approved delivery evidence.
+This file preserves the original REQ-to-source-package coverage and planned evidence categories, **not a second requirement, task or delivery-status table**. The revised execution assignments are in the [ordered package path and source crosswalk](../work-packages.md#revised-execution-path). Open the [catalog](../requirements-catalog.md) for REQ text, the [plan](../authoritative-plan.md#delivery-scope) for scope/approval and [execution records](../execution/README.md) for actual results. Source-package coverage is traceability, not current assignment, approval, or completion. AP-01..AP-04 retain their original contract/approval roles; revised final evidence is AP-16.
 
-| REQ | Packages | Planned evidence |
+| REQ | Source APs | Planned evidence |
 | --- | --- | --- |
 | REQ-001 | AP-06, AP-09, AP-13 | Authorized live feed in HTTP/browser workflow |
 | REQ-002 | AP-06, AP-09, AP-13 | Further Transmission updates a loaded Message |

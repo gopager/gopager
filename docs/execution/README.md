@@ -6,7 +6,7 @@ This directory owns execution state and evidence, not task definitions, decision
 
 For AP-NN, use `docs/execution/ap-NN.md`. Create it when that package starts. An absent record means no recorded execution, not approval or completion. Follow the same path rule for prerequisite producers; do not create an independent status matrix.
 
-Existing records: [AP-01](ap-01.md), [AP-02](ap-02.md). The [package directory](../work-packages.md#package-directory) locates all baseline APs.
+The [package directory](../work-packages.md#revised-execution-path) is the authoritative order and assignment index. The former AP-06..AP-16 records are preserved as `source-ap-*` historical evidence; reconciliation notes identify transferred partial outputs. [AP-06](ap-06.md) is the sole current execution record. The former AP-17 record is preserved as [source AP-17](source-ap-17.md). Do not infer current state from legacy `in-progress` rows in source records.
 
 ## Required Record Structure
 

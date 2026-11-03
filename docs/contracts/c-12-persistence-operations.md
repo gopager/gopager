@@ -8,11 +8,19 @@ Referenced contracts (follow only when relevant): [C-01](c-01-transmission-accep
 
 **Version/status:** 0.1-draft except the separately frozen [AP-05 foundation boundary](#ap-05-foundation-boundary). **Owner:** Operations/persistence with integration and domain schema owners. **Parties:** Lite/Full app, operator, authoritative store, roles, restart.
 
-**AP-04 delivery amendment (D-32):** This draft retains both target profiles below, but [delivery timing](../authoritative-plan.md#ap-04-scope-decision) requires Full/PostgreSQL first and only architectural preparation for Lite. SQLite implementation, cross-backend runtime evidence, single-process Lite proof and executable Lite-to-Full transfer are deferred. The [architecture](../architecture.md#operating-profiles) owns adapter/composition boundaries. PostgreSQL evidence remains mandatory for the initial slice; no parity claim is made for an absent adapter. Historical AP-03 experiments are unchanged.
+**AP-04 delivery amendment (D-32), topology clarified by D-63:** This draft retains both target profiles below, but [delivery timing](../authoritative-plan.md#ap-04-scope-decision) requires Full/PostgreSQL first and only architectural preparation for Lite. SQLite implementation, cross-backend runtime evidence, single-entry bundled Lite proof and executable Lite-to-Full transfer are deferred. The [architecture](../architecture.md#operating-profiles) owns adapter/composition boundaries. PostgreSQL evidence remains mandatory for the initial slice; no parity claim is made for an absent adapter. Historical AP-03 experiments are unchanged.
 
 Draft interfaces: `ReadOperationalStatus -> safeStatus`; `RunRetention(configuredPolicy) -> progress`; `RequestShutdown -> drainStatus`. Capabilities, not fixed CLI commands/API endpoints. D-31 excludes application Backup/Restore operations entirely.
 
-**Defined:** Shared logical schema, explicit SQLite/PostgreSQL adapters; test critical semantics across backends. Lite is one OS process with a local SQLite file. Full primary is authoritative; established external HA provides fencing/failover. Unclear write authority visibly stops acceptance/Delivery. Replicas/caches do not prove current authorization.
+**Defined:** Shared logical schema, explicit SQLite/PostgreSQL adapters; test critical semantics across backends. Lite has a local SQLite file and the single-start bundled application boundary in REQ-115, not an exact OS-process-count requirement. Full primary is authoritative; established external HA provides fencing/failover. Unclear write authority visibly stops acceptance/Delivery. Replicas/caches do not prove current authorization.
+
+## Managed Child Process Clarification
+
+**D-63; version/status:** operations-topology clarification 1.0, approved 2026-11-01 for the previously draft topology; existing frozen foundation interfaces are unchanged. The Operator starts only the application. Core may launch/manage child processes provided all required executables/runtimes/libraries ship with the application; it must not require separate module startup, orchestration, compiler or runtime-package installation. This is not permission for automatic dependency/code downloads at startup.
+
+Operations/integration owns child lifecycle and bounded IPC, resource enforcement, cancellation, termination and wait/reap, parent shutdown/failure behavior and safe diagnostics. A timeout around a still-running child, an unbounded memory allocation, or a child lost during shutdown is not validated bounded computation. Platform-specific mechanisms must be selected and tested before claiming portability or containment. Configuration must expose required capabilities/failures, not silently fall back to unrestricted in-process execution.
+
+Historical AP-03/AP-05 results and their read-only baselines remain unchanged; their “single-process Lite” wording records the old assumption, not a current exact-count acceptance rule. AP-15 T052 now uses REQ-115/D-63 through the separately approved 2026-11-01 narrow baseline amendment; its Lite timing/remaining acceptance is unchanged and AP-15 has not started. This correction does not deliver Lite/SQLite now, select a regex runtime, or remove the already specified external Full/PostgreSQL infrastructure boundary.
 
 **Retention/storage:** No default deletion without operator limits. Retention unit is a whole Message, aged by stored internal Message time (earliest Observation time); count limits remove oldest whole Messages by `(messageTime, Message ID)`. This is installation-wide and never depends on a User's View time or filters. Delete attached Message contributions, Contribution supports, target resolutions, Transmission evidence/membership, derived processing/search data and linked Submission receipts consistently; do not regroup unaffected Messages or retain dangling references. Lookups of deleted or invalidated Message references return not found; no alias mapping is required under D-40. Accepted C-01 exception remains: a Gateway retry after removal of its Submission receipt can create a new Transmission.
 
@@ -81,6 +89,38 @@ Operators must stop/drain older writers before applying incompatible migrations.
 Readiness becomes false on migration incompatibility, store/authority failure or shutdown; new platform work is refused with the existing storage/authority code. Recovery rechecks connectivity, write authority and schema before readiness returns; a successful ping alone is insufficient. Each later protected operation still checks its own current authority; a health probe is not an authorization cache.
 
 Shutdown first clears readiness/stops new starts, then cancels/drains registered work under a 30 s default total shutdown deadline, closes the HTTP listener and store handles, and returns completion or a visible coded failure/nonzero process exit. No discarded error or success claim after deadline. Cancellation/uncertain commits preserve their prior classification. Actual Delivery starts/retention/bootstrap are later domain consumers, not placeholder implementations in AP-05.
+
+## Application HTTP Transport
+
+**D-52; status:** approved application-wide behavior, pending AP-04 owner-contract review/freeze. **Owner:** Operations/persistence with integration and domain API owners. **Consumers:** every GoPager application API and browser-facing route.
+
+All application functions must be available through the configured HTTP listener, including protected administrative, authentication, Session, Gateway, query and live routes. GoPager does not require application-level TLS, redirect HTTP to HTTPS or require a separate HTTP setting. A reverse proxy may terminate external TLS and forward requests to GoPager over HTTP. Direct HTTP access also remains supported; it provides no confidentiality, server authentication or response integrity. Operators are responsible for protecting any externally exposed edge and for the proxy-to-application network path. Authentication and Session semantics over HTTP are owned by [C-06](c-06-identity-authorization.md#http-transport-and-human-authentication).
+
+### Application Handler Registration Addendum
+
+**Version/status:** api-registration 1.0, approved 2026-10-26 by the user (`platform_api_registration=approve-additive-registration`). **Owner:** Operations/integration. **Producer:** root application composition; **consumers:** AP-07 and later domain HTTP adapters.
+
+`StartWithAPI(context, config, migrations, store, runners, api http.Handler)` adds application routes on the same configured API listener. Existing `Start` remains the no-application entry point with unchanged behavior. Non-nil API registration requires the API role. Health routes retain priority and their exact boolean-only response/method rules. Domain routes are refused with C-07 `AUTHORITY_UNAVAILABLE` while not ready, stopping or cancelled; admitted requests join shutdown drain accounting. Domain handlers still enforce current authorization and bounded request/projection work. No second pool/listener, application TLS or redirect is introduced; transaction, migration and durability interfaces remain unchanged.
+
+## Local Identity Initialization and Startup
+
+Implementation usage for the approved AP-07 prerequisite is owned by [root composition](../../cmd/gopager/main.go) and the [local bootstrap command](../../cmd/gopager/bootstrap.go). API-role startup now requires `--public-origin` as the deployment origin used by [C-06 Cookie/Origin policy](c-06-identity-authorization.md#http-transport-and-human-authentication); it is not an HTTP opt-in. For example:
+
+```sh
+gopager --profile=full --roles=api,worker --listen-address=127.0.0.1:8080 --public-origin=http://localhost:8080 --migration-mode=apply
+```
+
+For an HTTPS-terminating reverse proxy, set `--public-origin=https://pager.example` while retaining the HTTP listen address. Worker-only startup does not need a public origin. `GOPAGER_DATABASE_URL` remains the secret connection input; database TLS policy is separate from application HTTP.
+
+`--login-attempts-per-account` and `--login-attempts-per-instance` configure the existing [C-06 per-minute login limits](c-06-identity-authorization.md#ap-02-credentials-and-recovery); both must be positive integers. The [login policy](../../internal/identity/login.go) owns executable defaults, and the [persistence adapter](../../internal/persistence/ent/identitystore/login.go) shares attempt accounting across API processes. Lower limits do not change password/Session semantics; raised limits are an explicit Operator capacity choice, not a capacity claim.
+
+On a fresh installation, initialize the first account locally before login:
+
+```sh
+gopager bootstrap --username=operator --actions=password.local,session.manage-own --migration-mode=apply < /protected/path/initial-password
+```
+
+The password comes from a pipe/file on stdin, not an argument or echoed terminal prompt. One optional final LF is the input delimiter; other password bytes are preserved. The command prints only the created Principal UUID and exits without opening a listener. The example grants only login/own-session management, not administrative domain rights. Operators must explicitly supply the required catalog actions for their initial administrator; `--fields` selects readable field sets and `--delegable` explicitly enables delegation of the supplied rights. There is no wildcard, implicit administrator role, shipped password or remote bootstrap route. Guest starts without grants. Bootstrap rejects existing accounts/completed initialization and commits its guard, accounts, selected grants, audit and required fact together. Runtime/acceptance limitations remain in [AP-07 evidence](../execution/source-ap-07.md).
 
 ## Updates and Remaining Evidence
 

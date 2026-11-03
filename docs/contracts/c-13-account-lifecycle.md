@@ -12,6 +12,8 @@ Operations: `RequestAccountDeletion(Principal, target, expectedRevision, confirm
 
 ## Immediate Boundary and Restart
 
+**AP-07 identity-core 1.0 partial freeze, 2026-10-26:** The user approved this immediate non-authenticating/revocation boundary and the field-handling obligations needed by the [AP-07 prerequisite binding](../execution/ap-04.md#ap-07-prerequisite-consumer-binding-proposal). This does not freeze or accelerate external/plugin/Delivery cleanup implementations, certify whole-account cleanup, or approve OIDC/SCIM. Unimplemented or unacknowledged personal-data owners must not be reported as cleaned up.
+
 The accepting transaction marks the account non-authenticating/deleting, increments access revision, revokes all login/key/recovery paths and grants/memberships, pauses owned Subscriptions, cancels unstarted account-related work, and records `principal.deleted` plus durable cleanup work. Reject further protected output/starts immediately, not after cleanup. Profile/contact/credential fields in Core account records are removed in that transaction; cleanup handles dependent domain-owned copies and external-secret references. No new account may reuse the old internal ID.
 
 State is deleting -> completed, or deleting -> cleanup-failed -> retrying. Access remains blocked through every failure/restart; cleanup is idempotent and C-08 fenced. Managers get safe per-domain progress/error state, not retained profile values. Success is reported only when all registered personal-data owners acknowledge their cleanup. Provider effects authorized before the boundary remain accepted/uncertain under C-09, not falsely cancelled. No distributed transaction or remote provider purge is promised.

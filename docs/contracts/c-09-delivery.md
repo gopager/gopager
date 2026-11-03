@@ -33,6 +33,36 @@ Subscription: ID/revision, owning Subscriber, personal/global kind, explicit non
 
 Hidden/unreadable operands produce an indeterminate value, propagated through negation and boolean composition; only a definite true matches. In particular `NOT(hiddenField = x)` is not true. For readable optional fields, presence can explicitly test absence; malformed typed comparisons are validation errors, not coerced strings or silent defaults.
 
+### Early Shared Typed Predicate Candidate
+
+**Version/status:** typed-predicate 1.0, explicitly frozen 2026-11-01 with restricted CEL-Go under D-66 as part of the user's `approve-processing-kernel-1.0` approval; execution start remains separate. **Owner:** DOM-07/integration for this shared representation; DOM-08 consumes it for Workflow selectors/conditions. No Delivery/subscription engine or general expression-language API is introduced.
+
+The approved subset's authoritative implemented wire types/validation are [typed values and closed schemas](../../internal/processing/values.go), [structured predicates/classified lookup](../../internal/processing/predicates.go) and [classification union](../../internal/processing/dependencies.go). [AP-12](../execution/source-ap-12.md#e-04-product-predicate-classification-and-supplied-core-guest) owns their actual partial verification; these primitives do not certify the complete Workflow, Subscription, native-search or publication consumer.
+
+Integer values are signed 64-bit decimal strings with exact comparison, finite numbers are JSON numbers without string coercion, timestamps are offset-bearing RFC 3339 instants at C-12 operational precision. Objects have closed declared properties whose values use this same representation; lists have one declared element schema. Absence is no field entry, not `null`, zero or empty text. Schema `optional`/`nullable` are separate; unknown fields/types, invalid nesting and mismatched comparisons are validation errors. Shared collection/input/nesting limits apply before evaluation.
+
+Predicate JSON has `op`, with only its relevant operand fields:
+
+| `op` | Required representation |
+| --- | --- |
+| `eq` | `field` reference and one typed `value` of its declared type |
+| `in` | `field` reference and bounded typed `values` of that same type |
+| `present` | `field` reference and boolean `value` specifying present versus absent |
+| `lt`, `lte`, `gt`, `gte` | `field` reference and typed numeric or timestamp `value` of a compatible declared type; no string ordering/coercion |
+| `contains` | string `field` reference and literal string `value`, never a regex or substring expression |
+| `and`, `or` | nonempty bounded `args` of predicates |
+| `not` | exactly one predicate in `args` |
+
+Field references are explicit `namespace` plus path-segment list into declared fields, not an expression string or arbitrary reflected Go field. The evaluation owner supplies the permitted field schema/resolver. Selectors reference source/current target fields; conditions additionally reference visible prior local-step outputs. Subscription consumers later bind their own event/result namespaces to this same type. No other Workflow's private intermediates or undeclared keys. Predicate argument/membership lists use the existing 1024-entry filter bound and depth 32; typed-value lists retain the 1000-element collection limit. Encoded evaluation input uses the existing 1 MiB limit.
+
+Field lookup returns distinct present, readable-absent and hidden/indeterminate states, with classified dependency references. Hidden is never replaced by absent. Readable optional absence makes equality/membership/ordered/substring predicates false; `present=false` may match it. Explicit null compares only with declared nullable null. Three-valued composition uses definite false dominance for AND, definite true dominance for OR, and otherwise propagates indeterminate; NOT preserves indeterminate. Only definite true selects or takes a true branch. Invalid runtime types are explicit failures, not indeterminate/false.
+
+Retain the union of declared/read source dependencies even when boolean short-circuiting could omit one. This conservative classification prevents hidden selector/branch operands from becoming public through a derived constant. It grants no rights. Target fields resolve on one correlated target context per predicate, never one target's Network and another's Unit. Transmission-level selection tests relevant target contexts separately, selects at most one run per Workflow and retains the context dependencies. No implicit list-loop expression is exposed.
+
+Under the final D-66 selection, validated structured predicates bind to restricted checked CEL-Go declarations/programs. There is no user-supplied CEL expression string, arbitrary function environment, independent authorization engine or native regex substitution. Standard-library validation retains exact wire types, finite numbers and the explicit absence/null/Hidden adapter; conservative source dependencies are collected independently of CEL short-circuiting. [The library assessment](../architecture.md#cel-go-incremental-capability-review) owns the selection rationale and [E-50](../execution/ap-04.md#e-50-bounded-cel-compatibility-and-cost-comparison) the bounded proof, not full production conformance. Additional library operators/extensions require explicit owner declaration before product use.
+
+### Subscription Target and Input Selection
+
 **Target selection:** A Subscription can select one or several configured target instances, including a provider-side channel or collection such as Telegram channel/chat or Pushover group key. Personal recipient selection follows the [configuration-authority boundary](#configuration-authority); subscription rights never create an integration. A dynamic selector may select from an explicitly delegated configured target pool using permitted structured data; it cannot turn untrusted Payload into an arbitrary undelegated URL/contact/Secret. An admin may explicitly configure a template-driven external destination under the Integration's trusted transport policy and delegated data rights; that is deliberate configuration, not an implicit global Unit mapping.
 
 **Overrides:** Unit-specific Extension fields have plugin-declared type/validation and explicit permission. Mapping/precedence is declared by the Subscription: common target configuration, then Subscription mapping, then explicitly selected Unit fields. Conflicting values from multiple relevant Units must be resolved by an explicit split-per-Unit or explicit configured selection, never map iteration order. Split Deliveries contain only the corresponding permitted data, with split identity in deduplication. Provider/channel/Secret changes remain separately authorized target configuration, not a Unit-field shortcut.

@@ -16,6 +16,7 @@ This glossary owns **domain term meanings**, not interface schemas or implementa
 | **Receiver hardware** | Physical radio receiver/SDR used by a Gateway. Not a domain object. | Gateway, Unit |
 | **Gateway adapter** | Software type receiving/decoding Emissions and submitting finalized Transmission reports. Responsibility boundary: [C-01](contracts/c-01-transmission-acceptance.md). | Gateway (a running instance) |
 | **Gateway** | A registered, authenticated running instance of a Gateway adapter, authorized for one or more Networks. Has its own state (contact, heartbeat, termination). | Receiver hardware, Subscriber |
+| **Gateway Bearer credential** | Reusable Bearer secret bound to exactly one Gateway; GoPager derives Gateway identity from the credential. HTTP exposure, authorization and lifecycle are defined by [C-06](contracts/c-06-identity-authorization.md#ap-06-gateway-bearer-credentials). | Gateway token; per-Gateway credential |
 | **Network** | A logical radio network or channel with exactly one Protocol, in whose context a Gateway submits Transmissions. | Protocol |
 | **Gateway Network identifier** | Gateway-local identifier with which a Submission may declare its Network; the Gateway's configuration maps it to exactly one assigned Network. | Network (the server entity) |
 | **Default Network** | Configured Gateway/Protocol fallback in [C-01 Network resolution](contracts/c-01-transmission-acceptance.md). | Network |
@@ -81,6 +82,7 @@ This glossary owns **domain term meanings**, not interface schemas or implementa
 | **User** | A human Principal with an account. | Unit, Subscriber |
 | **User group** | Set of Principals used for granting permissions. | Unit collection, Group call |
 | **Grant / Capability** | Permission to see data or perform an action; Capabilities cover actions such as changing the grouping configuration. | — |
+| **Field permission** | Global field-visibility permission for a Principal or User group, independent of data/action scopes. Definition and implemented type: [C-06 identity-fields1.0](contracts/c-06-identity-authorization.md#unscoped-field-permission-replacement-candidate). | Scoped data/action Grant |
 | **Subscription** | A Principal's standing request to be informed about matching Messages or other Domain events. | — |
 | **Subscriber** | The Principal owning a Subscription. | Unit, Address |
 | **Delivery target** | A configured destination instance (for example a push device, email address, webhook) used by a delivery plugin. | Message target, Address |
@@ -93,6 +95,7 @@ This glossary owns **domain term meanings**, not interface schemas or implementa
 | **Personal Subscription** | Subscription acting as its owning User within that User's delegable rights. | Global Subscription |
 | **Global Subscription** | Administratively managed Subscription acting as an explicitly assigned technical Principal, within its delegated rights. Never implicitly acts as an unrestricted administrator. | Personal Subscription |
 | **Delivery input** | Bounded, materialized, authorized data computed by Core for a Delivery plugin, including plugin-declared fields and rendered template output; independently usable without reading the original Message. | Original Payload, unrestricted object copy |
+| **Fact transport reference** | Internal pointer to a canonical Domain event for durable transport, not another fact history or authorization grant. DOM-07/integration owns [C-08's publication subset](contracts/c-08-events-jobs.md#postgresql-fact-publication); introduced under D-94. | Domain event envelope, Delivery job, consumer receipt |
 | **Delivery job** | Durable work to create or execute a Delivery, retaining trigger identity, Subscriber, selected Delivery target, revision context, and expiry. | Delivery, Delivery attempt |
 | **Delivery attempt** | One recorded authorization/start and external execution attempt for a Delivery, with an explicit result including possible uncertainty. | Provider acceptance, confirmation of reading |
 | **Recovery request** | Account-bound request entering the common local password recovery workflow, whether automatically fulfilled through a trusted integration or approved by an authorized manager. | Subscription |
@@ -108,6 +111,7 @@ This glossary owns **domain term meanings**, not interface schemas or implementa
 | **Core** | GoPager's application and authoritative domain services, excluding operator-installed extension code. | Plugin host |
 | **Integration** | Configured use of an operator-installed plugin and its declared capabilities; not an additional permission bypass or global Unit-to-Delivery-target mapping. | Integration ownership role |
 | **Plugin manifest** | Versioned declaration of an artifact's identity, SDK compatibility, capabilities, internal data access, configuration/Secret fields, extension fields, and input/result schemas. | Grant |
+| **Processing instance** | Separately revisioned administrative binding of a provisioned pure processing capability, its execution Principal and configuration; optionally binds an independent pure preview. Owner: [C-10](contracts/c-10-plugin-host.md#early-installed-processing-invocation-candidate). | Workflow, module artifact, Delivery target |
 | **Plugin host** | Core runtime that loads prebuilt plugin artifacts, binds declared/approved SDK capabilities, invokes code, and records bounded outcomes. Trust does not imply a hostile-code sandbox guarantee. | External plugin process |
 | **Host capability** | SDK-mediated ability declared by a plugin and explicitly approved for an instance, including optional network, filesystem, or command access. | Domain Capability/Grant |
 | **Secret reference** | Versioned reference to an instance-bound confidential configuration value in the Core Secret store or an external provider. | Plaintext configuration |
@@ -117,7 +121,10 @@ This glossary owns **domain term meanings**, not interface schemas or implementa
 | **Workflow definition version** | Immutable saved selector/step/output-schema definition referenced by a Workflow's active pointer and source-bound Processing results. Saving is not activation or historical reprocessing. | Mutable Workflow revision, Address-rule validity |
 | **Ingest publication barrier** | Requirement that selected ingest Workflows and current target/contribution derivation are ready before their new evidence/results enter normal GUI/search/Delivery projections. It does not delay honest original-intake acknowledgement or erase previously ready evidence. | Provider acceptance, whole-Message retention |
 | **Workflow selector** | Explicit trigger and correlated domain/Payload predicate deciding whether a Workflow runs for a particular Transmission. | Grant |
+| **Workflow candidate work** | Durable evaluation work for a scope-eligible Workflow; its admission does not prove that the selector matched. DOM-08/DOM-07 own its [approved lifecycle](contracts/c-08-events-jobs.md#processing-durable-selection-placement-review), introduced under D-75. | Selected Workflow execution, published Processing result |
+| **Execution generation proposal** | Unapproved D-77 alternative for separately identifiable evaluation work under the stable logical candidate key. DOM-08/DOM-07 own the [reselection binding review](contracts/c-08-events-jobs.md#processing-same-input-reselection-review); it is not the current adopted schema or a second queue. | Candidate revision, Fencing token, automatically renewed retry budget |
 | **Processing result** | Typed, namespaced derived fields and status from one Workflow version and input Transmission. A field such as `level` is data, not a Domain event. | Original Payload, Domain event type |
+| **Target-result binding candidate** | Stable historical heading for [C-11's approved target-result binding](contracts/c-11-processing-presentation.md#target-result-binding-candidate): target-correlated field sets inside one Processing result, not a new original target/Message. | Per-target Transmission splitting, field permission scope |
 | **Presentation template** | Versioned, permission-filtered rendering definition using an established template engine's constrained logic and escaped data interpolation. | Arbitrary browser script |
 | **Text key** | Stable identifier in the English text catalog, mapped to typed parameters and optional plural selection. | Domain event/error code |
 | **Field set** | Explicit set of readable domain field categories; computed and plugin-defined fields receive no rights merely by existing. | Scope |
@@ -136,7 +143,7 @@ Exact identifier spelling, schema and behavior have the same owner. This section
 | Submission, Gateway operations and acceptance fields | [C-01](contracts/c-01-transmission-acceptance.md), [C-02 Protocol fields](contracts/c-02-protocol-payload.md) |
 | Membership/representative and internal Message fields | [C-03](contracts/c-03-message-grouping.md) |
 | Target resolution, contribution/support and correction fields | [C-05](contracts/c-05-matching-correction.md) |
-| Grant scopes, field sets and exact action names | [C-06](contracts/c-06-identity-authorization.md) |
+| Grant scopes, global field permissions, field sets and exact action names | [C-06](contracts/c-06-identity-authorization.md) |
 | Query/live fields, errors/codes and API fallback mappings | [C-07](contracts/c-07-query-live.md) |
 | Domain event envelope/type names and job fields | [C-08](contracts/c-08-events-jobs.md) |
 | Delivery state and input/attempt fields | [C-09](contracts/c-09-delivery.md) |

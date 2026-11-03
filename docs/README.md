@@ -29,13 +29,15 @@ English is the language of repository artifacts, code identifiers/comments and i
 
 ## Library Reuse
 
-This mandatory policy applies to every repository activity and every work package, including tests, tooling and infrastructure. Before implementing substantial functionality, actively look for mature libraries and prefer a suitable, well-maintained library over rebuilding that functionality. The standard library counts as reuse.
+This mandatory policy applies to every repository activity and every work package, including tests, tooling and infrastructure. Before implementing any functionality, always check whether suitable libraries exist and prefer suitable, well-maintained libraries over rebuilding that functionality. The standard library counts as reuse.
 
-Write only the necessary custom functionality when no suitable library exists, suitable candidates are insufficiently maintained, their dependency footprint is unnecessarily large, or the useful subset is too small to justify the dependency. Assess suitability against the actual required behavior, maintenance, dependency footprint and integration cost; do not assume that fewer dependencies or custom code is inherently better.
+Write only the necessary custom functionality when no suitable library exists, candidates are outdated, insufficiently maintained or demonstrably faulty, the task is too small to justify their dependency/integration cost, or application-specific domain behavior or module/library integration requires that code. Assess suitability against the actual required behavior, maintenance, dependency footprint and integration cost; do not assume that fewer dependencies or custom code is inherently better.
 
 For Go, prefer the `go-pkgs` MCP tools for package discovery and current package/version facts. If unavailable or inconclusive, record that limitation and use authoritative upstream documentation/source and local toolchain documentation; do not invent package facts or treat an unavailable lookup as proof that no library exists.
 
 Record substantial selections and justified exceptions with alternatives and evidence at the existing technology/implementation owner; link them from the current execution record. Reassess existing in-progress work when this policy exposes unnecessary reinvention. A new library does not bypass frozen-contract, version, scope or approval gates. Approval and origin: [D-36](authoritative-plan.md#repository-wide-library-policy-decision).
+
+For cross-codebase reassessment, divide existing handwritten code into explicit, nonoverlapping review-session scopes, including tests and integration code. Inventory generated artifacts separately. Review sessions first report reusable capability needs centrally to the architecture/integration coordinator; they must not independently choose dependencies or implement replacements. The coordinator consolidates repeated needs, records one shared selection or justified exception at the architecture owner, and returns that binding to all affected sessions before implementation. Apply approved changes within disjoint write scopes and validate existing behavior; retain explicit findings requiring a contract or earlier-artifact approval rather than changing them implicitly. The requested full existing-code review and coordination procedure are authorized by [D-98](authoritative-plan.md#coordinated-existing-code-library-reassessment).
 
 ## Status Terms
 

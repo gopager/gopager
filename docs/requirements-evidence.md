@@ -35,6 +35,43 @@ For each proposed adoption, add a record here identifying affected REQ/C version
 
 No adoption assessment is approved yet.
 
+## Processing Kernel Library Sources
+
+Incremental-capability recheck, 2026-11-01: pkgsite metadata/public symbols for [`cel.dev/cel-go/cel` v0.33.2](https://pkg.go.dev/cel.dev/cel-go@v0.33.2/cel) and [`ext`](https://pkg.go.dev/cel.dev/cel-go@v0.33.2/ext), the official [CEL overview](https://cel.dev/overview/cel-overview), and the [published module manifest](https://proxy.golang.org/cel.dev/cel-go/@v/v0.33.2.mod). Verified API availability and declared dependencies only; no adoption, compatibility proof or measured incremental resource cost. The former `google/cel-go` release README URL returned 404 and was not used as release evidence. Recommendation and evaluation scope belong to [architecture](architecture.md#cel-go-incremental-capability-review).
+
+Reviewed 2026-10-28 for AP-04's authorized T043 preparation, not a package adoption or runtime test:
+
+- Local Go 1.26.2 `go doc regexp.Regexp`, `go doc os/exec.CommandContext`; local `src/regexp/regexp.go` Reader implementation and `src/regexp/exec.go` matcher loop. The documented Reader API and observed end-of-input handling warrant testing context-aware Reader cancellation; ordinary string methods do not accept context. Process cancellation is a distinct mechanism, not permission to change Lite topology.
+- [CEL-Go upstream entry](https://github.com/google/cel-go), including its canonical-repository/import migration notice and partial-state/unknown-value documentation. Reviewed current documentation, not a pinned executable release or compatibility result.
+- [Expr language definition](https://expr-lang.org/docs/language-definition), including operators, optional/nil values, predicates and regex. Language availability is not a demonstrated authorization/classification adapter.
+- [AP-03 E-07](execution/ap-03.md#e-07-wasm-runtime-probes) retains the exact historical Wazero tuple, synthetic guest/host observations and limitations; no earlier experiment was rerun or reinterpreted as application evidence.
+
+The [architecture assessment](architecture.md#t043-evaluator-library-and-budget-assessment) owns suitability/rationale. D-61 subsequently authorized the scoped follow-up; actual commands, hashes, successes/failures and limits belong to [AP-04 E-38](execution/ap-04.md#e-38-budget-and-memory-probe-results). Only the disposable scratch module acquired the approved Wazero dependency; no application dependency or implementation artifact was introduced.
+
+**2026-11-01 discovery addendum:** The now-available Go package-discovery tool returned canonical `cel.dev/cel-go/cel` and `common/types` at v0.33.2, and `github.com/expr-lang/expr` plus its `ast`/`vm` packages at v1.17.8. Queries: `cel.dev/cel-go` and `github.com/expr-lang/expr`, three results each. This confirms current package discovery, not adoption, pinned-version execution or a dependency/latency measurement. [The proposed restricted binding assessment](architecture.md#t043-predicate-and-coordination-library-binding) owns the D-36 suitability/exception rationale.
+
+### Managed Child Resource Sources
+
+Reviewed 2026-11-01 after D-63, without running a child experiment:
+
+- Local Go 1.26.2 `go doc os/exec.CommandContext`, `go doc os/exec.Cmd.WaitDelay`: context cancellation kills the configured child; pipe/wait bounds are separate. Neither API is an OS memory limiter or automatic proof of descendant/parent-death cleanup.
+- Local `go doc runtime/debug.SetMemoryLimit`: Go's memory target is explicitly soft and excludes some non-Go/runtime external memory. It is not a safe replacement for hard enforcement after the D-61 OOM counterexample.
+- Local `go doc syscall.Setrlimit`; [Linux getrlimit/setrlimit manual](https://man7.org/linux/man-pages/man2/getrlimit.2.html): unprivileged processes can lower hard/soft limits; address-space, CPU and data-segment limits have different semantics. Linux `RLIMIT_DATA` also affects `mmap` since 4.7; neither a generic Go API name nor a chosen byte value proves compatibility with Go's startup/address reservations.
+- [Linux cgroup v2 documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html): process membership/resource controllers are hierarchical. The outer disposable Docker limit is not proof that a distribution can create a separate per-child resource boundary without delegated OS permissions or extra Operator setup.
+
+Suitability/proposed follow-up belongs to [the architecture assessment](architecture.md#t043-evaluator-library-and-budget-assessment) and D-64. No Linux/macOS/Windows parity or automatic deployment privilege is inferred from these sources.
+
+### Native Plugin Sources
+
+Reviewed 2026-11-01 under the user's `review-native-alternative` instruction:
+
+- Local Go 1.26.2 `go doc plugin`, `go doc plugin.Open`, `go doc plugin.Plugin.Lookup`: supported host limits, exact toolchain/shared-source compatibility warnings, initialization at load, no close/unload and race-detector limitations. These are official API warnings, not a target plugin conformance test.
+- Go package-discovery module metadata reports `github.com/ebitengine/purego v0.11.2` (commit time 2026-10-15) and `github.com/hashicorp/go-plugin v1.8.0` (commit time 2026-04-29) as current/latest on the lookup. No package was installed or imported into the application.
+- [PureGo upstream README, main](https://github.com/ebitengine/purego/blob/main/README.md): native C-function/dynamic-symbol support, per-platform/architecture constraints and beta warning. This source review is not a verified pinned-release ABI/runtime matrix.
+- [HashiCorp go-plugin upstream README, main](https://github.com/hashicorp/go-plugin/blob/main/README.md): application-launched subprocesses with local net/rpc or gRPC, protocol/handshake/lifecycle facilities and controllable stdout/stderr forwarding. Framework crash separation is not a demonstrated resource cap, field-authority engine or secret-redaction guarantee.
+
+The initial guessed HashiCorp documentation URL returned HTTP 404; the canonical upstream repository/README and module metadata were used instead. [Architecture](architecture.md#native-plugin-alternative-review) owns the comparison/rationale. No native code, SDK, artifact load, runtime probe or production adoption follows.
+
 ## Documentation Reviews
 
 Historical AP documentary checks/outcomes are in [AP-01 E-01](execution/ap-01.md#e-01-imported-documentary-outcome) and [AP-02 E-01](execution/ap-02.md#e-01-imported-documentation-checks), not duplicated here.
