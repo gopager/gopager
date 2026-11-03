@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
 )
@@ -61,11 +62,18 @@ type RunningHandle struct {
 // Start validates configuration and store compatibility before composing the roles.
 // After valid registration it owns the store, including cleanup on startup failure.
 func Start(ctx context.Context, config Config, migrations fs.FS, store Store, runners []Runner) (_ *RunningHandle, result error) {
+	return StartWithAPI(ctx, config, migrations, store, runners, nil)
+}
+
+// StartWithAPI composes application routes on the platform listener without
+// changing the existing health, store, worker or shutdown boundaries.
+func StartWithAPI(ctx context.Context, config Config, migrations fs.FS, store Store, runners []Runner, api http.Handler) (_ *RunningHandle, result error) {
 	config = config.WithDefaults()
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
-	if store == nil || (len(runners) > 0 && !includesRole(config.Roles, RoleWorker)) {
+	if store == nil || (len(runners) > 0 && !includesRole(config.Roles, RoleWorker)) ||
+		(api != nil && !includesRole(config.Roles, RoleAPI)) {
 		return nil, NewFailure(CodeInvalidInput, errors.New("invalid store or runner role registration"))
 	}
 	for _, runner := range runners {
@@ -102,7 +110,7 @@ func Start(ctx context.Context, config Config, migrations fs.FS, store Store, ru
 			return nil, NewFailure(CodeInternalError, err)
 		}
 		handle.server = &http.Server{
-			Handler: HealthHandler(handle.ReadStatus), ReadHeaderTimeout: 5 * time.Second,
+			Handler: handle.applicationHandler(api), ReadHeaderTimeout: 5 * time.Second,
 			BaseContext: func(net.Listener) context.Context { return root },
 		}
 		handle.workers.Add(1)
@@ -287,10 +295,5 @@ func (h *RunningHandle) Shutdown(ctx context.Context) error {
 }
 
 func includesRole(roles []Role, wanted Role) bool {
-	for _, role := range roles {
-		if role == wanted {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(roles, wanted)
 }

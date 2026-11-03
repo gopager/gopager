@@ -74,6 +74,11 @@ The stable D-IDs below record decision topics and supersession. The **owner link
 | D-96 | <a id="d-96"></a>Approved reslicing of future AP-06+ execution into an explicit acyclic path; preserves AP-01..AP-05 and historical evidence | [Work-package reslicing decision](#work-package-reslicing-decision), [execution path](work-packages.md#revised-execution-path) |
 | D-97 | <a id="d-97"></a>Approved renumbering of the resliced execution path so AP IDs encode its order; preserves AP-01..AP-05 and historical evidence | [Ordered AP renumbering decision](#ordered-ap-renumbering-decision), [execution path](work-packages.md#revised-execution-path) |
 | D-98 | <a id="d-98"></a>Approved all-task library suitability checks and coordinated multi-session reassessment of existing code | [Coordinated reassessment](#coordinated-existing-code-library-reassessment), [policy owner](README.md#library-reuse) |
+| D-99 | <a id="d-99"></a>Approved preparation of complete synthetic-preview form schemas; exact schema/context freeze remains separate | [Synthetic preview schema completion](#synthetic-preview-schema-completion) |
+| D-100 | <a id="d-100"></a>Approved global plugin.configure for redacted Processing-instance reads/listing | [Instance read authorization](#processing-instance-read-authorization) |
+| D-101 | <a id="d-101"></a>Approved explicit optional local Processing artifact-root startup option | [Artifact-root configuration](#processing-artifact-root-configuration) |
+| D-102 | <a id="d-102"></a>Approved synthetic schema/context and null-or-name ZVEI; subsequent general bytes approval is D-103 | [Synthetic schema freeze responses](#synthetic-schema-freeze-responses) |
+| D-103 | <a id="d-103"></a>Approved bounded shared bytes values and SDK 1.1 bytes compatibility | [Shared bytes binding](#shared-bytes-binding) |
 
 ## Operating Assumptions
 
@@ -937,6 +942,50 @@ The required approval is now supplied. Resume only the selected revisioned same-
 **Question/options and resolution:** The user requires library suitability to be checked for every task, not just substantial additions, and all previously produced code to be reassessed in separate scoped sessions. Independent repeated selections are rejected: sessions must first centrally report capability needs, then receive the shared selection for implementation. [The existing policy owner](README.md#library-reuse) now specifies permitted custom-code exceptions and the coordination procedure, extending D-36 rather than creating a parallel instruction source. Root AGENTS already routes every agent to this policy.
 
 **Scope/impact:** Review the existing handwritten product, integration and test code; inventory generated artifacts separately. Record coverage and findings in the current execution record and shared technical selections at the architecture owner. This is not permission to change frozen domain behavior, reset data, rewrite historical test outcomes, silently upgrade dependencies or implement later AP features. Any concrete proposed replacement affecting earlier approved artifacts/contract choices still needs the required specific change approval. Current AP-06 remains the standalone kernel; subsequent assignments retain D-97's strict order. Review sessions may inspect earlier outputs without starting their remaining AP tasks.
+
+### Synthetic Preview Schema Completion
+
+**D-99; date/origin:** 2026-11-03, current AP-06 T055/T056. **Status:** approved for concrete schema preparation, not yet exact schema/context freeze. **Accountable owner/approver:** Product/integration; user selected `synthetic_form_scope=complete-form-catalog`. **Technical owners:** DOM-02/DOM-08/integration.
+
+**Question/options/resolution:** C-02 processing-source 1.0 provides the trusted typed projection, but does not bind public synthetic input field paths/form schemas/context identity. Choose a deliberately restricted POCSAG/FLEX first version or prepare the complete form catalog. The user selected the complete catalog. Prepare the versioned closed DTO, field/type/form mappings, synthetic identity/context and authorization rules and obtain their separate specific approval before implementing that schema. No caller-authoritative declarations or implicit field/classification choices are allowed.
+
+**Impact:** Additive clarification at C-02/C-11 with actual artifact links after approval; preserve frozen source-envelope semantics, classifications and historical evidence. This does not start AP-07 original intake, require later source ownership, approve a partial preview as complete or amend AP baselines. Exact schema approval and implementation evidence remain pending.
+
+### Processing Instance Read Authorization
+
+**D-100; date/origin:** 2026-11-03, current AP-06 T055/T056. **Status:** explicitly approved by user response `instance_read_authorization=global-plugin-configure`, including the bounded contract/implementation/test additions. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-05/DOM-08/integration.
+
+**Question/options/resolution:** Instance changes already require global `plugin.configure`, while instance read/list authorization is not concretely bound. Use the same existing global action for redacted configuration reads/listing, or separately design delegated instance rights. The user selected global `plugin.configure`; no new action or instance scope. C-06/C-10 own this narrow read binding. Preserve sensitive-field redaction and do not expose credentials or adopt a general plugin-management surface.
+
+**Impact/approved writes:** Processing management/read DTOs, native instance read/list adapters, protected root routes and directly related tests; additive C-06/C-10 text only. Earlier authorization semantics/action catalog/scopes and historical outcomes stay unchanged. No general plugin installer, personal settings or later AP scope is authorized.
+
+### Processing Artifact-root Configuration
+
+**D-101; date/origin:** 2026-11-03, current AP-06 T055/T056. **Status:** explicitly approved by user response `artifact_root_configuration=explicit-optional-root`, including bounded contract/startup/implementation/test additions. **Accountable owner/approver:** Product/integration; user. **Technical owners:** integration/plugin host.
+
+**Question/options/resolution:** The rooted local artifact loader exists but lacks a product startup setting. Add explicit optional `--processing-artifact-root`, or choose a different binding. The user selected that option without a guessed default path. No downloads, automatic installation or deployment compiler. If omitted, installed modules remain explicitly unavailable while built-in processing stays available.
+
+**Impact/approved writes:** Root startup configuration, rooted loader/inspector/execution lifecycle composition, directly related tests and additive C-10 usage binding. Retain existing artifact byte/digest/capability/authority limits, joined cleanup and D-85's configurable-value direction. Invalid supplied paths fail explicitly. No Secret store, general SDK or AP-baseline amendment is authorized.
+
+### Synthetic Schema Freeze Responses
+
+**D-102; date/origin:** 2026-11-03, current AP-06 T055/T056 following D-99. **Status:** schema/context and the subsequent null-or-name ZVEI clarification explicitly approved; the separately requested general binary value binding was subsequently approved under [D-103](#shared-bytes-binding). The independent responses below preserve the approval sequence. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-02/DOM-08/integration.
+
+**Resolution/evidence:** User selected `schema_context_freeze=approve-schema-context`: closed versioned full-form synthetic input, existing Network selection/current matcher for Unit eligibility, owner-generated synthetic identity excluded from work/publication, separate current action/scope/global field checks, existing whole-second Observation handling without a new age cap, no live writes and separate pure installed preview. Schema details are being transferred to C-02/C-11 with actual artifact links when implemented; the session proposal is not a second canonical contract.
+
+**Independent responses:** The user proposed simplifying ZVEI to `double_tone: "name"` or `double_tone: "none"` rather than a tagged union, otherwise approving. After explicit consultation about sentinel collision with an arbitrary technical name, the user selected `zvei_none_representation=null-or-name`: required `double_tone` is JSON null for no double tone or a nonempty unchanged technical-name string; `"none"` remains a possible ordinary name. Project it as a nullable string, not an absent field. This exact encoding clarification is approved for the C-02/C-11 addition and directly related implementation/tests. The user selected `binary_preview_representation=design-bytes-value-kind`, rejecting the recommended opaque-sidecar-only restriction and requesting a separate general bytes-type/operator design. This is design authorization, not a frozen bytes representation, automatic operator expansion or implementation approval.
+
+**Impact:** Continue independent approved instance/root and schema preparation work. Frozen shared C-09/C-11 value kinds, WASI wire/manifest compatibility and stored source semantics cannot be silently extended. Prepare the exact bytes/serialization/operator/resource/classification proposal and obtain specific affected-owner approval; assess downstream consumers without executing or changing their AP baselines. No partial preview or unresolved binary design may be reported as complete AP-06.
+
+### Shared Bytes Binding
+
+**D-103; date/origin:** 2026-11-03, current AP-06 T055/T056 following D-99/D-102. **Status:** explicitly approved by user response `bytes_binding_freeze=approve-bytes-binding`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-08, DOM-02, shared C-09 predicate owner and plugin host/integration.
+
+**Question/options/resolution:** Approve the narrowly specified general bytes value or revise its behavior. The user approves a distinct canonical padded standard-Base64 typed bytes value, exact equality/bounded membership/presence with existing three-valued boolean composition, identity copying and explicitly declared pure installed processing. No implicit text/number conversion, regex, byte indexing/ordering/concatenation or new predicate operator. Preserve absent/null/hidden/empty distinctions, all inherited source classifications and `derived` for output visibility. Bytes results have no automatic rendering, logging or search indexing. Bytes are not added to configuration/Secret schemas.
+
+**Bounds/compatibility:** Keep existing encoded input/intermediate/output, collection/depth/step, compute, CEL cost/memory and WASI bounds unchanged; enforce decoded aggregate bounds too. Comparisons consume length-aware cost within the existing CEL budget, with explicit resource errors and no partial result. Bytes input/result manifests require SDK 1.1; SDK 1.0 without bytes remains unchanged. Keep existing envelope shapes and fail incompatible old consumers closed, never coerce/drop/reset or rewrite immutable snapshots.
+
+**Approved writes/earlier impact:** Additive C-09/C-10/C-11 binding, shared Processing value/schema/predicate/evaluation/WASI/manifest adapters, complete D-102 synthetic DTO/source integration and directly related tests. This explicitly permits the required earlier frozen-type/adapter additions, not changes to their existing nonbytes semantics or historical results. Canonical rules live at the owning contracts/artifacts, not the session design note. Assess downstream consumers and bind the feature at owner contracts without implementing later Delivery/presentation/general-plugin tasks or changing AP baselines. Current native persistence JSON storage must retain typed values without destructive migration or arbitrary schema recreation. Approval is not passing runtime evidence; verify the exact byte/resource/compatibility and synthetic/HTTP/root behavior before closure.
 
 ## Workflow and Approval Gates
 

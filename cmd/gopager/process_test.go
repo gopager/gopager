@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gopager/gopager/internal/platform"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 )
@@ -27,6 +28,9 @@ func TestRunProcessHelper(t *testing.T) {
 	}
 	os.Args = []string{"gopager", "--profile=full", "--roles=" + roles,
 		"--migration-mode=apply", "--listen-address=" + os.Getenv("GOPAGER_AP05_TEST_LISTEN")}
+	if strings.Contains(roles, "api") {
+		os.Args = append(os.Args, "--public-origin=http://"+os.Getenv("GOPAGER_AP05_TEST_LISTEN"))
+	}
 	main()
 	os.Exit(0)
 }
@@ -92,7 +96,7 @@ func TestFullCommandProcessStartupAndSignalShutdown(t *testing.T) {
 					<-exited
 				}
 			}()
-			deadline := time.Now().Add(5 * time.Second)
+			deadline := time.Now().Add(platform.DefaultCallTimeout + time.Second)
 			ready := false
 			client := &http.Client{Timeout: 100 * time.Millisecond}
 			for time.Now().Before(deadline) {

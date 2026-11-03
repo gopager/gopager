@@ -21,6 +21,23 @@ Date: 2026-10-25. This file owns technology selections/rationale, topology, modu
 
 A broker, cache, separate search index, or policy service may become a later Full optimization with demonstrated benefit, not a speculative baseline component. SQLite WAL permits only one concurrent writer; short transactions and local storage are prerequisites. No WAL on a shared network filesystem and no multi-host SQLite HA.
 
+### Existing-code Library Reassessment
+
+Under [D-98](authoritative-plan.md#coordinated-existing-code-library-reassessment), three disjoint review sessions assessed 153 handwritten Go files and inventoried 181 generated Ent files separately, plus eight migration SQL artifacts. Coverage, limitations and validation remain at [AP-06](execution/ap-06.md#e-05-consolidated-library-binding). The generated artifacts were not manually audited line by line. Public package documentation was used after package-discovery HTTP 503 responses.
+
+**Central binding, 2026-11-03:** Retain the currently approved libraries and standard-library mechanisms below. No new dependency, upgrade, contract replacement or demonstrated library-replacement requirement emerged from these reports. These are coordinated reuse/exception decisions, not assertions that no alternative library exists.
+
+| Shared capability | Binding and justified application code |
+| --- | --- |
+| HTTP, strict JSON, CLI/configuration, logging and process lifecycle | Reuse Go `net/http`, `encoding/json`, `flag`, `context`, `log/slog` and synchronization primitives. Bounded closed inputs, proof precedence, CSRF/Origin and startup validation remain narrow integration. No routing/configuration framework is justified by the reviewed surfaces. |
+| Authentication, normalization, authorization and field classification | Retain pinned `x/crypto/argon2`, `x/text`, `x/net/idna` and standard crypto. Reuse central AuthZ; scoped action grants and global field permissions remain application semantics, not a second Casbin/OPA evaluator. Preserve persisted transactional login accounting rather than substitute the in-memory token bucket supplied by `x/time/rate`. |
+| Predicates, schemas, protocol/domain matching and receipts | Retain restricted CEL-Go and standard JSON/time/collection operations. Closed types, hidden/absent distinctions, target correlation, protocol address distinctions and actor-bound atomic command receipts are application-specific validation/integration; a generic schema or idempotency package does not replace them. |
+| WASI and rooted artifacts | Retain Wazero and the selected bounded Core regex/installed-command adapters. Pins, current authority, pure preview and resource/result checks remain integration code. |
+| Durable Processing work and scheduling | Retain D-75's single candidate lifecycle and bounded dispatcher. River/Watermill alternatives retain their previously documented assessment; cron scheduling does not supply candidate revisions, current-source checks or fencing. No second queue/lifecycle is introduced. |
+| Persistence, publication and test fixtures | Retain Ent, Goose, pgx through `database/sql`, D-94's Watermill reference-only transactional publication, Testcontainers and existing Go/Ginkgo/Gomega tooling. Caller-owned transaction adapters and owner migrations remain integration, not custom library replacements. |
+
+Review sessions receive this same binding before implementation. Continue reuse as kernel surfaces are completed; concrete future evidence of unnecessary reinvention must be reported centrally and pass existing approval gates. The review does not permit earlier behavior changes or later AP implementation.
+
 ### AP-05 Foundation Version Selection
 
 **TECH-01/05/06; D-35; status: approved 2026-10-26 for AP-05 only.** Exact initial implementation tuple: Go `1.26.2`, `github.com/jackc/pgx/v5 v5.11.0` through its `stdlib` adapter and Go `database/sql`, PostgreSQL `18.0`. The reproducible local test image is `postgres:18.0-alpine` at OCI index digest `sha256:48c8ad3a7284b82be4482a52076d47d879fd6fb084a1cbfccbd551f9331b0e40`; this pins the test fixture, not a requirement that Operators deploy Alpine containers. AP-03 characterized these exact candidates; the user separately approved their production selection under [D-35](authoritative-plan.md#ap-04-foundation-freeze-decision). No claim of latest versions, vulnerability certification or product runtime validation follows.

@@ -40,6 +40,8 @@ This glossary owns **domain term meanings**, not interface schemas or implementa
 | **Transmission target** | One original Address/Function reported in a Transmission. Evidence is owned by [C-01/C-02](contracts/c-02-protocol-payload.md); derived resolution is owned by [C-05](contracts/c-05-matching-correction.md). | Message target, Message contribution, Unit |
 | **Quality metrics** | Optional, already evaluated and contextualized reception-quality information supplied by the Gateway. | Gateway state |
 | **Incomplete marker** | Optional Gateway statement that a Transmission was received incompletely. | — |
+| **Synthetic preview source** | Transient server-validated sample with a distinct synthetic identity, never stored original evidence or publication authority. Owner: [C-02](contracts/c-02-protocol-payload.md#synthetic-preview-source-10), D-102. | Transmission, ready source, request-supplied declaration |
+| **Bytes value** | Typed binary sequence with canonical Base64 JSON transport, not text; owner: [C-09 shared bytes](contracts/c-09-delivery.md#shared-bytes-value-addendum), D-103. | String, decoded text, Payload comparison hash |
 
 ## Messages and Grouping
 

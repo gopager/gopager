@@ -85,3 +85,27 @@ T043's evaluator/fixtures consume the typed projection. Preview accepts a valida
 The implemented internal handover shape is [the detached source capture and owner port](../../internal/processing/capture.go). This port requires a trusted producer's prior Protocol/form validation; it is deliberately not a public DTO allowing a caller to invent field declarations. Target declarations also describe targetless absence/classification without fabricating a target. [AP-12 E-09](../execution/source-ap-12.md#e-09-target-result-kernel-implementation-and-bounds) records fixture validation and its missing real-owner limitation. The [approved C-11 target-result binding](c-11-processing-presentation.md#target-result-binding-candidate) determines how captured contexts produce outputs; it does not transfer original-evidence ownership.
 
 This handover establishes projection types/validation/ports, not original intake, decoder, full Payload transport, canonical identity or Message membership. AP-06 separately freezes/implements its originals and wires these ports; until then no production original-source route is claimed.
+
+### Synthetic Preview Source 1.0
+
+**Status:** exact schema/context approved under [D-102](../authoritative-plan.md#synthetic-schema-freeze-responses), with [D-103 bytes](../authoritative-plan.md#shared-bytes-binding). Owners: DOM-02/DOM-08/integration. This is a transient standalone preview source, not original intake, a stored source or publication authority. No later AP-07 producer is required.
+
+Closed request: `schemaVersion:1`, lowercase `protocol`, matching `form`, form-specific `payload`, ordered shared Protocol `targets`, existing `networkId`, optional offset-bearing RFC3339 `observedAt` and only the form-specific optional `subtype` below. Reject caller declarations, classifications, source/context revisions, Transmission/Unit IDs, positions, Network names, resolved context and unknown properties. Existing encoded Processing bounds apply.
+
+| Protocol/form | Closed payload and validation |
+| --- | --- |
+| POCSAG/FLEX `text` | `{value:string}`; retain submitted Unicode unchanged, including empty text. |
+| POCSAG/FLEX `numeric` | `{value:string}`; exact canonical code alphabet defined above, no extra normalization. |
+| POCSAG/FLEX `tone-only` | Payload omitted, not null or empty text. |
+| FLEX `binary` | Required subtype `transparent`/`secure`; `{encoding:"base64",data:string}` with C-09 canonical Base64 bytes. No implicit text. |
+| FLEX `flex-short-signal` | `{sourceCode:integer}` in `0..7`. |
+| ZVEI `zvei-signal` | Required `{double_tone:null}` for no double tone or `{double_tone:nonempty string}` for an unchanged technical name; `"none"` is an ordinary possible name, not a reserved sentinel. |
+| EAS `eas-header` | `{originator,eventCode,purgeTime,issueTime}` strings using [47 CFR 11.31(d)-(f)](https://www.ecfr.gov/current/title-47/section-11.31) originator/event codes, four-digit `TTTT` valid-time segments and seven-digit `JJJHHMM` issue instant. Preserve leading zeros. Station ID, audio/video, repetition/EOM and other reception/quality attributes are excluded. |
+
+Targets use the existing shared typed validator, never a new address parser: POCSAG numeric address plus required Function, FLEX supported decimal-address classes, five-digit ZVEI and six-digit EAS strings. Keep original order/duplicates and server-assigned positions. Preserve targetless POCSAG/FLEX; existing ZVEI/EAS minimum and EAS maximum 31 apply, plus the shared collection bound. Do not fabricate recipients.
+
+Server-owned declarations: `source.protocol/form/subtype` strings (`payload`); `source.observedAt` timestamp and `source.network.id/name` strings (`gateway`); `source.payload.text.value` and `.numeric.value` strings; `.binary` bytes; `.flex.shortSignal.sourceCode` integer; `.zvei.double_tone` nullable string; `.eas.originator/eventCode/purgeTime/issueTime` strings (all payload values `payload`). Target `address.number`/`address.text` are mutually exclusive optional integer/string and `function` an optional integer (`address`). Current matcher-produced `target.unit.id` and `.collections` are optional string/list-of-string (`unit`); no invented labels. Tone-only has no payload field. Declarations/classifications never come from the request.
+
+Generate a fresh ephemeral source UUID and immutable request revision; mark it internally synthetic and reject it from durable work/publication paths. Use supplied Observation or server time, truncating fractional seconds without rounding under D-42; preserve offset and add no age window. Resolve Network existence/name/Protocol and target/Unit context through current trusted owners in the live primary transaction. Reuse the verified matcher and its current Assignment/context revisions; no stored Transmission/Message lookup or fabricated Network name.
+
+Current `rule.preview`, exact Workflow scope and global field rights are separate mandatory checks. For Network scope require its selected Network; for Unit scope only original positions currently resolved into configured Units are eligible. Targetless/unassigned samples never widen Unit scope. Revalidate current authority/context for installed calls independently of the editor. Evaluation takes place outside SQL and has no live writes/results/facts/events. Installed preview uses only the separately pinned pure artifact, never the main module or effects. Missing actual owners fail explicitly; omission is not a successful synthetic substitute.

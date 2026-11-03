@@ -15,7 +15,15 @@ func TestParseConfigBindsExplicitInputs(t *testing.T) {
 		ok   bool
 	}{
 		{"worker", []string{"--profile=full", "--roles=worker"}, "synthetic-secret", true},
-		{"combined", []string{"--profile=full", "--roles=api,worker", "--listen-address=127.0.0.1:8080", "--migration-mode=apply"}, "synthetic-secret", true},
+		{"combined", []string{"--profile=full", "--roles=api,worker", "--listen-address=127.0.0.1:8080", "--public-origin=https://pager.example", "--migration-mode=apply"}, "synthetic-secret", true},
+		{"HTTP origin", []string{"--profile=full", "--roles=api", "--listen-address=127.0.0.1:8080", "--public-origin=http://pager.example:8080"}, "synthetic-secret", true},
+		{"missing public origin", []string{"--profile=full", "--roles=api", "--listen-address=127.0.0.1:8080"}, "synthetic-secret", false},
+		{"bad public origin", []string{"--profile=full", "--roles=api", "--listen-address=127.0.0.1:8080", "--public-origin=https://pager.example/path"}, "synthetic-secret", false},
+		{"configured login limits", []string{"--profile=full", "--roles=worker", "--login-attempts-per-account=2", "--login-attempts-per-instance=20"}, "synthetic-secret", true},
+		{"configured artifact root", []string{"--profile=full", "--roles=worker", "--processing-artifact-root=/"}, "synthetic-secret", true},
+		{"empty artifact root", []string{"--profile=full", "--roles=worker", "--processing-artifact-root="}, "synthetic-secret", false},
+		{"invalid artifact root", []string{"--profile=full", "--roles=worker", "--processing-artifact-root=/dev/null"}, "synthetic-secret", false},
+		{"invalid login limit", []string{"--profile=full", "--roles=worker", "--login-attempts-per-account=0"}, "synthetic-secret", false},
 		{"unsupported profile", []string{"--profile=lite", "--roles=worker"}, "synthetic-secret", false},
 		{"unknown role", []string{"--profile=full", "--roles=other"}, "synthetic-secret", false},
 		{"empty role", []string{"--profile=full", "--roles=worker,"}, "synthetic-secret", false},
@@ -40,6 +48,12 @@ func TestParseConfigBindsExplicitInputs(t *testing.T) {
 			}
 			if test.ok && config.DatabaseURL != test.dsn {
 				t.Fatal("secret environment input was not bound")
+			}
+			if test.name == "configured login limits" && (config.LoginLimits.AccountAttempts != 2 || config.LoginLimits.InstanceAttempts != 20) {
+				t.Fatal("configured login limits were not bound")
+			}
+			if test.name == "configured artifact root" && config.ProcessingArtifactRoot != "/" {
+				t.Fatal("Processing artifact root was not bound")
 			}
 		})
 	}
