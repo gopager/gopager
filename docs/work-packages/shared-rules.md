@@ -52,3 +52,21 @@ Execution may maintain documentation for behavior already assigned, but cannot c
 Use existing tooling and the smallest relevant checks. PostgreSQL, HTTP/SSE, browser, provider and operational evidence are distinct; a compile/unit run does not replace them. Record actual commands, versions/environment, results and limitations. Parallel execution requires explicit disjoint scope.
 
 Verify task coverage, references/anchors, permitted diff, fixed behavior and required output shape. Completion also requires all affected current documentation to agree with the delivered behavior and actual artifact versions; record the checked owner sections and any unresolved discrepancy in the execution record. Hand over actual artifact versions/paths and unresolved inputs at the designated execution owner. Never report unexecuted, missing or deferred work as complete.
+
+## Mandatory Continuation and Stop Conditions
+
+An AP execution assignment requires the whole assigned package: its planning, all tasks and supporting integration, actual acceptance verification, documentation maintenance and handover. An explicitly narrower user assignment limits this obligation to that scope.
+
+After every partial result, reassess all remaining assigned work and continue with the next actionable item. Milestones, foundation work, passing focused tests and updated execution records are progress, not reasons to end execution. Repair in-scope implementation or validation failures and rerun the affected checks; the first failed check is not itself an external blocker.
+
+Ask genuine clarification through a structured question tool when needed, while continuing independent work. Missing earlier inputs, approval or planner repairs block only their dependent work. Resume that work once resolved; do not request a second authorization for already assigned work.
+
+An incomplete execution may end only when:
+
+- The user explicitly pauses, cancels or narrows the assignment.
+- Every remaining item is blocked by a verified external input, unresolved clarification, required authority, unavailable access/environment or other concrete impediment that cannot be resolved safely within the assigned scope and available tools.
+- A hard runtime/tool limit actually prevents further execution. Preserve a truthful checkpoint at the execution owner when possible; do not present it as completion or an external planning blocker.
+
+Package size, complexity, effort already spent, a preferred response length, voluntary timeboxing or an anticipated context limit are not stop conditions. Nor is the absence of a commit, unless the assignment explicitly requires one. Do not defer actionable assigned work to a future session or ask whether to continue an already authorized AP.
+
+Before ending, check every outstanding task, required output, acceptance case and documentation obligation. If any is actionable, continue. Otherwise record the exact stop condition, affected task IDs, evidence, resolution owner and required input/action for resumption in the execution record. Keep verified slices distinct from blocked or unexecuted work; missing owner acceptance remains pending, never inferred. A remaining-work list or an honest "not complete" statement alone does not justify stopping.
