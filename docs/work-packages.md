@@ -2,6 +2,8 @@
 
 Navigation and execution order. Each AP file is an assignment baseline, not a progress log. Product scope/execution approval belong to the [plan](authoritative-plan.md#workflow-and-approval-gates); actual task state, assignee, commands and handovers belong to [execution records](execution/README.md).
 
+Every executable AP must satisfy the mandatory [self-containment and planning rules](work-packages/shared-rules.md#mandatory-ap-self-containment-and-planning): only verified earlier outputs and fixed decisions may be external inputs; each AP must own and exactly bound its remaining planning. The current unstarted APs include that bounded planning scope. Completed and historical assignment baselines remain unchanged.
+
 ## Targeted Reading
 
 An assigned AP file is the sole entry document needed to start a session. Its **Session Context** links the shared start procedure, relevant requirements, architecture, owner contracts, planned cases and package handovers. Follow those links; no earlier conversation or full-document preload is required.

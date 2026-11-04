@@ -1224,7 +1224,7 @@ Use the existing C-07 redacted error envelope/status table, C-12 transaction cap
 
 ## Workflow and Approval Gates
 
-Only this section grants scope/execution approval. An approval entry must identify date, approving authority, exact AP/task slice, immutable contract/artifact versions, relevant evidence and permitted write-scope binding. Product scope, technical freeze and experiment authorization are separate approvals; none is implied by another.
+Only this section grants product-scope/execution approval and other gates that require explicit approval. An approval entry must identify date, approving authority, exact AP/task slice, immutable contract/artifact versions, relevant evidence and permitted write-scope binding. Product scope and separately gated experiments still require their recorded approvals. However, execution of an AP authorizes the decisions and contract changes explicitly assigned to that AP; do not require a separate permission or technical-freeze approval for those in-scope changes. Make them from the AP's user stories, fixed decisions and evidence, following the [mandatory AP self-containment and planning rules](work-packages/shared-rules.md#mandatory-ap-self-containment-and-planning).
 
 | Gate | Approval condition | Current approval record |
 | --- | --- | --- |
