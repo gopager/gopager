@@ -4,12 +4,17 @@
 
 ## Session Context
 
-- **Authority:** [session procedure](shared-rules.md#session-start), [D-97 ordered AP renumbering approval](../authoritative-plan.md#ordered-ap-renumbering-decision), [processing-kernel binding](../execution/ap-04.md#processing-kernel-execution-binding).
-- **Source scope:** The evaluator/kernel slice of historical [source AP-12 T043](source-ap-12-processing-presentation.md); the prior partial implementation and evidence remain in the [source AP-12 execution record](../execution/source-ap-12.md).
+- **Authority:** [session procedure](shared-rules.md#session-start), [processing-kernel binding](../execution/ap-04.md#processing-kernel-execution-binding).
 - **Requirements and owners:** [REQ-091..093/095/097](../requirements-catalog.md#j-processing-presentation-and-usability), [C-11](../contracts/c-11-processing-presentation.md), [C-02](../contracts/c-02-protocol-payload.md), [C-08](../contracts/c-08-events-jobs.md), [C-09](../contracts/c-09-delivery.md), [C-10](../contracts/c-10-plugin-host.md).
 - **Owner:** DOM-08 and integration for shared composition.
-- **Prerequisites:** AP-05 foundation; only already verified identity and matcher handovers from historical [source AP-07](../execution/source-ap-07.md) and [source AP-08](../execution/source-ap-08.md), produced before this ordered path began. These are existing completed inputs, not dependencies on future current-path APs. No completed feed, plugin target, Delivery consumer, or later package is required.
-- **Write scope:** Existing T043 kernel and its owner schemas/adapters/tests, under the exact approved binding. This is a package-boundary relocation, not new product scope.
+- **Prerequisites:** [AP-05 foundation](../execution/ap-05.md#handover), [identity/AuthZ handover](../execution/source-ap-07.md#handover) and [matcher handover](../execution/source-ap-08.md#handover). No feed, target, Delivery consumer or later AP is required.
+- **Write scope:** Kernel, owner schemas/adapters/tests and root surfaces in the [exact binding](../execution/ap-04.md#processing-kernel-execution-binding).
+
+## Kernel Scope and Verification
+
+T055 covers selectively triggered, namespaced bounded Workflows/results, extraction/conditions, pure preview/errors, saved/active versions and declared pure installed-step invocation. Follow [C-11 evaluator/coordination](../contracts/c-11-processing-presentation.md#early-backend-kernel-preparation) and [C-10](../contracts/c-10-plugin-host.md); expose frozen evaluation/revision/result interfaces for intake publication. Scope-existence/source owners may be declared standalone fixtures with explicit missing-production-owner failure, never fabricated readiness.
+
+T056 verifies [F-21 preview](../contracts/reference-cases.md), [F-37/F-38](../contracts/ap-02-boundary-cases.md), regex/Payload/output budgets, sensitivity, version/revision conflicts and no preview effects. The exact binding owns required selectors, PostgreSQL and HTTP checks. Consumer source-bound integration belongs to AP-07/AP-13, not standalone kernel acceptance.
 
 - [ ] T055 [AP-06] Complete the already approved standalone Processing evaluator/kernel slice and expose its frozen evaluation, revision, result, and invocation boundaries.
 - [ ] T056 [AP-06] Complete the kernel's standalone conformance evidence and verified handover; defer source-bound consumer integration to its later path position.

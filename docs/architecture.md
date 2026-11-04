@@ -10,7 +10,7 @@ Date: 2026-10-25. This file owns technology selections/rationale, topology, modu
 | --- | --- | --- | --- |
 | TECH-01 | Go, modular monolith, single backend entry point | One Operator start with all application runtime dependencies supplied; application-managed children are permitted under [D-63](authoritative-plan.md#operator-start-and-bundled-dependency-clarification). Standard library first (`net/http`, `database/sql`, `context`), few justified dependencies, no heavy application framework. Go remains selected independently of OS-process count. No claimed benchmark advantage. | [AP-03 T010/T014](work-packages/ap-03-technical-validation.md) |
 | TECH-02 | Shared codebase and backend artifact for Lite/Full | Lite composes roles; Full may distribute the same capabilities. Topology is shown below. | [P-20/P-21](authoritative-plan.md#open-issues-and-risks) |
-| TECH-03 | Vue 3 + TypeScript, statically built and embedded in the backend | Independent client/server development, deployment without a mandatory separate web server or frontend process. Build tools may be development dependencies. | [AP-14](work-packages/ap-14-frontend.md), [C-07](contracts/c-07-query-live.md) |
+| TECH-03 | Vue 3 + TypeScript, statically built and embedded in the backend | Independent client/server development, deployment without a mandatory separate web server or frontend process. Build tools may be development dependencies. | [AP-15](work-packages/ap-15-frontend.md), [C-07](contracts/c-07-query-live.md) |
 | TECH-04 | REST/JSON, versioned OpenAPI contract; SSE for live updates | Explicit query/command API; live communication is primarily server-to-browser. No WebSocket without a bidirectional product need. | [P-10/P-15](authoritative-plan.md#open-issues-and-risks), [C-07](contracts/c-07-query-live.md) |
 | TECH-05 | Local SQLite file for Lite; PostgreSQL for Full | Relational transactions, shared logical schema with explicit dialect/driver boundaries. No mandatory universal ORM or separate domain data models. | [AP-03 T010](work-packages/ap-03-technical-validation.md), [P-01/P-03](authoritative-plan.md#open-issues-and-risks) |
 | TECH-06 | PostgreSQL primary as Full write authority | Stateless API/worker roles; established external database HA rather than custom consensus. Authority/replica behavior is specified in C-12. | [P-04/P-20](authoritative-plan.md#open-issues-and-risks), [C-12](contracts/c-12-persistence-operations.md) |
@@ -564,9 +564,9 @@ This section allocates responsibilities, not another copy of [REQ-097](requireme
 
 | Responsibility | Owner | Authoritative boundary |
 | --- | --- | --- |
-| Frontend text catalog, formatting integration and Vue-compatible i18n selection | Frontend / AP-13 | [C-11 text mappings/preferences](contracts/c-11-processing-presentation.md#text-key-mapping-and-remaining-technical-evidence) |
-| API error/code/parameter compatibility | DOM-06 / AP-09 | [C-07](contracts/c-07-query-live.md) |
-| Built-in processing/presentation text | DOM-08 / AP-12 | [C-11](contracts/c-11-processing-presentation.md) |
+| Frontend text catalog, formatting integration and Vue-compatible i18n selection | Frontend / AP-15 | [C-11 text mappings/preferences](contracts/c-11-processing-presentation.md#text-key-mapping-and-remaining-technical-evidence) |
+| API error/code/parameter compatibility | DOM-06 / AP-10 | [C-07](contracts/c-07-query-live.md) |
+| Built-in processing/presentation text | DOM-08 / AP-13; Delivery rendering in AP-11 | [C-11](contracts/c-11-processing-presentation.md) |
 | Shared key/schema compatibility | Integration | [Shared conventions](contracts/shared-conventions.md) |
 
 ## Operating Profiles

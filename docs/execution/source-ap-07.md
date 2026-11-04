@@ -1,8 +1,16 @@
 # Source AP-07 Historical Execution Record
 
+## Handover
+
+Verified prerequisite: bootstrap, login/logout/self-Session, current-authority resolution, point authorization/native filtering, restricting-key resolution, global fields and immediate invalidation. [E-02..E-13](#e-02-credential-primitives-and-api-registration) and the [field-correction evidence](#unscoped-field-correction-verification-and-handover) retain exact checks; [C-06](../contracts/c-06-identity-authorization.md#local-identity-and-authorization-handover-candidate) owns executable interface/artifact bindings.
+
+AP-06/AP-07 and each later protected domain compose server-derived scope-existence/filter/projection adapters in the live primary transaction; point authorization never permits raw entity output. No Guest/admin/worker fallback for missing authority.
+
+This does not verify general management, Recovery/rescue, key issuance/rotation or participant cleanup; [AP-14](../work-packages/ap-14-identity-lifecycle.md#exact-participant-api-and-verification-binding) owns them. Historical AP/task numbers and blockers below describe their observation dates, not current prerequisites.
+
 ## Baseline
 
-The [source AP-07 baseline](../work-packages/source-ap-07-identity-authorization.md) is unchanged at Git commit `24318de414b3b35f77b6b288905125c1debf46f4`. Execution starts on 2026-10-26 with existing uncommitted AP-04/AP-06 documentary changes, not a clean worktree.
+The [original AP-07 baseline](https://github.com/gopager/gopager/blob/24318de414b3b35f77b6b288905125c1debf46f4/docs/work-packages/ap-07-identity-authorization.md) is unchanged at Git commit `24318de414b3b35f77b6b288905125c1debf46f4`. Execution starts on 2026-10-26 with existing uncommitted AP-04/AP-06 documentary changes, not a clean worktree.
 
 Assignee: Copilot SDK assistant, sequential execution. Exact partial scope, version/library tuple and validation are approved in the [AP-04 prerequisite binding](ap-04.md#ap-07-prerequisite-consumer-binding-proposal) and [plan gate](../authoritative-plan.md#workflow-and-approval-gates). AP-05 is the verified platform prerequisite. This is the central identity/authorization handover required by AP-06/AP-08/AP-12, not whole-package acceptance.
 
@@ -140,7 +148,7 @@ Implemented current self-Session inspection for browser reload and configurable 
 - Domain scope existence and native query/projection composition require each actual domain owner. Until wired, unknown owner scopes explicitly return `AUTHORITY_UNAVAILABLE`, not an allow-all fallback. AP-08/AP-06 must provide and test those adapters in the same live platform transaction; this does not require full AP-07 management.
 - Whole AP-07 acceptance and unavailable personal-data cleanup remain outside the approved prerequisite scope.
 
-## Handover
+## Historical Handover
 
 The D-59 narrowed identity core is available to the staged prerequisite consumers under the approved binding; no whole AP-07 task is accepted. Reuse [current-authority resolution](../../internal/identity/authority.go), [login/Session services](../../internal/identity/login.go), [HTTP transport](../../internal/identity/http.go), [bootstrap](../../internal/identity/bootstrap.go), [point authorization](../../internal/authz/decision.go), [native Ent constraints](../../internal/persistence/ent/permissions/filter.go), [borrowed transaction driver](../../internal/persistence/ent/borrowed/driver.go), [identity persistence](../../internal/persistence/ent/identitystore/) and [fact append](../../internal/persistence/ent/eventstore/append.go). E-02..E-13 own the actual evidence; the owning contracts link the executable DTO/schema/port artifacts.
 
@@ -148,4 +156,4 @@ AP-08 T028/standalone T029, AP-12 T043 and AP-06 T022/T023 must compose their cu
 
 ### E-14 Resliced Execution Path Reconciliation
 
-Date: 2026-11-03. Under the user's explicit [D-96 approval](../authoritative-plan.md#work-package-reslicing-decision), E-13 and the global-field correction remain the evidence owners for their verified partial identity/AuthZ handovers. The original T025..T027 `in-progress` entries above describe their recorded state at the time and are no longer active work. Only the evidenced core handovers are consumed earlier in the revised path; remaining account, Recovery/key, scope-management, and full deletion work was assigned to [historical AP-24, now current AP-13](../work-packages/ap-13-identity-lifecycle.md). This does not accept or complete whole source AP-07 and does not change earlier evidence.
+Date: 2026-11-03. Under the user's explicit [D-96 approval](../authoritative-plan.md#work-package-reslicing-decision), E-13 and the global-field correction remain the evidence owners for their verified partial identity/AuthZ handovers. The original T025..T027 `in-progress` entries above describe their recorded state at the time and are no longer active work. Only the evidenced core handovers are consumed earlier in the revised path; remaining account, Recovery/key, scope-management, and full deletion work was assigned to historical AP-24, then AP-13, now [AP-14 under D-126](../work-packages/ap-14-identity-lifecycle.md). This navigation update does not accept or complete whole source AP-07 or change earlier evidence.

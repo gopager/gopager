@@ -2,7 +2,7 @@
 
 ## Baseline
 
-[Source AP-06 assignment](../work-packages/source-ap-06-transmission-messages.md) is opened from commit `24318de414b3b35f77b6b288905125c1debf46f4` on `main`; the worktree was clean. The source AP definition remains the historical acceptance reference.
+[Original AP-06 assignment at its immutable baseline](https://github.com/gopager/gopager/blob/24318de414b3b35f77b6b288905125c1debf46f4/docs/work-packages/ap-06-transmission-messages.md) is opened from commit `24318de414b3b35f77b6b288905125c1debf46f4` on `main`; the worktree was clean. This is historical acceptance evidence, not a current assignment.
 
 Assignee: Copilot SDK assistant. Accountable approval owner: user / Product and integration. The assignment proposes exclusive target scopes `internal/ingest/`, `internal/protocols/` and `internal/messages/`; no AP-06 implementation scope/version/test binding or implementation approval is recorded in the [plan](../authoritative-plan.md#workflow-and-approval-gates). The [AP-04 handover](ap-04.md) freezes/binds only the AP-05 foundation slice. The user request starts AP-06 but does not replace missing contract freezes, prerequisite handovers or the required execution binding.
 

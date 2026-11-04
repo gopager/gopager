@@ -38,4 +38,4 @@ Historical closure/evidence: [AP-02 execution record](../execution/ap-02.md), 20
 
 **Handover, not unfinished AP-02 decisions:** AP-03 owns runtime/driver/ABI/precision/Unicode/concurrency/crash/authority evidence; AP-04 owns FLEX verification and scope/contract freeze. Owner implementation packages elaborate user-deferred physical fields/types/indexes and generate approved REST/SDK artifacts. AP-12/AP-13 select established template/builder/i18n tooling under C-11, not new permission or product semantics. No spike, migration, product code, dependency installation, staging or commit was performed.
 
-Staged implementation dependencies are maintained in [AP-06](ap-06-transmission-messages.md), [AP-08](ap-08-master-data-correction.md) and [AP-12](ap-12-processing-presentation.md), not as a second dependency schedule here.
+Implementation dependencies are maintained in the [current assignments](../work-packages.md#revised-execution-path), not as a second schedule here.

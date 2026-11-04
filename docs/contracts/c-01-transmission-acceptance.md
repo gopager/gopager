@@ -4,9 +4,11 @@
 
 Referenced contracts (follow only when relevant): [C-02](c-02-protocol-payload.md), [C-05](c-05-matching-correction.md).
 
+**Implementation planning:** [AP-09](../work-packages/ap-09-gateway-network.md) owns Gateway/Network administration, diagnostics and contact-loss. Frozen intake/credential/state-report versions remain inputs.
+
 **Traceability:** [REQ-041..050](../requirements-catalog.md#e-transmission-networks-and-gateways), [REQ-108](../requirements-catalog.md#k-installed-web-app-and-security-behavior), [REQ-113..114](../requirements-catalog.md#l-operations-data-volume-and-evolution). Issue references: [P-01/P-03/P-08/P-09](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
-**Version/status:** 0.1-draft except the separately frozen [AP-05 intake-commit boundary](#ap-05-intake-commit-boundary) and the AP-07 slices frozen under [D-119](../authoritative-plan.md#ap-07-contract-freeze-proposal) and amended under [D-121](../authoritative-plan.md#ap-07-gateway-credential-management-http-addendum); the full Submission/API contract is not approved for implementation. **Owner:** DOM-01; integration owns the shared commit boundary. **Parties:** authorized Gateway/Gateway manager; downstream DOM-02/DOM-04/DOM-07.
+**Version/status:** 0.1-draft except the separately frozen [AP-05 intake-commit boundary](#ap-05-intake-commit-boundary) and AP-07 slices under [D-119](../authoritative-plan.md#ap-07-contract-freeze-proposal)/[D-121](../authoritative-plan.md#ap-07-gateway-credential-management-http-addendum), implemented under D-122/D-123/D-124 with evidence in [AP-07](../execution/ap-07.md). Unfixed remaining management/status details are AP-09's own planning, not a whole-file freeze prerequisite. **Owner:** DOM-01; integration owns the shared commit boundary. **Parties:** authorized Gateway/Gateway manager; downstream DOM-02/DOM-04/DOM-07.
 
 Gateway authentication and derived Gateway identity follow the [C-06 Gateway Bearer credential contract](c-06-identity-authorization.md#ap-06-gateway-bearer-credentials). The server does not trust a Gateway ID supplied in a Submission body; the active credential identifies exactly one Gateway before C-01 applies its current Network assignments and Submission authorization.
 

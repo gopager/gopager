@@ -4,6 +4,8 @@
 
 Referenced contracts (follow only when relevant): [C-06](c-06-identity-authorization.md), [C-07](c-07-query-live.md), [C-08](c-08-events-jobs.md), [C-10](c-10-plugin-host.md).
 
+**Implementation planning:** [AP-11](../work-packages/ap-11-events-delivery.md) owns Core Delivery/input/attempt/rendering; [AP-12](../work-packages/ap-12-plugin-host.md) owns real host/target/configuration integration and external-provider evidence.
+
 **Traceability:** [REQ-081..087](../requirements-catalog.md#i-domain-events-extensions-and-deliveries), [REQ-105..106](../requirements-catalog.md#k-installed-web-app-and-security-behavior), [REQ-129..130](../requirements-catalog.md#m-additional-domain-capabilities). Issue references: [P-07/P-10/P-11](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
 **Version/status:** 0.1-draft. **Owner:** DOM-07; C-10 host executes under control. **Parties:** authorized subscription owner/target manager, Domain event worker, host capability, provider.

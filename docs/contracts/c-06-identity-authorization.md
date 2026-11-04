@@ -4,6 +4,8 @@
 
 Referenced contracts (follow only when relevant): [C-07](c-07-query-live.md), [C-12](c-12-persistence-operations.md#application-http-transport).
 
+**Implementation planning:** Each [domain AP](../work-packages.md#revised-execution-path) owns its supporting authorization slice; DOM-05 participates within that AP. AP-14 owns general identity/lifecycle. Preserve fixed proof/field semantics.
+
 **Traceability:** [REQ-051..060](../requirements-catalog.md#f-access-rights-and-guests), [REQ-061/063..070](../requirements-catalog.md#g-accounts-and-login), [REQ-071..079](../requirements-catalog.md#h-recovery-and-access-keys), [REQ-105/107..110](../requirements-catalog.md#k-installed-web-app-and-security-behavior). Issue references: [P-09/P-10/P-14/P-17](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
 **Version/status:** 0.1-draft. **Owner:** DOM-05. **Parties:** every protected administrative/query/Gateway/live/worker path. OIDC/SCIM remain extension boundaries, not accelerated Delivery.

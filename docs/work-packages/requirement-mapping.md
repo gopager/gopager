@@ -1,140 +1,30 @@
 # Requirement Mapping and Planned Evidence
 
-[Package index](../work-packages.md) | [Contract index](../domain-contracts.md) | [Shared execution rules](shared-rules.md)
+[Assignments](../work-packages.md#revised-execution-path) | [Requirements](../requirements-catalog.md) | [Delivery scope](../authoritative-plan.md#delivery-scope)
 
-This file preserves the original REQ-to-source-package coverage and planned evidence categories, **not a second requirement, task or delivery-status table**. The revised execution assignments are in the [ordered package path and source crosswalk](../work-packages.md#revised-execution-path). Open the [catalog](../requirements-catalog.md) for REQ text, the [plan](../authoritative-plan.md#delivery-scope) for scope/approval and [execution records](../execution/README.md) for actual results. Source-package coverage is traceability, not current assignment, approval, or completion. AP-01..AP-04 retain their original contract/approval roles; revised final evidence is AP-16.
+This table owns requirement-to-producer coverage, not requirement definitions, delivery approval or results. Linked assignments own exact planning, paths and cases. AP-17 maps approved claims to actual producer evidence.
 
-| REQ | Source APs | Planned evidence |
+| REQ / capability | Producer | Evidence category |
 | --- | --- | --- |
-| REQ-001 | AP-06, AP-09, AP-13 | Authorized live feed in HTTP/browser workflow |
-| REQ-002 | AP-06, AP-09, AP-13 | Further Transmission updates a loaded Message |
-| REQ-003 | AP-13 | Change type and time-based fading |
-| REQ-004 | AP-09, AP-13 | Cursor history without losing selection |
-| REQ-005 | AP-09, AP-13 | Live history or visible limit/reconciliation |
-| REQ-006 | AP-09, AP-13 | Visible freshness loss |
-| REQ-007 | AP-09, AP-13 | Reconnect with revocation/deletion |
-| REQ-008 | AP-09, AP-13 | Concurrent tabs/filters and shared IP |
-| REQ-009 | AP-09, AP-13 | First-observed View time, single Message row, F-11a..F-11i |
-| REQ-010 | AP-09, AP-13 | Same appearance-time interval semantics with/without Unit filters |
-| REQ-011 | AP-03, AP-09 | Backend-parallel literal Unicode substrings |
-| REQ-012 | AP-09, AP-13 | Unit OR filter |
-| REQ-013 | AP-08, AP-09 | Genuinely permitted unassigned data with Network filter |
-| REQ-014 | AP-09, AP-13 | Contribution-correlated dimensions; Gateway filter only in admin diagnostics |
-| REQ-015 | AP-09 | OR within, correlated AND between dimensions |
-| REQ-016 | AP-09, AP-13 | Link/selection/time restoration |
-| REQ-017 | AP-07, AP-09 | F-11..F-14, no metadata oracles |
-| REQ-018 | AP-09, AP-13 | Authorized detail projection |
-| REQ-019 | AP-08, AP-09, AP-13 | Authorized prefilled detail action |
-| REQ-020 | AP-01, AP-06, AP-08, AP-13 | Protocol variant with effect preview |
-| REQ-021 | AP-08 | Unit deletion and historical rematch F-15 |
-| REQ-022 | AP-08, AP-13 | Consistent Unit presentation |
-| REQ-023 | AP-08, AP-13 | Inline organization with separate authorization |
-| REQ-024 | AP-08, AP-13 | Defaults/overrides/provenance/reset |
-| REQ-025 | AP-08, AP-13 | Protocol-correct Unit template |
-| REQ-026 | AP-08, AP-13 | Bulk preview/errors/deletion |
-| REQ-027 | AP-09, AP-13 | Unit-to-Message navigation |
-| REQ-028 | AP-08, AP-13 | Multiple cross-Network Unit collections |
-| REQ-029 | AP-07..AP-09 | Same-contribution fixture F-11; no cross-target fabricated match |
-| REQ-030 | AP-08, AP-13 | Formation without claimed co-alerting |
-| REQ-031 | AP-01, AP-06, AP-08 | Protocol-specific matching fixtures |
-| REQ-032 | AP-01, AP-08 | Specificity and conflict rejection |
-| REQ-033 | AP-08 | Temporal Address intervals/boundaries |
-| REQ-034 | AP-08 | Retroactive matching using Observation time |
-| REQ-035 | AP-08 | Rematch debounce/maximum delay with controlled clock |
-| REQ-036 | AP-08 | Complete impact scope, no color-only rematch |
-| REQ-037 | AP-06, AP-08 | Separate function meanings per Unit/organization |
-| REQ-038 | AP-06, AP-08 | Protocol defaults without false national standard |
-| REQ-039 | AP-07, AP-08 | Network-scoped editing/hidden uses |
-| REQ-040 | AP-08 | Unassigned versus uncertain/failed |
-| REQ-041 | AP-06, AP-07 | Identifiable authorized blockable Gateway |
-| REQ-042 | AP-06 | Gateway Networks and Network/Protocol boundary |
-| REQ-043 | AP-06 | Network precedence/reject unauthorized declaration |
-| REQ-044 | AP-06 | Single-Network Gateway without unnecessary ranges |
-| REQ-045 | AP-08, AP-13 | Safely redacted conflict explanation |
-| REQ-046 | AP-06..AP-09 | Unknown context separately authorizable |
-| REQ-047 | AP-06, AP-13 | Gateway state/times |
-| REQ-048 | AP-06 | Explicit termination versus lost contact |
-| REQ-049 | AP-06, AP-10 | Subscribable Gateway Domain event |
-| REQ-050 | AP-06, AP-13, AP-15 | Distinct Transmission/contact/removed history |
-| REQ-051 | AP-07, AP-13 | Visible direct/User group permissions |
-| REQ-052 | AP-07 | Additive multiple grants |
-| REQ-053 | AP-14 | Separate later nesting contract |
-| REQ-054 | AP-07 | Additive domain scopes |
-| REQ-055 | AP-07, AP-09 | Field/Transmission target projection |
-| REQ-056 | AP-07, AP-09 | Explicit unassigned-data permission |
-| REQ-057 | AP-07, AP-09, AP-13 | Usable guest without default rights |
-| REQ-058 | AP-07, AP-13 | Guest writes/warning/not deletable |
-| REQ-059 | AP-07, AP-09, AP-10 | Shared age limit across query/details/Delivery |
-| REQ-060 | AP-07..AP-09, AP-13 | Grant provenance/current assignment/safe scope deletion |
-| REQ-061 | AP-07, AP-14 | Principal/credential boundary, later bindings |
-| REQ-062 | AP-02, AP-07 | Field matrix/account deletion F-22 |
-| REQ-063 | AP-07, AP-13 | Profile maintenance without contact-as-identity |
-| REQ-064 | AP-07, AP-13 | Local login/suspension |
-| REQ-065 | AP-07, AP-14 | Prepared internal ID; later OIDC without duplicate account |
-| REQ-066 | AP-14 | Separate trusted-proxy boundary |
-| REQ-067 | AP-14 | Linking through both authentications |
-| REQ-068 | AP-14 | Controlled external-identity unlinking |
-| REQ-069 | AP-07 | No password/recovery bypass of excluded login |
-| REQ-070 | AP-07, AP-09, AP-13 | Session revocation stops new private output |
-| REQ-071 | AP-07, AP-13 | Old/new/confirmed password checks |
-| REQ-072 | AP-07, AP-13 | Recovery request without account oracle |
-| REQ-073 | AP-07, AP-13 | One-time proof, no administrator-known password |
-| REQ-074 | AP-07 | Username/expiry/one-time use |
-| REQ-075 | AP-07, AP-15 | Local rescue without silent account replacement |
-| REQ-076 | AP-07, AP-13 | Recovery/approval target rights |
-| REQ-077 | AP-07 | Own restricted keys |
-| REQ-078 | AP-07 | Targeted technical-account keys |
-| REQ-079 | AP-07, AP-13 | Rotation/revocation/last use |
-| REQ-080 | AP-14 | Later separate external/local lifecycle |
-| REQ-081 | AP-06, AP-10 | Explicit Domain event selection including Transmission/correction |
-| REQ-082 | AP-10, AP-13 | Chosen Delivery targets/Payload within current rights |
-| REQ-083 | AP-14 | Later cross-plugin contract without SDK dead end |
-| REQ-084 | AP-10, AP-11, AP-13 | Separate instances/secrets |
-| REQ-085 | AP-07, AP-10, AP-13 | Pause/deletion/suspension stops new Delivery |
-| REQ-086 | AP-10, AP-13 | Retry/final/uncertain statuses |
-| REQ-087 | AP-10, AP-13 | Authorized deliberate repeat with duplicate risk |
-| REQ-088 | No implementation package | Reserved identifier, no legacy adapter |
-| REQ-089 | AP-11, AP-13 | Operator lifecycle/compatibility/error status |
-| REQ-090 | AP-11 | Versioned SDK and initial targets under D-33; deferred target tasks remain reserved |
-| REQ-091 | AP-12, AP-13 | Bounded extraction/structure/conditions |
-| REQ-092 | AP-12, AP-13 | Preview without real side effects |
-| REQ-093 | AP-12, AP-13 | Saved/active/previous version |
-| REQ-094 | AP-12, AP-13 | Permission-preserving presentation |
-| REQ-095 | AP-08, AP-12, AP-13 | Field errors/revision conflicts |
-| REQ-096 | AP-12, AP-13 | Title/notices/safe dismissal rule |
-| REQ-097 | AP-02, AP-03, AP-09, AP-12, AP-13 | F-26: English catalog/fallback, keys/parameters/plurals, independent persistent locale preferences; no additional translations |
-| REQ-098 | AP-09, AP-13 | Copy/detail navigation preserves selection |
-| REQ-099 | AP-13, AP-16 | Mobile/desktop touch/keyboard |
-| REQ-100 | AP-13, AP-16 | Not color/mouse only |
-| REQ-101 | AP-14 | Later PWA installation |
-| REQ-102 | AP-14 | Later authorized background push |
-| REQ-103 | AP-14 | Later longer-lived revocable device login |
-| REQ-104 | AP-14 | Later PWA offline freshness |
-| REQ-105 | AP-07, AP-10 | Current rights before every attempt F-17 |
-| REQ-106 | AP-10, AP-11 | Provider acceptance is not reading/recall |
-| REQ-107 | AP-05, AP-07, AP-11 | Secret/error/log/Payload redaction |
-| REQ-108 | AP-06, AP-07, AP-09, AP-10 | Throttling without blanket location/IP block |
-| REQ-109 | AP-07, AP-13 | Authorized secret-free security audit |
-| REQ-110 | AP-07, AP-09, AP-13 | Safe login/forbidden/invisible-object errors |
-| REQ-111 | AP-15 | Configured retention, no default deletion |
-| REQ-112 | AP-06, AP-15 | Potentially removed history visible |
-| REQ-113 | AP-05, AP-06, AP-10 | F-01/F-02 retry versus independent Transmission |
-| REQ-114 | AP-05, AP-06, AP-15 | Honest acceptance point/commit uncertainty |
-| REQ-115 | AP-05, AP-15 | D-32 architecture preparation; Lite runtime evidence later |
-| REQ-116 | AP-05, AP-15 | Retained Lite conditional crash-loss contract; runtime evidence later under D-32 |
-| REQ-117 | AP-05, AP-10, AP-15 | Joint Full roles/database/live/worker qualification |
-| REQ-118 | AP-05, AP-15 | Combined app container, separate supplementary services |
-| REQ-119 | AP-15 | D-32 transition boundary review now; executable Lite->Full evidence later |
-| REQ-120 | AP-05, AP-15, AP-16 | Setup without default credentials, status/shutdown/update |
-| REQ-121 | AP-01, AP-06 | Four Protocol models/fixtures |
-| REQ-122 | AP-01, AP-06 | Sliding cross-Network Payload Grouping |
-| REQ-123 | AP-08, AP-09, AP-10 | F-12/F-13 suppression without discarding data |
-| REQ-124 | AP-08, AP-09 | Encryption label without decryption claim |
-| REQ-125 | AP-14 | Later voluntary registration without default permissions |
-| REQ-126 | Removed, reserved | D-31: manual Operator Backup/Restore, no application feature |
-| REQ-127 | AP-03, AP-15, AP-16 | Documented resource/history profiling without SLA |
-| REQ-128 | AP-14 | Later import/export without legacy mandate |
-| REQ-129 | AP-10, AP-11 | Target-specific Unit override without secret leak |
-| REQ-130 | AP-10 | Domain event/age/duplicate/correction rules during recovery |
-| REQ-131 | AP-14 | Later explicit SCIM mapping with origin-specific revocation |
-| REQ-132 | AP-08 | Detach organization, preserve defaults, no rematch F-16 |
+| REQ-001..019/027/029/055..060/070/098 query/live/detail | [AP-10 T063..T065](ap-10-query-live.md), [AP-15 T078..T080](ap-15-frontend.md) | Contribution-first projection/filter/page, Unicode, HTTP/SSE, browser freshness/revocation/navigation |
+| REQ-020/031..032/037..038/041..046/113..114/121..122 protocol/intake/Grouping | [AP-07](../execution/ap-07.md), [AP-08 T060..T062](ap-08-master-data-correction-after-intake.md) | Protocol/target/Grouping, acceptance/receipt/commit uncertainty and correction |
+| REQ-021..026/028/030/045/095/132 master data/defaults/templates | [AP-08 T060/T062](ap-08-master-data-correction-after-intake.md), AP-15 | Snapshot/default detachment/bulk conflict/authorization, PostgreSQL/HTTP/browser |
+| REQ-031..040/123..124 assignments/suppression | [AP-08 T061/T062](ap-08-master-data-correction-after-intake.md), AP-10 | Original-preserving correction, revision/claim/race/restart, safe visible derived state |
+| REQ-041..050 provisioning/diagnostics/contact state | [AP-09 T086..T088](ap-09-gateway-network.md), AP-15 | Production provisioning, HTTP diagnostics, timed contact races and atomic state facts |
+| REQ-049/081..082/084..087/105..106/129..130 events/Delivery | [AP-11 T066..T068](ap-11-events-delivery.md), [AP-12 T069..T071](ap-12-plugin-host.md), AP-15 | Claims, input/rendering, split/replay/idempotency/current rights, controlled versus real providers |
+| REQ-051..052/054..064/069..079/085/109..110 identity/lifecycle | [Identity core](../execution/source-ap-07.md#handover), [AP-14 T075..T077](ap-14-identity-lifecycle.md), AP-10/AP-11/AP-15 | Additive scopes/fields/age, safe management/recovery/rescue, immediate invalidation and participant cleanup |
+| REQ-089..090/106..107/129 host/initial targets | [AP-12 T069..T071](ap-12-plugin-host.md) | Manifest/configuration/Secrets/ABI/lifecycle, target method/signature matrix, actual external Delivery |
+| REQ-091..095 shared Delivery rendering | [AP-11 T066/T068](ap-11-events-delivery.md) | Established bounded engine, declared inputs/output contexts, hidden defaults/conflicts |
+| REQ-091..100 Processing/presentation/preferences/notices | [AP-06](../execution/ap-06.md), [AP-13 T072..T074](ap-13-processing-presentation-integration.md), AP-15 | Evaluator/preview/activation, historical Reprocess without sending, source-bound safe presentation and browser accessibility |
+| REQ-097/099..100 frontend assets/i18n/usability | [AP-15 T078..T080](ap-15-frontend.md) | Build/asset registration, English keys/typed parameters, independent locale, desktop/mobile/keyboard/touch |
+| REQ-107/114 foundation redaction/authority | [AP-05](../execution/ap-05.md), AP-07/AP-12/AP-16 | Safe errors/logs, transaction uncertainty, bounded shutdown/current authority |
+| REQ-108 throttling | Identity core/AP-14 login; [AP-10 T063/T065](ap-10-query-live.md) search; [AP-11 T067/T068](ap-11-events-delivery.md) sending; AP-12 provider limits | Explained admission and shared-IP fairness, distinct from page/deadline/retry bounds |
+| REQ-111..112/117..118/120/127 operations | [AP-16 T081..T083](ap-16-operations.md) | Actual retention/status/setup/update/shutdown, disposable Full topology/fault/recovery, measured environment without SLA |
+| REQ-115..116/119 profile preparation only | AP-05, [AP-16 T083](ap-16-operations.md) | Adapter/topology/transition boundary; no Lite runtime, parity or executable transfer claim |
+| REQ-133/138 saved views | [AP-10 T063/T065](ap-10-query-live.md), AP-15 | Own product clarification, then approved server ownership/delegation/visibility and private saved-view tests |
+| REQ-134 single-Gateway delegation | [AP-09 T086/T088](ap-09-gateway-network.md), AP-15 | Own delivery clarification, then approved detail-versus-rotation scope tests |
+| REQ-135..137 field/query refinements | AP-10/AP-15 | Selected-Unit, Payload-only and hidden-filter/option scenarios |
+| REQ-053/065..068/080/083/101..104/125/128/131 later capabilities | No current implementation producer | Delivery scope determines future work; no present completion claim |
+| REQ-088/126 removed identifiers | None | Reserved, not implementation tasks |
+
+Foundation evidence is an input, not proof of later product behavior. Each consumer verifies its exact required versions. Missing producer evidence remains with that producer; AP-17 does not backfill it.

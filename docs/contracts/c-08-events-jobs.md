@@ -4,6 +4,8 @@
 
 Referenced contracts (follow only when relevant): [C-01](c-01-transmission-acceptance.md), [C-09](c-09-delivery.md), [C-11](c-11-processing-presentation.md).
 
+**Implementation planning:** Each [producing/consuming AP](../work-packages.md#revised-execution-path) owns its required fact/work/consumer slice with DOM-07 participating. Fixed append/publication versions are inputs, not a generic production queue.
+
 **Traceability:** [REQ-049](../requirements-catalog.md#e-transmission-networks-and-gateways), [REQ-081](../requirements-catalog.md#i-domain-events-extensions-and-deliveries), [REQ-113..114/117](../requirements-catalog.md#l-operations-data-volume-and-evolution). Issue references: [P-01/P-04/P-11/P-12](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
 **Version/status:** 0.1-draft except the separately frozen [AP-05 transaction participation](#ap-05-transaction-participation), [AP-07 identity-facts subset](#ap-07-identity-fact-append-candidate) and individually versioned subsets below, including [PostgreSQL fact publication](#postgresql-fact-publication). **Owner:** DOM-07 for mechanics, producing domain for Domain event meaning, integration for commit boundary. **Producers/consumers:** Gateway/Message/assignment/configuration changes -> explicit live/rematch/Delivery work.
@@ -26,7 +28,7 @@ The platform supplies cancellable primary-store operations and current-clock/CAS
 
 ## PostgreSQL Fact Publication
 
-**Version/status:** postgresql-fact-publication 1.0, frozen and implementation-approved on 2026-11-02 by [D-94](../authoritative-plan.md#watermill-postgresql-publication-integration-proposal). **Owners:** DOM-07/integration for transport and transaction participation; existing producing domains retain fact meanings. **Producers:** existing identity/master-data/Processing appenders; **consumers:** controlled integration fixtures only in this slice. No production subscription or AP-10 execution is approved.
+**Version/status:** postgresql-fact-publication 1.0, frozen and implementation-approved on 2026-11-02 by [D-94](../authoritative-plan.md#watermill-postgresql-publication-integration-proposal). **Owners:** DOM-07/integration for transport/transaction participation; producing domains retain fact meanings. **Producers:** identity/master-data/Processing appenders. This version implements publication, not production consumption; consuming APs own the latter.
 
 The existing typed producer ports and canonical envelopes remain unchanged. Every successful append writes its canonical `domain_events` row and one Watermill transport reference in the same live caller transaction. Transport topic and reference serialization are owned by [the infrastructure reference definitions](../../internal/persistence/ent/eventstore/transport.go); reviewed physical storage is owned by [the central migration](../../internal/persistence/migrations/00008_fact_transport.sql). Transport UUID equals canonical fact ID. No classified envelope, source Payload or authorization snapshot is copied to transport metadata. Publication failure aborts the producing unit; no independent connection, post-commit relay, optional transport fallback or automatic callback replay is permitted.
 

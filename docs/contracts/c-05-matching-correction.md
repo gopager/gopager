@@ -4,6 +4,8 @@
 
 Referenced contracts (follow only when relevant): [C-01](c-01-transmission-acceptance.md), [C-06](c-06-identity-authorization.md), [C-09](c-09-delivery.md).
 
+**Implementation planning:** [AP-08 T061](../work-packages/ap-08-master-data-correction-after-intake.md) owns historical correction/suppression and its persistence/work/facts, preserving fixed matcher/intake behavior.
+
 **Traceability:** [REQ-021](../requirements-catalog.md#c-units-organizations-and-defaults), [REQ-031..040](../requirements-catalog.md#d-correct-assignment-and-history), [REQ-123..124](../requirements-catalog.md#m-additional-domain-capabilities). Issue references: [P-08..P-10/P-12](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
 **Version/status:** 0.1-draft. **Owner:** DOM-04. **Producers:** temporal Address rules, Transmission targets, relevant master-data Domain events. **Consumers:** DOM-06/DOM-07 using central C-06 evaluation.

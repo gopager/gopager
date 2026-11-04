@@ -16,6 +16,14 @@ Referenced contracts (follow only when relevant): [C-05](c-05-matching-correctio
 
 **Transaction/time:** Consistently capture inherited defaults before detachment; reliably coordinate reference/permission changes and required correction work. C-05 does not require historical color/icon versioning for general master data.
 
+### AP-08 Unit Template Direction
+
+**Owner:** DOM-03. **Status:** standalone ownership approved; [AP-08](../work-packages/ap-08-master-data-correction-after-intake.md) defines exact authorization in C-06 before implementation.
+
+A Unit template is a standalone master-data resource, not owned by an Organization. It may carry an optional Organization reference and the supported Unit creation settings. Creating a Unit from a template copies its current settings; the Unit has no live template relationship, and later template edits do not change it. Any copied Organization reference becomes the Unit's ordinary Organization relationship and follows the inheritance rules above.
+
+Template operations require explicit current C-06 authorization, not inferred `organization.*` or `unit.*` rights.
+
 ## AP-02 Concrete Master-data Contract
 
 - Unit: stable ID/revision, required nonempty name (maximum 256 Unicode scalars), optional one Organization, optional color (`#RRGGBB`), icon reference from configured catalog, Function meanings per Protocol/code, zero or more Unit collection memberships, plugin-namespaced Extension fields. No implied Network ownership. Organization/Unit collection/template names use the same name limit; names are not identity keys.

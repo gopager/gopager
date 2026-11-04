@@ -4,6 +4,8 @@
 
 Referenced contracts (follow only when relevant): [C-06](c-06-identity-authorization.md), [C-08](c-08-events-jobs.md), [C-09](c-09-delivery.md), [C-10](c-10-plugin-host.md), [C-12](c-12-persistence-operations.md).
 
+**Implementation planning:** [AP-14](../work-packages/ap-14-identity-lifecycle.md) owns account lifecycle and concrete cleanup participants against completed personal-data stores.
+
 **Traceability:** [REQ-061..062/065..068](../requirements-catalog.md#g-accounts-and-login), [REQ-080](../requirements-catalog.md#h-recovery-and-access-keys), [REQ-109](../requirements-catalog.md#k-installed-web-app-and-security-behavior), [REQ-131](../requirements-catalog.md#m-additional-domain-capabilities). Issue references: [P-14/P-17](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
 **Version/status:** 0.1-draft. **Owner:** DOM-05; integration coordinates deletion; DOM-07 owns Delivery fields. **Parties:** confirmed account owner/authorized account manager, all personal-data owners.

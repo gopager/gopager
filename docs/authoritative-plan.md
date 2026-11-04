@@ -43,7 +43,7 @@ The stable D-IDs below record decision topics and supersession. The **owner link
 | D-27 | <a id="d-27"></a>Storage model superseded by D-29; no independent current definition | [D-29](#d-29); [C-07 diagnostics](contracts/c-07-query-live.md) retains the separate Gateway-filter boundary |
 | D-28 | <a id="d-28"></a>Confirmed query-time model; supersedes universal public Message-time exception | [C-07 time algorithm](contracts/c-07-query-live.md#time-selection-and-one-row-message-results), [C-05 stored minima](contracts/c-05-matching-correction.md#target-resolution-message-contributions-and-ingest-storage) |
 | D-29 | <a id="d-29"></a>Confirmed logical model replacing D-27; heuristic scope amended by D-30. Physical fields/types/indexes explicitly deferred to owner design/freeze, not approved by diagram. | [Architecture relationships/ownership](architecture.md#logical-relationship-model), [C-01 originals](contracts/c-01-transmission-acceptance.md), [C-03 membership](contracts/c-03-message-grouping.md), [C-05 derivation](contracts/c-05-matching-correction.md), [C-07 projection](contracts/c-07-query-live.md), [C-11 results](contracts/c-11-processing-presentation.md) |
-| D-30 | <a id="d-30"></a>Heuristic delivery deferred; supersedes activation/detail proposals under D-17/D-29. Interrupted threshold exploration was not approval. | [Scope](#delivery-scope), [C-02 comparison boundary](contracts/c-02-protocol-payload.md), [C-03 current membership](contracts/c-03-message-grouping.md), [AP-14 later work](work-packages/source-ap-14-later-extensions.md) |
+| D-30 | <a id="d-30"></a>Heuristic delivery deferred; supersedes activation/detail proposals under D-17/D-29. Interrupted threshold exploration was not approval. | [Scope](#delivery-scope), [C-02 comparison boundary](contracts/c-02-protocol-payload.md), [C-03 current membership](contracts/c-03-message-grouping.md) |
 | D-31 | <a id="d-31"></a>Application Backup/Restore removed; supersedes former application-lifecycle proposals | [Reserved REQ-126](requirements-catalog.md#m-additional-domain-capabilities), [C-12 Operator boundary](contracts/c-12-persistence-operations.md#operator-backup-boundary-and-profile-transition), [C-13 personal-data boundary](contracts/c-13-account-lifecycle.md) |
 | D-32 | <a id="d-32"></a>Approved AP-04 delivery amendment: Lite architecture preparation now, runnable Lite later; qualifies D-03 delivery timing without replacing the shared application direction | [AP-04 scope decision](#ap-04-scope-decision) |
 | D-33 | <a id="d-33"></a>Approved AP-04 Webhook capability expansion; initial Pushover/Webhook, Telegram/email later; qualifies D-06 timing without technical freeze | [AP-04 scope decision](#ap-04-scope-decision) |
@@ -74,6 +74,7 @@ The stable D-IDs below record decision topics and supersession. The **owner link
 | D-96 | <a id="d-96"></a>Approved reslicing of future AP-06+ execution into an explicit acyclic path; preserves AP-01..AP-05 and historical evidence | [Work-package reslicing decision](#work-package-reslicing-decision), [execution path](work-packages.md#revised-execution-path) |
 | D-97 | <a id="d-97"></a>Approved renumbering of the resliced execution path so AP IDs encode its order; preserves AP-01..AP-05 and historical evidence | [Ordered AP renumbering decision](#ordered-ap-renumbering-decision), [execution path](work-packages.md#revised-execution-path) |
 | D-98 | <a id="d-98"></a>Approved all-task library suitability checks and coordinated multi-session reassessment of existing code | [Coordinated reassessment](#coordinated-existing-code-library-reassessment), [policy owner](README.md#library-reuse) |
+| D-126 | <a id="d-126"></a>Approved direct open-AP planning repair without sidecars; inserts Gateway producer, preserves completed results and assigns all supporting work before its consumers | [Open-AP self-containment repair](#open-ap-self-containment-repair) |
 | D-99 | <a id="d-99"></a>Approved preparation of complete synthetic-preview form schemas; exact schema/context freeze remains separate | [Synthetic preview schema completion](#synthetic-preview-schema-completion) |
 | D-100 | <a id="d-100"></a>Approved global plugin.configure for redacted Processing-instance reads/listing | [Instance read authorization](#processing-instance-read-authorization) |
 | D-101 | <a id="d-101"></a>Approved explicit optional local Processing artifact-root startup option | [Artifact-root configuration](#processing-artifact-root-configuration) |
@@ -100,6 +101,7 @@ The stable D-IDs below record decision topics and supersession. The **owner link
 | D-122 | <a id="d-122"></a>Approved AP-07 additive write scope and execution binding | [AP-07 additive write-scope and execution-binding proposal](#ap-07-additive-write-scope-and-execution-binding-proposal) |
 | D-123 | <a id="d-123"></a>Approved narrow AP-07 selected-Workflow worker lifecycle scope extension | [AP-07 selected-Workflow worker lifecycle scope extension](#ap-07-selected-workflow-worker-lifecycle-scope-extension) |
 | D-124 | <a id="d-124"></a>Approved AP-07 selected-Workflow source and atomic publication scope extension | [AP-07 selected-Workflow source and publication scope extension](#ap-07-selected-workflow-source-and-publication-scope-extension) |
+| D-125 | <a id="d-125"></a>Approved standalone Unit-template ownership direction; C-06 actions and implementation remain unbound | [AP-08 Unit-template ownership](#ap-08-unit-template-ownership) |
 
 ## Operating Assumptions
 
@@ -139,6 +141,8 @@ This is the only delivery-phase classification. It does not repeat REQ acceptanc
 | REQ-129..130 | Phase-1 proposal |
 | REQ-131 | Later |
 | REQ-132 | Phase-1 proposal |
+| REQ-133..134/138 | Delivery classification unresolved; owner planning is assigned under D-126, but these additions are not silently approved or deferred |
+| REQ-135..137 | Acceptance refinements of already approved field/query goals; verify within AP-10 without broadening frozen authorization |
 | [D-30 comparison extension](#d-30) | Later, separately approved slice; not a current contract blocker |
 
 Resolve IDs in the [catalog](requirements-catalog.md), not in a parallel feature summary.
@@ -169,30 +173,30 @@ Resolve IDs in the [catalog](requirements-catalog.md), not in a parallel feature
 
 ## Open Issues and Risks
 
-P-19 was never assigned. This table owns **remaining gate/status**, not the already-defined contract semantics. A resolved documentary question is not proof of implementation.
+P-19 was never assigned. This table owns **remaining gate/status**, not contract semantics. D-126 routes implementation-dependent work to current APs; AP-03's completed disposable probes are evidence, not an unowned prerequisite or a production guarantee. A resolved documentary question is not proof of implementation.
 
 | ID | Remaining gate / disposition | Owner detail | Responsible package |
 | --- | --- | --- | --- |
-| P-01 | Technical durability/crash and commit-uncertainty evidence open | [C-01](contracts/c-01-transmission-acceptance.md), [C-08](contracts/c-08-events-jobs.md), [C-12](contracts/c-12-persistence-operations.md) | AP-03 |
-| P-02 | Policy resolved by D-13; experimental authorization still required | [D-13](#d-13), [approval gates](#workflow-and-approval-gates) | AP-03 |
-| P-03 | Documentary boundary resolved; backend evidence open | [C-12](contracts/c-12-persistence-operations.md) | AP-03 |
-| P-04 | Full failover/driver fencing evidence open | [C-08](contracts/c-08-events-jobs.md), [C-12](contracts/c-12-persistence-operations.md) | AP-03 |
-| P-05 | Exact ABI/toolchain/runtime and resource/cancellation evidence open; freeze pending | [C-10](contracts/c-10-plugin-host.md) | AP-03 / AP-04 |
-| P-06 | Documentary lifecycle resolved; enforcement/toolchain evidence open | [C-10](contracts/c-10-plugin-host.md) | AP-03 |
-| P-07 | Adversarial capability/I/O/cancellation evidence open | [C-09](contracts/c-09-delivery.md), [C-10](contracts/c-10-plugin-host.md) | AP-03 |
-| P-08 | Whole-second Observation precision and Grouping-window precision selected by D-42/D-49; FLEX facts verified under D-34. Product-specific duration/concurrency validation remains open and is mandatory under AP-06 T024 after implementation; under D-50 it does not block AP-04 contract freeze/binding. D-30 is not a blocker | [D-34](#ap-04-flex-decision), [D-42](#ap-06-observation-precision-decision), [D-49](#ap-06-grouping-window-precision-decision), [D-50](#ap-06-grouping-validation-timing-decision), [C-01](contracts/c-01-transmission-acceptance.md), [C-02](contracts/c-02-protocol-payload.md), [C-03](contracts/c-03-message-grouping.md), [C-08](contracts/c-08-events-jobs.md) | AP-03 / AP-04 / AP-06 |
+| P-01 | Foundation/intake evidence recorded; broader crash/fault qualification remains AP-16 work | [AP-05](execution/ap-05.md), [AP-07](execution/ap-07.md), [C-12](contracts/c-12-persistence-operations.md) | AP-16 |
+| P-02 | Policy resolved by D-13; separate new experiments retain their approval gate | [D-13](#d-13), [approval gates](#workflow-and-approval-gates) | Current experimenting owner, only if assigned |
+| P-03 | Foundation evidence recorded; actual retention/operational evidence remains | [C-12](contracts/c-12-persistence-operations.md) | AP-16 |
+| P-04 | Full topology/failover evidence remains; Delivery-specific fencing is AP-11 work | [C-08](contracts/c-08-events-jobs.md), [C-12](contracts/c-12-persistence-operations.md) | AP-11 / AP-16 |
+| P-05 | Pure installed-processing slice fixed; general production SDK/ABI selection and proof owned by host planning | [C-10](contracts/c-10-plugin-host.md) | AP-12 |
+| P-06 | General host lifecycle/configuration enforcement evidence remains | [C-10](contracts/c-10-plugin-host.md) | AP-12 |
+| P-07 | Current target/host capability, I/O/cancellation evidence remains | [C-09](contracts/c-09-delivery.md), [C-10](contracts/c-10-plugin-host.md) | AP-12 |
+| P-08 | Observation/Grouping decisions remain fixed; current intake concurrency/publication evidence is recorded, not an old AP-06 T024 prerequisite | [D-42](#ap-06-observation-precision-decision), [D-49](#ap-06-grouping-window-precision-decision), [AP-07 evidence](execution/ap-07.md) | AP-07 evidence; AP-17 coverage verification |
 | P-09 | Logical-model question resolved by D-29/D-30; physical design at owner gates, not a diagram freeze | [D-29](#d-29), [C-05](contracts/c-05-matching-correction.md) | AP-03 / AP-04 / affected implementation owner |
-| P-10 | Documentary projection/revocation boundary resolved; enforcement evidence open | [C-06](contracts/c-06-identity-authorization.md), [C-07](contracts/c-07-query-live.md) | AP-03 |
-| P-11 | Documentary contract resolved; worker/provider enforcement evidence and freeze open | [C-08](contracts/c-08-events-jobs.md), [C-09](contracts/c-09-delivery.md), [C-10](contracts/c-10-plugin-host.md) | AP-03 / AP-04 |
-| P-12 | Documentary correction model resolved; concurrency/publication evidence open | [C-05](contracts/c-05-matching-correction.md) | AP-03 |
-| P-13 | Documentary question closed; implementation/freeze separately gated | [C-04](contracts/c-04-master-data.md) | AP-04 / AP-08 |
-| P-14 | Documentary question closed; freeze and lifecycle execution evidence remain | [C-13](contracts/c-13-account-lifecycle.md) | AP-04 / AP-07 |
-| P-15 | Unicode implementation pin, indexing and backend parity evidence open | [C-07](contracts/c-07-query-live.md) | AP-03 |
-| P-16 | Documentary semantics closed; budgets/installed-step evidence open; library/editor selections belong to implementation owners | [C-11](contracts/c-11-processing-presentation.md) | AP-03 / AP-12 / AP-13 |
-| P-17 | Deliberately later, not a current implementation blocker | [C-06](contracts/c-06-identity-authorization.md), [C-13](contracts/c-13-account-lifecycle.md) | AP-14 |
-| P-18 | Product scope approved with D-32/D-33 amendments; D-35 freezes only AP-05 foundation, all other technical slices remain gated | [Delivery scope](#delivery-scope), [approval gates](#workflow-and-approval-gates) | AP-04 |
-| P-20 | Operations qualification open | [C-12](contracts/c-12-persistence-operations.md) | AP-03 |
-| P-21 | Available reference host and measured environment missing | [Operating assumptions](#operating-assumptions), [C-12](contracts/c-12-persistence-operations.md) | AP-03 |
+| P-10 | Query/live projection/revocation enforcement remains current consumer work | [C-06](contracts/c-06-identity-authorization.md), [C-07](contracts/c-07-query-live.md) | AP-10 |
+| P-11 | Claims/materialization/attempts and real host/provider evidence remain | [C-08](contracts/c-08-events-jobs.md), [C-09](contracts/c-09-delivery.md), [C-10](contracts/c-10-plugin-host.md) | AP-11 / AP-12 |
+| P-12 | Historical correction supporting planning and concurrency/publication evidence remain | [C-05](contracts/c-05-matching-correction.md) | AP-08 |
+| P-13 | Remaining master-data/default/template planning and implementation remain | [C-04](contracts/c-04-master-data.md) | AP-08 |
+| P-14 | Full account cleanup planning/participants and lifecycle evidence remain | [C-13](contracts/c-13-account-lifecycle.md) | AP-14 |
+| P-15 | Query Unicode/index evidence remains; deferred backend runtime parity is not required now | [C-07](contracts/c-07-query-live.md) | AP-10 |
+| P-16 | Shared renderer selection belongs to Delivery; GUI/historical work to presentation; frontend editor to browser AP | [C-11](contracts/c-11-processing-presentation.md) | AP-11 / AP-13 / AP-15 |
+| P-17 | External identity deliberately later, not a current implementation blocker | [C-06](contracts/c-06-identity-authorization.md), [C-13](contracts/c-13-account-lifecycle.md) | Later separately approved slice |
+| P-18 | Approved delivery scope remains; each current AP owns its unfixed supporting contract planning under D-126 | [Delivery scope](#delivery-scope), [approval gates](#workflow-and-approval-gates) | Current producer AP; AP-17 verifies |
+| P-20 | Actual Full operations qualification remains | [C-12](contracts/c-12-persistence-operations.md) | AP-16 |
+| P-21 | Record actual disposable evidence environment; no unsupported hardware/capacity certification required | [Operating assumptions](#operating-assumptions), [C-12](contracts/c-12-persistence-operations.md) | AP-16 |
 
 ### AP-04 Foundation Freeze Decision
 
@@ -892,7 +896,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 **Resolution:** Establish the ordered revised execution path AP-17 through AP-27 in [the package index](work-packages.md#revised-execution-path), with new stable task IDs T055..T085. The path first consumes the already verified AP-07 identity-core and AP-08 matcher handovers, then completes the currently active frozen Processing kernel, Transmission intake, historical correction, query/live API, events/Delivery, plugin targets, Processing presentation, remaining identity lifecycle, frontend, operations, and final evidence. Each revised AP lists only prerequisites that are earlier in that path. The path is a strict sequence; no parallel or cross-branch prerequisite is implicit.
 
-**Scope and preservation:** AP-01..AP-05 definitions and results are unchanged. Original AP-06..AP-16 definitions, stable IDs, task IDs and recorded observations are retained as source history, not edited to fabricate completion. Their remaining work is reassigned only through the new AP-17..AP-27 baselines and the source-to-revision crosswalk. The verified D-59/D-70 identity handover, D-60 matcher handover, and partial T043 evidence remain owned by their original execution records. Append-only reconciliation notes identify old `in-progress` markers as historical; the [AP-17 execution record](execution/source-ap-17.md) is the canonical state record for the sole current assignment.
+**Scope and preservation at approval:** AP-01..AP-05 definitions/results stayed unchanged. Original AP-06..AP-16 tasks and observations were retained, not marked complete; remaining work moved to the then AP-17..AP-27 sequence. D-59/D-70 identity, D-60 matcher and partial T043 checks remain in their evidence records. The then AP-17 start/check observations are retained in [AP-06 E-01/E-02](execution/ap-06.md#e-01-resliced-assignment-start); current document retention and assignments are governed by D-126.
 
 **Approval boundary:** This decision approves the new documentary assignments, ordering, crosswalk and execution-record reconciliation; it does not change product requirements, decisions, frozen contracts, delivery scope, technical selections, or grant implementation approval to future assignments. AP-17 is the same already frozen and started T043 kernel scope under the existing AP-04 binding; its placement changes, not its implementation scope. AP-18..AP-27 require their own exact contract/version/write-scope execution bindings before starting. AP-14 remains a separately gated later-extension baseline outside the required path. This decision supersedes D-95's earlier restriction against AP baseline changes only for the AP-06+ reslicing explicitly approved here; it does not authorize edits to AP-01..AP-05 or overwrite prior evidence.
 
@@ -1222,18 +1226,49 @@ Use the existing C-07 redacted error envelope/status table, C-12 transaction cap
 
 **Approval evidence:** The user explicitly selected `approve_exact_extension` on 2026-11-04 in response to the exact path set and purpose above. This extends D-122 only as stated and leaves all other exclusions unchanged.
 
+### AP-08 Unit-template ownership
+
+**D-125; date/origin:** 2026-11-04, AP-08 T060 clarification. **Status:** approved direction. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-03/C-04 for behavior; DOM-05/C-06 for authorization within AP-08.
+
+**Question/context and evidence:** AP-08 T060 includes template operations. REQ-025 asks managers to create Units from templates; C-04 defines a template as a copied creation snapshot that may supply an Organization, color, icon and Protocol-specific defaults, but does not define whether templates are Organization-owned or standalone. C-06 has an explicit `unit.*` and `organization.*` action catalog but no template actions. The user was asked to choose among Organization-owned templates, standalone templates with explicit C-06 actions, and predefined read-only templates.
+
+**Resolution and rationale:** The user responded `standalone`. A Unit template is therefore an independent master-data resource, not an Organization-owned resource. This permits a template to carry an optional Organization reference without making that Organization the template's owner. The Organization-scoped and read-only alternatives were not selected.
+
+**Consequences:** [C-04](contracts/c-04-master-data.md#ap-08-unit-template-direction) owns the snapshot behavior. [AP-08 T060](work-packages/ap-08-master-data-correction-after-intake.md) owns exact C-06 template actions and implementation; [AP-15](work-packages/ap-15-frontend.md) consumes the completed API. Preserve frozen master-data/matcher/intake inputs. The ownership decision is not implementation evidence.
+
+### Open-AP self-containment repair
+
+**D-126; date:** 2026-11-04. **Status:** user-approved planning authority. **Owner:** Planning/integration.
+
+**Scope:** Directly maintain current AP documentation and required references, migrate needed source-assignment inputs to their owners and remove redundant source definitions/redirects/duplicate records. Preserve unique evidence and immutable baseline provenance; no product execution or sidecars. This supersedes earlier requirements to retain duplicate source-assignment files, not their behavioral decisions or observed results. The [ordered assignments](work-packages.md#revised-execution-path) own task allocation, supporting paths and verification; the [mapping](work-packages/requirement-mapping.md) owns REQ coverage. Executing agents may not enlarge their own assignments.
+
+**Boundary:** Preserve fixed behavior and actual evidence. REQ-133/134/138 delivery classification and global-view visibility require the clarification assigned to AP-09/AP-10. REQ-135..137 refine approved field/query acceptance. Subscription-preview remains optional. This approval does not claim implementation or runtime completion.
+
 ## Workflow and Approval Gates
 
-Only this section grants product-scope/execution approval and other gates that require explicit approval. An approval entry must identify date, approving authority, exact AP/task slice, immutable contract/artifact versions, relevant evidence and permitted write-scope binding. Product scope and separately gated experiments still require their recorded approvals. However, execution of an AP authorizes the decisions and contract changes explicitly assigned to that AP; do not require a separate permission or technical-freeze approval for those in-scope changes. Make them from the AP's user stories, fixed decisions and evidence, following the [mandatory AP self-containment and planning rules](work-packages/shared-rules.md#mandatory-ap-self-containment-and-planning).
+Read this section for current authority; consult individual approval evidence only when needed to verify a named input.
+
+| Activity | Required authority |
+| --- | --- |
+| Current documentary planning | User-authorized direct AP maintenance under D-126; no sidecars or product execution |
+| Product execution | User order to execute the named AP within its assignment, approved delivery scope and fixed required inputs |
+| Own planning/contracts | Included in that AP execution order; no additional owner sign-off or freeze permission |
+| Fixed behavior or outside-scope change | Explicit authorized planning/decision revision before affected implementation |
+| External effects, experiments, parallel work | Explicit approved environment/slice or disjoint scope; own ordinary acceptance tests remain assigned work |
+
+Delivery classification is only in [Delivery Scope](#delivery-scope). Results are only in producer execution records. Approval does not establish implementation or successful tests.
+
+## Recorded Approval Evidence
 
 | Gate | Approval condition | Current approval record |
 | --- | --- | --- |
 | Documentation | User authorization for specification maintenance | Authorized documentary work; not product implementation |
+| Open-AP repair | User authorization for direct assignment and current dependency repair | Approved 2026-11-04 under [D-126](#open-ap-self-containment-repair), including the explicit no-sidecar instruction. AP-08 supporting planning/write scope is inline; AP-09..AP-17 are the current path. Ordering is not evidence of completion. An order to execute a current AP authorizes all its assigned planning and contract decisions, including supporting slices, without a second freeze-permission gate. |
 | PostgreSQL fact publication | Explicit additive C-08 binding, pinned library and earlier-producer implementation approval | Approved 2026-11-02 as `approve-publication-slice` under [D-94](#watermill-postgresql-publication-integration-proposal). Exact write/test scope and exclusions are owned there; [C-08 postgresql-fact-publication 1.0](contracts/c-08-events-jobs.md#postgresql-fact-publication) is the frozen subset. Product evidence remains [AP-12 E-46](execution/source-ap-12.md#e-46-approved-postgresql-watermill-publication-slice), an infrastructure input to AP-06, not its intake/Grouping validation or a production-consumer start. |
 | AP-06 session repercussions | Explicit follow-up approval after AP-01..AP-06 impact review | Approved 2026-11-02 under [D-95](#ap-06-session-repercussion-consolidation), reopening only the named documentary handovers/status navigation. [AP-04 E-53](execution/ap-04.md#e-53-ap-06-publication-and-follow-up-binding) binds this follow-up; no AP baseline or new product execution approval follows. |
-| AP-06+ reslicing and execution order | Explicit user authorization to reslice active/future assignments and reconcile partial execution state | Reslicing approved 2026-11-03 under [D-96](#work-package-reslicing-decision); ordered renumbering approved under [D-97](#ordered-ap-renumbering-decision). The [revised path](work-packages.md#revised-execution-path) and AP-06..AP-16 are the current assignments; AP-01..AP-05 and former source baselines/evidence remain preserved. Only AP-06 continues under the existing T043 binding; later package execution approvals remain separate. |
-| AP-07 owner-contract slices | Explicit approval of the exact required owner slices and versions before implementation | Approved 2026-11-03 under [D-119](#ap-07-contract-freeze-proposal): the seven AP-07 slices in C-01/C-02/C-03/C-05/C-06/C-08/C-11 are frozen as 1.0. Additive AP-07 Gateway credential-management HTTP slices in C-01/C-06 are approved as 1.1 under [D-121](#ap-07-gateway-credential-management-http-addendum); F-68 is planned and not executed. No AP-07 write-scope addendum or implementation binding is approved. |
-| AP-07 implementation scope and start | Explicit approval of the exact active-AP addendum, assignee, frozen inputs and runnable verification binding before any proposed-only path is edited | Approved 2026-11-03 under [D-122](#ap-07-additive-write-scope-and-execution-binding-proposal), with the narrow worker lifecycle addition approved 2026-11-04 under [D-123](#ap-07-selected-workflow-worker-lifecycle-scope-extension). T057..T059 may proceed under the [AP-07 addendum](work-packages/addenda/ap-07-intake-implementation.md) as amended; all other baseline, exclusions, assignee and validation bindings remain unchanged. |
+| AP-06+ reslicing and execution order | Explicit user authorization to reslice active/future assignments and reconcile partial execution state | D-96/D-97 establish the historical reslicing and sequential order; [D-126](#open-ap-self-containment-repair) supplies the current AP-06..AP-17 mapping. Completed baselines and source evidence remain preserved. Product execution requires the actual AP start order; own planning is not an additional approval gate. |
+| AP-07 owner-contract slices | Recorded exact owner slices and versions | D-119 freezes the seven AP-07 slices as 1.0; D-121 adds Gateway credential HTTP 1.1. D-122/D-123/D-124 bind implementation. Actual F-68 and selected-Workflow evidence is in [AP-07](execution/ap-07.md); earlier draft/unexecuted statements below are historical approvals, not current blockers. |
+| AP-07 implementation scope and start | Recorded exact implementation binding | D-122/D-123/D-124 and the existing [AP-07 addendum](work-packages/addenda/ap-07-intake-implementation.md) preserve the completed implementation binding. Actual outcomes/limitations are in AP-07's execution record; D-126 does not reopen it. |
 | Repository-wide library policy | Explicit user instruction during AP-05 | Approved 2026-10-26 under [D-36](#repository-wide-library-policy-decision), including persistence of the rule and review/correction of in-progress AP-05. Other frozen-contract/dependency approvals remain in force. |
 | AP-03 baseline clarification | Explicit approval to clarify that AP-03 is pre-implementation planning/feasibility and does not require a completed application or product runtime tests | Approved by the user on 2026-10-25. Narrowly clarifies the AP-03 task descriptions and acceptance; standalone feasible probes remain bounded by the Executable experiments gate. Product-/hardware-dependent validation is documented as future evidence, not an AP-03 completion blocker. No product behavior, production technology, or scope decision is made. |
 | Executable experiments | **Approved 2026-10-25 by the user (sole approving authority)** for AP-03 T010..T012 isolated, disposable feasibility/conformance probes using Go 1.26.2; `modernc.org/sqlite` v1.61.0; `github.com/mattn/go-sqlite3` v1.14.52; `github.com/jackc/pgx/v5` v5.11.0; PostgreSQL 18.0 Alpine; `github.com/tetratelabs/wazero` v1.12.0; `golang.org/x/text` v0.43.0. AP-03/C-01..C-03, C-06..C-12 and shared conventions remain at their starting documented versions; no application artifact exists. Permitted: temporary external scratch harnesses, local database/container installation, bounded characterization/benchmark runs, and recording outputs in [AP-03 execution evidence](execution/ap-03.md). Forbidden: product/application code or manifest changes, production technology/contract decisions, AP baseline edits except the separately approved clarification recorded above, real secrets or external-provider effects. T013 is authorized as planning and resource-limited disposable-host characterization only; no Raspberry Pi measurement or hardware guarantee. Exact commands, environment, runtime image digest, limits, and results are in the AP-03 execution record. | User's explicit authorization in this session, 2026-10-25; bounded by AP-03 and the restrictions in this row. |

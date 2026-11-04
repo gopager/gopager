@@ -4,6 +4,8 @@
 
 Referenced contracts (follow only when relevant): [C-01](c-01-transmission-acceptance.md), [C-08](c-08-events-jobs.md), [C-09](c-09-delivery.md).
 
+**Implementation planning:** [AP-16](../work-packages/ap-16-operations.md) owns retention/status/setup/shutdown/update and Full fault/topology evidence. Lite/SQLite and executable transfer are deferred.
+
 **Traceability:** [REQ-111..112/114..120](../requirements-catalog.md#l-operations-data-volume-and-evolution), [REQ-127 and removed REQ-126](../requirements-catalog.md#m-additional-domain-capabilities). Issue references: [P-01/P-03/P-04/P-15/P-20/P-21](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
 **Version/status:** 0.1-draft except the separately frozen [AP-05 foundation boundary](#ap-05-foundation-boundary). **Owner:** Operations/persistence with integration and domain schema owners. **Parties:** Lite/Full app, operator, authoritative store, roles, restart.
@@ -20,7 +22,7 @@ Draft interfaces: `ReadOperationalStatus -> safeStatus`; `RunRetention(configure
 
 Operations/integration owns child lifecycle and bounded IPC, resource enforcement, cancellation, termination and wait/reap, parent shutdown/failure behavior and safe diagnostics. A timeout around a still-running child, an unbounded memory allocation, or a child lost during shutdown is not validated bounded computation. Platform-specific mechanisms must be selected and tested before claiming portability or containment. Configuration must expose required capabilities/failures, not silently fall back to unrestricted in-process execution.
 
-Historical AP-03/AP-05 results and their read-only baselines remain unchanged; their “single-process Lite” wording records the old assumption, not a current exact-count acceptance rule. AP-15 T052 now uses REQ-115/D-63 through the separately approved 2026-11-01 narrow baseline amendment; its Lite timing/remaining acceptance is unchanged and AP-15 has not started. This correction does not deliver Lite/SQLite now, select a regex runtime, or remove the already specified external Full/PostgreSQL infrastructure boundary.
+REQ-115/D-63 does not impose an exact managed-process count. Lite/SQLite runtime remains deferred; the external Full/PostgreSQL infrastructure boundary remains required.
 
 **Retention/storage:** No default deletion without operator limits. Retention unit is a whole Message, aged by stored internal Message time (earliest Observation time); count limits remove oldest whole Messages by `(messageTime, Message ID)`. This is installation-wide and never depends on a User's View time or filters. Delete attached Message contributions, Contribution supports, target resolutions, Transmission evidence/membership, derived processing/search data and linked Submission receipts consistently; do not regroup unaffected Messages or retain dangling references. Lookups of deleted or invalidated Message references return not found; no alias mapping is required under D-40. Accepted C-01 exception remains: a Gateway retry after removal of its Submission receipt can create a new Transmission.
 
@@ -48,7 +50,7 @@ Backup and Restore are manual Operator responsibilities, not application feature
 
 An older copy may reintroduce revoked credentials, deleted accounts or work whose external effect happened later. The application has no knowledge of that missing history and promises no automatic prevention/reconciliation. Operators must account for those risks externally before starting the restored application. Normal startup still enforces schema compatibility, current stored rights, job deadlines/fencing and honest uncertainty for recorded started attempts; this is ordinary consistency, not special restore logic.
 
-Lite-to-Full remains a separate required profile transition: stop source writes, transfer a consistent domain state preserving IDs, original evidence/times, accounts/grants, configuration, contribution/result context, jobs and dedup identities, and provision the Secret/artifact dependencies externally. Validate backend parity and target references/counts; rebuild only derived indexes/projections as needed and activate exactly one target write authority. A concrete transition mechanism belongs to AP-15, not a general Backup/Restore subsystem. Do not run two independent writable copies.
+The deferred Lite-to-Full transition must stop source writes, transfer consistent domain state preserving IDs, original evidence/times, accounts/grants, configuration, contribution/results, jobs and dedup identities, and provision Secret/artifact dependencies externally. It must validate backend parity and target references/counts, rebuild only derived indexes/projections as needed and activate one target write authority. AP-16 documents this boundary; no current AP implements the transfer mechanism or a general Backup/Restore subsystem. Do not run two independent writable copies.
 
 ## AP-05 Foundation Boundary
 
@@ -126,7 +128,7 @@ The password comes from a pipe/file on stdin, not an argument or echoed terminal
 
 Updates preflight schema/plugin compatibility, block conflicting writes during incompatible migration, and record migration version/result under the [current migration binding](#ap-05-foundation-migration-addendum), without content checksums. Failure leaves explicit not-ready/maintenance state. SQLite and PostgreSQL share domain semantics, not necessarily identical SQL. No automatic binary downgrade after irreversible schema/data change; recovery from an external backup is the Operator's responsibility. Plugin artifact rollback follows C-10 and does not roll back provider effects.
 
-AP-03 owns exact drivers/runtime versions, schema/index/constraint and isolation experiments, migration feasibility, fsync/crash evidence, Full primary fencing/failover and the available reference host. AP-05/AP-15 implement approved mechanics later. No arbitrary SLA/RPO/RTO, disk threshold, automatic acknowledged-loss policy or successful failover test is inferred from this documentary contract.
+AP-03's completed disposable driver/runtime/isolation probes supply bounded evidence, not product crash/failover guarantees. AP-05's completed foundation remains fixed; AP-16 owns remaining actual operational mechanics and Full fault/topology verification using completed domain producers. No arbitrary SLA/RPO/RTO, disk threshold, automatic acknowledged-loss policy or successful failover test is inferred from this documentary contract.
 
 ## AP-05 Foundation Migration Addendum
 

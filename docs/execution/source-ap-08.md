@@ -1,10 +1,18 @@
 # Source AP-08 Historical Execution Record
 
+## Handover
+
+Verified D-60 prerequisite: Unit/collection/current-context operations and standalone temporal-rule/current matching only. Exact implemented artifacts are linked from [E-02](#e-02-implemented-approved-prerequisite-slice); actual PostgreSQL/race/HTTP cases are in [E-03](#e-03-postgresql-race-http-and-proxy-validation).
+
+Consumers retain current scope/revision/lock participation and server-derived candidate contexts. Original verification used explicit Network fixtures; current production intake/Network composition is evidenced separately in [AP-07](ap-07.md#handover).
+
+Remaining templates/Organizations/defaults/bulk, suppression and historical support/correction belong to [AP-08](../work-packages/ap-08-master-data-correction-after-intake.md#planning-before-coding). This record verifies neither those operations nor whole original tasks. Historical blockers below are dated observations, not unowned inputs.
+
 ## Baseline
 
-The [source AP-08 baseline](../work-packages/source-ap-08-master-data-correction.md) remains unchanged at commit `24318de414b3b35f77b6b288905125c1debf46f4`. Execution starts on 2026-10-27 with existing local AP-04/AP-06/AP-07 documentation and identity implementation changes, not a clean worktree.
+The [original AP-08 baseline](https://github.com/gopager/gopager/blob/24318de414b3b35f77b6b288905125c1debf46f4/docs/work-packages/ap-08-master-data-correction.md) remains unchanged at commit `24318de414b3b35f77b6b288905125c1debf46f4`. Execution starts on 2026-10-27 with existing local AP-04/AP-06/AP-07 documentation and identity implementation changes, not a clean worktree.
 
-Assignee: current Copilot SDK assistant, sequential execution. The user separately approved the four input freezes and `minimal_matcher_execution=approve-and-start` under [D-60](../authoritative-plan.md#early-master-data-and-matcher-prerequisite-proposal). Exact versions, narrow write scope, exclusions and required validation belong to the [AP-04 consumer binding](ap-04.md#ap-08-prerequisite-consumer-binding-proposal). Prerequisites: verified AP-05 foundation and [D-59 identity core](ap-07.md#handover). No whole T028/T029 or AP-08 acceptance is implied.
+Assignee: current Copilot SDK assistant, sequential execution. The user separately approved the four input freezes and `minimal_matcher_execution=approve-and-start` under [D-60](../authoritative-plan.md#early-master-data-and-matcher-prerequisite-proposal). Exact versions, narrow write scope, exclusions and required validation belong to the [AP-04 consumer binding](ap-04.md#ap-08-prerequisite-consumer-binding-proposal). Prerequisites: verified AP-05 foundation and [D-59 identity core](source-ap-07.md#handover). No whole T028/T029 or AP-08 acceptance is implied.
 
 ## Task Outcomes
 
@@ -56,7 +64,7 @@ No historical rematching/suppression/publication, original intake, Message/contr
 - Production Network scope/Protocol ownership is supplied by AP-06; standalone owner fixtures must not be presented as complete production wiring.
 - Historical correction and the remaining T028 operations are outside the approved early slice, not implemented placeholders or whole-task completion.
 
-## Handover
+## Historical Handover
 
 The **verified D-60 prerequisite only** is available to AP-06 T022/T023 through the four owner artifact bindings in E-02, with actual evidence in E-03. No whole T028/T029/AP-08 acceptance is claimed. DOM-01/AP-06 must supply the actual Network existence/Protocol/scope owner, use server-derived candidate context and retain the transaction/lock boundary; it must not expose internal matching as caller-supplied authority. AP-06 still needs the T043 evaluator kernel and its own contract/execution binding.
 

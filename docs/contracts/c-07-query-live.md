@@ -4,6 +4,8 @@
 
 Referenced contracts (follow only when relevant): [C-03](c-03-message-grouping.md), [C-06](c-06-identity-authorization.md), [C-11](c-11-processing-presentation.md).
 
+**Implementation planning:** [AP-10](../work-packages/ap-10-query-live.md) owns Query/SSE, supporting fields/consumption/admission and saved-view clarification. [AP-15](../work-packages/ap-15-frontend.md) consumes its completed APIs.
+
 **Traceability:** [REQ-001..010](../requirements-catalog.md#a-live-message-view), [REQ-011..020](../requirements-catalog.md#b-search-filters-and-details), [REQ-027/029](../requirements-catalog.md#c-units-organizations-and-defaults), [REQ-055..060](../requirements-catalog.md#f-access-rights-and-guests), [REQ-097..100](../requirements-catalog.md#j-processing-presentation-and-usability). Issue references: [P-08..P-10/P-12/P-15](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
 **Version/status:** 0.1-draft except the separately frozen [AP-05 platform error binding](#ap-05-platform-error-binding). **Owner:** DOM-06; integration owns OpenAPI/Domain event boundary; C-06 exclusively owns permission semantics. **Parties:** Vue/API consumers receive authorized projections, not internal database objects.
