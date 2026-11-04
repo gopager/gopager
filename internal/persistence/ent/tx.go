@@ -22,20 +22,36 @@ type Tx struct {
 	AuditRecord *AuditRecordClient
 	// CommandReceipt is the client for interacting with the CommandReceipt builders.
 	CommandReceipt *CommandReceiptClient
+	// ContributionSupport is the client for interacting with the ContributionSupport builders.
+	ContributionSupport *ContributionSupportClient
 	// Credential is the client for interacting with the Credential builders.
 	Credential *CredentialClient
 	// DomainEvent is the client for interacting with the DomainEvent builders.
 	DomainEvent *DomainEventClient
 	// FieldPermission is the client for interacting with the FieldPermission builders.
 	FieldPermission *FieldPermissionClient
+	// Gateway is the client for interacting with the Gateway builders.
+	Gateway *GatewayClient
+	// GatewayCredential is the client for interacting with the GatewayCredential builders.
+	GatewayCredential *GatewayCredentialClient
+	// GatewayNetwork is the client for interacting with the GatewayNetwork builders.
+	GatewayNetwork *GatewayNetworkClient
 	// Grant is the client for interacting with the Grant builders.
 	Grant *GrantClient
+	// GroupingControl is the client for interacting with the GroupingControl builders.
+	GroupingControl *GroupingControlClient
 	// IdentityControl is the client for interacting with the IdentityControl builders.
 	IdentityControl *IdentityControlClient
 	// LoginAttempt is the client for interacting with the LoginAttempt builders.
 	LoginAttempt *LoginAttemptClient
 	// Membership is the client for interacting with the Membership builders.
 	Membership *MembershipClient
+	// Message is the client for interacting with the Message builders.
+	Message *MessageClient
+	// MessageContribution is the client for interacting with the MessageContribution builders.
+	MessageContribution *MessageContributionClient
+	// Network is the client for interacting with the Network builders.
+	Network *NetworkClient
 	// PendingAssignmentScope is the client for interacting with the PendingAssignmentScope builders.
 	PendingAssignmentScope *PendingAssignmentScopeClient
 	// ProcessingCandidate is the client for interacting with the ProcessingCandidate builders.
@@ -48,6 +64,10 @@ type Tx struct {
 	ProcessingInstanceVersion *ProcessingInstanceVersionClient
 	// ProcessingResult is the client for interacting with the ProcessingResult builders.
 	ProcessingResult *ProcessingResultClient
+	// Transmission is the client for interacting with the Transmission builders.
+	Transmission *TransmissionClient
+	// TransmissionTarget is the client for interacting with the TransmissionTarget builders.
+	TransmissionTarget *TransmissionTargetClient
 	// Unit is the client for interacting with the Unit builders.
 	Unit *UnitClient
 	// UnitCollection is the client for interacting with the UnitCollection builders.
@@ -196,19 +216,29 @@ func (tx *Tx) init() {
 	tx.AssignmentControl = NewAssignmentControlClient(tx.config)
 	tx.AuditRecord = NewAuditRecordClient(tx.config)
 	tx.CommandReceipt = NewCommandReceiptClient(tx.config)
+	tx.ContributionSupport = NewContributionSupportClient(tx.config)
 	tx.Credential = NewCredentialClient(tx.config)
 	tx.DomainEvent = NewDomainEventClient(tx.config)
 	tx.FieldPermission = NewFieldPermissionClient(tx.config)
+	tx.Gateway = NewGatewayClient(tx.config)
+	tx.GatewayCredential = NewGatewayCredentialClient(tx.config)
+	tx.GatewayNetwork = NewGatewayNetworkClient(tx.config)
 	tx.Grant = NewGrantClient(tx.config)
+	tx.GroupingControl = NewGroupingControlClient(tx.config)
 	tx.IdentityControl = NewIdentityControlClient(tx.config)
 	tx.LoginAttempt = NewLoginAttemptClient(tx.config)
 	tx.Membership = NewMembershipClient(tx.config)
+	tx.Message = NewMessageClient(tx.config)
+	tx.MessageContribution = NewMessageContributionClient(tx.config)
+	tx.Network = NewNetworkClient(tx.config)
 	tx.PendingAssignmentScope = NewPendingAssignmentScopeClient(tx.config)
 	tx.ProcessingCandidate = NewProcessingCandidateClient(tx.config)
 	tx.ProcessingControl = NewProcessingControlClient(tx.config)
 	tx.ProcessingInstance = NewProcessingInstanceClient(tx.config)
 	tx.ProcessingInstanceVersion = NewProcessingInstanceVersionClient(tx.config)
 	tx.ProcessingResult = NewProcessingResultClient(tx.config)
+	tx.Transmission = NewTransmissionClient(tx.config)
+	tx.TransmissionTarget = NewTransmissionTargetClient(tx.config)
 	tx.Unit = NewUnitClient(tx.config)
 	tx.UnitCollection = NewUnitCollectionClient(tx.config)
 	tx.UserGroup = NewUserGroupClient(tx.config)

@@ -11,13 +11,21 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/assignmentcontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/auditrecord"
 	"github.com/gopager/gopager/internal/persistence/ent/commandreceipt"
+	"github.com/gopager/gopager/internal/persistence/ent/contributionsupport"
 	"github.com/gopager/gopager/internal/persistence/ent/credential"
 	"github.com/gopager/gopager/internal/persistence/ent/domainevent"
 	"github.com/gopager/gopager/internal/persistence/ent/fieldpermission"
+	"github.com/gopager/gopager/internal/persistence/ent/gateway"
+	"github.com/gopager/gopager/internal/persistence/ent/gatewaycredential"
+	"github.com/gopager/gopager/internal/persistence/ent/gatewaynetwork"
 	"github.com/gopager/gopager/internal/persistence/ent/grant"
+	"github.com/gopager/gopager/internal/persistence/ent/groupingcontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/identitycontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/loginattempt"
 	"github.com/gopager/gopager/internal/persistence/ent/membership"
+	"github.com/gopager/gopager/internal/persistence/ent/message"
+	"github.com/gopager/gopager/internal/persistence/ent/messagecontribution"
+	"github.com/gopager/gopager/internal/persistence/ent/network"
 	"github.com/gopager/gopager/internal/persistence/ent/pendingassignmentscope"
 	"github.com/gopager/gopager/internal/persistence/ent/processingcandidate"
 	"github.com/gopager/gopager/internal/persistence/ent/processingcontrol"
@@ -25,6 +33,8 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/processinginstanceversion"
 	"github.com/gopager/gopager/internal/persistence/ent/processingresult"
 	"github.com/gopager/gopager/internal/persistence/ent/schema"
+	"github.com/gopager/gopager/internal/persistence/ent/transmission"
+	"github.com/gopager/gopager/internal/persistence/ent/transmissiontarget"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
 	"github.com/gopager/gopager/internal/persistence/ent/unitcollection"
 	"github.com/gopager/gopager/internal/persistence/ent/usergroup"
@@ -168,6 +178,21 @@ func init() {
 	commandreceiptDescID := commandreceiptFields[0].Descriptor()
 	// commandreceipt.DefaultID holds the default value on creation for the id field.
 	commandreceipt.DefaultID = commandreceiptDescID.Default.(func() uuid.UUID)
+	contributionsupport.Policy = privacy.NewPolicies(schema.ContributionSupport{})
+	contributionsupport.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := contributionsupport.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
+	contributionsupportFields := schema.ContributionSupport{}.Fields()
+	_ = contributionsupportFields
+	// contributionsupportDescTargetPosition is the schema descriptor for target_position field.
+	contributionsupportDescTargetPosition := contributionsupportFields[3].Descriptor()
+	// contributionsupport.TargetPositionValidator is a validator for the "target_position" field. It is called by the builders before save.
+	contributionsupport.TargetPositionValidator = contributionsupportDescTargetPosition.Validators[0].(func(int) error)
 	credentialMixin := schema.Credential{}.Mixin()
 	credential.Policy = privacy.NewPolicies(schema.Credential{})
 	credential.Hooks[0] = func(next ent.Mutator) ent.Mutator {
@@ -229,6 +254,71 @@ func init() {
 	fieldpermissionDescID := fieldpermissionMixinFields0[0].Descriptor()
 	// fieldpermission.DefaultID holds the default value on creation for the id field.
 	fieldpermission.DefaultID = fieldpermissionDescID.Default.(func() uuid.UUID)
+	gateway.Policy = privacy.NewPolicies(schema.Gateway{})
+	gateway.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := gateway.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
+	gatewayFields := schema.Gateway{}.Fields()
+	_ = gatewayFields
+	// gatewayDescRevision is the schema descriptor for revision field.
+	gatewayDescRevision := gatewayFields[1].Descriptor()
+	// gateway.DefaultRevision holds the default value on creation for the revision field.
+	gateway.DefaultRevision = gatewayDescRevision.Default.(int64)
+	// gateway.RevisionValidator is a validator for the "revision" field. It is called by the builders before save.
+	gateway.RevisionValidator = gatewayDescRevision.Validators[0].(func(int64) error)
+	gatewaycredential.Policy = privacy.NewPolicies(schema.GatewayCredential{})
+	gatewaycredential.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := gatewaycredential.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
+	gatewaycredentialFields := schema.GatewayCredential{}.Fields()
+	_ = gatewaycredentialFields
+	// gatewaycredentialDescPending is the schema descriptor for pending field.
+	gatewaycredentialDescPending := gatewaycredentialFields[3].Descriptor()
+	// gatewaycredential.DefaultPending holds the default value on creation for the pending field.
+	gatewaycredential.DefaultPending = gatewaycredentialDescPending.Default.(bool)
+	gatewaynetwork.Policy = privacy.NewPolicies(schema.GatewayNetwork{})
+	gatewaynetwork.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := gatewaynetwork.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
+	gatewaynetworkFields := schema.GatewayNetwork{}.Fields()
+	_ = gatewaynetworkFields
+	// gatewaynetworkDescGatewayNetworkIdentifier is the schema descriptor for gateway_network_identifier field.
+	gatewaynetworkDescGatewayNetworkIdentifier := gatewaynetworkFields[2].Descriptor()
+	// gatewaynetwork.GatewayNetworkIdentifierValidator is a validator for the "gateway_network_identifier" field. It is called by the builders before save.
+	gatewaynetwork.GatewayNetworkIdentifierValidator = func() func(string) error {
+		validators := gatewaynetworkDescGatewayNetworkIdentifier.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(gateway_network_identifier string) error {
+			for _, fn := range fns {
+				if err := fn(gateway_network_identifier); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// gatewaynetworkDescID is the schema descriptor for id field.
+	gatewaynetworkDescID := gatewaynetworkFields[0].Descriptor()
+	// gatewaynetwork.DefaultID holds the default value on creation for the id field.
+	gatewaynetwork.DefaultID = gatewaynetworkDescID.Default.(func() uuid.UUID)
 	grantMixin := schema.Grant{}.Mixin()
 	grant.Policy = privacy.NewPolicies(schema.Grant{})
 	grant.Hooks[0] = func(next ent.Mutator) ent.Mutator {
@@ -261,6 +351,27 @@ func init() {
 	grantDescID := grantMixinFields0[0].Descriptor()
 	// grant.DefaultID holds the default value on creation for the id field.
 	grant.DefaultID = grantDescID.Default.(func() uuid.UUID)
+	groupingcontrol.Policy = privacy.NewPolicies(schema.GroupingControl{})
+	groupingcontrol.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := groupingcontrol.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
+	groupingcontrolFields := schema.GroupingControl{}.Fields()
+	_ = groupingcontrolFields
+	// groupingcontrolDescRevision is the schema descriptor for revision field.
+	groupingcontrolDescRevision := groupingcontrolFields[1].Descriptor()
+	// groupingcontrol.DefaultRevision holds the default value on creation for the revision field.
+	groupingcontrol.DefaultRevision = groupingcontrolDescRevision.Default.(int64)
+	// groupingcontrol.RevisionValidator is a validator for the "revision" field. It is called by the builders before save.
+	groupingcontrol.RevisionValidator = groupingcontrolDescRevision.Validators[0].(func(int64) error)
+	// groupingcontrolDescWindowSeconds is the schema descriptor for window_seconds field.
+	groupingcontrolDescWindowSeconds := groupingcontrolFields[2].Descriptor()
+	// groupingcontrol.WindowSecondsValidator is a validator for the "window_seconds" field. It is called by the builders before save.
+	groupingcontrol.WindowSecondsValidator = groupingcontrolDescWindowSeconds.Validators[0].(func(int64) error)
 	identitycontrol.Policy = privacy.NewPolicies(schema.IdentityControl{})
 	identitycontrol.Hooks[0] = func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
@@ -321,6 +432,85 @@ func init() {
 	membershipDescID := membershipMixinFields0[0].Descriptor()
 	// membership.DefaultID holds the default value on creation for the id field.
 	membership.DefaultID = membershipDescID.Default.(func() uuid.UUID)
+	message.Policy = privacy.NewPolicies(schema.Message{})
+	message.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := message.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
+	messageFields := schema.Message{}.Fields()
+	_ = messageFields
+	// messageDescRevision is the schema descriptor for revision field.
+	messageDescRevision := messageFields[1].Descriptor()
+	// message.DefaultRevision holds the default value on creation for the revision field.
+	message.DefaultRevision = messageDescRevision.Default.(int64)
+	// message.RevisionValidator is a validator for the "revision" field. It is called by the builders before save.
+	message.RevisionValidator = messageDescRevision.Validators[0].(func(int64) error)
+	// messageDescIdentityForm is the schema descriptor for identity_form field.
+	messageDescIdentityForm := messageFields[2].Descriptor()
+	// message.IdentityFormValidator is a validator for the "identity_form" field. It is called by the builders before save.
+	message.IdentityFormValidator = messageDescIdentityForm.Validators[0].(func(string) error)
+	// messageDescIdentitySubtype is the schema descriptor for identity_subtype field.
+	messageDescIdentitySubtype := messageFields[3].Descriptor()
+	// message.DefaultIdentitySubtype holds the default value on creation for the identity_subtype field.
+	message.DefaultIdentitySubtype = messageDescIdentitySubtype.Default.(string)
+	messagecontribution.Policy = privacy.NewPolicies(schema.MessageContribution{})
+	messagecontribution.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := messagecontribution.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
+	messagecontributionFields := schema.MessageContribution{}.Fields()
+	_ = messagecontributionFields
+	// messagecontributionDescReady is the schema descriptor for ready field.
+	messagecontributionDescReady := messagecontributionFields[5].Descriptor()
+	// messagecontribution.DefaultReady holds the default value on creation for the ready field.
+	messagecontribution.DefaultReady = messagecontributionDescReady.Default.(bool)
+	network.Policy = privacy.NewPolicies(schema.Network{})
+	network.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := network.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
+	networkFields := schema.Network{}.Fields()
+	_ = networkFields
+	// networkDescRevision is the schema descriptor for revision field.
+	networkDescRevision := networkFields[1].Descriptor()
+	// network.DefaultRevision holds the default value on creation for the revision field.
+	network.DefaultRevision = networkDescRevision.Default.(int64)
+	// network.RevisionValidator is a validator for the "revision" field. It is called by the builders before save.
+	network.RevisionValidator = networkDescRevision.Validators[0].(func(int64) error)
+	// networkDescName is the schema descriptor for name field.
+	networkDescName := networkFields[2].Descriptor()
+	// network.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	network.NameValidator = func() func(string) error {
+		validators := networkDescName.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(name string) error {
+			for _, fn := range fns {
+				if err := fn(name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// networkDescDeleted is the schema descriptor for deleted field.
+	networkDescDeleted := networkFields[4].Descriptor()
+	// network.DefaultDeleted holds the default value on creation for the deleted field.
+	network.DefaultDeleted = networkDescDeleted.Default.(bool)
 	pendingassignmentscope.Policy = privacy.NewPolicies(schema.PendingAssignmentScope{})
 	pendingassignmentscope.Hooks[0] = func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
@@ -475,6 +665,52 @@ func init() {
 	processingresultDescID := processingresultFields[0].Descriptor()
 	// processingresult.DefaultID holds the default value on creation for the id field.
 	processingresult.DefaultID = processingresultDescID.Default.(func() uuid.UUID)
+	transmission.Policy = privacy.NewPolicies(schema.Transmission{})
+	transmission.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := transmission.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
+	transmissionFields := schema.Transmission{}.Fields()
+	_ = transmissionFields
+	// transmissionDescSubmissionID is the schema descriptor for submission_id field.
+	transmissionDescSubmissionID := transmissionFields[3].Descriptor()
+	// transmission.SubmissionIDValidator is a validator for the "submission_id" field. It is called by the builders before save.
+	transmission.SubmissionIDValidator = transmissionDescSubmissionID.Validators[0].(func(string) error)
+	// transmissionDescNetworkResolution is the schema descriptor for network_resolution field.
+	transmissionDescNetworkResolution := transmissionFields[5].Descriptor()
+	// transmission.NetworkResolutionValidator is a validator for the "network_resolution" field. It is called by the builders before save.
+	transmission.NetworkResolutionValidator = transmissionDescNetworkResolution.Validators[0].(func(string) error)
+	// transmissionDescSourceRevision is the schema descriptor for source_revision field.
+	transmissionDescSourceRevision := transmissionFields[12].Descriptor()
+	// transmission.SourceRevisionValidator is a validator for the "source_revision" field. It is called by the builders before save.
+	transmission.SourceRevisionValidator = transmissionDescSourceRevision.Validators[0].(func(int64) error)
+	// transmissionDescIncomplete is the schema descriptor for incomplete field.
+	transmissionDescIncomplete := transmissionFields[13].Descriptor()
+	// transmission.DefaultIncomplete holds the default value on creation for the incomplete field.
+	transmission.DefaultIncomplete = transmissionDescIncomplete.Default.(bool)
+	transmissiontarget.Policy = privacy.NewPolicies(schema.TransmissionTarget{})
+	transmissiontarget.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := transmissiontarget.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
+	transmissiontargetFields := schema.TransmissionTarget{}.Fields()
+	_ = transmissiontargetFields
+	// transmissiontargetDescPosition is the schema descriptor for position field.
+	transmissiontargetDescPosition := transmissiontargetFields[1].Descriptor()
+	// transmissiontarget.PositionValidator is a validator for the "position" field. It is called by the builders before save.
+	transmissiontarget.PositionValidator = transmissiontargetDescPosition.Validators[0].(func(int) error)
+	// transmissiontargetDescAssignmentRevision is the schema descriptor for assignment_revision field.
+	transmissiontargetDescAssignmentRevision := transmissiontargetFields[6].Descriptor()
+	// transmissiontarget.AssignmentRevisionValidator is a validator for the "assignment_revision" field. It is called by the builders before save.
+	transmissiontarget.AssignmentRevisionValidator = transmissiontargetDescAssignmentRevision.Validators[0].(func(int64) error)
 	unitMixin := schema.Unit{}.Mixin()
 	unit.Policy = privacy.NewPolicies(schema.Unit{})
 	unit.Hooks[0] = func(next ent.Mutator) ent.Mutator {

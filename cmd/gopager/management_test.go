@@ -279,7 +279,7 @@ func TestManagementRejectsInvalidShapes(t *testing.T) {
 
 }
 
-func TestManagementUnwiredProductionNetworkOwnerFailsExplicitly(t *testing.T) {
+func TestManagementProductionNetworkOwnerHidesUnknownNetwork(t *testing.T) {
 	store := newManagementStore(t)
 	handler, err := composeApplicationAPI("http://example.test", identity.DefaultLoginRateLimits(), store, nil, nil)
 	if err != nil {
@@ -318,8 +318,8 @@ func TestManagementUnwiredProductionNetworkOwnerFailsExplicitly(t *testing.T) {
 	rule := call("/api/v1/address-rules/preview", `{"schemaVersion":1,"networkId":"`+uuid.NewString()+`","unitId":"`+unitID.String()+
 		`","protocol":"pocsag","selector":{"from":10,"to":20,"mode":"function-bit"},"enabled":true}`, "", cookies[0])
 	var failure managementResponse
-	if err := json.Unmarshal(rule.Body.Bytes(), &failure); err != nil || rule.Code != http.StatusServiceUnavailable || failure.Code != "AUTHORITY_UNAVAILABLE" {
-		t.Fatalf("unwired production Network owner returned success/default: %d %v", rule.Code, err)
+	if err := json.Unmarshal(rule.Body.Bytes(), &failure); err != nil || rule.Code != http.StatusForbidden || failure.Code != "FORBIDDEN" {
+		t.Fatalf("production Network owner exposed an unauthorized Network: %d %v", rule.Code, err)
 	}
 }
 

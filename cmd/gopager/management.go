@@ -16,6 +16,7 @@ import (
 	"github.com/gopager/gopager/internal/assignments"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/identity"
+	"github.com/gopager/gopager/internal/ingest"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/protocols"
 )
@@ -385,8 +386,13 @@ func writeManagementError(w http.ResponseWriter, err error) {
 	var failure *platform.Failure
 	switch {
 	case errors.Is(err, authz.ErrInvalidInput), errors.Is(err, identity.ErrInvalidInput),
-		errors.Is(err, assignments.ErrInvalidRule), errors.Is(err, protocols.ErrInvalidTarget):
+		errors.Is(err, assignments.ErrInvalidRule), errors.Is(err, protocols.ErrInvalidTarget),
+		errors.Is(err, ingest.ErrInvalidSubmission), errors.Is(err, ingest.ErrInvalidGatewayStateReport):
 		code, fallback, status = "INVALID_INPUT", "Check the supplied values.", http.StatusBadRequest
+	case errors.Is(err, ingest.ErrSubmissionTooLarge):
+		code, fallback, status = "RESOURCE_LIMIT", "The operation exceeds a configured limit.", http.StatusRequestEntityTooLarge
+	case errors.Is(err, ingest.ErrSubmissionConflict):
+		code, fallback, status = "IDEMPOTENCY_CONFLICT", "This Submission ID was already used with different content.", http.StatusConflict
 	case errors.Is(err, identity.ErrLoginRequired):
 		code, fallback, status = "LOGIN_REQUIRED", "Sign in to continue.", http.StatusUnauthorized
 	case errors.Is(err, authz.ErrForbidden):

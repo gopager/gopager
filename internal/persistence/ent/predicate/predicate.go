@@ -21,6 +21,9 @@ type AuditRecord func(*sql.Selector)
 // CommandReceipt is the predicate function for commandreceipt builders.
 type CommandReceipt func(*sql.Selector)
 
+// ContributionSupport is the predicate function for contributionsupport builders.
+type ContributionSupport func(*sql.Selector)
+
 // Credential is the predicate function for credential builders.
 type Credential func(*sql.Selector)
 
@@ -30,8 +33,20 @@ type DomainEvent func(*sql.Selector)
 // FieldPermission is the predicate function for fieldpermission builders.
 type FieldPermission func(*sql.Selector)
 
+// Gateway is the predicate function for gateway builders.
+type Gateway func(*sql.Selector)
+
+// GatewayCredential is the predicate function for gatewaycredential builders.
+type GatewayCredential func(*sql.Selector)
+
+// GatewayNetwork is the predicate function for gatewaynetwork builders.
+type GatewayNetwork func(*sql.Selector)
+
 // Grant is the predicate function for grant builders.
 type Grant func(*sql.Selector)
+
+// GroupingControl is the predicate function for groupingcontrol builders.
+type GroupingControl func(*sql.Selector)
 
 // IdentityControl is the predicate function for identitycontrol builders.
 type IdentityControl func(*sql.Selector)
@@ -41,6 +56,15 @@ type LoginAttempt func(*sql.Selector)
 
 // Membership is the predicate function for membership builders.
 type Membership func(*sql.Selector)
+
+// Message is the predicate function for message builders.
+type Message func(*sql.Selector)
+
+// MessageContribution is the predicate function for messagecontribution builders.
+type MessageContribution func(*sql.Selector)
+
+// Network is the predicate function for network builders.
+type Network func(*sql.Selector)
 
 // PendingAssignmentScope is the predicate function for pendingassignmentscope builders.
 type PendingAssignmentScope func(*sql.Selector)
@@ -59,6 +83,12 @@ type ProcessingInstanceVersion func(*sql.Selector)
 
 // ProcessingResult is the predicate function for processingresult builders.
 type ProcessingResult func(*sql.Selector)
+
+// Transmission is the predicate function for transmission builders.
+type Transmission func(*sql.Selector)
+
+// TransmissionTarget is the predicate function for transmissiontarget builders.
+type TransmissionTarget func(*sql.Selector)
 
 // Unit is the predicate function for unit builders.
 type Unit func(*sql.Selector)

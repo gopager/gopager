@@ -152,6 +152,12 @@ Core-owned built-in ingest derivation is internal processing, not a user grant o
 
 Preview runs the same validator/evaluator against the supplied draft/sample and returns typed fields, selected branches, absent-field explanations and safe step errors. It neither saves/activates nor writes live results, events or Deliveries. External/OS-effecting installed steps are not invoked in preview: return an explicit capability-unavailable explanation unless a declared pure preview implementation exists. Never quietly execute live integration code.
 
+### AP-07 Ingest Publication Binding
+
+**Version/status:** ingest-publication 1.0, frozen for AP-07 under [D-119](../authoritative-plan.md#ap-07-contract-freeze-proposal). **Owner:** DOM-08 for Processing readiness/results, DOM-01 for accepted originals and target/contribution publication, integration for the shared commit boundary.
+
+Acceptance stores the original Transmission and required internal facts/work atomically, even when selected Workflows remain pending. A Transmission with no selected Workflow is complete for this barrier. Until every selected Workflow finishes successfully against current source/configuration revisions, new unprocessed evidence is not published to normal GUI/search/Delivery views; pending/failure remains inspectable internally. Publish Processing results, ready target/contribution state and `processing.completed` atomically after current-revision/fencing checks. Failure or stale work cannot expose partial results, displace previously valid published Message evidence, or duplicate the result/fact on retry. AP-07 does not implement historical reprocessing or external Delivery effects.
+
 ## Presentation and Configuration
 
 Presentation template: ID/revision, immutable definition version, applicable permitted scope, typed field bindings and output kind (GUI card or Delivery text/structured input). Use an established engine's constrained condition/iteration/fallback syntax for both contexts; no second handwritten expression parser. Concrete library/version, Vue editor and optional visual builder are implementation selections in AP-12/AP-13, subject to these semantics, not missing product decisions or promised parity. Rendering is bounded by shared output/nesting/collection limits and escapes interpolation for its output context.

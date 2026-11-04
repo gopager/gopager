@@ -17,6 +17,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/commandstore"
 	"github.com/gopager/gopager/internal/persistence/ent/eventstore"
 	"github.com/gopager/gopager/internal/persistence/ent/identitystore"
+	"github.com/gopager/gopager/internal/persistence/ent/ingeststore"
 	"github.com/gopager/gopager/internal/persistence/ent/processingstore"
 	"github.com/gopager/gopager/internal/persistence/ent/unitstore"
 	"github.com/gopager/gopager/internal/platform"
@@ -24,6 +25,7 @@ import (
 	"github.com/gopager/gopager/internal/processing"
 	processingmanagement "github.com/gopager/gopager/internal/processing/management"
 	"github.com/gopager/gopager/internal/processing/synthetic"
+	"github.com/gopager/gopager/internal/processing/worker"
 	"github.com/gopager/gopager/internal/protocols"
 )
 
@@ -366,10 +368,12 @@ func (api processingWorkflowAPI) registerPreview(mux *http.ServeMux) {
 }
 
 type processingAPIRuntime struct {
-	host       *processing.WASMHost
-	root       *os.Root
-	executions *processing.InstanceExecutions
-	routes     processingAPIRoutes
+	host            *processing.WASMHost
+	root            *os.Root
+	executions      *processing.InstanceExecutions
+	routes          processingAPIRoutes
+	workerSource    worker.WorkSourceOwner
+	workerPublisher worker.Publisher
 }
 
 func composeProcessingAPIRuntime(ctx context.Context, store *postgres.Store,
@@ -430,6 +434,13 @@ func composeProcessingAPIRuntime(ctx context.Context, store *postgres.Store,
 	if err != nil {
 		return nil, err
 	}
+	intakeRepository, err := ingeststore.New(store, facts, facts)
+	if err != nil {
+		return nil, err
+	}
+	if networkScopes == nil {
+		networkScopes = intakeRepository
+	}
 	repository, err := processingstore.New(store)
 	if err != nil {
 		return nil, err
@@ -472,6 +483,16 @@ func composeProcessingAPIRuntime(ctx context.Context, store *postgres.Store,
 	if err != nil {
 		return nil, err
 	}
+	sourceMatcher, err := assignments.NewService(store, resolver, store, assignmentRepository,
+		unitRepository, intakeRepository, receipts, facts)
+	if err != nil {
+		return nil, err
+	}
+	workerSource, err := ingeststore.NewProcessingSourceOwner(intakeRepository, sourceMatcher,
+		repository, facts, store, artifacts, executions, resolver)
+	if err != nil {
+		return nil, err
+	}
 	if root != nil {
 		inspector, err = processing.NewLocalInstanceInspector(host, root)
 		if err != nil {
@@ -486,9 +507,11 @@ func composeProcessingAPIRuntime(ctx context.Context, store *postgres.Store,
 	if err != nil {
 		return nil, err
 	}
-	return &processingAPIRuntime{host: host, root: root, executions: executions, routes: processingAPIRoutes{
-		workflows: workflows, reads: reads, retries: retries, preview: preview, instances: instances,
-	}}, nil
+	return &processingAPIRuntime{host: host, root: root, executions: executions,
+		workerSource: workerSource, workerPublisher: workerSource,
+		routes: processingAPIRoutes{workflows: workflows, reads: reads, retries: retries,
+			preview: preview, instances: instances},
+	}, nil
 }
 
 type syntheticAssignmentNetworkOwner struct {

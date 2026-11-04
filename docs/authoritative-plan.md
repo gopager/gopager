@@ -79,6 +79,27 @@ The stable D-IDs below record decision topics and supersession. The **owner link
 | D-101 | <a id="d-101"></a>Approved explicit optional local Processing artifact-root startup option | [Artifact-root configuration](#processing-artifact-root-configuration) |
 | D-102 | <a id="d-102"></a>Approved synthetic schema/context and null-or-name ZVEI; subsequent general bytes approval is D-103 | [Synthetic schema freeze responses](#synthetic-schema-freeze-responses) |
 | D-103 | <a id="d-103"></a>Approved bounded shared bytes values and SDK 1.1 bytes compatibility | [Shared bytes binding](#shared-bytes-binding) |
+| D-104 | <a id="d-104"></a>Approved Gateway-authenticated HTTP Submission as the intended AP-07 product boundary; no baseline or implementation approval | [AP-07 Gateway HTTP Submission boundary](#ap-07-gateway-http-submission-boundary-decision) |
+| D-105 | <a id="d-105"></a>Approved Gateway-authenticated HTTP Gateway-state reporting in AP-07; no baseline or implementation approval | [AP-07 Gateway-state HTTP boundary](#ap-07-gateway-state-http-boundary-decision) |
+| D-106 | <a id="d-106"></a>Approved administrator-authenticated HTTP Gateway Network configuration in AP-07; no baseline or implementation approval | [AP-07 Gateway Network configuration HTTP boundary](#ap-07-gateway-network-configuration-http-boundary-decision) |
+| D-107 | <a id="d-107"></a>Approved POST /api/v1/transmissions route for SubmitTransmission; no contract freeze or implementation approval | [AP-07 Submission route](#ap-07-submission-route-decision) |
+| D-108 | <a id="d-108"></a>Approved POST /api/v1/gateway/state route for ReportGatewayState; no contract freeze or implementation approval | [AP-07 Gateway-state route](#ap-07-gateway-state-route-decision) |
+| D-109 | <a id="d-109"></a>Approved PUT /api/v1/gateways/{id}/networks route for ConfigureGatewayNetworks; no contract freeze or implementation approval | [AP-07 Gateway Network configuration route](#ap-07-gateway-network-configuration-route-decision) |
+| D-110 | <a id="d-110"></a>Approved complete-replacement semantics for Gateway Network PUT; no contract freeze or implementation approval | [AP-07 Gateway Network replacement semantics](#ap-07-gateway-network-replacement-semantics-decision) |
+| D-111 | <a id="d-111"></a>Approved Network-scope authorization over current and proposed Gateway assignments; no contract freeze or implementation approval | [AP-07 Gateway Network replacement authorization](#ap-07-gateway-network-replacement-authorization-decision) |
+| D-112 | <a id="d-112"></a>Confirmed AP-owned planning and contract decisions; no separate AP prerequisite for a consuming AP's own contract freeze | [AP planning and contract decision ownership](#ap-planning-and-contract-decision-ownership) |
+| D-113 | <a id="d-113"></a>Approved bounded Gateway degraded reports with opaque reason codes and optional detail | [AP-07 Gateway degraded-report decision](#ap-07-gateway-degraded-report-decision) |
+| D-114 | <a id="d-114"></a>Approved explicit recovered operation for Gateway degraded-state recovery | [AP-07 Gateway recovery decision](#ap-07-gateway-recovery-decision) |
+| D-115 | <a id="d-115"></a>Approved complete Gateway Network replacement request shape | [AP-07 Gateway Network replacement request decision](#ap-07-gateway-network-replacement-request-decision) |
+| D-116 | <a id="d-116"></a>Approved Gateway state facts only for actual state transitions | [AP-07 Gateway state-fact boundary](#ap-07-gateway-state-fact-boundary) |
+| D-117 | <a id="d-117"></a>Approved 204 success response for Gateway state reports | [AP-07 Gateway state HTTP response](#ap-07-gateway-state-http-response) |
+| D-118 | <a id="d-118"></a>Approved revision-returning success response for Gateway Network replacement | [AP-07 Gateway Network HTTP response](#ap-07-gateway-network-http-response) |
+| D-119 | <a id="d-119"></a>Approved AP-07 owner-contract slice freeze; implementation approval remains separate | [AP-07 contract freeze proposal](#ap-07-contract-freeze-proposal) |
+| D-120 | <a id="d-120"></a>Approved idempotent active-state semantics for `recovered` reports | [AP-07 recovered report idempotency](#ap-07-recovered-report-idempotency) |
+| D-121 | <a id="d-121"></a>Approved additive AP-07 Gateway credential-management HTTP contract; implementation approval remains separate | [AP-07 Gateway credential-management HTTP addendum](#ap-07-gateway-credential-management-http-addendum) |
+| D-122 | <a id="d-122"></a>Approved AP-07 additive write scope and execution binding | [AP-07 additive write-scope and execution-binding proposal](#ap-07-additive-write-scope-and-execution-binding-proposal) |
+| D-123 | <a id="d-123"></a>Approved narrow AP-07 selected-Workflow worker lifecycle scope extension | [AP-07 selected-Workflow worker lifecycle scope extension](#ap-07-selected-workflow-worker-lifecycle-scope-extension) |
+| D-124 | <a id="d-124"></a>Approved AP-07 selected-Workflow source and atomic publication scope extension | [AP-07 selected-Workflow source and publication scope extension](#ap-07-selected-workflow-source-and-publication-scope-extension) |
 
 ## Operating Assumptions
 
@@ -987,6 +1008,220 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 **Approved writes/earlier impact:** Additive C-09/C-10/C-11 binding, shared Processing value/schema/predicate/evaluation/WASI/manifest adapters, complete D-102 synthetic DTO/source integration and directly related tests. This explicitly permits the required earlier frozen-type/adapter additions, not changes to their existing nonbytes semantics or historical results. Canonical rules live at the owning contracts/artifacts, not the session design note. Assess downstream consumers and bind the feature at owner contracts without implementing later Delivery/presentation/general-plugin tasks or changing AP baselines. Current native persistence JSON storage must retain typed values without destructive migration or arbitrary schema recreation. Approval is not passing runtime evidence; verify the exact byte/resource/compatibility and synthetic/HTTP/root behavior before closure.
 
+### AP-07 Gateway HTTP Submission boundary decision
+
+**D-104; date/origin:** 2026-11-03, AP-07 T057..T059 readiness clarification. **Status:** approved by user response `submission_boundary=http_endpoint`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01, DOM-05/C-06 and integration/API composition.
+
+**Question/options/resolution:** Determine whether AP-07 is intended to deliver an externally reachable, Gateway-authenticated HTTP Submission endpoint or only an internal Submission service with the HTTP route deferred to another package. The user selected the externally reachable Gateway HTTP endpoint as the intended AP-07 product boundary.
+
+**Evidence/rationale:** AP-07 T057 covers Gateway/Network authorization and Submission acceptance; [C-01](contracts/c-01-transmission-acceptance.md) describes `SubmitTransmission` but remains draft and has no frozen route/handler. [D-52](#application-wide-http-support-decision) and [D-47](#ap-06-gateway-credential-decision) remain in force; this decision resolves intended AP allocation, not their contract details.
+
+**Approval and impact boundary:** This is a product-boundary decision only. It does not amend the immutable active AP-07 assignment, freeze C-01/C-06, authorize edits to `cmd/gopager/`, `internal/identity/` or other out-of-scope paths, bind an assignee/write scope, or approve implementation. C-01 must define the concrete HTTP interface and required owners must bind Gateway proof/composition before implementation. The current Network-owner wiring and exact schema/migration paths remain separate blockers identified in [AP-04 E-54](execution/ap-04.md#e-54-ap-07-contract-and-binding-readiness). AP-07 stays blocked pending its specific scope addendum and subsequent separate approvals; no downstream AP is amended.
+
+### AP-07 Gateway-state HTTP boundary decision
+
+**D-105; date/origin:** 2026-11-03, AP-07 T057 readiness clarification. **Status:** approved by user response `gateway_state_http=include_report_state`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01, DOM-05/C-06 and integration/API composition.
+
+**Question/options/resolution:** Determine whether the AP-07 Gateway HTTP boundary also includes the C-01 `ReportGatewayState` operation, or whether Gateway-state HTTP reporting is deferred. The user selected a Gateway-authenticated HTTP endpoint for heartbeat and explicit termination reporting in AP-07.
+
+**Evidence/impact:** AP-07 T057 includes Gateway state operations and C-01 lists `ReportGatewayState` separately from `SubmitTransmission`, but defines no frozen route. This resolves only its intended external HTTP availability; it does not select a route, wire format, status codes, or report/heartbeat behavior beyond the already-owned C-01 operation. `ConfigureGatewayNetworks` is an administrative operation and is not included in this Gateway-authenticated endpoint decision.
+
+**Approval boundary:** D-105 supplements [D-104](#ap-07-gateway-http-submission-boundary-decision). Neither decision amends the AP-07 baseline, freezes C-01/C-06, authorizes out-of-scope writes, approves an AP-07 addendum or implementation, or resolves the administrative `ConfigureGatewayNetworks` API surface. C-01 and the relevant owners must freeze those remaining details separately; no downstream AP is amended.
+
+### AP-07 Gateway Network configuration HTTP boundary decision
+
+**D-106; date/origin:** 2026-11-03, AP-07 T057 readiness clarification. **Status:** approved by user response `configure_gateway_networks_http=include_admin_route`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01, DOM-05/C-06 and integration/API composition.
+
+**Question/options/resolution:** Determine whether C-01 `ConfigureGatewayNetworks`, an Administrative-Principal operation, is exposed through an HTTP management endpoint in AP-07 or remains an internal service/deferred route. The user selected an administrator-authenticated HTTP endpoint in the AP-07 intended boundary.
+
+**Evidence/impact:** C-01 specifies a Gateway, expected revision and allowed Network contexts but no frozen route. Current management routes do not expose Gateway Network configuration. This decision allocates the operation to AP-07's intended HTTP surface; it does not select URL, method, payload, response, revision behavior or management UI.
+
+**Approval boundary:** D-106 complements the Gateway-authenticated endpoints in [D-104](#ap-07-gateway-http-submission-boundary-decision) and [D-105](#ap-07-gateway-state-http-boundary-decision), but uses Administrative-Principal authorization. It does not amend the AP-07 baseline, freeze C-01/C-06, authorize root-composition or other out-of-scope writes, approve an AP-07 addendum or implementation. No downstream AP is amended.
+
+### AP-07 Submission route decision
+
+**D-107; date/origin:** 2026-11-03, AP-07 T057 HTTP interface clarification. **Status:** approved by user response `submit_transmission_route=approve_post_transmissions`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01, DOM-05/C-06 and integration/API composition.
+
+**Question/options/resolution:** Select the HTTP method/path for the approved Gateway-authenticated `SubmitTransmission` operation. The user selected `POST /api/v1/transmissions`; the Gateway is identified through authentication rather than a caller-supplied Gateway ID in the path.
+
+**Approval boundary:** This selects only the route and method, consistent with existing versioned REST JSON APIs. C-01 request/response, validation, errors, idempotency and transaction details remain draft; D-107 does not freeze C-01/C-06, authorize out-of-scope writes, approve an AP-07 addendum or implementation.
+
+### AP-07 Gateway-state route decision
+
+**D-108; date/origin:** 2026-11-03, AP-07 T057 HTTP interface clarification. **Status:** approved by user response `report_gateway_state_route=approve_post_gateway_state`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01, DOM-05/C-06 and integration/API composition.
+
+**Question/options/resolution:** Select the HTTP method/path for the approved Gateway-authenticated `ReportGatewayState` operation. The user selected `POST /api/v1/gateway/state`; the Gateway is identified through authentication rather than a caller-supplied Gateway ID in the path.
+
+**Approval boundary:** This selects only the route and method. The request representation, heartbeat/termination state rules, response, errors and transaction behavior remain governed by the pending C-01 freeze. D-108 does not freeze contracts, authorize out-of-scope writes, approve an AP-07 addendum or implementation.
+
+### AP-07 Gateway Network configuration route decision
+
+**D-109; date/origin:** 2026-11-03, AP-07 T057 HTTP interface clarification. **Status:** approved by user response `configure_gateway_networks_route=approve_put_gateway_networks`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01, DOM-05/C-06 and integration/API composition.
+
+**Question/options/resolution:** Select the HTTP method/path for the approved Administrative-Principal `ConfigureGatewayNetworks` operation. The user selected `PUT /api/v1/gateways/{id}/networks`, targeting the Gateway with its ID and using administrative authentication.
+
+**Approval boundary:** This selects only the route and method. [D-110](#ap-07-gateway-network-replacement-semantics-decision) separately approves complete-replacement semantics; request/response shapes, validation details, revision-conflict response and authorization still require the C-01/C-06 owner freeze. D-109 does not authorize out-of-scope writes, approve an AP-07 addendum or implementation.
+
+### AP-07 Gateway Network replacement semantics decision
+
+**D-110; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `configure_gateway_networks_semantics=approve_full_replacement`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01, DOM-05/C-06 and integration/API composition.
+
+**Question/options/resolution:** Determine whether `PUT /api/v1/gateways/{id}/networks` replaces the complete allowed-Network set or partially mutates it. The user approved complete-set replacement under `expectedRevision`; do not add PATCH. Reject an empty or invalid set without mutation and report stale revisions as a revision conflict.
+
+**Evidence/rationale:** C-01 treats allowed Network contexts as a set, requires at least one assigned Network and exactly one default per Protocol when multiple same-Protocol Networks are assigned. Existing `PUT /api/v1/units/{id}` uses complete replacement, and the repository has no PATCH route convention. Full replacement avoids introducing separate add/remove/default-transition semantics.
+
+**Approval boundary and impacts:** D-110 resolves the product semantics question left open by [D-109](#ap-07-gateway-network-configuration-route-decision); it does not freeze C-01/C-06 or specify the concrete JSON body, status/error codes, validation order or authorization implementation. DOM-01 must incorporate the approved behavior into the C-01 freeze, with C-06 authorization details owned by DOM-05. No AP-07 addendum, out-of-scope write path, implementation binding or implementation is approved; no downstream AP is amended.
+
+### AP-07 Gateway Network replacement authorization decision
+
+**D-111; date/origin:** 2026-11-03, AP-07 T057 authorization clarification. **Status:** approved by user response `configure_gateway_networks_authorization=union_of_current_and_proposed`. **Accountable owner/approver:** Product/integration; user. **Technical owner:** DOM-05/C-06, with DOM-01 owning Gateway Network assignment meaning.
+
+**Question/options/resolution:** Determine the Network scope required for an Administrative Principal to replace a Gateway's complete Network assignment set. The user approved requiring `gateway.update` coverage for every Network in the union of the current and proposed assignments; an `all`-scope grant also covers the operation. Current-only coverage is insufficient to add an unauthorized Network, and no partial mutation is allowed.
+
+**Evidence/rationale:** C-06 currently permits `gateway.update` at Network or all scope but does not define the affected Network set for full replacement. D-110 makes the operation a complete set replacement, so authorization must cover both removals and additions.
+
+**Approval boundary and impacts:** D-111 supplies the product rule for the [C-06 AP-07 Gateway HTTP Authorization draft](contracts/c-06-identity-authorization.md#ap-07-gateway-http-authorization). DOM-05 must incorporate it and define its concrete evaluation against current authoritative state and expected revision. This does not freeze C-06, add a new action, approve an AP-07 addendum or implementation, or amend downstream APs.
+
+### AP planning and contract decision ownership
+
+**D-112; date/origin:** 2026-11-03, user clarification of the AP execution model. **Status:** confirmed by explicit user instruction. **Accountable authority:** Product/integration; user. **Canonical rules:** [documentation change rules](README.md#change-rules) and [shared execution rules](work-packages/shared-rules.md#session-start).
+
+**Rule:** Necessary planning and contract decisions belong to the AP that consumes them. An AP may rely on approved decisions/results from preceding APs and may obtain user clarification for genuinely unresolved matters; it must not be made dependent on a separate AP solely to plan or freeze its own required contract slice. Maintain each decision in its canonical plan/owner-contract location and freeze the exact slice before implementation.
+
+**Boundaries:** Domain ownership continues to identify where definitions are maintained, not an additional unlisted execution gate. This rule does not authorize inventing defaults, changing an earlier AP result or frozen contract without the explicit earlier-result/change procedure, expanding the immutable AP's write scope, or skipping a required active-AP addendum. Product decisions, exact implementation scope, assignee, and validation binding remain separate where the AP/change procedure requires them.
+
+### AP-07 Gateway degraded-report decision
+
+**D-113; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `gateway_degraded_report=opaque_reason_and_detail`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01 for operation/state meaning; DOM-07/C-08 for fact recording.
+
+**Question/options/resolution:** Determine how `ReportGatewayState` represents a Gateway-reported failure/processing problem. The approved draft allows a `degraded` report with a required opaque ASCII `reasonCode` bounded to 64 bytes and optional UTF-8 `detail` bounded to 512 bytes. These values are Gateway-reported diagnostics only; they do not authorize actions or independently drive automated behavior. The report records contact time and the degraded state fact. Ordinary heartbeat does not silently clear degraded state.
+
+**Approval boundary:** D-113 approves this product representation and reporting behavior for the AP-07 C-01/C-08 draft. It does not freeze C-01/C-08, define a reason-code catalog, approve an AP-07 addendum or implementation, or authorize downstream work. The recovery operation is resolved separately by [D-114](#ap-07-gateway-recovery-decision).
+
+### AP-07 Gateway recovery decision
+
+**D-114; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `gateway_degraded_recovery=explicit_recovered_operation`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01 for operation/state meaning; DOM-07/C-08 for fact recording.
+
+**Question/options/resolution:** Determine how an authenticated Gateway reports recovery after a degraded report. The user approved a distinct `recovered` operation. It explicitly records contact and transitions `degraded` to `active`; heartbeat remains contact-only and does not clear degraded status.
+
+**Approval boundary:** This defines the recovery operation and its transition for the AP-07 C-01/C-08 draft. It does not freeze the contracts, approve an AP-07 addendum or implementation, or authorize downstream work.
+
+### AP-07 Gateway Network replacement request decision
+
+**D-115; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `gateway_networks_request=approve_networks_array`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01 for Gateway configuration; DOM-05/C-06 for authorization.
+
+**Question/options/resolution:** Determine the request representation for complete-set replacement. The user approved a closed request with `schemaVersion`, `expectedRevision` and a complete `networks` array. Each entry contains `gatewayNetworkIdentifier`, `networkId` and a `default` boolean. Local identifiers and Network IDs are unique. For every Protocol, exactly one entry is marked default; this includes a Protocol with a single assigned Network, clarified by the user's response, "I don't care - It's default anyways." Empty, duplicate, foreign or otherwise invalid sets are rejected without mutation under D-110; stale revisions conflict.
+
+**Approval boundary:** D-115 specifies the chosen representation for the C-01 draft, not a frozen contract or implementation approval.
+
+### AP-07 Gateway state-fact boundary
+
+**D-116; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `state_fact_rule=transitions_only`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01 for Gateway state; DOM-07/C-08 for fact recording.
+
+**Question/options/resolution:** Determine whether `gateway.state-changed` is emitted for every authenticated report or only for a state transition. The user approved transitions only. Heartbeat and repeated reports of the current state may update authenticated contact/report data but do not append `gateway.state-changed` unless the effective state changes.
+
+**Approval boundary:** D-116 specifies the C-01/C-08 draft fact boundary and AP-07 test expectation. It does not freeze either contract or authorize implementation.
+
+### AP-07 Gateway state HTTP response
+
+**D-117; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `gateway_state_success=204_no_content`. **Accountable owner/approver:** Product/integration; user. **Technical owner:** DOM-01/C-01.
+
+**Question/options/resolution:** Select the successful HTTP response for `ReportGatewayState`. The user approved `204 No Content` after the authenticated report and required state/fact changes commit. Failures use the common C-07 error envelope/status semantics.
+
+**Approval boundary:** D-117 defines the C-01 draft response only; it does not freeze the contract or authorize implementation.
+
+### AP-07 Gateway Network HTTP response
+
+**D-118; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `network_replacement_success=200_revision`. **Accountable owner/approver:** Product/integration; user. **Technical owner:** DOM-01/C-01.
+
+**Question/options/resolution:** Select the successful HTTP response for `ConfigureGatewayNetworks`. The user approved `200 OK` with `{schemaVersion:1, revision:string}` containing the newly committed Gateway revision, allowing the caller to use it as the next `expectedRevision`. Failures use the common C-07 error envelope/status semantics.
+
+**Approval boundary:** D-118 defines the C-01 draft response only; it does not freeze the contract or authorize implementation.
+
+### AP-07 contract freeze proposal
+
+**D-119; date/origin:** 2026-11-03, AP-07 T057..T059 planning. **Status:** approved by user response `contract_freeze=approve_exact_set`. **Accountable cross-domain approver:** product/integration; user. **Contract owners:** DOM-01 (C-01), DOM-02 (C-02/C-03), DOM-04 (C-05), DOM-05 (C-06), DOM-07/integration (C-08), DOM-08/integration (C-11).
+
+**Question/context/resolution:** Which exact owner-contract inputs govern AP-07 implementation? T057..T059 require Gateway HTTP acceptance and state operations, complete Network replacement, original-preserving Protocol comparison, initial target admission/Grouping, required facts, and the Processing publication barrier. D-104..D-118 and D-120 record the user-approved product decisions; [D-112](#ap-planning-and-contract-decision-ownership) places remaining necessary planning in AP-07. The user approved the exact owner-slice set below for 1.0 freeze. No whole contract file is frozen.
+
+| Canonical owner source | Exact AP-07 slice frozen as 1.0 |
+| --- | --- |
+| [C-01](contracts/c-01-transmission-acceptance.md) | The AP-07 HTTP Surface, plus the existing Network resolution, Observation-time/idempotency, rejected-Submission, time/transaction, receipt, and Gateway-state clauses it references; C-07 error envelope/status meanings remain unchanged. |
+| [C-02](contracts/c-02-protocol-payload.md) | AP-07 Transmission Input Binding, common version-1 Protocol/Payload/target input, exact identity comparison and preservation rules; D-34 remains unchanged. |
+| [C-03](contracts/c-03-message-grouping.md) | AP-07 Initial Grouping Binding and its exact Payload identity, inclusive `W`/Observation-time, membership/merge and initial-derivation clauses; no historical regrouping or heuristics. |
+| [C-05](contracts/c-05-matching-correction.md) | AP-07 Initial Target Admission Binding, Target Resolution/Message Contributions and the approved D-53 Original Target Reference; no historical rematching, correction jobs or suppression management. |
+| [C-06](contracts/c-06-identity-authorization.md) | AP-07 Gateway HTTP Authorization and the existing Gateway-specific credential format/lifecycle; Gateway proof resolves one Gateway, and Network replacement uses `gateway.update` over the current/proposed union or `all`. |
+| [C-08](contracts/c-08-events-jobs.md) | AP-07 Intake Fact Binding and the exact envelope/type rows it references; existing AP-05 transaction-participation 1.0 and approved PostgreSQL fact-publication 1.0 are consumed unchanged. |
+| [C-11](contracts/c-11-processing-presentation.md) | AP-07 Ingest Publication Binding and the existing Workflow/result and publication steps 1..3 needed for acceptance readiness; no historical reprocessing or external Delivery effects. |
+
+Use the existing C-07 redacted error envelope/status table, C-12 transaction capability, shared version-1 schemas/limits, and existing AP-05/AP-06 approved results without reopening those decisions. Proposed focused T059 acceptance cases are [F-01 (same-ID retry/conflict only), F-01a..F-01c, F-02..F-10d except F-10e, F-11a/F-11e, F-42..F-44, F-47, F-50, F-52 and F-60..F-67](contracts/reference-cases.md#ap-07-intake-cases). F-60..F-67 are planned, not executed.
+
+**Rationale and boundaries:** This is the narrowest known contract set covering the immutable AP's three tasks while preserving prior decisions and owner locations. The approval freezes only these AP-07 slices under the listed 1.0 names, not whole C-01..C-11 documents, a new OpenAPI artifact, an AP-07 baseline amendment, an implementation scope/addendum, or downstream work. Product decisions are approved individually under D-104..D-118 and D-120; this freeze does not imply consent to the still-unapproved active-AP addendum or implementation binding.
+
+**Approval evidence and boundary:** The user approved the exact set with `approve_exact_set` on 2026-11-03; each listed AP-07 slice is now versioned 1.0 at its canonical owner location. This approval does not authorize an AP-07 baseline amendment, additive write-scope artifact, code changes, or implementation. The separate AP-07 addendum and implementation binding still require explicit approval.
+
+### AP-07 recovered report idempotency
+
+**D-120; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `recovered_when_not_degraded=set_active_idempotently`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01 for state behavior; DOM-07/C-08 for transition facts.
+
+**Question/options/resolution:** Determine how an authenticated `recovered` report behaves if the Gateway is no longer degraded. The user approved it as an idempotent request to set state `active`. It records contact; if the effective state already is active, it emits no `gateway.state-changed` fact under D-116. Any different state transitions to active and emits the transition fact.
+
+**Approval boundary:** D-120 supplements D-114 for the C-01/C-08 draft and F-61; it does not freeze contracts or authorize implementation.
+
+### AP-07 Gateway credential-management HTTP addendum
+
+**D-121; date/origin:** 2026-11-03, AP-07 T057 contract clarification. **Status:** approved by user response `credential_http_contract_amendment=approve_exact_set`. **Accountable approver:** product/integration; user. **Contract owners:** DOM-01/C-01 for HTTP operations and DOM-05/C-06 for credential and authorization semantics.
+
+**Question/context:** The D-119 freeze defined three AP-07 routes, but C-06 also requires authorized administrators to issue, inspect, rotate, and revoke Gateway credentials. Repository inspection found no Gateway credential implementation or approved out-of-band provisioner. The user first selected the out-of-band direction, then selected an HTTP API after that assumption was verified false. C-01 and C-06 1.0 were already frozen, so no change to them could be inferred from that direction alone.
+
+**Options and resolution:** Keep provisioning blocked pending an identified provisioner; add an operator-side non-HTTP mechanism; or add explicit protected HTTP operations. The user approved the exact additive HTTP contract proposal below. The existing three C-01 routes and all existing C-01/C-06 1.0 text remain unchanged. The new AP-07 credential-management slice is an additive 1.1 amendment in each canonical contract owner file.
+
+**Approved HTTP surface:** `POST /api/v1/gateways/{id}/credentials` issues the first credential or a single pending replacement. Its closed request is `{schemaVersion:1, commandId:UUID, expectedRevision:string}`. Initial success returns 201 with credential ID, one-time secret, and new Gateway revision; a replay of the same command returns only nonsecret status/revision and never re-exposes the secret, while changed input under that command ID conflicts. `GET /api/v1/gateways/{id}/credentials` requires `gateway.read` and returns nonsecret credential IDs/status/timestamps only, including the pending ID. `DELETE /api/v1/gateways/{id}/credentials/{credentialId}` takes a closed `{schemaVersion:1, commandId:UUID, expectedRevision:string}` body, revokes that credential, and returns 200 with the new revision. Issue/revoke require `gateway.update` over all current Gateway Network assignments or `all`; status reads require `gateway.read` over those assignments or `all`. All use the normal protected administrative HTTP channel and C-07 errors; the Gateway direct-HTTP exception does not apply.
+
+**Rationale and impacts:** This satisfies the already-frozen C-06 issuance/lifecycle requirement without making Gateway credentials usable as Principal/API keys or broadening the existing Submission, state-report, or Network-configuration routes. D-119 and its 1.0 slices remain historical and unchanged; D-121 authorizes only the described C-01/C-06 contract amendments and the corresponding planned case F-68. It does not amend the AP-07 baseline, approve any write-scope addendum, authorize code changes or implementation, or change downstream AP instructions.
+
+**Canonical consequences:** C-01 owns the exact new HTTP surface; C-06 owns credential/administrative authorization semantics; [F-68](contracts/reference-cases.md#ap-07-intake-cases) owns the planned acceptance case. The amendment is recorded in [AP-07 execution evidence](execution/ap-07.md#e-05-ap-07-credential-management-http-contract-amendment-approval). Implementation remains blocked pending a separately approved exact write-scope addendum, assignee, and verification binding.
+
+### AP-07 additive write-scope and execution-binding proposal
+
+**D-122; date/origin:** 2026-11-03, AP-07 T057..T059 execution planning. **Status:** approved by the user with `approve_exact_set` on 2026-11-03. **Accountable owner/approver:** product/integration; user. **Execution owner:** current sequential Copilot SDK assistant, without parallel workers.
+
+**Question/context:** The immutable AP-07 write scope does not include root API composition, Gateway credential/proof support, typed AP-07 fact factories, or the exact Ent schema/generated/migration and PostgreSQL test files. Those are needed to implement the approved [D-119 contracts](#ap-07-contract-freeze-proposal) and the approved [D-121 credential API amendment](#ap-07-gateway-credential-management-http-addendum). The original assignment remains unchanged. The exact proposed added paths, frozen inputs, exclusions, case set and validation commands are owned by the [AP-07 implementation addendum proposal](work-packages/addenda/ap-07-intake-implementation.md).
+
+**Options/recommendation:** Implement only within the original write scope, which cannot complete the selected HTTP routes and persistence wiring; stop AP-07; or approve a compatible additive scope while preserving T057..T059 and their acceptance. Recommend the additive scope in the linked proposal. No earlier decision or completed result is to be changed. Reuse the existing NetworkOwner port, authorization action catalog, C-12 transaction participant, Ent/Goose infrastructure, and C-11 publication interface; if those interfaces prove insufficient, stop and request a separately approved scope change rather than editing their owner modules.
+
+**Approval and impact boundary:** D-121 approved contract amendments only; it did not approve any proposed path, assignee, test command, dependency change or implementation start. The user has now explicitly approved the exact D-122 addendum and execution binding. This authorizes only AP-07 T057..T059 within the paths and validation commands in the linked addendum, with the frozen D-119 1.0 and D-121 1.1 inputs. No AP baseline, earlier result, dependency, or downstream AP/task is changed or authorized.
+
+**Approval evidence and boundary:** The user approved the exact D-122 proposal and [AP-07 implementation addendum](work-packages/addenda/ap-07-intake-implementation.md) with `approve_exact_set` on 2026-11-03. The current sequential Copilot SDK assistant is the assignee; no parallel worker is authorized. The exact write paths, exclusions, frozen inputs and runnable verification binding are canonical in that addendum. Implementation is authorized to start under those limits. If an excluded path, new dependency or changed contract proves necessary, stop and obtain a separately approved scope change.
+
+### AP-07 selected-Workflow worker lifecycle scope extension
+
+**D-123; date/origin:** 2026-11-04, AP-07 T058/T059 implementation scope clarification. **Status:** approved by user response `approve_worker_lifecycle_extension`. **Accountable owner/approver:** product/integration; user. **Execution owner:** current sequential Copilot SDK assistant; no parallel worker.
+
+**Question/context:** T058 and F-66 require selected Workflow work to complete and publish through the frozen C-11 barrier. The current production composition supplies `worker.MissingSourceOwner{}`. The existing worker capture carries an `InstalledInvocationOwner`, but `worker.Service.Run` has no owner-resource release participant for the run-owned `InstanceExecution`; a production installed-Workflow owner cannot safely complete the lifecycle without a focused worker change. D-122 excludes `internal/processing/`, so the user was asked to approve a narrowly scoped extension.
+
+**Options and resolution:** Keep D-122 unchanged and leave T058/F-66 blocked, broadly reopen Processing internals, or approve only the worker lifecycle seam and focused tests. The user approved the narrow extension.
+
+**Exact scope and rationale:** Add only `internal/processing/worker/service.go` and the new focused test file `internal/processing/worker/service_lifecycle_test.go` to D-122. This permits `worker.Service` to release owner-captured resources across successful, failed and canceled execution paths and tests that lifecycle. The established SourceOwner/publication contracts, AP-07 acceptance criteria and C-11 semantics do not change. All remaining D-122 paths and exclusions remain in force; this does not authorize edits to other `internal/processing/` files, dependencies, AP baselines, earlier results or downstream APs.
+
+**Consequences and evidence locations:** Amend the versioned [AP-07 implementation addendum](work-packages/addenda/ap-07-intake-implementation.md) to list these two paths and link D-123; record implementation and verification only in the [AP-07 execution record](execution/ap-07.md). No glossary term or downstream AP amendment is required.
+
+**Approval evidence:** The user explicitly selected `approve_worker_lifecycle_extension` on 2026-11-04 in response to the exact path and purpose above. This decision adds only the two listed worker paths to D-122 and leaves every other boundary unchanged.
+
+### AP-07 selected-Workflow source and publication scope extension
+
+**D-124; date/origin:** 2026-11-04, AP-07 T058/T059 implementation scope clarification. **Status:** approved by user response `approve_exact_extension`. **Accountable owner/approver:** product/integration; user. **Execution owner:** current sequential Copilot SDK assistant; no parallel worker.
+
+**Question/context:** F-66 remains incomplete: production composition still supplies `worker.MissingSourceOwner{}`, and worker completion persists private evidence without invoking the existing fenced publication service. D-122 excludes `cmd/gopager/processing.go` and `cmd/gopager/processing_management.go`, which own worker and Processing runtime composition. D-123 permits only the release-hook lifecycle in `internal/processing/worker/service.go`; it does not authorize atomic publication integration. The addendum's rule requires a separate approval when the implementation cannot meet the frozen contracts within its approved paths.
+
+**Options and resolution:** Keep F-66 blocked, broadly reopen Processing/runtime implementation, or authorize only the source/publication composition and focused verification paths needed by T058/T059. The user approved the exact narrow extension.
+
+**Exact scope and rationale:** Add `cmd/gopager/processing.go` and `cmd/gopager/processing_management.go` for production source/worker composition and run-resource ownership; extend the existing `internal/processing/worker/service.go` permission beyond D-123's release hook only to invoke the existing publication participant atomically with successful candidate completion; and add `internal/processing/worker/service_publication_test.go` for that focused behavior. Existing D-122 paths `internal/persistence/ent/ingeststore/`, `cmd/gopager/main.go`, and `internal/persistence/ent/borrowed/ingest_test.go` remain the allowed locations for source-owner persistence, top-level wiring and real-PostgreSQL F-66 acceptance coverage. No other path is added.
+
+**Impacts and boundaries:** C-11 publication semantics, F-66 acceptance, D-119/D-121 frozen contract inputs, AP-07 T057..T059, and all prior results remain unchanged. No dependency, AP baseline, glossary term, downstream task or other `internal/processing/` path is authorized. The D-122 verification binding remains in force, including real-PostgreSQL integration; the focused worker command covers the new publication test. The D-122 addendum is the canonical exact path/verification binding; implementation evidence belongs only in the AP-07 execution record.
+
+**Approval evidence:** The user explicitly selected `approve_exact_extension` on 2026-11-04 in response to the exact path set and purpose above. This extends D-122 only as stated and leaves all other exclusions unchanged.
+
 ## Workflow and Approval Gates
 
 Only this section grants scope/execution approval. An approval entry must identify date, approving authority, exact AP/task slice, immutable contract/artifact versions, relevant evidence and permitted write-scope binding. Product scope, technical freeze and experiment authorization are separate approvals; none is implied by another.
@@ -997,6 +1232,8 @@ Only this section grants scope/execution approval. An approval entry must identi
 | PostgreSQL fact publication | Explicit additive C-08 binding, pinned library and earlier-producer implementation approval | Approved 2026-11-02 as `approve-publication-slice` under [D-94](#watermill-postgresql-publication-integration-proposal). Exact write/test scope and exclusions are owned there; [C-08 postgresql-fact-publication 1.0](contracts/c-08-events-jobs.md#postgresql-fact-publication) is the frozen subset. Product evidence remains [AP-12 E-46](execution/source-ap-12.md#e-46-approved-postgresql-watermill-publication-slice), an infrastructure input to AP-06, not its intake/Grouping validation or a production-consumer start. |
 | AP-06 session repercussions | Explicit follow-up approval after AP-01..AP-06 impact review | Approved 2026-11-02 under [D-95](#ap-06-session-repercussion-consolidation), reopening only the named documentary handovers/status navigation. [AP-04 E-53](execution/ap-04.md#e-53-ap-06-publication-and-follow-up-binding) binds this follow-up; no AP baseline or new product execution approval follows. |
 | AP-06+ reslicing and execution order | Explicit user authorization to reslice active/future assignments and reconcile partial execution state | Reslicing approved 2026-11-03 under [D-96](#work-package-reslicing-decision); ordered renumbering approved under [D-97](#ordered-ap-renumbering-decision). The [revised path](work-packages.md#revised-execution-path) and AP-06..AP-16 are the current assignments; AP-01..AP-05 and former source baselines/evidence remain preserved. Only AP-06 continues under the existing T043 binding; later package execution approvals remain separate. |
+| AP-07 owner-contract slices | Explicit approval of the exact required owner slices and versions before implementation | Approved 2026-11-03 under [D-119](#ap-07-contract-freeze-proposal): the seven AP-07 slices in C-01/C-02/C-03/C-05/C-06/C-08/C-11 are frozen as 1.0. Additive AP-07 Gateway credential-management HTTP slices in C-01/C-06 are approved as 1.1 under [D-121](#ap-07-gateway-credential-management-http-addendum); F-68 is planned and not executed. No AP-07 write-scope addendum or implementation binding is approved. |
+| AP-07 implementation scope and start | Explicit approval of the exact active-AP addendum, assignee, frozen inputs and runnable verification binding before any proposed-only path is edited | Approved 2026-11-03 under [D-122](#ap-07-additive-write-scope-and-execution-binding-proposal), with the narrow worker lifecycle addition approved 2026-11-04 under [D-123](#ap-07-selected-workflow-worker-lifecycle-scope-extension). T057..T059 may proceed under the [AP-07 addendum](work-packages/addenda/ap-07-intake-implementation.md) as amended; all other baseline, exclusions, assignee and validation bindings remain unchanged. |
 | Repository-wide library policy | Explicit user instruction during AP-05 | Approved 2026-10-26 under [D-36](#repository-wide-library-policy-decision), including persistence of the rule and review/correction of in-progress AP-05. Other frozen-contract/dependency approvals remain in force. |
 | AP-03 baseline clarification | Explicit approval to clarify that AP-03 is pre-implementation planning/feasibility and does not require a completed application or product runtime tests | Approved by the user on 2026-10-25. Narrowly clarifies the AP-03 task descriptions and acceptance; standalone feasible probes remain bounded by the Executable experiments gate. Product-/hardware-dependent validation is documented as future evidence, not an AP-03 completion blocker. No product behavior, production technology, or scope decision is made. |
 | Executable experiments | **Approved 2026-10-25 by the user (sole approving authority)** for AP-03 T010..T012 isolated, disposable feasibility/conformance probes using Go 1.26.2; `modernc.org/sqlite` v1.61.0; `github.com/mattn/go-sqlite3` v1.14.52; `github.com/jackc/pgx/v5` v5.11.0; PostgreSQL 18.0 Alpine; `github.com/tetratelabs/wazero` v1.12.0; `golang.org/x/text` v0.43.0. AP-03/C-01..C-03, C-06..C-12 and shared conventions remain at their starting documented versions; no application artifact exists. Permitted: temporary external scratch harnesses, local database/container installation, bounded characterization/benchmark runs, and recording outputs in [AP-03 execution evidence](execution/ap-03.md). Forbidden: product/application code or manifest changes, production technology/contract decisions, AP baseline edits except the separately approved clarification recorded above, real secrets or external-provider effects. T013 is authorized as planning and resource-limited disposable-host characterization only; no Raspberry Pi measurement or hardware guarantee. Exact commands, environment, runtime image digest, limits, and results are in the AP-03 execution record. | User's explicit authorization in this session, 2026-10-25; bounded by AP-03 and the restrictions in this row. |
@@ -1008,6 +1245,15 @@ Only this section grants scope/execution approval. An approval entry must identi
 | AP-05 event infrastructure experiments | Explicit approval of isolated framework versions/scope | Approved 2026-10-26 as `watermill_experiment=true` and `goes_experiment=true`; exact tuple/scope in [D-40](#transmission-and-message-architecture-reassessment). No product architecture/framework selection. |
 | Product implementation | Approved slice, frozen/validated inputs, named assignee and runnable validation binding | Approved by the user on 2026-10-26 (`consumer_binding_approval=true`) only for AP-05 T019..T021 under [D-35](#ap-04-foundation-freeze-decision), activated by the user's next explicit AP-05 start instruction. Assignee, exact write-scope/input/validation binding: [AP-04 handover](execution/ap-04.md#ap-05-consumer-binding). No consumer task is executed in AP-04; no other AP or generated API/SDK artifact is approved. |
 | AP-04 domain-slice follow-up | Explicit approval to prepare/reopen documentary T017/T018 work for a named consumer slice; freeze and implementation require later separate approvals | Approved by the user on 2026-10-26 to prepare/reopen AP-04's documentary follow-up for the AP-06 contract slice. This authorizes review and preparation only for C-01/C-02/C-03/C-05/C-06/C-08/C-11 and the required vocabulary/consumer binding. The user subsequently approved only the C-04 minimum consumed by AP-08 T029/AP-06: Unit identity/revision, deletion lifecycle at the matcher boundary, and the C-04/C-05 interface. No unrelated C-04 scope, contract freeze, product/library choice, AP-06 code, or AP-baseline amendment is approved. [AP-04 follow-up record](execution/ap-04.md#follow-up-ap-06-contract-slice). |
+| AP-04 AP-07 intake-slice follow-up | Explicit approval to prepare/reopen documentary T017/T018 work for the current AP-07 slice; contract freeze and AP-07 implementation require later separate approvals | Approved by the user on 2026-11-03 (`Authorize AP-04 documentary follow-up`) for a documentary review and preparation of the owner-contract/freeze and execution-binding proposal for AP-07 T057..T059. Review is limited to the assigned intake slice, its directly required owner dependencies, vocabulary, cases and verification inputs. It does not freeze or change contract behavior, select unapproved technology, approve AP-07 implementation, amend an AP baseline or start downstream work. The exact record is [AP-04's AP-07 follow-up](execution/ap-04.md#follow-up-ap-07-transmission-intake-freeze-and-binding). |
+| AP-07 Gateway HTTP Submission boundary | Explicit product-boundary decision, separate from baseline and implementation approval | Approved 2026-11-03 under [D-104](#ap-07-gateway-http-submission-boundary-decision): the intended AP-07 outcome includes a Gateway-authenticated HTTP Submission endpoint. No active-baseline reopening/addendum, contract freeze or implementation is approved. |
+| AP-07 Gateway-state HTTP boundary | Separate product-boundary decision for Gateway heartbeats/termination | Approved 2026-11-03 under [D-105](#ap-07-gateway-state-http-boundary-decision): include Gateway-authenticated `ReportGatewayState` HTTP in the intended AP-07 outcome. No baseline addendum, contract freeze or implementation is approved. |
+| AP-07 Gateway Network configuration HTTP boundary | Separate product-boundary decision for administrative Gateway Network configuration | Approved 2026-11-03 under [D-106](#ap-07-gateway-network-configuration-http-boundary-decision): include administrator-authenticated `ConfigureGatewayNetworks` HTTP in the intended AP-07 outcome. No baseline addendum, contract freeze or implementation is approved. |
+| AP-07 Submission route | Separate method/path selection, not a C-01 contract freeze | Approved 2026-11-03 under [D-107](#ap-07-submission-route-decision): `POST /api/v1/transmissions`; request/response and execution remain gated. |
+| AP-07 Gateway-state route | Separate method/path selection, not a C-01 contract freeze | Approved 2026-11-03 under [D-108](#ap-07-gateway-state-route-decision): `POST /api/v1/gateway/state`; request/response and execution remain gated. |
+| AP-07 Gateway Network configuration route | Separate method/path selection, not a C-01 contract freeze | Approved 2026-11-03 under [D-109](#ap-07-gateway-network-configuration-route-decision): `PUT /api/v1/gateways/{id}/networks`; replacement/partial-update semantics and execution remain gated. |
+| AP-07 active-AP addendum procedure | Explicit approval of a compatible additive-scope process for an active AP, preserving its original assignment | Approved by the user on 2026-11-03 (`addendum_procedure=approve_procedure`) for the minimal [documentation-authority](README.md#document-authority) and [shared-rule](work-packages/shared-rules.md#approved-active-ap-addenda) updates. This approves the procedure only; the AP-07-specific addendum, contract freeze and implementation binding remain unapproved. The proposal and evidence are in [AP-04 E-55](execution/ap-04.md#e-55-active-ap-07-addendum-procedure-and-scope-proposal). |
+| AP-07 owner-contract draft preparation | Explicit authorization to prepare draft contract changes for owner review, separate from contract freeze or implementation | Approved by the user on 2026-11-03 (`next_step=authorize_draft_contracts`) for the directly required AP-07 owner surfaces in C-01/C-02/C-03/C-05/C-06/C-08/C-11. Changes must remain marked draft and preserve separately frozen subsets and earlier evidence. DOM owners must review/approve exact contract versions; this does not approve an AP-07 addendum, implementation binding, or product-code changes. Evidence: [AP-04 E-57](execution/ap-04.md#e-57-ap-07-owner-contract-draft-preparation). |
 | Parallel execution | Explicitly disjoint approved scopes and shared-boundary integration coordination | None recorded |
 | AP-06 prerequisite documentary preparation | Explicit authorization to prepare the contracts and execution bindings of the necessary prerequisite slices, without starting them | Approved by the user on 2026-10-26 (`prerequisite_contract_preparation=approve-required-preparation`) for AP-07 central identity/authorization, AP-08 T028 and standalone T029 current-rule/matcher handover, and AP-12 T043 evaluator/revision/result kernel. AP-04 T017/T018 may review and prepare their necessary C-04/C-06/C-13/C-11 dependencies and relevant C-08/C-09/C-10/C-12 interfaces. This extends the previous C-04 minimum review boundary only as required for these handovers. Concrete version freezes and implementation bindings must still be presented for explicit approval; no prerequisite AP is started, no AP baseline amended, and no UI, external Delivery/provider or unrelated future task is authorized. |
 | AP-07 prerequisite identity-core | Separate explicit contract and execution approval | Approved by the user on 2026-10-26 as `identity_core_freeze=approve` and `identity_core_execution=approve-and-start`. C-06 identity-core 1.0 and the required C-13 immediate invalidation/deletion boundary are frozen for the exact [AP-07 prerequisite consumer binding](execution/ap-04.md#ap-07-prerequisite-consumer-binding-proposal), and sequential implementation starts now. Named assignee, write scope, library tuple, tests and excluded later work are in that binding. This is not whole-AP-07 acceptance, an AP-06 implementation start or an amendment of any AP baseline. |

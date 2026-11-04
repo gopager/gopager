@@ -21,7 +21,7 @@ type processingWorkerRuntime struct {
 
 // composeProcessingWorker registers real primary due selection and the explicit current source boundary.
 func composeProcessingWorker(ctx context.Context, store *postgres.Store, source worker.WorkSourceOwner,
-	config worker.DispatchConfig) (*processingWorkerRuntime, error) {
+	publisher worker.Publisher, config worker.DispatchConfig) (*processingWorkerRuntime, error) {
 	ctx, cancel := context.WithTimeout(ctx, platform.DefaultCallTimeout)
 	defer cancel()
 	repository, err := processingstore.New(store)
@@ -32,7 +32,7 @@ func composeProcessingWorker(ctx context.Context, store *postgres.Store, source 
 	if err != nil {
 		return nil, err
 	}
-	service, err := worker.New(store, repository, source, host, uuid.New())
+	service, err := worker.NewWithPublisher(store, repository, source, host, uuid.New(), publisher)
 	if err != nil {
 		return nil, errors.Join(err, host.Close(context.WithoutCancel(ctx)))
 	}

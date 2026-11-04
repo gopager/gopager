@@ -21,19 +21,29 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/assignmentcontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/auditrecord"
 	"github.com/gopager/gopager/internal/persistence/ent/commandreceipt"
+	"github.com/gopager/gopager/internal/persistence/ent/contributionsupport"
 	"github.com/gopager/gopager/internal/persistence/ent/credential"
 	"github.com/gopager/gopager/internal/persistence/ent/domainevent"
 	"github.com/gopager/gopager/internal/persistence/ent/fieldpermission"
+	"github.com/gopager/gopager/internal/persistence/ent/gateway"
+	"github.com/gopager/gopager/internal/persistence/ent/gatewaycredential"
+	"github.com/gopager/gopager/internal/persistence/ent/gatewaynetwork"
 	"github.com/gopager/gopager/internal/persistence/ent/grant"
+	"github.com/gopager/gopager/internal/persistence/ent/groupingcontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/identitycontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/loginattempt"
 	"github.com/gopager/gopager/internal/persistence/ent/membership"
+	"github.com/gopager/gopager/internal/persistence/ent/message"
+	"github.com/gopager/gopager/internal/persistence/ent/messagecontribution"
+	"github.com/gopager/gopager/internal/persistence/ent/network"
 	"github.com/gopager/gopager/internal/persistence/ent/pendingassignmentscope"
 	"github.com/gopager/gopager/internal/persistence/ent/processingcandidate"
 	"github.com/gopager/gopager/internal/persistence/ent/processingcontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/processinginstance"
 	"github.com/gopager/gopager/internal/persistence/ent/processinginstanceversion"
 	"github.com/gopager/gopager/internal/persistence/ent/processingresult"
+	"github.com/gopager/gopager/internal/persistence/ent/transmission"
+	"github.com/gopager/gopager/internal/persistence/ent/transmissiontarget"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
 	"github.com/gopager/gopager/internal/persistence/ent/unitcollection"
 	"github.com/gopager/gopager/internal/persistence/ent/usergroup"
@@ -57,20 +67,36 @@ type Client struct {
 	AuditRecord *AuditRecordClient
 	// CommandReceipt is the client for interacting with the CommandReceipt builders.
 	CommandReceipt *CommandReceiptClient
+	// ContributionSupport is the client for interacting with the ContributionSupport builders.
+	ContributionSupport *ContributionSupportClient
 	// Credential is the client for interacting with the Credential builders.
 	Credential *CredentialClient
 	// DomainEvent is the client for interacting with the DomainEvent builders.
 	DomainEvent *DomainEventClient
 	// FieldPermission is the client for interacting with the FieldPermission builders.
 	FieldPermission *FieldPermissionClient
+	// Gateway is the client for interacting with the Gateway builders.
+	Gateway *GatewayClient
+	// GatewayCredential is the client for interacting with the GatewayCredential builders.
+	GatewayCredential *GatewayCredentialClient
+	// GatewayNetwork is the client for interacting with the GatewayNetwork builders.
+	GatewayNetwork *GatewayNetworkClient
 	// Grant is the client for interacting with the Grant builders.
 	Grant *GrantClient
+	// GroupingControl is the client for interacting with the GroupingControl builders.
+	GroupingControl *GroupingControlClient
 	// IdentityControl is the client for interacting with the IdentityControl builders.
 	IdentityControl *IdentityControlClient
 	// LoginAttempt is the client for interacting with the LoginAttempt builders.
 	LoginAttempt *LoginAttemptClient
 	// Membership is the client for interacting with the Membership builders.
 	Membership *MembershipClient
+	// Message is the client for interacting with the Message builders.
+	Message *MessageClient
+	// MessageContribution is the client for interacting with the MessageContribution builders.
+	MessageContribution *MessageContributionClient
+	// Network is the client for interacting with the Network builders.
+	Network *NetworkClient
 	// PendingAssignmentScope is the client for interacting with the PendingAssignmentScope builders.
 	PendingAssignmentScope *PendingAssignmentScopeClient
 	// ProcessingCandidate is the client for interacting with the ProcessingCandidate builders.
@@ -83,6 +109,10 @@ type Client struct {
 	ProcessingInstanceVersion *ProcessingInstanceVersionClient
 	// ProcessingResult is the client for interacting with the ProcessingResult builders.
 	ProcessingResult *ProcessingResultClient
+	// Transmission is the client for interacting with the Transmission builders.
+	Transmission *TransmissionClient
+	// TransmissionTarget is the client for interacting with the TransmissionTarget builders.
+	TransmissionTarget *TransmissionTargetClient
 	// Unit is the client for interacting with the Unit builders.
 	Unit *UnitClient
 	// UnitCollection is the client for interacting with the UnitCollection builders.
@@ -111,19 +141,29 @@ func (c *Client) init() {
 	c.AssignmentControl = NewAssignmentControlClient(c.config)
 	c.AuditRecord = NewAuditRecordClient(c.config)
 	c.CommandReceipt = NewCommandReceiptClient(c.config)
+	c.ContributionSupport = NewContributionSupportClient(c.config)
 	c.Credential = NewCredentialClient(c.config)
 	c.DomainEvent = NewDomainEventClient(c.config)
 	c.FieldPermission = NewFieldPermissionClient(c.config)
+	c.Gateway = NewGatewayClient(c.config)
+	c.GatewayCredential = NewGatewayCredentialClient(c.config)
+	c.GatewayNetwork = NewGatewayNetworkClient(c.config)
 	c.Grant = NewGrantClient(c.config)
+	c.GroupingControl = NewGroupingControlClient(c.config)
 	c.IdentityControl = NewIdentityControlClient(c.config)
 	c.LoginAttempt = NewLoginAttemptClient(c.config)
 	c.Membership = NewMembershipClient(c.config)
+	c.Message = NewMessageClient(c.config)
+	c.MessageContribution = NewMessageContributionClient(c.config)
+	c.Network = NewNetworkClient(c.config)
 	c.PendingAssignmentScope = NewPendingAssignmentScopeClient(c.config)
 	c.ProcessingCandidate = NewProcessingCandidateClient(c.config)
 	c.ProcessingControl = NewProcessingControlClient(c.config)
 	c.ProcessingInstance = NewProcessingInstanceClient(c.config)
 	c.ProcessingInstanceVersion = NewProcessingInstanceVersionClient(c.config)
 	c.ProcessingResult = NewProcessingResultClient(c.config)
+	c.Transmission = NewTransmissionClient(c.config)
+	c.TransmissionTarget = NewTransmissionTargetClient(c.config)
 	c.Unit = NewUnitClient(c.config)
 	c.UnitCollection = NewUnitCollectionClient(c.config)
 	c.UserGroup = NewUserGroupClient(c.config)
@@ -227,19 +267,29 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		AssignmentControl:         NewAssignmentControlClient(cfg),
 		AuditRecord:               NewAuditRecordClient(cfg),
 		CommandReceipt:            NewCommandReceiptClient(cfg),
+		ContributionSupport:       NewContributionSupportClient(cfg),
 		Credential:                NewCredentialClient(cfg),
 		DomainEvent:               NewDomainEventClient(cfg),
 		FieldPermission:           NewFieldPermissionClient(cfg),
+		Gateway:                   NewGatewayClient(cfg),
+		GatewayCredential:         NewGatewayCredentialClient(cfg),
+		GatewayNetwork:            NewGatewayNetworkClient(cfg),
 		Grant:                     NewGrantClient(cfg),
+		GroupingControl:           NewGroupingControlClient(cfg),
 		IdentityControl:           NewIdentityControlClient(cfg),
 		LoginAttempt:              NewLoginAttemptClient(cfg),
 		Membership:                NewMembershipClient(cfg),
+		Message:                   NewMessageClient(cfg),
+		MessageContribution:       NewMessageContributionClient(cfg),
+		Network:                   NewNetworkClient(cfg),
 		PendingAssignmentScope:    NewPendingAssignmentScopeClient(cfg),
 		ProcessingCandidate:       NewProcessingCandidateClient(cfg),
 		ProcessingControl:         NewProcessingControlClient(cfg),
 		ProcessingInstance:        NewProcessingInstanceClient(cfg),
 		ProcessingInstanceVersion: NewProcessingInstanceVersionClient(cfg),
 		ProcessingResult:          NewProcessingResultClient(cfg),
+		Transmission:              NewTransmissionClient(cfg),
+		TransmissionTarget:        NewTransmissionTargetClient(cfg),
 		Unit:                      NewUnitClient(cfg),
 		UnitCollection:            NewUnitCollectionClient(cfg),
 		UserGroup:                 NewUserGroupClient(cfg),
@@ -270,19 +320,29 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		AssignmentControl:         NewAssignmentControlClient(cfg),
 		AuditRecord:               NewAuditRecordClient(cfg),
 		CommandReceipt:            NewCommandReceiptClient(cfg),
+		ContributionSupport:       NewContributionSupportClient(cfg),
 		Credential:                NewCredentialClient(cfg),
 		DomainEvent:               NewDomainEventClient(cfg),
 		FieldPermission:           NewFieldPermissionClient(cfg),
+		Gateway:                   NewGatewayClient(cfg),
+		GatewayCredential:         NewGatewayCredentialClient(cfg),
+		GatewayNetwork:            NewGatewayNetworkClient(cfg),
 		Grant:                     NewGrantClient(cfg),
+		GroupingControl:           NewGroupingControlClient(cfg),
 		IdentityControl:           NewIdentityControlClient(cfg),
 		LoginAttempt:              NewLoginAttemptClient(cfg),
 		Membership:                NewMembershipClient(cfg),
+		Message:                   NewMessageClient(cfg),
+		MessageContribution:       NewMessageContributionClient(cfg),
+		Network:                   NewNetworkClient(cfg),
 		PendingAssignmentScope:    NewPendingAssignmentScopeClient(cfg),
 		ProcessingCandidate:       NewProcessingCandidateClient(cfg),
 		ProcessingControl:         NewProcessingControlClient(cfg),
 		ProcessingInstance:        NewProcessingInstanceClient(cfg),
 		ProcessingInstanceVersion: NewProcessingInstanceVersionClient(cfg),
 		ProcessingResult:          NewProcessingResultClient(cfg),
+		Transmission:              NewTransmissionClient(cfg),
+		TransmissionTarget:        NewTransmissionTargetClient(cfg),
 		Unit:                      NewUnitClient(cfg),
 		UnitCollection:            NewUnitCollectionClient(cfg),
 		UserGroup:                 NewUserGroupClient(cfg),
@@ -319,10 +379,13 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.Account, c.AddressRule, c.AssignmentControl, c.AuditRecord, c.CommandReceipt,
-		c.Credential, c.DomainEvent, c.FieldPermission, c.Grant, c.IdentityControl,
-		c.LoginAttempt, c.Membership, c.PendingAssignmentScope, c.ProcessingCandidate,
-		c.ProcessingControl, c.ProcessingInstance, c.ProcessingInstanceVersion,
-		c.ProcessingResult, c.Unit, c.UnitCollection, c.UserGroup, c.Workflow,
+		c.ContributionSupport, c.Credential, c.DomainEvent, c.FieldPermission,
+		c.Gateway, c.GatewayCredential, c.GatewayNetwork, c.Grant, c.GroupingControl,
+		c.IdentityControl, c.LoginAttempt, c.Membership, c.Message,
+		c.MessageContribution, c.Network, c.PendingAssignmentScope,
+		c.ProcessingCandidate, c.ProcessingControl, c.ProcessingInstance,
+		c.ProcessingInstanceVersion, c.ProcessingResult, c.Transmission,
+		c.TransmissionTarget, c.Unit, c.UnitCollection, c.UserGroup, c.Workflow,
 		c.WorkflowScopeReference, c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
@@ -334,10 +397,13 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.Account, c.AddressRule, c.AssignmentControl, c.AuditRecord, c.CommandReceipt,
-		c.Credential, c.DomainEvent, c.FieldPermission, c.Grant, c.IdentityControl,
-		c.LoginAttempt, c.Membership, c.PendingAssignmentScope, c.ProcessingCandidate,
-		c.ProcessingControl, c.ProcessingInstance, c.ProcessingInstanceVersion,
-		c.ProcessingResult, c.Unit, c.UnitCollection, c.UserGroup, c.Workflow,
+		c.ContributionSupport, c.Credential, c.DomainEvent, c.FieldPermission,
+		c.Gateway, c.GatewayCredential, c.GatewayNetwork, c.Grant, c.GroupingControl,
+		c.IdentityControl, c.LoginAttempt, c.Membership, c.Message,
+		c.MessageContribution, c.Network, c.PendingAssignmentScope,
+		c.ProcessingCandidate, c.ProcessingControl, c.ProcessingInstance,
+		c.ProcessingInstanceVersion, c.ProcessingResult, c.Transmission,
+		c.TransmissionTarget, c.Unit, c.UnitCollection, c.UserGroup, c.Workflow,
 		c.WorkflowScopeReference, c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
@@ -357,20 +423,36 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.AuditRecord.mutate(ctx, m)
 	case *CommandReceiptMutation:
 		return c.CommandReceipt.mutate(ctx, m)
+	case *ContributionSupportMutation:
+		return c.ContributionSupport.mutate(ctx, m)
 	case *CredentialMutation:
 		return c.Credential.mutate(ctx, m)
 	case *DomainEventMutation:
 		return c.DomainEvent.mutate(ctx, m)
 	case *FieldPermissionMutation:
 		return c.FieldPermission.mutate(ctx, m)
+	case *GatewayMutation:
+		return c.Gateway.mutate(ctx, m)
+	case *GatewayCredentialMutation:
+		return c.GatewayCredential.mutate(ctx, m)
+	case *GatewayNetworkMutation:
+		return c.GatewayNetwork.mutate(ctx, m)
 	case *GrantMutation:
 		return c.Grant.mutate(ctx, m)
+	case *GroupingControlMutation:
+		return c.GroupingControl.mutate(ctx, m)
 	case *IdentityControlMutation:
 		return c.IdentityControl.mutate(ctx, m)
 	case *LoginAttemptMutation:
 		return c.LoginAttempt.mutate(ctx, m)
 	case *MembershipMutation:
 		return c.Membership.mutate(ctx, m)
+	case *MessageMutation:
+		return c.Message.mutate(ctx, m)
+	case *MessageContributionMutation:
+		return c.MessageContribution.mutate(ctx, m)
+	case *NetworkMutation:
+		return c.Network.mutate(ctx, m)
 	case *PendingAssignmentScopeMutation:
 		return c.PendingAssignmentScope.mutate(ctx, m)
 	case *ProcessingCandidateMutation:
@@ -383,6 +465,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.ProcessingInstanceVersion.mutate(ctx, m)
 	case *ProcessingResultMutation:
 		return c.ProcessingResult.mutate(ctx, m)
+	case *TransmissionMutation:
+		return c.Transmission.mutate(ctx, m)
+	case *TransmissionTargetMutation:
+		return c.TransmissionTarget.mutate(ctx, m)
 	case *UnitMutation:
 		return c.Unit.mutate(ctx, m)
 	case *UnitCollectionMutation:
@@ -1086,6 +1172,140 @@ func (c *CommandReceiptClient) mutate(ctx context.Context, m *CommandReceiptMuta
 	}
 }
 
+// ContributionSupportClient is a client for the ContributionSupport schema.
+type ContributionSupportClient struct {
+	config
+}
+
+// NewContributionSupportClient returns a client for the ContributionSupport from the given config.
+func NewContributionSupportClient(c config) *ContributionSupportClient {
+	return &ContributionSupportClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `contributionsupport.Hooks(f(g(h())))`.
+func (c *ContributionSupportClient) Use(hooks ...Hook) {
+	c.hooks.ContributionSupport = append(c.hooks.ContributionSupport, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `contributionsupport.Intercept(f(g(h())))`.
+func (c *ContributionSupportClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ContributionSupport = append(c.inters.ContributionSupport, interceptors...)
+}
+
+// Create returns a builder for creating a ContributionSupport entity.
+func (c *ContributionSupportClient) Create() *ContributionSupportCreate {
+	mutation := newContributionSupportMutation(c.config, OpCreate)
+	return &ContributionSupportCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ContributionSupport entities.
+func (c *ContributionSupportClient) CreateBulk(builders ...*ContributionSupportCreate) *ContributionSupportCreateBulk {
+	return &ContributionSupportCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ContributionSupportClient) MapCreateBulk(slice any, setFunc func(*ContributionSupportCreate, int)) *ContributionSupportCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ContributionSupportCreateBulk{err: fmt.Errorf("calling to ContributionSupportClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ContributionSupportCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ContributionSupportCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ContributionSupport.
+func (c *ContributionSupportClient) Update() *ContributionSupportUpdate {
+	mutation := newContributionSupportMutation(c.config, OpUpdate)
+	return &ContributionSupportUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ContributionSupportClient) UpdateOne(_m *ContributionSupport) *ContributionSupportUpdateOne {
+	mutation := newContributionSupportMutation(c.config, OpUpdateOne, withContributionSupport(_m))
+	return &ContributionSupportUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ContributionSupportClient) UpdateOneID(id uuid.UUID) *ContributionSupportUpdateOne {
+	mutation := newContributionSupportMutation(c.config, OpUpdateOne, withContributionSupportID(id))
+	return &ContributionSupportUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ContributionSupport.
+func (c *ContributionSupportClient) Delete() *ContributionSupportDelete {
+	mutation := newContributionSupportMutation(c.config, OpDelete)
+	return &ContributionSupportDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ContributionSupportClient) DeleteOne(_m *ContributionSupport) *ContributionSupportDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ContributionSupportClient) DeleteOneID(id uuid.UUID) *ContributionSupportDeleteOne {
+	builder := c.Delete().Where(contributionsupport.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ContributionSupportDeleteOne{builder}
+}
+
+// Query returns a query builder for ContributionSupport.
+func (c *ContributionSupportClient) Query() *ContributionSupportQuery {
+	return &ContributionSupportQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeContributionSupport},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ContributionSupport entity by its id.
+func (c *ContributionSupportClient) Get(ctx context.Context, id uuid.UUID) (*ContributionSupport, error) {
+	return c.Query().Where(contributionsupport.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ContributionSupportClient) GetX(ctx context.Context, id uuid.UUID) *ContributionSupport {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ContributionSupportClient) Hooks() []Hook {
+	hooks := c.hooks.ContributionSupport
+	return append(hooks[:len(hooks):len(hooks)], contributionsupport.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *ContributionSupportClient) Interceptors() []Interceptor {
+	return c.inters.ContributionSupport
+}
+
+func (c *ContributionSupportClient) mutate(ctx context.Context, m *ContributionSupportMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ContributionSupportCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ContributionSupportUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ContributionSupportUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ContributionSupportDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ContributionSupport mutation op: %q", m.Op())
+	}
+}
+
 // CredentialClient is a client for the Credential schema.
 type CredentialClient struct {
 	config
@@ -1488,6 +1708,408 @@ func (c *FieldPermissionClient) mutate(ctx context.Context, m *FieldPermissionMu
 	}
 }
 
+// GatewayClient is a client for the Gateway schema.
+type GatewayClient struct {
+	config
+}
+
+// NewGatewayClient returns a client for the Gateway from the given config.
+func NewGatewayClient(c config) *GatewayClient {
+	return &GatewayClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `gateway.Hooks(f(g(h())))`.
+func (c *GatewayClient) Use(hooks ...Hook) {
+	c.hooks.Gateway = append(c.hooks.Gateway, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `gateway.Intercept(f(g(h())))`.
+func (c *GatewayClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Gateway = append(c.inters.Gateway, interceptors...)
+}
+
+// Create returns a builder for creating a Gateway entity.
+func (c *GatewayClient) Create() *GatewayCreate {
+	mutation := newGatewayMutation(c.config, OpCreate)
+	return &GatewayCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Gateway entities.
+func (c *GatewayClient) CreateBulk(builders ...*GatewayCreate) *GatewayCreateBulk {
+	return &GatewayCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *GatewayClient) MapCreateBulk(slice any, setFunc func(*GatewayCreate, int)) *GatewayCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &GatewayCreateBulk{err: fmt.Errorf("calling to GatewayClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*GatewayCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &GatewayCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Gateway.
+func (c *GatewayClient) Update() *GatewayUpdate {
+	mutation := newGatewayMutation(c.config, OpUpdate)
+	return &GatewayUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *GatewayClient) UpdateOne(_m *Gateway) *GatewayUpdateOne {
+	mutation := newGatewayMutation(c.config, OpUpdateOne, withGateway(_m))
+	return &GatewayUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *GatewayClient) UpdateOneID(id uuid.UUID) *GatewayUpdateOne {
+	mutation := newGatewayMutation(c.config, OpUpdateOne, withGatewayID(id))
+	return &GatewayUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Gateway.
+func (c *GatewayClient) Delete() *GatewayDelete {
+	mutation := newGatewayMutation(c.config, OpDelete)
+	return &GatewayDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *GatewayClient) DeleteOne(_m *Gateway) *GatewayDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *GatewayClient) DeleteOneID(id uuid.UUID) *GatewayDeleteOne {
+	builder := c.Delete().Where(gateway.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &GatewayDeleteOne{builder}
+}
+
+// Query returns a query builder for Gateway.
+func (c *GatewayClient) Query() *GatewayQuery {
+	return &GatewayQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeGateway},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Gateway entity by its id.
+func (c *GatewayClient) Get(ctx context.Context, id uuid.UUID) (*Gateway, error) {
+	return c.Query().Where(gateway.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *GatewayClient) GetX(ctx context.Context, id uuid.UUID) *Gateway {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *GatewayClient) Hooks() []Hook {
+	hooks := c.hooks.Gateway
+	return append(hooks[:len(hooks):len(hooks)], gateway.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *GatewayClient) Interceptors() []Interceptor {
+	return c.inters.Gateway
+}
+
+func (c *GatewayClient) mutate(ctx context.Context, m *GatewayMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&GatewayCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&GatewayUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&GatewayUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&GatewayDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Gateway mutation op: %q", m.Op())
+	}
+}
+
+// GatewayCredentialClient is a client for the GatewayCredential schema.
+type GatewayCredentialClient struct {
+	config
+}
+
+// NewGatewayCredentialClient returns a client for the GatewayCredential from the given config.
+func NewGatewayCredentialClient(c config) *GatewayCredentialClient {
+	return &GatewayCredentialClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `gatewaycredential.Hooks(f(g(h())))`.
+func (c *GatewayCredentialClient) Use(hooks ...Hook) {
+	c.hooks.GatewayCredential = append(c.hooks.GatewayCredential, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `gatewaycredential.Intercept(f(g(h())))`.
+func (c *GatewayCredentialClient) Intercept(interceptors ...Interceptor) {
+	c.inters.GatewayCredential = append(c.inters.GatewayCredential, interceptors...)
+}
+
+// Create returns a builder for creating a GatewayCredential entity.
+func (c *GatewayCredentialClient) Create() *GatewayCredentialCreate {
+	mutation := newGatewayCredentialMutation(c.config, OpCreate)
+	return &GatewayCredentialCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of GatewayCredential entities.
+func (c *GatewayCredentialClient) CreateBulk(builders ...*GatewayCredentialCreate) *GatewayCredentialCreateBulk {
+	return &GatewayCredentialCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *GatewayCredentialClient) MapCreateBulk(slice any, setFunc func(*GatewayCredentialCreate, int)) *GatewayCredentialCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &GatewayCredentialCreateBulk{err: fmt.Errorf("calling to GatewayCredentialClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*GatewayCredentialCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &GatewayCredentialCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for GatewayCredential.
+func (c *GatewayCredentialClient) Update() *GatewayCredentialUpdate {
+	mutation := newGatewayCredentialMutation(c.config, OpUpdate)
+	return &GatewayCredentialUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *GatewayCredentialClient) UpdateOne(_m *GatewayCredential) *GatewayCredentialUpdateOne {
+	mutation := newGatewayCredentialMutation(c.config, OpUpdateOne, withGatewayCredential(_m))
+	return &GatewayCredentialUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *GatewayCredentialClient) UpdateOneID(id uuid.UUID) *GatewayCredentialUpdateOne {
+	mutation := newGatewayCredentialMutation(c.config, OpUpdateOne, withGatewayCredentialID(id))
+	return &GatewayCredentialUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for GatewayCredential.
+func (c *GatewayCredentialClient) Delete() *GatewayCredentialDelete {
+	mutation := newGatewayCredentialMutation(c.config, OpDelete)
+	return &GatewayCredentialDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *GatewayCredentialClient) DeleteOne(_m *GatewayCredential) *GatewayCredentialDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *GatewayCredentialClient) DeleteOneID(id uuid.UUID) *GatewayCredentialDeleteOne {
+	builder := c.Delete().Where(gatewaycredential.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &GatewayCredentialDeleteOne{builder}
+}
+
+// Query returns a query builder for GatewayCredential.
+func (c *GatewayCredentialClient) Query() *GatewayCredentialQuery {
+	return &GatewayCredentialQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeGatewayCredential},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a GatewayCredential entity by its id.
+func (c *GatewayCredentialClient) Get(ctx context.Context, id uuid.UUID) (*GatewayCredential, error) {
+	return c.Query().Where(gatewaycredential.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *GatewayCredentialClient) GetX(ctx context.Context, id uuid.UUID) *GatewayCredential {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *GatewayCredentialClient) Hooks() []Hook {
+	hooks := c.hooks.GatewayCredential
+	return append(hooks[:len(hooks):len(hooks)], gatewaycredential.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *GatewayCredentialClient) Interceptors() []Interceptor {
+	return c.inters.GatewayCredential
+}
+
+func (c *GatewayCredentialClient) mutate(ctx context.Context, m *GatewayCredentialMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&GatewayCredentialCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&GatewayCredentialUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&GatewayCredentialUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&GatewayCredentialDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown GatewayCredential mutation op: %q", m.Op())
+	}
+}
+
+// GatewayNetworkClient is a client for the GatewayNetwork schema.
+type GatewayNetworkClient struct {
+	config
+}
+
+// NewGatewayNetworkClient returns a client for the GatewayNetwork from the given config.
+func NewGatewayNetworkClient(c config) *GatewayNetworkClient {
+	return &GatewayNetworkClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `gatewaynetwork.Hooks(f(g(h())))`.
+func (c *GatewayNetworkClient) Use(hooks ...Hook) {
+	c.hooks.GatewayNetwork = append(c.hooks.GatewayNetwork, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `gatewaynetwork.Intercept(f(g(h())))`.
+func (c *GatewayNetworkClient) Intercept(interceptors ...Interceptor) {
+	c.inters.GatewayNetwork = append(c.inters.GatewayNetwork, interceptors...)
+}
+
+// Create returns a builder for creating a GatewayNetwork entity.
+func (c *GatewayNetworkClient) Create() *GatewayNetworkCreate {
+	mutation := newGatewayNetworkMutation(c.config, OpCreate)
+	return &GatewayNetworkCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of GatewayNetwork entities.
+func (c *GatewayNetworkClient) CreateBulk(builders ...*GatewayNetworkCreate) *GatewayNetworkCreateBulk {
+	return &GatewayNetworkCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *GatewayNetworkClient) MapCreateBulk(slice any, setFunc func(*GatewayNetworkCreate, int)) *GatewayNetworkCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &GatewayNetworkCreateBulk{err: fmt.Errorf("calling to GatewayNetworkClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*GatewayNetworkCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &GatewayNetworkCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for GatewayNetwork.
+func (c *GatewayNetworkClient) Update() *GatewayNetworkUpdate {
+	mutation := newGatewayNetworkMutation(c.config, OpUpdate)
+	return &GatewayNetworkUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *GatewayNetworkClient) UpdateOne(_m *GatewayNetwork) *GatewayNetworkUpdateOne {
+	mutation := newGatewayNetworkMutation(c.config, OpUpdateOne, withGatewayNetwork(_m))
+	return &GatewayNetworkUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *GatewayNetworkClient) UpdateOneID(id uuid.UUID) *GatewayNetworkUpdateOne {
+	mutation := newGatewayNetworkMutation(c.config, OpUpdateOne, withGatewayNetworkID(id))
+	return &GatewayNetworkUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for GatewayNetwork.
+func (c *GatewayNetworkClient) Delete() *GatewayNetworkDelete {
+	mutation := newGatewayNetworkMutation(c.config, OpDelete)
+	return &GatewayNetworkDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *GatewayNetworkClient) DeleteOne(_m *GatewayNetwork) *GatewayNetworkDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *GatewayNetworkClient) DeleteOneID(id uuid.UUID) *GatewayNetworkDeleteOne {
+	builder := c.Delete().Where(gatewaynetwork.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &GatewayNetworkDeleteOne{builder}
+}
+
+// Query returns a query builder for GatewayNetwork.
+func (c *GatewayNetworkClient) Query() *GatewayNetworkQuery {
+	return &GatewayNetworkQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeGatewayNetwork},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a GatewayNetwork entity by its id.
+func (c *GatewayNetworkClient) Get(ctx context.Context, id uuid.UUID) (*GatewayNetwork, error) {
+	return c.Query().Where(gatewaynetwork.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *GatewayNetworkClient) GetX(ctx context.Context, id uuid.UUID) *GatewayNetwork {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *GatewayNetworkClient) Hooks() []Hook {
+	hooks := c.hooks.GatewayNetwork
+	return append(hooks[:len(hooks):len(hooks)], gatewaynetwork.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *GatewayNetworkClient) Interceptors() []Interceptor {
+	return c.inters.GatewayNetwork
+}
+
+func (c *GatewayNetworkClient) mutate(ctx context.Context, m *GatewayNetworkMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&GatewayNetworkCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&GatewayNetworkUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&GatewayNetworkUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&GatewayNetworkDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown GatewayNetwork mutation op: %q", m.Op())
+	}
+}
+
 // GrantClient is a client for the Grant schema.
 type GrantClient struct {
 	config
@@ -1619,6 +2241,140 @@ func (c *GrantClient) mutate(ctx context.Context, m *GrantMutation) (Value, erro
 		return (&GrantDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Grant mutation op: %q", m.Op())
+	}
+}
+
+// GroupingControlClient is a client for the GroupingControl schema.
+type GroupingControlClient struct {
+	config
+}
+
+// NewGroupingControlClient returns a client for the GroupingControl from the given config.
+func NewGroupingControlClient(c config) *GroupingControlClient {
+	return &GroupingControlClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `groupingcontrol.Hooks(f(g(h())))`.
+func (c *GroupingControlClient) Use(hooks ...Hook) {
+	c.hooks.GroupingControl = append(c.hooks.GroupingControl, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `groupingcontrol.Intercept(f(g(h())))`.
+func (c *GroupingControlClient) Intercept(interceptors ...Interceptor) {
+	c.inters.GroupingControl = append(c.inters.GroupingControl, interceptors...)
+}
+
+// Create returns a builder for creating a GroupingControl entity.
+func (c *GroupingControlClient) Create() *GroupingControlCreate {
+	mutation := newGroupingControlMutation(c.config, OpCreate)
+	return &GroupingControlCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of GroupingControl entities.
+func (c *GroupingControlClient) CreateBulk(builders ...*GroupingControlCreate) *GroupingControlCreateBulk {
+	return &GroupingControlCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *GroupingControlClient) MapCreateBulk(slice any, setFunc func(*GroupingControlCreate, int)) *GroupingControlCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &GroupingControlCreateBulk{err: fmt.Errorf("calling to GroupingControlClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*GroupingControlCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &GroupingControlCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for GroupingControl.
+func (c *GroupingControlClient) Update() *GroupingControlUpdate {
+	mutation := newGroupingControlMutation(c.config, OpUpdate)
+	return &GroupingControlUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *GroupingControlClient) UpdateOne(_m *GroupingControl) *GroupingControlUpdateOne {
+	mutation := newGroupingControlMutation(c.config, OpUpdateOne, withGroupingControl(_m))
+	return &GroupingControlUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *GroupingControlClient) UpdateOneID(id int) *GroupingControlUpdateOne {
+	mutation := newGroupingControlMutation(c.config, OpUpdateOne, withGroupingControlID(id))
+	return &GroupingControlUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for GroupingControl.
+func (c *GroupingControlClient) Delete() *GroupingControlDelete {
+	mutation := newGroupingControlMutation(c.config, OpDelete)
+	return &GroupingControlDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *GroupingControlClient) DeleteOne(_m *GroupingControl) *GroupingControlDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *GroupingControlClient) DeleteOneID(id int) *GroupingControlDeleteOne {
+	builder := c.Delete().Where(groupingcontrol.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &GroupingControlDeleteOne{builder}
+}
+
+// Query returns a query builder for GroupingControl.
+func (c *GroupingControlClient) Query() *GroupingControlQuery {
+	return &GroupingControlQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeGroupingControl},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a GroupingControl entity by its id.
+func (c *GroupingControlClient) Get(ctx context.Context, id int) (*GroupingControl, error) {
+	return c.Query().Where(groupingcontrol.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *GroupingControlClient) GetX(ctx context.Context, id int) *GroupingControl {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *GroupingControlClient) Hooks() []Hook {
+	hooks := c.hooks.GroupingControl
+	return append(hooks[:len(hooks):len(hooks)], groupingcontrol.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *GroupingControlClient) Interceptors() []Interceptor {
+	return c.inters.GroupingControl
+}
+
+func (c *GroupingControlClient) mutate(ctx context.Context, m *GroupingControlMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&GroupingControlCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&GroupingControlUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&GroupingControlUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&GroupingControlDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown GroupingControl mutation op: %q", m.Op())
 	}
 }
 
@@ -2021,6 +2777,408 @@ func (c *MembershipClient) mutate(ctx context.Context, m *MembershipMutation) (V
 		return (&MembershipDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Membership mutation op: %q", m.Op())
+	}
+}
+
+// MessageClient is a client for the Message schema.
+type MessageClient struct {
+	config
+}
+
+// NewMessageClient returns a client for the Message from the given config.
+func NewMessageClient(c config) *MessageClient {
+	return &MessageClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `message.Hooks(f(g(h())))`.
+func (c *MessageClient) Use(hooks ...Hook) {
+	c.hooks.Message = append(c.hooks.Message, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `message.Intercept(f(g(h())))`.
+func (c *MessageClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Message = append(c.inters.Message, interceptors...)
+}
+
+// Create returns a builder for creating a Message entity.
+func (c *MessageClient) Create() *MessageCreate {
+	mutation := newMessageMutation(c.config, OpCreate)
+	return &MessageCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Message entities.
+func (c *MessageClient) CreateBulk(builders ...*MessageCreate) *MessageCreateBulk {
+	return &MessageCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *MessageClient) MapCreateBulk(slice any, setFunc func(*MessageCreate, int)) *MessageCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &MessageCreateBulk{err: fmt.Errorf("calling to MessageClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*MessageCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &MessageCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Message.
+func (c *MessageClient) Update() *MessageUpdate {
+	mutation := newMessageMutation(c.config, OpUpdate)
+	return &MessageUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *MessageClient) UpdateOne(_m *Message) *MessageUpdateOne {
+	mutation := newMessageMutation(c.config, OpUpdateOne, withMessage(_m))
+	return &MessageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *MessageClient) UpdateOneID(id uuid.UUID) *MessageUpdateOne {
+	mutation := newMessageMutation(c.config, OpUpdateOne, withMessageID(id))
+	return &MessageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Message.
+func (c *MessageClient) Delete() *MessageDelete {
+	mutation := newMessageMutation(c.config, OpDelete)
+	return &MessageDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *MessageClient) DeleteOne(_m *Message) *MessageDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *MessageClient) DeleteOneID(id uuid.UUID) *MessageDeleteOne {
+	builder := c.Delete().Where(message.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &MessageDeleteOne{builder}
+}
+
+// Query returns a query builder for Message.
+func (c *MessageClient) Query() *MessageQuery {
+	return &MessageQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeMessage},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Message entity by its id.
+func (c *MessageClient) Get(ctx context.Context, id uuid.UUID) (*Message, error) {
+	return c.Query().Where(message.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *MessageClient) GetX(ctx context.Context, id uuid.UUID) *Message {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *MessageClient) Hooks() []Hook {
+	hooks := c.hooks.Message
+	return append(hooks[:len(hooks):len(hooks)], message.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *MessageClient) Interceptors() []Interceptor {
+	return c.inters.Message
+}
+
+func (c *MessageClient) mutate(ctx context.Context, m *MessageMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&MessageCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&MessageUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&MessageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&MessageDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Message mutation op: %q", m.Op())
+	}
+}
+
+// MessageContributionClient is a client for the MessageContribution schema.
+type MessageContributionClient struct {
+	config
+}
+
+// NewMessageContributionClient returns a client for the MessageContribution from the given config.
+func NewMessageContributionClient(c config) *MessageContributionClient {
+	return &MessageContributionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `messagecontribution.Hooks(f(g(h())))`.
+func (c *MessageContributionClient) Use(hooks ...Hook) {
+	c.hooks.MessageContribution = append(c.hooks.MessageContribution, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `messagecontribution.Intercept(f(g(h())))`.
+func (c *MessageContributionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.MessageContribution = append(c.inters.MessageContribution, interceptors...)
+}
+
+// Create returns a builder for creating a MessageContribution entity.
+func (c *MessageContributionClient) Create() *MessageContributionCreate {
+	mutation := newMessageContributionMutation(c.config, OpCreate)
+	return &MessageContributionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of MessageContribution entities.
+func (c *MessageContributionClient) CreateBulk(builders ...*MessageContributionCreate) *MessageContributionCreateBulk {
+	return &MessageContributionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *MessageContributionClient) MapCreateBulk(slice any, setFunc func(*MessageContributionCreate, int)) *MessageContributionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &MessageContributionCreateBulk{err: fmt.Errorf("calling to MessageContributionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*MessageContributionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &MessageContributionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for MessageContribution.
+func (c *MessageContributionClient) Update() *MessageContributionUpdate {
+	mutation := newMessageContributionMutation(c.config, OpUpdate)
+	return &MessageContributionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *MessageContributionClient) UpdateOne(_m *MessageContribution) *MessageContributionUpdateOne {
+	mutation := newMessageContributionMutation(c.config, OpUpdateOne, withMessageContribution(_m))
+	return &MessageContributionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *MessageContributionClient) UpdateOneID(id uuid.UUID) *MessageContributionUpdateOne {
+	mutation := newMessageContributionMutation(c.config, OpUpdateOne, withMessageContributionID(id))
+	return &MessageContributionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for MessageContribution.
+func (c *MessageContributionClient) Delete() *MessageContributionDelete {
+	mutation := newMessageContributionMutation(c.config, OpDelete)
+	return &MessageContributionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *MessageContributionClient) DeleteOne(_m *MessageContribution) *MessageContributionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *MessageContributionClient) DeleteOneID(id uuid.UUID) *MessageContributionDeleteOne {
+	builder := c.Delete().Where(messagecontribution.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &MessageContributionDeleteOne{builder}
+}
+
+// Query returns a query builder for MessageContribution.
+func (c *MessageContributionClient) Query() *MessageContributionQuery {
+	return &MessageContributionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeMessageContribution},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a MessageContribution entity by its id.
+func (c *MessageContributionClient) Get(ctx context.Context, id uuid.UUID) (*MessageContribution, error) {
+	return c.Query().Where(messagecontribution.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *MessageContributionClient) GetX(ctx context.Context, id uuid.UUID) *MessageContribution {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *MessageContributionClient) Hooks() []Hook {
+	hooks := c.hooks.MessageContribution
+	return append(hooks[:len(hooks):len(hooks)], messagecontribution.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *MessageContributionClient) Interceptors() []Interceptor {
+	return c.inters.MessageContribution
+}
+
+func (c *MessageContributionClient) mutate(ctx context.Context, m *MessageContributionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&MessageContributionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&MessageContributionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&MessageContributionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&MessageContributionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown MessageContribution mutation op: %q", m.Op())
+	}
+}
+
+// NetworkClient is a client for the Network schema.
+type NetworkClient struct {
+	config
+}
+
+// NewNetworkClient returns a client for the Network from the given config.
+func NewNetworkClient(c config) *NetworkClient {
+	return &NetworkClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `network.Hooks(f(g(h())))`.
+func (c *NetworkClient) Use(hooks ...Hook) {
+	c.hooks.Network = append(c.hooks.Network, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `network.Intercept(f(g(h())))`.
+func (c *NetworkClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Network = append(c.inters.Network, interceptors...)
+}
+
+// Create returns a builder for creating a Network entity.
+func (c *NetworkClient) Create() *NetworkCreate {
+	mutation := newNetworkMutation(c.config, OpCreate)
+	return &NetworkCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Network entities.
+func (c *NetworkClient) CreateBulk(builders ...*NetworkCreate) *NetworkCreateBulk {
+	return &NetworkCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *NetworkClient) MapCreateBulk(slice any, setFunc func(*NetworkCreate, int)) *NetworkCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &NetworkCreateBulk{err: fmt.Errorf("calling to NetworkClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*NetworkCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &NetworkCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Network.
+func (c *NetworkClient) Update() *NetworkUpdate {
+	mutation := newNetworkMutation(c.config, OpUpdate)
+	return &NetworkUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *NetworkClient) UpdateOne(_m *Network) *NetworkUpdateOne {
+	mutation := newNetworkMutation(c.config, OpUpdateOne, withNetwork(_m))
+	return &NetworkUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *NetworkClient) UpdateOneID(id uuid.UUID) *NetworkUpdateOne {
+	mutation := newNetworkMutation(c.config, OpUpdateOne, withNetworkID(id))
+	return &NetworkUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Network.
+func (c *NetworkClient) Delete() *NetworkDelete {
+	mutation := newNetworkMutation(c.config, OpDelete)
+	return &NetworkDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *NetworkClient) DeleteOne(_m *Network) *NetworkDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *NetworkClient) DeleteOneID(id uuid.UUID) *NetworkDeleteOne {
+	builder := c.Delete().Where(network.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &NetworkDeleteOne{builder}
+}
+
+// Query returns a query builder for Network.
+func (c *NetworkClient) Query() *NetworkQuery {
+	return &NetworkQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeNetwork},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Network entity by its id.
+func (c *NetworkClient) Get(ctx context.Context, id uuid.UUID) (*Network, error) {
+	return c.Query().Where(network.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *NetworkClient) GetX(ctx context.Context, id uuid.UUID) *Network {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *NetworkClient) Hooks() []Hook {
+	hooks := c.hooks.Network
+	return append(hooks[:len(hooks):len(hooks)], network.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *NetworkClient) Interceptors() []Interceptor {
+	return c.inters.Network
+}
+
+func (c *NetworkClient) mutate(ctx context.Context, m *NetworkMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&NetworkCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&NetworkUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&NetworkUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&NetworkDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Network mutation op: %q", m.Op())
 	}
 }
 
@@ -2825,6 +3983,274 @@ func (c *ProcessingResultClient) mutate(ctx context.Context, m *ProcessingResult
 		return (&ProcessingResultDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown ProcessingResult mutation op: %q", m.Op())
+	}
+}
+
+// TransmissionClient is a client for the Transmission schema.
+type TransmissionClient struct {
+	config
+}
+
+// NewTransmissionClient returns a client for the Transmission from the given config.
+func NewTransmissionClient(c config) *TransmissionClient {
+	return &TransmissionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `transmission.Hooks(f(g(h())))`.
+func (c *TransmissionClient) Use(hooks ...Hook) {
+	c.hooks.Transmission = append(c.hooks.Transmission, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `transmission.Intercept(f(g(h())))`.
+func (c *TransmissionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Transmission = append(c.inters.Transmission, interceptors...)
+}
+
+// Create returns a builder for creating a Transmission entity.
+func (c *TransmissionClient) Create() *TransmissionCreate {
+	mutation := newTransmissionMutation(c.config, OpCreate)
+	return &TransmissionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Transmission entities.
+func (c *TransmissionClient) CreateBulk(builders ...*TransmissionCreate) *TransmissionCreateBulk {
+	return &TransmissionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TransmissionClient) MapCreateBulk(slice any, setFunc func(*TransmissionCreate, int)) *TransmissionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TransmissionCreateBulk{err: fmt.Errorf("calling to TransmissionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TransmissionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TransmissionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Transmission.
+func (c *TransmissionClient) Update() *TransmissionUpdate {
+	mutation := newTransmissionMutation(c.config, OpUpdate)
+	return &TransmissionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TransmissionClient) UpdateOne(_m *Transmission) *TransmissionUpdateOne {
+	mutation := newTransmissionMutation(c.config, OpUpdateOne, withTransmission(_m))
+	return &TransmissionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TransmissionClient) UpdateOneID(id uuid.UUID) *TransmissionUpdateOne {
+	mutation := newTransmissionMutation(c.config, OpUpdateOne, withTransmissionID(id))
+	return &TransmissionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Transmission.
+func (c *TransmissionClient) Delete() *TransmissionDelete {
+	mutation := newTransmissionMutation(c.config, OpDelete)
+	return &TransmissionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TransmissionClient) DeleteOne(_m *Transmission) *TransmissionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TransmissionClient) DeleteOneID(id uuid.UUID) *TransmissionDeleteOne {
+	builder := c.Delete().Where(transmission.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TransmissionDeleteOne{builder}
+}
+
+// Query returns a query builder for Transmission.
+func (c *TransmissionClient) Query() *TransmissionQuery {
+	return &TransmissionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTransmission},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Transmission entity by its id.
+func (c *TransmissionClient) Get(ctx context.Context, id uuid.UUID) (*Transmission, error) {
+	return c.Query().Where(transmission.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TransmissionClient) GetX(ctx context.Context, id uuid.UUID) *Transmission {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *TransmissionClient) Hooks() []Hook {
+	hooks := c.hooks.Transmission
+	return append(hooks[:len(hooks):len(hooks)], transmission.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *TransmissionClient) Interceptors() []Interceptor {
+	return c.inters.Transmission
+}
+
+func (c *TransmissionClient) mutate(ctx context.Context, m *TransmissionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TransmissionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TransmissionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TransmissionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TransmissionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Transmission mutation op: %q", m.Op())
+	}
+}
+
+// TransmissionTargetClient is a client for the TransmissionTarget schema.
+type TransmissionTargetClient struct {
+	config
+}
+
+// NewTransmissionTargetClient returns a client for the TransmissionTarget from the given config.
+func NewTransmissionTargetClient(c config) *TransmissionTargetClient {
+	return &TransmissionTargetClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `transmissiontarget.Hooks(f(g(h())))`.
+func (c *TransmissionTargetClient) Use(hooks ...Hook) {
+	c.hooks.TransmissionTarget = append(c.hooks.TransmissionTarget, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `transmissiontarget.Intercept(f(g(h())))`.
+func (c *TransmissionTargetClient) Intercept(interceptors ...Interceptor) {
+	c.inters.TransmissionTarget = append(c.inters.TransmissionTarget, interceptors...)
+}
+
+// Create returns a builder for creating a TransmissionTarget entity.
+func (c *TransmissionTargetClient) Create() *TransmissionTargetCreate {
+	mutation := newTransmissionTargetMutation(c.config, OpCreate)
+	return &TransmissionTargetCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of TransmissionTarget entities.
+func (c *TransmissionTargetClient) CreateBulk(builders ...*TransmissionTargetCreate) *TransmissionTargetCreateBulk {
+	return &TransmissionTargetCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TransmissionTargetClient) MapCreateBulk(slice any, setFunc func(*TransmissionTargetCreate, int)) *TransmissionTargetCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TransmissionTargetCreateBulk{err: fmt.Errorf("calling to TransmissionTargetClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TransmissionTargetCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TransmissionTargetCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for TransmissionTarget.
+func (c *TransmissionTargetClient) Update() *TransmissionTargetUpdate {
+	mutation := newTransmissionTargetMutation(c.config, OpUpdate)
+	return &TransmissionTargetUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TransmissionTargetClient) UpdateOne(_m *TransmissionTarget) *TransmissionTargetUpdateOne {
+	mutation := newTransmissionTargetMutation(c.config, OpUpdateOne, withTransmissionTarget(_m))
+	return &TransmissionTargetUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TransmissionTargetClient) UpdateOneID(id int) *TransmissionTargetUpdateOne {
+	mutation := newTransmissionTargetMutation(c.config, OpUpdateOne, withTransmissionTargetID(id))
+	return &TransmissionTargetUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for TransmissionTarget.
+func (c *TransmissionTargetClient) Delete() *TransmissionTargetDelete {
+	mutation := newTransmissionTargetMutation(c.config, OpDelete)
+	return &TransmissionTargetDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TransmissionTargetClient) DeleteOne(_m *TransmissionTarget) *TransmissionTargetDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TransmissionTargetClient) DeleteOneID(id int) *TransmissionTargetDeleteOne {
+	builder := c.Delete().Where(transmissiontarget.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TransmissionTargetDeleteOne{builder}
+}
+
+// Query returns a query builder for TransmissionTarget.
+func (c *TransmissionTargetClient) Query() *TransmissionTargetQuery {
+	return &TransmissionTargetQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTransmissionTarget},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a TransmissionTarget entity by its id.
+func (c *TransmissionTargetClient) Get(ctx context.Context, id int) (*TransmissionTarget, error) {
+	return c.Query().Where(transmissiontarget.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TransmissionTargetClient) GetX(ctx context.Context, id int) *TransmissionTarget {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *TransmissionTargetClient) Hooks() []Hook {
+	hooks := c.hooks.TransmissionTarget
+	return append(hooks[:len(hooks):len(hooks)], transmissiontarget.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *TransmissionTargetClient) Interceptors() []Interceptor {
+	return c.inters.TransmissionTarget
+}
+
+func (c *TransmissionTargetClient) mutate(ctx context.Context, m *TransmissionTargetMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TransmissionTargetCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TransmissionTargetUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TransmissionTargetUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TransmissionTargetDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown TransmissionTarget mutation op: %q", m.Op())
 	}
 }
 
@@ -3764,18 +5190,22 @@ func (c *WorkflowVersionClient) mutate(ctx context.Context, m *WorkflowVersionMu
 type (
 	hooks struct {
 		Account, AddressRule, AssignmentControl, AuditRecord, CommandReceipt,
-		Credential, DomainEvent, FieldPermission, Grant, IdentityControl, LoginAttempt,
-		Membership, PendingAssignmentScope, ProcessingCandidate, ProcessingControl,
-		ProcessingInstance, ProcessingInstanceVersion, ProcessingResult, Unit,
-		UnitCollection, UserGroup, Workflow, WorkflowScopeReference,
-		WorkflowVersion []ent.Hook
+		ContributionSupport, Credential, DomainEvent, FieldPermission, Gateway,
+		GatewayCredential, GatewayNetwork, Grant, GroupingControl, IdentityControl,
+		LoginAttempt, Membership, Message, MessageContribution, Network,
+		PendingAssignmentScope, ProcessingCandidate, ProcessingControl,
+		ProcessingInstance, ProcessingInstanceVersion, ProcessingResult, Transmission,
+		TransmissionTarget, Unit, UnitCollection, UserGroup, Workflow,
+		WorkflowScopeReference, WorkflowVersion []ent.Hook
 	}
 	inters struct {
 		Account, AddressRule, AssignmentControl, AuditRecord, CommandReceipt,
-		Credential, DomainEvent, FieldPermission, Grant, IdentityControl, LoginAttempt,
-		Membership, PendingAssignmentScope, ProcessingCandidate, ProcessingControl,
-		ProcessingInstance, ProcessingInstanceVersion, ProcessingResult, Unit,
-		UnitCollection, UserGroup, Workflow, WorkflowScopeReference,
-		WorkflowVersion []ent.Interceptor
+		ContributionSupport, Credential, DomainEvent, FieldPermission, Gateway,
+		GatewayCredential, GatewayNetwork, Grant, GroupingControl, IdentityControl,
+		LoginAttempt, Membership, Message, MessageContribution, Network,
+		PendingAssignmentScope, ProcessingCandidate, ProcessingControl,
+		ProcessingInstance, ProcessingInstanceVersion, ProcessingResult, Transmission,
+		TransmissionTarget, Unit, UnitCollection, UserGroup, Workflow,
+		WorkflowScopeReference, WorkflowVersion []ent.Interceptor
 	}
 )

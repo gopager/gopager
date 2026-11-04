@@ -16,10 +16,12 @@ import (
 	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/assignments"
 	"github.com/gopager/gopager/internal/identity"
+	ingestdomain "github.com/gopager/gopager/internal/ingest"
 	"github.com/gopager/gopager/internal/persistence/ent/assignmentstore"
 	"github.com/gopager/gopager/internal/persistence/ent/commandstore"
 	"github.com/gopager/gopager/internal/persistence/ent/eventstore"
 	"github.com/gopager/gopager/internal/persistence/ent/identitystore"
+	"github.com/gopager/gopager/internal/persistence/ent/ingeststore"
 	"github.com/gopager/gopager/internal/persistence/ent/unitstore"
 	"github.com/gopager/gopager/internal/persistence/migrations"
 	"github.com/gopager/gopager/internal/platform"
@@ -66,8 +68,19 @@ func run() (result error) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	var runners []platform.Runner
+	var processingRuntime *processingAPIRuntime
+	if slices.Contains(config.Roles, platform.RoleAPI) || slices.Contains(config.Roles, platform.RoleWorker) {
+		processingRuntime, err = composeProcessingAPIRuntime(ctx, store, nil, config.ProcessingArtifactRoot)
+		if err != nil {
+			return errors.Join(err, store.Close())
+		}
+		defer func() {
+			result = errors.Join(result, processingRuntime.Close(context.Background()))
+		}()
+	}
 	if slices.Contains(config.Roles, platform.RoleWorker) {
-		runtime, err := composeProcessingWorker(ctx, store, worker.MissingSourceOwner{}, config.ProcessingDispatch)
+		runtime, err := composeProcessingWorker(ctx, store, processingRuntime.workerSource,
+			processingRuntime.workerPublisher, config.ProcessingDispatch)
 		if err != nil {
 			return errors.Join(err, store.Close())
 		}
@@ -78,13 +91,6 @@ func run() (result error) {
 	}
 	var api http.Handler
 	if slices.Contains(config.Roles, platform.RoleAPI) {
-		processingRuntime, runtimeErr := composeProcessingAPIRuntime(ctx, store, nil, config.ProcessingArtifactRoot)
-		if runtimeErr != nil {
-			return errors.Join(runtimeErr, store.Close())
-		}
-		defer func() {
-			result = errors.Join(result, processingRuntime.Close(context.Background()))
-		}()
 		api, err = composeApplicationAPI(config.PublicOrigin, config.LoginLimits, store, nil, nil, processingRuntime.routes)
 		if err != nil {
 			return errors.Join(err, store.Close())
@@ -192,11 +198,23 @@ func composeApplicationAPI(publicOrigin string, limits identity.LoginRateLimits,
 	if err != nil {
 		return nil, err
 	}
-	resolver, err := identity.NewResolver(repository, store, applicationScopeOwners{identity: repository, units: unitRepository, networks: networkScopes})
+	facts, err := eventstore.New(store)
 	if err != nil {
 		return nil, err
 	}
-	facts, err := eventstore.New(store)
+	intakeRepository, err := ingeststore.New(store, facts, facts)
+	if err != nil {
+		return nil, err
+	}
+	if networkOwner == nil {
+		networkOwner = intakeRepository
+	}
+	if networkScopes == nil {
+		networkScopes = intakeRepository
+	}
+	resolver, err := identity.NewResolver(repository, store, applicationScopeOwners{
+		identity: repository, units: unitRepository, networks: networkScopes,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -216,9 +234,20 @@ func composeApplicationAPI(publicOrigin string, limits identity.LoginRateLimits,
 	if err != nil {
 		return nil, err
 	}
+	intakeService, err := ingestdomain.NewService(store, store, intakeRepository, ruleService)
+	if err != nil {
+		return nil, err
+	}
+	gatewayAdministration, err := ingestdomain.NewGatewayAdministration(store, resolver, store,
+		intakeRepository, receipts, facts)
+	if err != nil {
+		return nil, err
+	}
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/auth/", authHandler)
 	registerManagementRoutes(mux, transport, unitService, ruleService)
+	registerIngestRoutes(mux, intakeService)
+	registerGatewayManagementRoutes(mux, transport, gatewayAdministration)
 	if len(processingRoutes) == 1 {
 		registerProcessingRoutes(mux, transport, processingRoutes[0])
 	}

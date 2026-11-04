@@ -42,9 +42,15 @@ A Message contribution is the stored, rebuildable read model: Message, Network/P
 
 Semantic reference names are `contributionId` and `addressRuleId`; these are not a frozen physical field inventory or an immutable rule-version reference.
 
+### AP-07 Initial Target Admission Binding
+
+**Version/status:** initial-target-admission 1.0, frozen for AP-07 under [D-119](../authoritative-plan.md#ap-07-contract-freeze-proposal). **Owner:** DOM-04 for resolution/contribution behavior; DOM-01 owns original target evidence.
+
+On initial acceptance, resolve the current Gateway Network under C-01, then evaluate each original target against current Address rules at the normalized Observation time. Preserve original target order/positions and store the current per-target resolution; keep unresolved, unassigned, pending and failed states distinct. Construct current Message contributions and their supports from usable targets under C-05. Empty target lists remain targetless and create no synthetic target. This binding covers initial admission only; it does not implement historical rematching, correction jobs, suppression management or change the approved D-53 reference choice.
+
 #### Original Target Reference
 
-**D-53; status:** approved reference choice; C-05 remains draft pending AP-04 freeze. **Owner:** DOM-04, with DOM-01 owning original target evidence. **Producers:** C-01/C-02 original targets and C-05 resolutions. **Consumers:** Contribution supports, C-08 facts, C-11 target context and later authorized projections.
+**D-53; status:** approved reference choice; C-05 remains draft as a whole. AP-07's initial target-resolution/contribution slice is frozen under D-119 for its intake path, without claiming later rematching scope. **Owner:** DOM-04, with DOM-01 owning original target evidence. **Producers:** C-01/C-02 original targets and C-05 resolutions. **Consumers:** Contribution supports, C-08 facts, C-11 target context and later authorized projections.
 
 An original target reference is `(transmissionId, targetPosition)`: the Transmission UUID and a JSON integer indexing its original `transmissionTargets` array from zero. The position is immutable; validation requires `0 <= targetPosition < len(transmissionTargets)`. Neither matching, suppression, correction nor Message merge sorts, renumbers or deduplicates that evidence list. Equal Address/Function values at different positions remain distinct original targets; they may support the same contribution. No separate target UUID or Assignment entity is created.
 

@@ -19,6 +19,8 @@ type Capture struct {
 	Scope       processing.EvaluationScope
 	Artifacts   processing.InstalledArtifacts
 	Invocations processing.InstalledInvocationOwner
+	// Release closes owner resources after the run has drained.
+	Release func() error
 }
 
 // SourceOwner supplies current unpublished source/Principal/configuration authority under primary locks.
@@ -35,6 +37,11 @@ type WorkSourceOwner interface {
 	ReconcileCandidate(context.Context, platform.TransactionContext, processing.Candidate) (processing.Candidate, error)
 }
 
+// Publisher applies completed private evidence and source readiness in the same primary transaction.
+type Publisher interface {
+	Publish(context.Context, platform.TransactionContext, uuid.UUID) error
+}
+
 // Repository combines existing private claim/failure/result transitions in the caller transaction.
 type Repository interface {
 	processing.CandidateRepository
@@ -49,6 +56,7 @@ type Service struct {
 	source       SourceOwner
 	regex        *processing.WASMHost
 	id           uuid.UUID
+	publisher    Publisher
 }
 
 // New requires real owner participants; an absent source cannot be treated as eligible work.
@@ -58,6 +66,20 @@ func New(transactions identity.Transactions, repository Repository, source Sourc
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing Processing worker dependency"))
 	}
 	return &Service{transactions: transactions, repository: repository, source: source, regex: regex, id: id}, nil
+}
+
+// NewWithPublisher requires the atomic publication participant used by production dispatch.
+func NewWithPublisher(transactions identity.Transactions, repository Repository, source SourceOwner,
+	regex *processing.WASMHost, id uuid.UUID, publisher Publisher) (*Service, error) {
+	if publisher == nil {
+		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing Processing publication dependency"))
+	}
+	service, err := New(transactions, repository, source, regex, id)
+	if err != nil {
+		return nil, err
+	}
+	service.publisher = publisher
+	return service, nil
 }
 
 // ExecuteWork reconciles selected metadata before claiming or recovering; completed evidence is never recomputed.
@@ -70,6 +92,7 @@ func (s *Service) ExecuteWork(ctx context.Context, selected processing.Candidate
 		return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("current candidate reconciliation owner unavailable"))
 	}
 	var current processing.Candidate
+	var recovered bool
 	err := s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
 		var err error
 		current, err = owner.ReconcileCandidate(tx.Context(), tx, selected)
@@ -85,6 +108,7 @@ func (s *Service) ExecuteWork(ctx context.Context, selected processing.Candidate
 		if current.State != "running" {
 			return nil
 		}
+		recovered = true
 		recovery, ok := s.repository.(processing.CandidateRecoveryRepository)
 		if !ok {
 			return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("candidate recovery participant unavailable"))
@@ -99,14 +123,22 @@ func (s *Service) ExecuteWork(ctx context.Context, selected processing.Candidate
 	if err != nil {
 		return err
 	}
+	if current.State == "superseded" {
+		if s.publisher == nil {
+			return nil
+		}
+		return s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
+			return s.publisher.Publish(tx.Context(), tx, current.TransmissionID)
+		})
+	}
 	if current.State != "pending" {
 		return nil
 	}
 	// Recovery schedules a primary-clock retry; leave that future work to native due selection.
-	if selected.State == "running" {
+	if recovered {
 		return nil
 	}
-	_, _, err = s.Run(ctx, current)
+	_, _, err = s.run(ctx, current, s.publisher != nil)
 	return err
 }
 
@@ -135,7 +167,15 @@ type outcome struct {
 
 // Run claims current work, evaluates outside SQL, renews ownership and stores only private evidence.
 // Caller cancellation leaves lost work recoverable; it never fabricates publication readiness.
-func (s *Service) Run(ctx context.Context, pending processing.Candidate) (processing.Candidate, *processing.PrivateResult, error) {
+func (s *Service) Run(ctx context.Context, pending processing.Candidate) (
+	completed processing.Candidate, evidence *processing.PrivateResult, resultErr error,
+) {
+	return s.run(ctx, pending, false)
+}
+
+func (s *Service) run(ctx context.Context, pending processing.Candidate, publish bool) (
+	completed processing.Candidate, evidence *processing.PrivateResult, resultErr error,
+) {
 	if err := pending.Validate(); err != nil {
 		return processing.Candidate{}, nil, err
 	}
@@ -162,8 +202,16 @@ func (s *Service) Run(ctx context.Context, pending processing.Candidate) (proces
 		return err
 	})
 	if err != nil {
+		if captured.Release != nil {
+			err = errors.Join(err, captured.Release())
+		}
 		return processing.Candidate{}, nil, err
 	}
+	defer func() {
+		if captured.Release != nil {
+			resultErr = errors.Join(resultErr, captured.Release())
+		}
+	}()
 	compute, cancel := context.WithCancel(ctx)
 	defer cancel()
 	results := make(chan outcome, 1)
@@ -208,13 +256,14 @@ func (s *Service) Run(ctx context.Context, pending processing.Candidate) (proces
 				return processing.Candidate{}, nil, err
 			}
 		case result := <-results:
-			return s.finish(ctx, current, captured, result)
+			return s.finish(ctx, current, captured, result, publish)
 		}
 	}
 }
 
 // finish revalidates current source authority before a fenced completion or classified failure.
-func (s *Service) finish(ctx context.Context, current processing.Candidate, captured Capture, result outcome) (processing.Candidate, *processing.PrivateResult, error) {
+func (s *Service) finish(ctx context.Context, current processing.Candidate, captured Capture,
+	result outcome, publish bool) (processing.Candidate, *processing.PrivateResult, error) {
 	lease, err := current.Lease()
 	if err != nil {
 		return processing.Candidate{}, nil, err
@@ -236,7 +285,13 @@ func (s *Service) finish(ctx context.Context, current processing.Candidate, capt
 			return err
 		}
 		completed, evidence, err = s.repository.CompleteCandidate(tx.Context(), tx, lease, source.OriginalTargetCount, result.evaluation)
-		return err
+		if err != nil || !publish {
+			return err
+		}
+		if s.publisher == nil {
+			return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Processing publication owner unavailable"))
+		}
+		return s.publisher.Publish(tx.Context(), tx, completed.TransmissionID)
 	})
 	if err != nil {
 		return processing.Candidate{}, nil, err
