@@ -3,12 +3,15 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
+	units "github.com/gopager/gopager/internal/Units"
+	"github.com/gopager/gopager/internal/persistence/ent/organization"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
 )
 
@@ -23,6 +26,10 @@ type Unit struct {
 	Name string `json:"name,omitempty"`
 	// Deleted holds the value of the "deleted" field.
 	Deleted bool `json:"deleted,omitempty"`
+	// OrganizationID holds the value of the "organization_id" field.
+	OrganizationID *uuid.UUID `json:"organization_id,omitempty"`
+	// Settings holds the value of the "settings" field.
+	Settings units.Settings `json:"settings,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the UnitQuery when eager-loading is set.
 	Edges        UnitEdges `json:"edges"`
@@ -35,9 +42,11 @@ type UnitEdges struct {
 	Collections []*UnitCollection `json:"collections,omitempty"`
 	// AddressRules holds the value of the address_rules edge.
 	AddressRules []*AddressRule `json:"address_rules,omitempty"`
+	// Organization holds the value of the organization edge.
+	Organization *Organization `json:"organization,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [3]bool
 }
 
 // CollectionsOrErr returns the Collections value or an error if the edge
@@ -58,11 +67,26 @@ func (e UnitEdges) AddressRulesOrErr() ([]*AddressRule, error) {
 	return nil, &NotLoadedError{edge: "address_rules"}
 }
 
+// OrganizationOrErr returns the Organization value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e UnitEdges) OrganizationOrErr() (*Organization, error) {
+	if e.Organization != nil {
+		return e.Organization, nil
+	} else if e.loadedTypes[2] {
+		return nil, &NotFoundError{label: organization.Label}
+	}
+	return nil, &NotLoadedError{edge: "organization"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*Unit) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case unit.FieldOrganizationID:
+			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
+		case unit.FieldSettings:
+			values[i] = new([]byte)
 		case unit.FieldDeleted:
 			values[i] = new(sql.NullBool)
 		case unit.FieldRevision:
@@ -110,6 +134,21 @@ func (_m *Unit) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Deleted = value.Bool
 			}
+		case unit.FieldOrganizationID:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field organization_id", values[i])
+			} else if value.Valid {
+				_m.OrganizationID = new(uuid.UUID)
+				*_m.OrganizationID = *value.S.(*uuid.UUID)
+			}
+		case unit.FieldSettings:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field settings", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Settings); err != nil {
+					return fmt.Errorf("unmarshal field settings: %w", err)
+				}
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -131,6 +170,11 @@ func (_m *Unit) QueryCollections() *UnitCollectionQuery {
 // QueryAddressRules queries the "address_rules" edge of the Unit entity.
 func (_m *Unit) QueryAddressRules() *AddressRuleQuery {
 	return NewUnitClient(_m.config).QueryAddressRules(_m)
+}
+
+// QueryOrganization queries the "organization" edge of the Unit entity.
+func (_m *Unit) QueryOrganization() *OrganizationQuery {
+	return NewUnitClient(_m.config).QueryOrganization(_m)
 }
 
 // Update returns a builder for updating this Unit.
@@ -164,6 +208,14 @@ func (_m *Unit) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("deleted=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Deleted))
+	builder.WriteString(", ")
+	if v := _m.OrganizationID; v != nil {
+		builder.WriteString("organization_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("settings=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Settings))
 	builder.WriteByte(')')
 	return builder.String()
 }

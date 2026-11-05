@@ -24,6 +24,7 @@ This table owns requirement-to-producer coverage, not requirement definitions, d
 | REQ-133/138 saved views | [AP-10 T063/T065](ap-10-query-live.md), AP-15 | Own product clarification, then approved server ownership/delegation/visibility and private saved-view tests |
 | REQ-134 single-Gateway delegation | [AP-09 T086/T088](ap-09-gateway-network.md), AP-15 | Own delivery clarification, then approved detail-versus-rotation scope tests |
 | REQ-135..137 field/query refinements | AP-10/AP-15 | Selected-Unit, Payload-only and hidden-filter/option scenarios |
+| REQ-139 plugin reactions to any Domain event | Unassigned; needs the plugin-model planning revision under [D-130](../authoritative-plan.md#plugin-trust-clarification) (AP-11/AP-12 compatibility context) | Not in the initial release; planning must keep the event catalog, reaction Subscriptions and plugin capabilities open for it |
 | REQ-053/065..068/080/083/101..104/125/128/131 later capabilities | No current implementation producer | Delivery scope determines future work; no present completion claim |
 | REQ-088/126 removed identifiers | None | Reserved, not implementation tasks |
 

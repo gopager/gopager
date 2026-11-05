@@ -102,6 +102,10 @@ The stable D-IDs below record decision topics and supersession. The **owner link
 | D-123 | <a id="d-123"></a>Approved narrow AP-07 selected-Workflow worker lifecycle scope extension | [AP-07 selected-Workflow worker lifecycle scope extension](#ap-07-selected-workflow-worker-lifecycle-scope-extension) |
 | D-124 | <a id="d-124"></a>Approved AP-07 selected-Workflow source and atomic publication scope extension | [AP-07 selected-Workflow source and publication scope extension](#ap-07-selected-workflow-source-and-publication-scope-extension) |
 | D-125 | <a id="d-125"></a>Approved standalone Unit-template ownership direction; C-06 actions and implementation remain unbound | [AP-08 Unit-template ownership](#ap-08-unit-template-ownership) |
+| D-127 | <a id="d-127"></a>Selected AP-08 explicit target-specific suppression; no broad selector rules | [AP-08 suppression direction](#ap-08-suppression-direction) |
+| D-128 | <a id="d-128"></a>Unreleased migrations change only tables they create; cross-file edits squashed into owning migrations | [Owning-migration consolidation](#owning-migration-consolidation) |
+| D-129 | <a id="d-129"></a>Core regex runs in-process with deterministic admission bounds; supersedes D-62 for Core regex | [In-process Core regex](#in-process-core-regex) |
+| D-130 | <a id="d-130"></a>Plugins are fully trusted and may access host, devices and network directly; D-67 is only a first subset | [Plugin trust clarification](#plugin-trust-clarification) |
 
 ## Operating Assumptions
 
@@ -532,7 +536,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### Core Regex Runtime Selection Proposal
 
-**D-62; date/origin:** 2026-10-28, AP-04 T017/T018 preparation for AP-12 T043 and AP-06 T023/T024. **Status:** explicitly approved 2026-11-01 after D-63/D-64 comparison (`core_regex_runtime_after_comparison=approve-embedded-wasm-regex`). **Accountable owner/approver:** Product/integration; user. **Technical owners:** architecture/integration, DOM-08 and runtime/operations.
+**D-62; date/origin:** 2026-10-28, AP-04 T017/T018 preparation for AP-12 T043 and AP-06 T023/T024. **Status:** explicitly approved 2026-11-01 after D-63/D-64 comparison (`core_regex_runtime_after_comparison=approve-embedded-wasm-regex`). **Superseded for Core regex on 2026-11-05 by [D-129](#in-process-core-regex)**; its evidence remains historical. **Accountable owner/approver:** Product/integration; user. **Technical owners:** architecture/integration, DOM-08 and runtime/operations.
 
 **Question and evidence:** Select how the bounded built-in regex capability executes, now that [D-61's actual probe](execution/ap-04.md#e-38-budget-and-memory-probe-results) shows a valid small-input capture case OOM-killing a 512 MiB native process despite Reader cancellation, while the embedded guest fails controllably without losing its host. The [architecture assessment](architecture.md#t043-evaluator-library-and-budget-assessment) owns exact alternatives, tuple and limitations.
 
@@ -1243,6 +1247,44 @@ Use the existing C-07 redacted error envelope/status table, C-12 transaction cap
 **Scope:** Directly maintain current AP documentation and required references, migrate needed source-assignment inputs to their owners and remove redundant source definitions/redirects/duplicate records. Preserve unique evidence and immutable baseline provenance; no product execution or sidecars. This supersedes earlier requirements to retain duplicate source-assignment files, not their behavioral decisions or observed results. The [ordered assignments](work-packages.md#revised-execution-path) own task allocation, supporting paths and verification; the [mapping](work-packages/requirement-mapping.md) owns REQ coverage. Executing agents may not enlarge their own assignments.
 
 **Boundary:** Preserve fixed behavior and actual evidence. REQ-133/134/138 delivery classification and global-view visibility require the clarification assigned to AP-09/AP-10. REQ-135..137 refine approved field/query acceptance. Subscription-preview remains optional. This approval does not claim implementation or runtime completion.
+
+### AP-08 suppression direction
+
+**D-127; date/origin:** 2026-11-04, AP-08 T061 contract planning under D-126. **Status:** selected for the assigned AP-08 slice. **Accountable owner:** Product/integration; **contract owner:** DOM-04/C-05.
+
+**Question/context and evidence:** REQ-123 excludes unwanted Transmission targets from normal operation; [F-82](contracts/ap-02-boundary-cases.md#f-82-c-05) requires suppressing one target independently when it shares a Message contribution with another target. The pre-AP-08 C-05 0.1 draft also sketched Network/Protocol/selector/time-range suppression filters, but no such broad filter contract was frozen.
+
+**Resolution and rationale:** AP-08 persists one Suppression per immutable `(transmissionId, targetPosition)`. This makes each exclusion, authorization context, audit record, and lift apply only to the manager-selected original target. Broad selectors that silently suppress future or multiple targets are not part of this slice.
+
+**Consequences:** [C-05 historical-correction 1.0](contracts/c-05-matching-correction.md#ap-08-historical-correction-and-suppression) owns the exact data and revision contract; [C-06](contracts/c-06-identity-authorization.md#ap-08-master-data-authorization) owns authorization. D-10's confirmed no-deletion/no-implicit-Payload-masking boundary, C-05 initial target admission, original evidence, Message membership, and Delivery non-trigger behavior remain unchanged. This direction adds no broad suppression-rule administration or future-target matching.
+
+### Owning-migration consolidation
+
+**D-128; date/origin:** 2026-11-05, user instruction during AP-08 execution. **Status:** authorized and applied. **Accountable owner:** Integration; DOM-03/DOM-04/DOM-05 for their tables.
+
+**Question/context and evidence:** No Goose migration has been released or run outside test fixtures. Several files changed tables that an earlier file created: `00005` altered `identity_grants`, the former `00010_master_data.sql` altered `units` and `command_receipts`, and the former `00011_historical_correction.sql` altered and backfilled `assignment_pending_scopes` and indexed `transmissions`. The user instructed that no migration may edit a table created or edited by another migration, and that such changes be squashed into the owning migration.
+
+**Resolution:** Until a release fixes migration history, each table's complete definition (columns, defaults, checks, indexes) lives in the migration that creates it; later files create only their own tables and may reference earlier ones. Upgrade-only guards and backfills for unreleased states are removed. The focused per-owner file layout is kept rather than a single monolith, because it preserves owner boundaries and the prefix-upgrade test before `00008_fact_transport.sql`. Applied result: `organizations`, `unit_templates`, Unit Organization/settings, `command_receipts.result_items` and the full correction-work columns moved into `00004_current_assignments.sql`; the `identity_grants.field_names` default into `00001_identity.sql`; `transmissions_unpublished` into `00009_transmission_intake.sql`; correction-owned tables are now `00010_historical_correction.sql`. The former `00010_master_data.sql` was removed.
+
+**Consequences:** This revises unreleased AP-05..AP-08 migration artifacts, not their contracts or fixed behavior. Earlier execution evidence remains as observed; current results are in the [AP-08 record](execution/ap-08.md). After the first release, released files become immutable and changes return to new ordered migrations.
+
+### In-process Core regex
+
+**D-129; date/origin:** 2026-11-05, user decision during AP-08 execution after a review of the WASM use (`Umstellen, mit Nachweis`). **Status:** selected and implemented; supersedes D-62 for Core regex only. **Accountable owner:** Product/integration; **technical owners:** architecture/integration, DOM-08.
+
+**Question/context and evidence:** D-62 ran Core regex as a Go/WASI guest under Wazero because D-61 showed a valid 4085-byte/233-capture pattern OOM-killing a 512 MiB native process. Measured on 2026-11-05: each guest call cost 4.7 ms and 12.9 MB of allocations (standard library including compilation: 1.7 µs, 3 KB). Host preparation took 0.94 s, or 14.3 s under the race detector, and dominated test runtime. The guest added a 3.8 MB embedded artifact and limited Processing to Wazero's compiler targets (amd64/arm64). The D-61 memory growth comes from Go's NFA keeping one capture slice per program instruction (the counterexample: 932,003 instructions x 468 slots, about 6.6 GB). Both quantities are known before matching. That is D-62's option (B), which was not chosen at the time for lack of proof.
+
+**Resolution:** Core regex uses Go's standard `regexp` in process ([adapter](../internal/processing/regex.go)). Before compilation, a parse-tree estimate bounds the program at 20,000 instructions and instructions x capture slots x 16 bytes at 32 MiB; the exact compiled program is checked against the same bounds. Matching reads through a cancellable reader inside the existing 1 s call budget; cancellation or expiry is a failure, never a no-match. Pattern (4096 B) and text (1 MiB) limits are unchanged. Executable proof (512 MiB container, no swap, D-61 counterexample at 1 KiB and 1 MiB, plus an admitted near-bound worst case): no OOM, peak process memory 28 MB; details in [AP-08 E-13](execution/ap-08.md#e-13-in-process-core-regex-proof).
+
+**Consequences:** The `regexguest` command and `regex.wasm` are removed; `WASMHost` serves only installed artifacts (C-10). Processing consumers take a `RegexEvaluator`. C-11 limits and failure semantics are unchanged. The plugin runtime selection (TECH-08) is not decided here; its review is in the [architecture](architecture.md#native-plugin-alternative-review).
+
+### Plugin trust clarification
+
+**D-130; date/origin:** 2026-11-05, user statement during AP-08 execution. **Status:** product clarification; runtime selection open. **Accountable owner:** Product (user).
+
+**Statement:** Plugins are fully trusted. It must be possible to integrate, for example, GPIO control, display output, printers, building automation, MQTT or KNX through plugins. The Operator provides plugins before start by mounting them (in Docker) and naming them in configuration or the environment; runtime installation is not required.
+
+**Consequences:** This confirms D-24 and corrects any reading of [D-67](#narrow-installed-processing-abi-proposal)'s pure, capability-free WASI command as a general plugin restriction; D-67 remains only the first implemented Processing-step subset. The current WASI runtime cannot provide direct device or network access, so the plugin runtime (TECH-08) and the C-10 SDK need a planning revision. The [architecture re-evaluation](architecture.md#native-plugin-alternative-review) recommends managed plugin executables over a versioned local protocol. No runtime, ABI or implementation is selected by this clarification.
 
 ## Workflow and Approval Gates
 

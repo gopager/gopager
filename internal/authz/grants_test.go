@@ -27,7 +27,10 @@ func TestExplicitActionScopeCatalog(t *testing.T) {
 	}
 	if authz.ActionAllowsScope("grouping.configure", "network") ||
 		!authz.ActionAllowsScope("grouping.configure", "all") ||
-		authz.ActionAllowsScope("without-unit.read", "unit") {
+		authz.ActionAllowsScope("without-unit.read", "unit") ||
+		authz.ActionAllowsScope("unit-template.read", "unit") ||
+		!authz.ActionAllowsScope("unit-template.read", "all") ||
+		!authz.ActionAllowsScope("assignment-correction.retry", "unitCollection") {
 		t.Fatal("action-specific scope restrictions were lost")
 	}
 }

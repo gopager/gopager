@@ -12,8 +12,8 @@ One fact has one maintained definition. Other documents link to it; they do not 
 | Interface signatures, fields/types, state transitions, algorithms, permissions, errors, defaults/limits and compatibility | Respective [C-ID owner file](domain-contracts.md#contract-register); only genuinely cross-contract rules in [shared conventions](contracts/shared-conventions.md) | Contract owner / integration |
 | Concrete input/expected-output examples (F-IDs) | [Core cases](contracts/reference-cases.md), [boundary cases](contracts/ap-02-boundary-cases.md) | Case's contract owner |
 | Domain term meanings, prohibited terms and rename history | [Glossary](glossary.md) | Integration |
-| Stable task definition, REQ/C context, role, prerequisites, proposed write scope, acceptance and non-goals | Respective [AP file](work-packages.md#package-directory) | Planning / integration |
-| Approved additive scope for an active AP | Versioned addendum under `docs/work-packages/addenda/`; approval in the plan | Planning / integration |
+| Stable task definition, REQ/C context, role, prerequisites, supporting write scope, acceptance and non-goals | Respective [AP file](work-packages.md#revised-execution-path) | Planning / integration |
+| Authorized assignment revision | Respective AP file; authority in the plan | Planning / integration |
 | Named assignee, actual execution state, approved write-scope binding, commands/results, blockers and artifact handovers | Respective [execution record](execution/README.md) | Executing owner / integration |
 | Shared session and immutable-AP workflow | [Execution rules](work-packages/shared-rules.md) | Integration |
 | REQ-to-package coverage and planned evidence categories | [Requirement mapping](work-packages/requirement-mapping.md) | Integration |
@@ -36,9 +36,9 @@ Write only the necessary custom functionality when no suitable library exists, c
 
 For Go, prefer the `go-pkgs` MCP tools for package discovery and current package/version facts. If unavailable or inconclusive, record that limitation and use authoritative upstream documentation/source and local toolchain documentation; do not invent package facts or treat an unavailable lookup as proof that no library exists.
 
-Record substantial selections and justified exceptions with alternatives and evidence at the existing technology/implementation owner; link them from the current execution record. Reassess existing in-progress work when this policy exposes unnecessary reinvention. A new library does not bypass frozen-contract, version, scope or approval gates. Approval and origin: [D-36](authoritative-plan.md#repository-wide-library-policy-decision).
+Record substantial selections/exceptions with alternatives and evidence at the technology/implementation owner; link from execution evidence. Reassess unnecessary reinvention. Library adoption must remain within assigned scope and fixed contracts.
 
-For cross-codebase reassessment, divide existing handwritten code into explicit, nonoverlapping review-session scopes, including tests and integration code. Inventory generated artifacts separately. Review sessions first report reusable capability needs centrally to the architecture/integration coordinator; they must not independently choose dependencies or implement replacements. The coordinator consolidates repeated needs, records one shared selection or justified exception at the architecture owner, and returns that binding to all affected sessions before implementation. Apply approved changes within disjoint write scopes and validate existing behavior; retain explicit findings requiring a contract or earlier-artifact approval rather than changing them implicitly. The requested full existing-code review and coordination procedure are authorized by [D-98](authoritative-plan.md#coordinated-existing-code-library-reassessment).
+For a repository-wide library reassessment, use disjoint scopes and separate generated artifacts. Coordinate repeated needs at the architecture owner before choosing shared replacements; validate behavior within approved write scopes.
 
 ## Status Terms
 
@@ -49,7 +49,7 @@ For cross-codebase reassessment, divide existing handwritten code into explicit,
 - **Approved:** recorded authority with exact scope/version/evidence.
 - **Documented:** recorded specification, not implemented behavior.
 
-Actual contract state is in its C-ID file, execution state in its execution record and approval in the plan. AP checkmarks predating the immutable-AP workflow are historical planning marks, not a current status source.
+Contract state is in its C-ID file, execution state in its execution record and approval in the plan. Assignment checkmarks are not evidence.
 
 ## Change Rules
 
@@ -57,14 +57,14 @@ Actual contract state is in its C-ID file, execution state in its execution reco
 2. A product decision gets a stable D-ID/disposition and owner link in the plan; the chosen behavior is specified only in the linked owner. A technology selection/rationale is recorded under its TECH-ID in the architecture. Implementation-local choices are recorded beside the owning contract/interface or code, with rationale when non-obvious, not in a parallel decision diary.
 3. Preserve stable REQ/D/P/C/AP/T/F/TECH IDs. Reserve removed IDs. Delivery phase and approval are never inferred from requirements, files or checkmarks.
 4. Contract updates identify owner, version/status, changed surface, producers/consumers and affected packages. Keep data/error/time/revision/idempotency/transaction rules at that boundary; shared authorization or commit semantics require integration agreement. Necessary planning and contract decisions belong to the AP that consumes them, based on approved prior-AP outputs or user clarification; do not add a separate AP or owner sign-off gate unless the approved scope/change rules require it. Freeze the exact required slice before implementation. Changes to frozen prior-AP results still require the explicit earlier-result gate and renewed approval of affected scope.
-5. Treat the current AP as read-only during its execution. A compatible additive scope extension requires an explicitly approved [active-AP addendum](work-packages/shared-rules.md#approved-active-ap-addenda); record execution information under [execution records](execution/README.md). Adapt only affected not-yet-started downstream APs when a concrete finding requires it, following the [downstream amendment procedure](work-packages/shared-rules.md#downstream-amendments).
-6. Update owner content and incoming references in the same change. Conflicting owners block approval; do not silently pick a weaker rule or an unapproved default.
+5. Executing agents cannot enlarge their assignment. Authorized planners amend AP documentation directly, with scope/authority recorded in the plan; do not create sidecars. Execution information stays in execution records.
+6. Every executing agent follows [mandatory documentation maintenance](work-packages/shared-rules.md#mandatory-documentation-maintenance). Conflicting owners block dependent work; do not silently pick a weaker rule or unapproved default.
 7. Evidence must distinguish planned cases from executed commands and results. No inferred product completion, SLA, capacity, RPO/RTO or hardware certification.
 8. Names and propagation follow the [glossary maintenance rules](glossary.md#maintenance-rules). External code adoption follows the [reuse assessment](requirements-evidence.md#evidence-assessment-for-deliberate-reuse).
 9. Once generated API/schema/SDK artifacts become authoritative, record their exact path/version in the owning C-ID file and replace corresponding hand-maintained detail with links. Never keep two independently editable definitions of the same schema.
 
 ## Reading Order
 
-For assigned work, the AP file is sufficient as the initial context: follow its **Session Context** and the [shared start procedure](work-packages/shared-rules.md#session-start), including the execution record. Do not preload all contracts or rely on prior chat.
+For assigned work, start from the AP's **Session Context** and the [shared procedure](work-packages/shared-rules.md#session-start). Read only linked sections needed by its tasks and the specific producer handovers. Do not preload decision history, source assignments, whole contracts or prior chat.
 
 For a lookup, choose the owner above. D/P/TECH IDs route decisions and gates; C-ID files expose interface details; F-IDs locate examples. History is provenance, never an alternative specification.

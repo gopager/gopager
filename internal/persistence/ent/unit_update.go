@@ -11,7 +11,9 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
+	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/persistence/ent/addressrule"
+	"github.com/gopager/gopager/internal/persistence/ent/organization"
 	"github.com/gopager/gopager/internal/persistence/ent/predicate"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
 	"github.com/gopager/gopager/internal/persistence/ent/unitcollection"
@@ -80,6 +82,40 @@ func (_u *UnitUpdate) SetNillableDeleted(v *bool) *UnitUpdate {
 	return _u
 }
 
+// SetOrganizationID sets the "organization_id" field.
+func (_u *UnitUpdate) SetOrganizationID(v uuid.UUID) *UnitUpdate {
+	_u.mutation.SetOrganizationID(v)
+	return _u
+}
+
+// SetNillableOrganizationID sets the "organization_id" field if the given value is not nil.
+func (_u *UnitUpdate) SetNillableOrganizationID(v *uuid.UUID) *UnitUpdate {
+	if v != nil {
+		_u.SetOrganizationID(*v)
+	}
+	return _u
+}
+
+// ClearOrganizationID clears the value of the "organization_id" field.
+func (_u *UnitUpdate) ClearOrganizationID() *UnitUpdate {
+	_u.mutation.ClearOrganizationID()
+	return _u
+}
+
+// SetSettings sets the "settings" field.
+func (_u *UnitUpdate) SetSettings(v units.Settings) *UnitUpdate {
+	_u.mutation.SetSettings(v)
+	return _u
+}
+
+// SetNillableSettings sets the "settings" field if the given value is not nil.
+func (_u *UnitUpdate) SetNillableSettings(v *units.Settings) *UnitUpdate {
+	if v != nil {
+		_u.SetSettings(*v)
+	}
+	return _u
+}
+
 // AddCollectionIDs adds the "collections" edge to the UnitCollection entity by IDs.
 func (_u *UnitUpdate) AddCollectionIDs(ids ...uuid.UUID) *UnitUpdate {
 	_u.mutation.AddCollectionIDs(ids...)
@@ -108,6 +144,11 @@ func (_u *UnitUpdate) AddAddressRules(v ...*AddressRule) *UnitUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.AddAddressRuleIDs(ids...)
+}
+
+// SetOrganization sets the "organization" edge to the Organization entity.
+func (_u *UnitUpdate) SetOrganization(v *Organization) *UnitUpdate {
+	return _u.SetOrganizationID(v.ID)
 }
 
 // Mutation returns the UnitMutation object of the builder.
@@ -155,6 +196,12 @@ func (_u *UnitUpdate) RemoveAddressRules(v ...*AddressRule) *UnitUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveAddressRuleIDs(ids...)
+}
+
+// ClearOrganization clears the "organization" edge to the Organization entity.
+func (_u *UnitUpdate) ClearOrganization() *UnitUpdate {
+	_u.mutation.ClearOrganization()
+	return _u
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -228,6 +275,9 @@ func (_u *UnitUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Deleted(); ok {
 		_spec.SetField(unit.FieldDeleted, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Settings(); ok {
+		_spec.SetField(unit.FieldSettings, field.TypeJSON, value)
 	}
 	if _u.mutation.CollectionsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -319,6 +369,35 @@ func (_u *UnitUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.OrganizationCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   unit.OrganizationTable,
+			Columns: []string{unit.OrganizationColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organization.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.OrganizationIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   unit.OrganizationTable,
+			Columns: []string{unit.OrganizationColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organization.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -390,6 +469,40 @@ func (_u *UnitUpdateOne) SetNillableDeleted(v *bool) *UnitUpdateOne {
 	return _u
 }
 
+// SetOrganizationID sets the "organization_id" field.
+func (_u *UnitUpdateOne) SetOrganizationID(v uuid.UUID) *UnitUpdateOne {
+	_u.mutation.SetOrganizationID(v)
+	return _u
+}
+
+// SetNillableOrganizationID sets the "organization_id" field if the given value is not nil.
+func (_u *UnitUpdateOne) SetNillableOrganizationID(v *uuid.UUID) *UnitUpdateOne {
+	if v != nil {
+		_u.SetOrganizationID(*v)
+	}
+	return _u
+}
+
+// ClearOrganizationID clears the value of the "organization_id" field.
+func (_u *UnitUpdateOne) ClearOrganizationID() *UnitUpdateOne {
+	_u.mutation.ClearOrganizationID()
+	return _u
+}
+
+// SetSettings sets the "settings" field.
+func (_u *UnitUpdateOne) SetSettings(v units.Settings) *UnitUpdateOne {
+	_u.mutation.SetSettings(v)
+	return _u
+}
+
+// SetNillableSettings sets the "settings" field if the given value is not nil.
+func (_u *UnitUpdateOne) SetNillableSettings(v *units.Settings) *UnitUpdateOne {
+	if v != nil {
+		_u.SetSettings(*v)
+	}
+	return _u
+}
+
 // AddCollectionIDs adds the "collections" edge to the UnitCollection entity by IDs.
 func (_u *UnitUpdateOne) AddCollectionIDs(ids ...uuid.UUID) *UnitUpdateOne {
 	_u.mutation.AddCollectionIDs(ids...)
@@ -418,6 +531,11 @@ func (_u *UnitUpdateOne) AddAddressRules(v ...*AddressRule) *UnitUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.AddAddressRuleIDs(ids...)
+}
+
+// SetOrganization sets the "organization" edge to the Organization entity.
+func (_u *UnitUpdateOne) SetOrganization(v *Organization) *UnitUpdateOne {
+	return _u.SetOrganizationID(v.ID)
 }
 
 // Mutation returns the UnitMutation object of the builder.
@@ -465,6 +583,12 @@ func (_u *UnitUpdateOne) RemoveAddressRules(v ...*AddressRule) *UnitUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveAddressRuleIDs(ids...)
+}
+
+// ClearOrganization clears the "organization" edge to the Organization entity.
+func (_u *UnitUpdateOne) ClearOrganization() *UnitUpdateOne {
+	_u.mutation.ClearOrganization()
+	return _u
 }
 
 // Where appends a list predicates to the UnitUpdate builder.
@@ -569,6 +693,9 @@ func (_u *UnitUpdateOne) sqlSave(ctx context.Context) (_node *Unit, err error) {
 	if value, ok := _u.mutation.Deleted(); ok {
 		_spec.SetField(unit.FieldDeleted, field.TypeBool, value)
 	}
+	if value, ok := _u.mutation.Settings(); ok {
+		_spec.SetField(unit.FieldSettings, field.TypeJSON, value)
+	}
 	if _u.mutation.CollectionsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2M,
@@ -652,6 +779,35 @@ func (_u *UnitUpdateOne) sqlSave(ctx context.Context) (_node *Unit, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(addressrule.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.OrganizationCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   unit.OrganizationTable,
+			Columns: []string{unit.OrganizationColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organization.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.OrganizationIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   unit.OrganizationTable,
+			Columns: []string{unit.OrganizationColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organization.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {

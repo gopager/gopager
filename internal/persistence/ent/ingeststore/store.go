@@ -577,6 +577,9 @@ func (s *Store) groupMessage(ctx context.Context, executor postgres.Executor, re
 func (s *Store) storeTargets(ctx context.Context, tx platform.TransactionContext, executor postgres.Executor,
 	transmission, message uuid.UUID, messageRevision int64, submission ingest.ValidatedSubmission,
 	accepted time.Time, match assignments.MatchResult) error {
+	if err := s.captureCorrectionDirty(ctx, executor, transmission, submission.ResolvedNetwork, accepted, match.Revision); err != nil {
+		return err
+	}
 	for position, target := range submission.TransmissionTargets {
 		original, err := json.Marshal(target)
 		if err != nil {
@@ -658,9 +661,24 @@ func (s *Store) storeTargets(ctx context.Context, tx platform.TransactionContext
 		_, err = executor.ExecContext(ctx, `INSERT INTO contribution_supports
 			(id,contribution_id,transmission_id,target_position,observed_at,accepted_at)
 			VALUES($1,$2,$3,NULL,$4,$5)`, uuid.New(), contributionID, transmission, submission.ObservedAt, accepted)
-		return err
+		if err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+func (s *Store) captureCorrectionDirty(ctx context.Context, executor postgres.Executor,
+	transmission, network uuid.UUID, accepted time.Time, assignmentRevision int64,
+) error {
+	_, err := executor.ExecContext(ctx, `INSERT INTO correction_dirty_transmissions
+		(scope_id,transmission_id,accepted_at,recorded_at)
+		SELECT scope.id,$1,$2,$2 FROM assignment_pending_scopes scope
+		WHERE scope.assignment_revision=$3 AND scope.state IN ('queued','running')
+		AND (jsonb_array_length(scope.network_ids)=0 OR scope.network_ids @> jsonb_build_array($4::text))
+		ON CONFLICT (scope_id,accepted_at,transmission_id) DO NOTHING`,
+		transmission, accepted, assignmentRevision, network)
+	return err
 }
 
 func (s *Store) mergeContributions(ctx context.Context, executor postgres.Executor, survivor, absorbed uuid.UUID) error {

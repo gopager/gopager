@@ -214,7 +214,7 @@ func TestManagementHTTPAndTLSReverseProxyWithHTTPUpstream(t *testing.T) {
 			collection := managementRequest(t, client, origin, "POST", "/api/v1/unit-collections",
 				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Stations"}`, login.CSRFToken, "", http.StatusCreated)
 			collectionID, _ := managementResultID(t, collection)
-			unitInput := `{"schemaVersion":1,"commandId":"` + uuid.NewString() + `","name":"Station","collectionIds":["` + collectionID.String() + `"]}`
+			unitInput := `{"schemaVersion":1,"commandId":"` + uuid.NewString() + `","name":"Station","collectionIds":["` + collectionID.String() + `"],"organizationId":null,"settings":{}}`
 			created := managementRequest(t, client, origin, "POST", "/api/v1/units", unitInput, login.CSRFToken, "", http.StatusCreated)
 			unitID, _ := managementResultID(t, created)
 			retry := managementRequest(t, client, origin, "POST", "/api/v1/units", unitInput, login.CSRFToken, "", http.StatusCreated)
@@ -223,10 +223,73 @@ func TestManagementHTTPAndTLSReverseProxyWithHTTPUpstream(t *testing.T) {
 			}
 			for _, membership := range []string{"", `,"collectionIds":null`} {
 				managementRequest(t, client, origin, "PUT", "/api/v1/units/"+unitID.String(),
-					`{"schemaVersion":1,"expectedRevision":"1","name":"Silent clear"`+membership+`}`, login.CSRFToken, "", http.StatusBadRequest)
+					`{"schemaVersion":1,"expectedRevision":"1","name":"Silent clear","organizationId":null,"settings":{}`+membership+`}`, login.CSRFToken, "", http.StatusBadRequest)
 			}
 			managementRequest(t, client, origin, "PUT", "/api/v1/units/"+unitID.String(),
-				`{"schemaVersion":1,"expectedRevision":"1","name":"Station renamed","collectionIds":["`+collectionID.String()+`"]}`, login.CSRFToken, "", http.StatusOK)
+				`{"schemaVersion":1,"expectedRevision":"1","name":"Station renamed","collectionIds":["`+collectionID.String()+`"],"organizationId":null,"settings":{}}`, login.CSRFToken, "", http.StatusOK)
+			defaults := `{"color":{"mode":"value","value":"#AABBCC"},"icon":{"mode":"unset"},"functionMeanings":{"mode":"unset"}}`
+			organization := managementRequest(t, client, origin, "POST", "/api/v1/organizations",
+				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Radio Operations","defaults":`+defaults+`}`,
+				login.CSRFToken, "", http.StatusCreated)
+			organizationID, _ := managementResultID(t, organization)
+			templateSettings := `{"color":{"mode":"inherit"},"icon":{"mode":"inherit"},"functionMeanings":{"mode":"inherit"}}`
+			template := managementRequest(t, client, origin, "POST", "/api/v1/unit-templates",
+				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Radio","organizationId":"`+
+					organizationID.String()+`","settings":`+templateSettings+`}`, login.CSRFToken, "", http.StatusCreated)
+			templateID, _ := managementResultID(t, template)
+			copied := managementRequest(t, client, origin, "POST", "/api/v1/units/from-template",
+				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","templateId":"`+templateID.String()+
+					`","name":"Copied Radio","collectionIds":[]}`, login.CSRFToken, "", http.StatusCreated)
+			copiedID, _ := managementResultID(t, copied)
+			bulkSettings := `{"color":{"mode":"value","value":"#123456"},"icon":{"mode":"unset"},"functionMeanings":{"mode":"unset"}}`
+			bulkItems := `"operation":"update","items":[{"id":"` + copiedID.String() +
+				`","expectedRevision":"1","settings":` + bulkSettings + `}]}`
+			bulk := `{"schemaVersion":1,"commandId":"` + uuid.NewString() + `",` + bulkItems
+			bulkPreview := `{"schemaVersion":1,` + bulkItems
+			preview := managementRequest(t, client, origin, "POST", "/api/v1/units/bulk/preview",
+				bulkPreview, login.CSRFToken, "", http.StatusOK)
+			var previewData struct {
+				Valid bool `json:"valid"`
+			}
+			if err := json.Unmarshal(preview.Data, &previewData); err != nil || !previewData.Valid {
+				t.Fatalf("bulk preview was invalid: %v", err)
+			}
+			managementRequest(t, client, origin, "POST", "/api/v1/units/bulk",
+				bulk, login.CSRFToken, "", http.StatusOK)
+			managementRequest(t, client, origin, "DELETE", "/api/v1/organizations/"+organizationID.String(),
+				`{"schemaVersion":1,"expectedRevision":"1"}`, login.CSRFToken, "", http.StatusOK)
+			managementRequest(t, client, origin, "GET", "/api/v1/unit-templates/"+templateID.String(),
+				"", "", "", http.StatusOK)
+			// AP-08 suppression/correction routes return only the safe version-1 error shape.
+			managementRequest(t, client, origin, "GET", "/api/v1/suppressions", "", "", "", http.StatusOK)
+			unknownTransmission := uuid.NewString()
+			missingTarget := managementRequest(t, client, origin, "POST", "/api/v1/suppressions",
+				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","transmissionId":"`+unknownTransmission+
+					`","targetPosition":0,"expectedAssignmentRevision":"1"}`, login.CSRFToken, "", http.StatusNotFound)
+			if missingTarget.Code != "NOT_FOUND" || strings.Contains(string(missingTarget.Data), unknownTransmission) {
+				t.Fatalf("unknown suppression target was not a safe NOT_FOUND: %+v", missingTarget)
+			}
+			unknownField := managementRequest(t, client, origin, "POST", "/api/v1/suppressions",
+				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","transmissionId":"`+unknownTransmission+
+					`","targetPosition":0,"expectedAssignmentRevision":"1","selector":"*"}`,
+				login.CSRFToken, "", http.StatusBadRequest)
+			if unknownField.Code != "INVALID_INPUT" {
+				t.Fatalf("broad suppression selector was not rejected: %+v", unknownField)
+			}
+			unknownCorrection := uuid.NewString()
+			for _, request := range []struct{ method, path, body, csrf string }{
+				{"GET", "/api/v1/assignment-corrections/" + unknownCorrection, "", ""},
+				{"POST", "/api/v1/assignment-corrections/" + unknownCorrection + "/retry",
+					`{"schemaVersion":1,"commandId":"` + uuid.NewString() + `"}`, login.CSRFToken},
+			} {
+				missing := managementRequest(t, client, origin, request.method, request.path, request.body,
+					request.csrf, "", http.StatusNotFound)
+				if missing.Code != "NOT_FOUND" || strings.Contains(string(missing.Data), unknownCorrection) {
+					t.Fatalf("%s %s was not a safe NOT_FOUND: %+v", request.method, request.path, missing)
+				}
+			}
+			managementRequest(t, client, origin, "GET", "/api/v1/units/"+copiedID.String(),
+				"", "", "", http.StatusOK)
 			managementRequest(t, client, origin, "GET", "/api/v1/units?offset=0&limit=1", "", "", "", http.StatusOK)
 			managementRequest(t, client, origin, "GET", "/api/v1/units?networkId=ignored", "", "", "", http.StatusBadRequest)
 			managementRequest(t, client, origin, "GET", "/api/v1/units", "", "", "Bearer malformed", http.StatusUnauthorized)
@@ -255,6 +318,87 @@ func TestManagementHTTPAndTLSReverseProxyWithHTTPUpstream(t *testing.T) {
 				`{"schemaVersion":1,"expectedRevision":"2"}`, login.CSRFToken, "", http.StatusOK)
 			managementRequest(t, client, origin, "DELETE", "/api/v1/units/"+unitID.String(),
 				`{"schemaVersion":1,"expectedRevision":"3"}`, login.CSRFToken, "", http.StatusAccepted)
+			if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+				executor, err := store.Resolve(tx)
+				if err != nil {
+					return err
+				}
+				if _, err := executor.ExecContext(tx.Context(), `UPDATE identity_grants
+					SET actions=actions-'unit-template.read'-'organization.create'
+					WHERE subject_kind='principal'`); err != nil {
+					return err
+				}
+				_, err = executor.ExecContext(tx.Context(), `UPDATE identity_control
+					SET access_revision=access_revision+1 WHERE id=1`)
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			var unitsBefore int
+			if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+				executor, err := store.Resolve(tx)
+				if err != nil {
+					return err
+				}
+				return executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM units`).Scan(&unitsBefore)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			deniedTemplateCopy := managementRequest(t, client, origin, "POST", "/api/v1/units/from-template",
+				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","templateId":"`+templateID.String()+
+					`","name":"Denied Copy","collectionIds":[]}`, login.CSRFToken, "", http.StatusForbidden)
+			if deniedTemplateCopy.Code != "FORBIDDEN" || strings.Contains(string(deniedTemplateCopy.Data), templateID.String()) ||
+				strings.Contains(string(deniedTemplateCopy.Data), organizationID.String()) {
+				t.Fatalf("template denial exposed cross-scope data: %+v", deniedTemplateCopy)
+			}
+			var unitsAfter int
+			if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+				executor, err := store.Resolve(tx)
+				if err != nil {
+					return err
+				}
+				return executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM units`).Scan(&unitsAfter)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if unitsAfter != unitsBefore {
+				t.Fatalf("denied template copy created a Unit: before=%d after=%d", unitsBefore, unitsAfter)
+			}
+			var organizationsBefore int
+			if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+				executor, err := store.Resolve(tx)
+				if err != nil {
+					return err
+				}
+				return executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM organizations`).
+					Scan(&organizationsBefore)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			inlineOrganization := `{"name":"Denied Inline","defaults":{"color":{"mode":"unset"},` +
+				`"icon":{"mode":"unset"},"functionMeanings":{"mode":"unset"}}}`
+			deniedInline := managementRequest(t, client, origin, "POST", "/api/v1/units",
+				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Denied Inline Unit",`+
+					`"collectionIds":[],"settings":{},"newOrganization":`+inlineOrganization+`}`,
+				login.CSRFToken, "", http.StatusForbidden)
+			if deniedInline.Code != "FORBIDDEN" {
+				t.Fatalf("inline Organization denial had unsafe HTTP code: %+v", deniedInline)
+			}
+			var organizationsAfter int
+			if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+				executor, err := store.Resolve(tx)
+				if err != nil {
+					return err
+				}
+				return executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM organizations`).
+					Scan(&organizationsAfter)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if organizationsAfter != organizationsBefore {
+				t.Fatalf("denied inline creation persisted an Organization: before=%d after=%d",
+					organizationsBefore, organizationsAfter)
+			}
 		})
 	}
 }
@@ -308,7 +452,7 @@ func TestManagementProductionNetworkOwnerHidesUnknownNetwork(t *testing.T) {
 	if len(cookies) != 1 {
 		t.Fatal("login did not set the Session cookie")
 	}
-	created := call("/api/v1/units", `{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Station","collectionIds":[]}`,
+	created := call("/api/v1/units", `{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Station","collectionIds":[],"organizationId":null,"settings":{}}`,
 		authentication.CSRFToken, cookies[0])
 	var unit managementResponse
 	if err := json.Unmarshal(created.Body.Bytes(), &unit); err != nil || created.Code != http.StatusCreated {

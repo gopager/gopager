@@ -374,6 +374,8 @@ type processingAPIRuntime struct {
 	routes          processingAPIRoutes
 	workerSource    worker.WorkSourceOwner
 	workerPublisher worker.Publisher
+	// correctionPublication is the same source owner, re-entering corrected Transmissions into C-11.
+	correctionPublication assignments.CorrectionPublication
 }
 
 func composeProcessingAPIRuntime(ctx context.Context, store *postgres.Store,
@@ -451,13 +453,13 @@ func composeProcessingAPIRuntime(ctx context.Context, store *postgres.Store,
 		return nil, err
 	}
 	matcher, err := assignments.NewService(store, resolver, store, assignmentRepository, unitRepository,
-		syntheticAssignmentNetworkOwner{owner: networks}, receipts, facts)
+		syntheticAssignmentNetworkOwner{owner: networks}, receipts, facts, facts)
 	if err != nil {
 		return nil, err
 	}
 	artifacts := &processingDefinitionArtifacts{host: host, root: root, store: store,
 		repository: repository, resolver: resolver}
-	preparer, err := processing.NewWorkflowDefinitionPreparer(processing.NewSyntheticDeclarationOwner(), host, artifacts)
+	preparer, err := processing.NewWorkflowDefinitionPreparer(processing.NewSyntheticDeclarationOwner(), processing.CoreRegex{}, artifacts)
 	if err != nil {
 		return nil, err
 	}
@@ -484,7 +486,7 @@ func composeProcessingAPIRuntime(ctx context.Context, store *postgres.Store,
 		return nil, err
 	}
 	sourceMatcher, err := assignments.NewService(store, resolver, store, assignmentRepository,
-		unitRepository, intakeRepository, receipts, facts)
+		unitRepository, intakeRepository, receipts, facts, facts)
 	if err != nil {
 		return nil, err
 	}
@@ -508,7 +510,7 @@ func composeProcessingAPIRuntime(ctx context.Context, store *postgres.Store,
 		return nil, err
 	}
 	return &processingAPIRuntime{host: host, root: root, executions: executions,
-		workerSource: workerSource, workerPublisher: workerSource,
+		workerSource: workerSource, workerPublisher: workerSource, correctionPublication: workerSource,
 		routes: processingAPIRoutes{workflows: workflows, reads: reads, retries: retries,
 			preview: preview, instances: instances},
 	}, nil

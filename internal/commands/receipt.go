@@ -15,8 +15,15 @@ import (
 )
 
 type Result struct {
+	ID       uuid.UUID    `json:"id"`
+	Revision int64        `json:"revision,string"`
+	Items    []ResultItem `json:"items,omitempty"`
+}
+
+type ResultItem struct {
 	ID       uuid.UUID `json:"id"`
 	Revision int64     `json:"revision,string"`
+	Status   string    `json:"status,omitempty"`
 }
 
 // Receipt retains no input snapshot or secret and is not a login receipt.

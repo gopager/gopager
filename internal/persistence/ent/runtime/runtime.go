@@ -6,12 +6,14 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/persistence/ent/account"
 	"github.com/gopager/gopager/internal/persistence/ent/addressrule"
 	"github.com/gopager/gopager/internal/persistence/ent/assignmentcontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/auditrecord"
 	"github.com/gopager/gopager/internal/persistence/ent/commandreceipt"
 	"github.com/gopager/gopager/internal/persistence/ent/contributionsupport"
+	"github.com/gopager/gopager/internal/persistence/ent/correctiondirtytransmission"
 	"github.com/gopager/gopager/internal/persistence/ent/credential"
 	"github.com/gopager/gopager/internal/persistence/ent/domainevent"
 	"github.com/gopager/gopager/internal/persistence/ent/fieldpermission"
@@ -26,6 +28,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/message"
 	"github.com/gopager/gopager/internal/persistence/ent/messagecontribution"
 	"github.com/gopager/gopager/internal/persistence/ent/network"
+	"github.com/gopager/gopager/internal/persistence/ent/organization"
 	"github.com/gopager/gopager/internal/persistence/ent/pendingassignmentscope"
 	"github.com/gopager/gopager/internal/persistence/ent/processingcandidate"
 	"github.com/gopager/gopager/internal/persistence/ent/processingcontrol"
@@ -33,10 +36,12 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/processinginstanceversion"
 	"github.com/gopager/gopager/internal/persistence/ent/processingresult"
 	"github.com/gopager/gopager/internal/persistence/ent/schema"
+	"github.com/gopager/gopager/internal/persistence/ent/targetsuppression"
 	"github.com/gopager/gopager/internal/persistence/ent/transmission"
 	"github.com/gopager/gopager/internal/persistence/ent/transmissiontarget"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
 	"github.com/gopager/gopager/internal/persistence/ent/unitcollection"
+	"github.com/gopager/gopager/internal/persistence/ent/unittemplate"
 	"github.com/gopager/gopager/internal/persistence/ent/usergroup"
 	"github.com/gopager/gopager/internal/persistence/ent/workflow"
 	"github.com/gopager/gopager/internal/persistence/ent/workflowscopereference"
@@ -174,6 +179,10 @@ func init() {
 	commandreceiptDescResultRevision := commandreceiptFields[6].Descriptor()
 	// commandreceipt.ResultRevisionValidator is a validator for the "result_revision" field. It is called by the builders before save.
 	commandreceipt.ResultRevisionValidator = commandreceiptDescResultRevision.Validators[0].(func(int64) error)
+	// commandreceiptDescResultItems is the schema descriptor for result_items field.
+	commandreceiptDescResultItems := commandreceiptFields[7].Descriptor()
+	// commandreceipt.DefaultResultItems holds the default value on creation for the result_items field.
+	commandreceipt.DefaultResultItems = commandreceiptDescResultItems.Default.([]commands.ResultItem)
 	// commandreceiptDescID is the schema descriptor for id field.
 	commandreceiptDescID := commandreceiptFields[0].Descriptor()
 	// commandreceipt.DefaultID holds the default value on creation for the id field.
@@ -193,6 +202,15 @@ func init() {
 	contributionsupportDescTargetPosition := contributionsupportFields[3].Descriptor()
 	// contributionsupport.TargetPositionValidator is a validator for the "target_position" field. It is called by the builders before save.
 	contributionsupport.TargetPositionValidator = contributionsupportDescTargetPosition.Validators[0].(func(int) error)
+	correctiondirtytransmission.Policy = privacy.NewPolicies(schema.CorrectionDirtyTransmission{})
+	correctiondirtytransmission.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := correctiondirtytransmission.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
 	credentialMixin := schema.Credential{}.Mixin()
 	credential.Policy = privacy.NewPolicies(schema.Credential{})
 	credential.Hooks[0] = func(next ent.Mutator) ent.Mutator {
@@ -511,6 +529,52 @@ func init() {
 	networkDescDeleted := networkFields[4].Descriptor()
 	// network.DefaultDeleted holds the default value on creation for the deleted field.
 	network.DefaultDeleted = networkDescDeleted.Default.(bool)
+	organizationMixin := schema.Organization{}.Mixin()
+	organization.Policy = privacy.NewPolicies(schema.Organization{})
+	organization.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := organization.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
+	organizationMixinFields0 := organizationMixin[0].Fields()
+	_ = organizationMixinFields0
+	organizationFields := schema.Organization{}.Fields()
+	_ = organizationFields
+	// organizationDescRevision is the schema descriptor for revision field.
+	organizationDescRevision := organizationMixinFields0[1].Descriptor()
+	// organization.DefaultRevision holds the default value on creation for the revision field.
+	organization.DefaultRevision = organizationDescRevision.Default.(int64)
+	// organization.RevisionValidator is a validator for the "revision" field. It is called by the builders before save.
+	organization.RevisionValidator = organizationDescRevision.Validators[0].(func(int64) error)
+	// organizationDescName is the schema descriptor for name field.
+	organizationDescName := organizationFields[0].Descriptor()
+	// organization.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	organization.NameValidator = func() func(string) error {
+		validators := organizationDescName.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(name string) error {
+			for _, fn := range fns {
+				if err := fn(name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// organizationDescDeleted is the schema descriptor for deleted field.
+	organizationDescDeleted := organizationFields[2].Descriptor()
+	// organization.DefaultDeleted holds the default value on creation for the deleted field.
+	organization.DefaultDeleted = organizationDescDeleted.Default.(bool)
+	// organizationDescID is the schema descriptor for id field.
+	organizationDescID := organizationMixinFields0[0].Descriptor()
+	// organization.DefaultID holds the default value on creation for the id field.
+	organization.DefaultID = organizationDescID.Default.(func() uuid.UUID)
 	pendingassignmentscope.Policy = privacy.NewPolicies(schema.PendingAssignmentScope{})
 	pendingassignmentscope.Hooks[0] = func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
@@ -526,6 +590,28 @@ func init() {
 	pendingassignmentscopeDescAssignmentRevision := pendingassignmentscopeFields[1].Descriptor()
 	// pendingassignmentscope.AssignmentRevisionValidator is a validator for the "assignment_revision" field. It is called by the builders before save.
 	pendingassignmentscope.AssignmentRevisionValidator = pendingassignmentscopeDescAssignmentRevision.Validators[0].(func(int64) error)
+	// pendingassignmentscopeDescAttempts is the schema descriptor for attempts field.
+	pendingassignmentscopeDescAttempts := pendingassignmentscopeFields[11].Descriptor()
+	// pendingassignmentscope.DefaultAttempts holds the default value on creation for the attempts field.
+	pendingassignmentscope.DefaultAttempts = pendingassignmentscopeDescAttempts.Default.(int)
+	// pendingassignmentscope.AttemptsValidator is a validator for the "attempts" field. It is called by the builders before save.
+	pendingassignmentscope.AttemptsValidator = pendingassignmentscopeDescAttempts.Validators[0].(func(int) error)
+	// pendingassignmentscopeDescFencingToken is the schema descriptor for fencing_token field.
+	pendingassignmentscopeDescFencingToken := pendingassignmentscopeFields[13].Descriptor()
+	// pendingassignmentscope.DefaultFencingToken holds the default value on creation for the fencing_token field.
+	pendingassignmentscope.DefaultFencingToken = pendingassignmentscopeDescFencingToken.Default.(int64)
+	// pendingassignmentscope.FencingTokenValidator is a validator for the "fencing_token" field. It is called by the builders before save.
+	pendingassignmentscope.FencingTokenValidator = pendingassignmentscopeDescFencingToken.Validators[0].(func(int64) error)
+	// pendingassignmentscopeDescAccessRevision is the schema descriptor for access_revision field.
+	pendingassignmentscopeDescAccessRevision := pendingassignmentscopeFields[14].Descriptor()
+	// pendingassignmentscope.DefaultAccessRevision holds the default value on creation for the access_revision field.
+	pendingassignmentscope.DefaultAccessRevision = pendingassignmentscopeDescAccessRevision.Default.(int64)
+	// pendingassignmentscope.AccessRevisionValidator is a validator for the "access_revision" field. It is called by the builders before save.
+	pendingassignmentscope.AccessRevisionValidator = pendingassignmentscopeDescAccessRevision.Validators[0].(func(int64) error)
+	// pendingassignmentscopeDescFailureCode is the schema descriptor for failure_code field.
+	pendingassignmentscopeDescFailureCode := pendingassignmentscopeFields[15].Descriptor()
+	// pendingassignmentscope.FailureCodeValidator is a validator for the "failure_code" field. It is called by the builders before save.
+	pendingassignmentscope.FailureCodeValidator = pendingassignmentscopeDescFailureCode.Validators[0].(func(string) error)
 	// pendingassignmentscopeDescID is the schema descriptor for id field.
 	pendingassignmentscopeDescID := pendingassignmentscopeFields[0].Descriptor()
 	// pendingassignmentscope.DefaultID holds the default value on creation for the id field.
@@ -665,6 +751,27 @@ func init() {
 	processingresultDescID := processingresultFields[0].Descriptor()
 	// processingresult.DefaultID holds the default value on creation for the id field.
 	processingresult.DefaultID = processingresultDescID.Default.(func() uuid.UUID)
+	targetsuppression.Policy = privacy.NewPolicies(schema.TargetSuppression{})
+	targetsuppression.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := targetsuppression.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
+	targetsuppressionFields := schema.TargetSuppression{}.Fields()
+	_ = targetsuppressionFields
+	// targetsuppressionDescTargetPosition is the schema descriptor for target_position field.
+	targetsuppressionDescTargetPosition := targetsuppressionFields[2].Descriptor()
+	// targetsuppression.TargetPositionValidator is a validator for the "target_position" field. It is called by the builders before save.
+	targetsuppression.TargetPositionValidator = targetsuppressionDescTargetPosition.Validators[0].(func(int) error)
+	// targetsuppressionDescRevision is the schema descriptor for revision field.
+	targetsuppressionDescRevision := targetsuppressionFields[3].Descriptor()
+	// targetsuppression.DefaultRevision holds the default value on creation for the revision field.
+	targetsuppression.DefaultRevision = targetsuppressionDescRevision.Default.(int64)
+	// targetsuppression.RevisionValidator is a validator for the "revision" field. It is called by the builders before save.
+	targetsuppression.RevisionValidator = targetsuppressionDescRevision.Validators[0].(func(int64) error)
 	transmission.Policy = privacy.NewPolicies(schema.Transmission{})
 	transmission.Hooks[0] = func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
@@ -799,6 +906,52 @@ func init() {
 	unitcollectionDescID := unitcollectionMixinFields0[0].Descriptor()
 	// unitcollection.DefaultID holds the default value on creation for the id field.
 	unitcollection.DefaultID = unitcollectionDescID.Default.(func() uuid.UUID)
+	unittemplateMixin := schema.UnitTemplate{}.Mixin()
+	unittemplate.Policy = privacy.NewPolicies(schema.UnitTemplate{})
+	unittemplate.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := unittemplate.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
+	unittemplateMixinFields0 := unittemplateMixin[0].Fields()
+	_ = unittemplateMixinFields0
+	unittemplateFields := schema.UnitTemplate{}.Fields()
+	_ = unittemplateFields
+	// unittemplateDescRevision is the schema descriptor for revision field.
+	unittemplateDescRevision := unittemplateMixinFields0[1].Descriptor()
+	// unittemplate.DefaultRevision holds the default value on creation for the revision field.
+	unittemplate.DefaultRevision = unittemplateDescRevision.Default.(int64)
+	// unittemplate.RevisionValidator is a validator for the "revision" field. It is called by the builders before save.
+	unittemplate.RevisionValidator = unittemplateDescRevision.Validators[0].(func(int64) error)
+	// unittemplateDescName is the schema descriptor for name field.
+	unittemplateDescName := unittemplateFields[0].Descriptor()
+	// unittemplate.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	unittemplate.NameValidator = func() func(string) error {
+		validators := unittemplateDescName.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(name string) error {
+			for _, fn := range fns {
+				if err := fn(name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// unittemplateDescDeleted is the schema descriptor for deleted field.
+	unittemplateDescDeleted := unittemplateFields[3].Descriptor()
+	// unittemplate.DefaultDeleted holds the default value on creation for the deleted field.
+	unittemplate.DefaultDeleted = unittemplateDescDeleted.Default.(bool)
+	// unittemplateDescID is the schema descriptor for id field.
+	unittemplateDescID := unittemplateMixinFields0[0].Descriptor()
+	// unittemplate.DefaultID holds the default value on creation for the id field.
+	unittemplate.DefaultID = unittemplateDescID.Default.(func() uuid.UUID)
 	usergroupMixin := schema.UserGroup{}.Mixin()
 	usergroup.Policy = privacy.NewPolicies(schema.UserGroup{})
 	usergroup.Hooks[0] = func(next ent.Mutator) ent.Mutator {

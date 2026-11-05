@@ -1,16 +1,4 @@
 -- +goose Up
--- +goose StatementBegin
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM identity_grants WHERE field_names <> '[]'::jsonb) THEN
-        RAISE EXCEPTION 'INCOMPATIBLE_VERSION: scoped development field permissions require explicit review';
-    END IF;
-END;
-$$;
--- +goose StatementEnd
-
--- Retain the unpublished legacy column without using it for authorization.
-ALTER TABLE identity_grants ALTER COLUMN field_names SET DEFAULT '[]'::jsonb;
 CREATE TABLE identity_field_permissions (
     id uuid PRIMARY KEY,
     revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
@@ -32,4 +20,3 @@ END;
 $$;
 -- +goose StatementEnd
 DROP TABLE identity_field_permissions;
-ALTER TABLE identity_grants ALTER COLUMN field_names DROP DEFAULT;

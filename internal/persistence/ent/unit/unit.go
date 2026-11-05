@@ -20,10 +20,16 @@ const (
 	FieldName = "name"
 	// FieldDeleted holds the string denoting the deleted field in the database.
 	FieldDeleted = "deleted"
+	// FieldOrganizationID holds the string denoting the organization_id field in the database.
+	FieldOrganizationID = "organization_id"
+	// FieldSettings holds the string denoting the settings field in the database.
+	FieldSettings = "settings"
 	// EdgeCollections holds the string denoting the collections edge name in mutations.
 	EdgeCollections = "collections"
 	// EdgeAddressRules holds the string denoting the address_rules edge name in mutations.
 	EdgeAddressRules = "address_rules"
+	// EdgeOrganization holds the string denoting the organization edge name in mutations.
+	EdgeOrganization = "organization"
 	// Table holds the table name of the unit in the database.
 	Table = "units"
 	// CollectionsTable is the table that holds the collections relation/edge. The primary key declared below.
@@ -38,6 +44,13 @@ const (
 	AddressRulesInverseTable = "address_rules"
 	// AddressRulesColumn is the table column denoting the address_rules relation/edge.
 	AddressRulesColumn = "unit_id"
+	// OrganizationTable is the table that holds the organization relation/edge.
+	OrganizationTable = "units"
+	// OrganizationInverseTable is the table name for the Organization entity.
+	// It exists in this package in order to avoid circular dependency with the "organization" package.
+	OrganizationInverseTable = "organizations"
+	// OrganizationColumn is the table column denoting the organization relation/edge.
+	OrganizationColumn = "organization_id"
 )
 
 // Columns holds all SQL columns for unit fields.
@@ -46,6 +59,8 @@ var Columns = []string{
 	FieldRevision,
 	FieldName,
 	FieldDeleted,
+	FieldOrganizationID,
+	FieldSettings,
 }
 
 var (
@@ -107,6 +122,11 @@ func ByDeleted(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDeleted, opts...).ToFunc()
 }
 
+// ByOrganizationID orders the results by the organization_id field.
+func ByOrganizationID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOrganizationID, opts...).ToFunc()
+}
+
 // ByCollectionsCount orders the results by collections count.
 func ByCollectionsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -134,6 +154,13 @@ func ByAddressRules(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newAddressRulesStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByOrganizationField orders the results by organization field.
+func ByOrganizationField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newOrganizationStep(), sql.OrderByField(field, opts...))
+	}
+}
 func newCollectionsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -146,5 +173,12 @@ func newAddressRulesStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(AddressRulesInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, AddressRulesTable, AddressRulesColumn),
+	)
+}
+func newOrganizationStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(OrganizationInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, OrganizationTable, OrganizationColumn),
 	)
 }

@@ -88,7 +88,7 @@ type WorkflowProgram struct {
 	selector             *PredicateProgram
 	steps                []compiledStep
 	targeted             bool
-	regex                *WASMHost
+	regex                RegexEvaluator
 	preparationArtifacts any
 }
 
@@ -208,19 +208,19 @@ func cloneDeclarations(local map[string]FieldSchema) map[string]FieldSchema {
 
 // CompileWorkflow prepares a closed definition outside source transactions.
 // The supplied owner declarations are authoritative; this does not accept a user schema as authority.
-func CompileWorkflow(ctx context.Context, definition Definition, source Declarations, regex *WASMHost) (*WorkflowProgram, error) {
+func CompileWorkflow(ctx context.Context, definition Definition, source Declarations, regex RegexEvaluator) (*WorkflowProgram, error) {
 	return compileWorkflow(ctx, definition, source, regex, nil)
 }
 
 // CompileWorkflowInstalled additionally prepares declared artifacts through their trusted instance owner.
-func CompileWorkflowInstalled(ctx context.Context, definition Definition, source Declarations, regex *WASMHost, artifacts InstalledArtifacts) (*WorkflowProgram, error) {
+func CompileWorkflowInstalled(ctx context.Context, definition Definition, source Declarations, regex RegexEvaluator, artifacts InstalledArtifacts) (*WorkflowProgram, error) {
 	if artifacts == nil {
 		return nil, capabilityUnavailable(errors.New("installed artifact owner unavailable"))
 	}
 	return compileWorkflow(ctx, definition, source, regex, artifacts)
 }
 
-func compileWorkflow(ctx context.Context, definition Definition, source Declarations, regex *WASMHost, artifacts InstalledArtifacts) (*WorkflowProgram, error) {
+func compileWorkflow(ctx context.Context, definition Definition, source Declarations, regex RegexEvaluator, artifacts InstalledArtifacts) (*WorkflowProgram, error) {
 	if ctx == nil || source == nil {
 		return nil, invalid(errors.New("missing Workflow preparation participant"))
 	}

@@ -54,14 +54,14 @@ type Service struct {
 	transactions identity.Transactions
 	repository   Repository
 	source       SourceOwner
-	regex        *processing.WASMHost
+	regex        processing.RegexEvaluator
 	id           uuid.UUID
 	publisher    Publisher
 }
 
 // New requires real owner participants; an absent source cannot be treated as eligible work.
 func New(transactions identity.Transactions, repository Repository, source SourceOwner,
-	regex *processing.WASMHost, id uuid.UUID) (*Service, error) {
+	regex processing.RegexEvaluator, id uuid.UUID) (*Service, error) {
 	if transactions == nil || repository == nil || source == nil || regex == nil || id == uuid.Nil {
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing Processing worker dependency"))
 	}
@@ -70,7 +70,7 @@ func New(transactions identity.Transactions, repository Repository, source Sourc
 
 // NewWithPublisher requires the atomic publication participant used by production dispatch.
 func NewWithPublisher(transactions identity.Transactions, repository Repository, source SourceOwner,
-	regex *processing.WASMHost, id uuid.UUID, publisher Publisher) (*Service, error) {
+	regex processing.RegexEvaluator, id uuid.UUID, publisher Publisher) (*Service, error) {
 	if publisher == nil {
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing Processing publication dependency"))
 	}

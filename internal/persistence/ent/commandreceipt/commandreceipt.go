@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/commands"
 )
 
 const (
@@ -25,6 +26,8 @@ const (
 	FieldResultID = "result_id"
 	// FieldResultRevision holds the string denoting the result_revision field in the database.
 	FieldResultRevision = "result_revision"
+	// FieldResultItems holds the string denoting the result_items field in the database.
+	FieldResultItems = "result_items"
 	// FieldRecordedAt holds the string denoting the recorded_at field in the database.
 	FieldRecordedAt = "recorded_at"
 	// Table holds the table name of the commandreceipt in the database.
@@ -40,6 +43,7 @@ var Columns = []string{
 	FieldFingerprint,
 	FieldResultID,
 	FieldResultRevision,
+	FieldResultItems,
 	FieldRecordedAt,
 }
 
@@ -65,6 +69,8 @@ var (
 	OperationValidator func(string) error
 	// ResultRevisionValidator is a validator for the "result_revision" field. It is called by the builders before save.
 	ResultRevisionValidator func(int64) error
+	// DefaultResultItems holds the default value on creation for the "result_items" field.
+	DefaultResultItems []commands.ResultItem
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )

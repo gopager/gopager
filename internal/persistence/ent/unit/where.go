@@ -69,6 +69,11 @@ func Deleted(v bool) predicate.Unit {
 	return predicate.Unit(sql.FieldEQ(FieldDeleted, v))
 }
 
+// OrganizationID applies equality check predicate on the "organization_id" field. It's identical to OrganizationIDEQ.
+func OrganizationID(v uuid.UUID) predicate.Unit {
+	return predicate.Unit(sql.FieldEQ(FieldOrganizationID, v))
+}
+
 // RevisionEQ applies the EQ predicate on the "revision" field.
 func RevisionEQ(v int64) predicate.Unit {
 	return predicate.Unit(sql.FieldEQ(FieldRevision, v))
@@ -184,6 +189,36 @@ func DeletedNEQ(v bool) predicate.Unit {
 	return predicate.Unit(sql.FieldNEQ(FieldDeleted, v))
 }
 
+// OrganizationIDEQ applies the EQ predicate on the "organization_id" field.
+func OrganizationIDEQ(v uuid.UUID) predicate.Unit {
+	return predicate.Unit(sql.FieldEQ(FieldOrganizationID, v))
+}
+
+// OrganizationIDNEQ applies the NEQ predicate on the "organization_id" field.
+func OrganizationIDNEQ(v uuid.UUID) predicate.Unit {
+	return predicate.Unit(sql.FieldNEQ(FieldOrganizationID, v))
+}
+
+// OrganizationIDIn applies the In predicate on the "organization_id" field.
+func OrganizationIDIn(vs ...uuid.UUID) predicate.Unit {
+	return predicate.Unit(sql.FieldIn(FieldOrganizationID, vs...))
+}
+
+// OrganizationIDNotIn applies the NotIn predicate on the "organization_id" field.
+func OrganizationIDNotIn(vs ...uuid.UUID) predicate.Unit {
+	return predicate.Unit(sql.FieldNotIn(FieldOrganizationID, vs...))
+}
+
+// OrganizationIDIsNil applies the IsNil predicate on the "organization_id" field.
+func OrganizationIDIsNil() predicate.Unit {
+	return predicate.Unit(sql.FieldIsNull(FieldOrganizationID))
+}
+
+// OrganizationIDNotNil applies the NotNil predicate on the "organization_id" field.
+func OrganizationIDNotNil() predicate.Unit {
+	return predicate.Unit(sql.FieldNotNull(FieldOrganizationID))
+}
+
 // HasCollections applies the HasEdge predicate on the "collections" edge.
 func HasCollections() predicate.Unit {
 	return predicate.Unit(func(s *sql.Selector) {
@@ -222,6 +257,29 @@ func HasAddressRules() predicate.Unit {
 func HasAddressRulesWith(preds ...predicate.AddressRule) predicate.Unit {
 	return predicate.Unit(func(s *sql.Selector) {
 		step := newAddressRulesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasOrganization applies the HasEdge predicate on the "organization" edge.
+func HasOrganization() predicate.Unit {
+	return predicate.Unit(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, OrganizationTable, OrganizationColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasOrganizationWith applies the HasEdge predicate on the "organization" edge with a given conditions (other predicates).
+func HasOrganizationWith(preds ...predicate.Organization) predicate.Unit {
+	return predicate.Unit(func(s *sql.Selector) {
+		step := newOrganizationStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

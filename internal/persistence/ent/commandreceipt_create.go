@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/persistence/ent/commandreceipt"
 )
 
@@ -54,6 +55,12 @@ func (_c *CommandReceiptCreate) SetResultID(v uuid.UUID) *CommandReceiptCreate {
 // SetResultRevision sets the "result_revision" field.
 func (_c *CommandReceiptCreate) SetResultRevision(v int64) *CommandReceiptCreate {
 	_c.mutation.SetResultRevision(v)
+	return _c
+}
+
+// SetResultItems sets the "result_items" field.
+func (_c *CommandReceiptCreate) SetResultItems(v []commands.ResultItem) *CommandReceiptCreate {
+	_c.mutation.SetResultItems(v)
 	return _c
 }
 
@@ -114,6 +121,10 @@ func (_c *CommandReceiptCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *CommandReceiptCreate) defaults() error {
+	if _, ok := _c.mutation.ResultItems(); !ok {
+		v := commandreceipt.DefaultResultItems
+		_c.mutation.SetResultItems(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		if commandreceipt.DefaultID == nil {
 			return fmt.Errorf("ent: uninitialized commandreceipt.DefaultID (forgotten import ent/runtime?)")
@@ -153,6 +164,9 @@ func (_c *CommandReceiptCreate) check() error {
 		if err := commandreceipt.ResultRevisionValidator(v); err != nil {
 			return &ValidationError{Name: "result_revision", err: fmt.Errorf(`ent: validator failed for field "CommandReceipt.result_revision": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.ResultItems(); !ok {
+		return &ValidationError{Name: "result_items", err: errors.New(`ent: missing required field "CommandReceipt.result_items"`)}
 	}
 	if _, ok := _c.mutation.RecordedAt(); !ok {
 		return &ValidationError{Name: "recorded_at", err: errors.New(`ent: missing required field "CommandReceipt.recorded_at"`)}
@@ -215,6 +229,10 @@ func (_c *CommandReceiptCreate) createSpec() (*CommandReceipt, *sqlgraph.CreateS
 	if value, ok := _c.mutation.ResultRevision(); ok {
 		_spec.SetField(commandreceipt.FieldResultRevision, field.TypeInt64, value)
 		_node.ResultRevision = value
+	}
+	if value, ok := _c.mutation.ResultItems(); ok {
+		_spec.SetField(commandreceipt.FieldResultItems, field.TypeJSON, value)
+		_node.ResultItems = value
 	}
 	if value, ok := _c.mutation.RecordedAt(); ok {
 		_spec.SetField(commandreceipt.FieldRecordedAt, field.TypeTime, value)

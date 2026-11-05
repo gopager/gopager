@@ -76,15 +76,6 @@ func TestProcessingWorkerPrivateEvaluationAndCurrentSourceRecheck(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	host, err := processing.NewWASMHost(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := host.Close(context.Background()); err != nil {
-			t.Error(err)
-		}
-	})
 	actor := uuid.New()
 	authority := processingAuthorityFixture(actor, authz.Scope{Kind: "all"})
 	configuration := processing.WorkflowConfiguration{ID: uuid.New(), Revision: 1, Name: "worker",
@@ -186,7 +177,7 @@ func TestProcessingWorkerPrivateEvaluationAndCurrentSourceRecheck(t *testing.T) 
 				}}
 			}
 			workerID := uuid.New()
-			runner, err := worker.New(primary, repository, owner, host, workerID)
+			runner, err := worker.New(primary, repository, owner, processing.CoreRegex{}, workerID)
 			if err != nil {
 				t.Fatal(err)
 			}

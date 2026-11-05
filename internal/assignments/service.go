@@ -17,23 +17,35 @@ import (
 )
 
 type Service struct {
-	transactions identity.Transactions
-	resolver     *identity.Resolver
-	clock        platform.Clock
-	repository   Repository
-	units        units.ContextReader
-	networks     NetworkOwner
-	commands     commands.Repository
-	facts        events.ConfigurationAppender
+	transactions    identity.Transactions
+	resolver        *identity.Resolver
+	clock           platform.Clock
+	repository      Repository
+	units           units.ContextReader
+	networks        NetworkOwner
+	commands        commands.Repository
+	facts           events.ConfigurationAppender
+	correctionFacts events.CorrectionAppender
 }
 
 // NewService composes current rules; operations needing an unwired Network owner fail explicitly.
-func NewService(transactions identity.Transactions, resolver *identity.Resolver, clock platform.Clock, repository Repository, unitOwner units.ContextReader, networks NetworkOwner, receipts commands.Repository, facts events.ConfigurationAppender) (*Service, error) {
+func NewService(transactions identity.Transactions, resolver *identity.Resolver, clock platform.Clock, repository Repository,
+	unitOwner units.ContextReader, networks NetworkOwner, receipts commands.Repository, facts events.ConfigurationAppender,
+	correctionFacts ...events.CorrectionAppender,
+) (*Service, error) {
 	if transactions == nil || resolver == nil || clock == nil || repository == nil || unitOwner == nil || receipts == nil || facts == nil {
 		return nil, authz.ErrInvalidInput
 	}
+	if len(correctionFacts) > 1 {
+		return nil, authz.ErrInvalidInput
+	}
+	var correctionAppender events.CorrectionAppender
+	if len(correctionFacts) == 1 {
+		correctionAppender = correctionFacts[0]
+	}
 	return &Service{transactions: transactions, resolver: resolver, clock: clock, repository: repository,
-		units: unitOwner, networks: networks, commands: receipts, facts: facts}, nil
+		units: unitOwner, networks: networks, commands: receipts, facts: facts,
+		correctionFacts: correctionAppender}, nil
 }
 
 // within resolves current authority before the Assignment lock, using one primary transaction.

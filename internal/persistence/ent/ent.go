@@ -18,6 +18,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/auditrecord"
 	"github.com/gopager/gopager/internal/persistence/ent/commandreceipt"
 	"github.com/gopager/gopager/internal/persistence/ent/contributionsupport"
+	"github.com/gopager/gopager/internal/persistence/ent/correctiondirtytransmission"
 	"github.com/gopager/gopager/internal/persistence/ent/credential"
 	"github.com/gopager/gopager/internal/persistence/ent/domainevent"
 	"github.com/gopager/gopager/internal/persistence/ent/fieldpermission"
@@ -32,16 +33,19 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/message"
 	"github.com/gopager/gopager/internal/persistence/ent/messagecontribution"
 	"github.com/gopager/gopager/internal/persistence/ent/network"
+	"github.com/gopager/gopager/internal/persistence/ent/organization"
 	"github.com/gopager/gopager/internal/persistence/ent/pendingassignmentscope"
 	"github.com/gopager/gopager/internal/persistence/ent/processingcandidate"
 	"github.com/gopager/gopager/internal/persistence/ent/processingcontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/processinginstance"
 	"github.com/gopager/gopager/internal/persistence/ent/processinginstanceversion"
 	"github.com/gopager/gopager/internal/persistence/ent/processingresult"
+	"github.com/gopager/gopager/internal/persistence/ent/targetsuppression"
 	"github.com/gopager/gopager/internal/persistence/ent/transmission"
 	"github.com/gopager/gopager/internal/persistence/ent/transmissiontarget"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
 	"github.com/gopager/gopager/internal/persistence/ent/unitcollection"
+	"github.com/gopager/gopager/internal/persistence/ent/unittemplate"
 	"github.com/gopager/gopager/internal/persistence/ent/usergroup"
 	"github.com/gopager/gopager/internal/persistence/ent/workflow"
 	"github.com/gopager/gopager/internal/persistence/ent/workflowscopereference"
@@ -106,40 +110,44 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			account.Table:                   account.ValidColumn,
-			addressrule.Table:               addressrule.ValidColumn,
-			assignmentcontrol.Table:         assignmentcontrol.ValidColumn,
-			auditrecord.Table:               auditrecord.ValidColumn,
-			commandreceipt.Table:            commandreceipt.ValidColumn,
-			contributionsupport.Table:       contributionsupport.ValidColumn,
-			credential.Table:                credential.ValidColumn,
-			domainevent.Table:               domainevent.ValidColumn,
-			fieldpermission.Table:           fieldpermission.ValidColumn,
-			gateway.Table:                   gateway.ValidColumn,
-			gatewaycredential.Table:         gatewaycredential.ValidColumn,
-			gatewaynetwork.Table:            gatewaynetwork.ValidColumn,
-			grant.Table:                     grant.ValidColumn,
-			groupingcontrol.Table:           groupingcontrol.ValidColumn,
-			identitycontrol.Table:           identitycontrol.ValidColumn,
-			loginattempt.Table:              loginattempt.ValidColumn,
-			membership.Table:                membership.ValidColumn,
-			message.Table:                   message.ValidColumn,
-			messagecontribution.Table:       messagecontribution.ValidColumn,
-			network.Table:                   network.ValidColumn,
-			pendingassignmentscope.Table:    pendingassignmentscope.ValidColumn,
-			processingcandidate.Table:       processingcandidate.ValidColumn,
-			processingcontrol.Table:         processingcontrol.ValidColumn,
-			processinginstance.Table:        processinginstance.ValidColumn,
-			processinginstanceversion.Table: processinginstanceversion.ValidColumn,
-			processingresult.Table:          processingresult.ValidColumn,
-			transmission.Table:              transmission.ValidColumn,
-			transmissiontarget.Table:        transmissiontarget.ValidColumn,
-			unit.Table:                      unit.ValidColumn,
-			unitcollection.Table:            unitcollection.ValidColumn,
-			usergroup.Table:                 usergroup.ValidColumn,
-			workflow.Table:                  workflow.ValidColumn,
-			workflowscopereference.Table:    workflowscopereference.ValidColumn,
-			workflowversion.Table:           workflowversion.ValidColumn,
+			account.Table:                     account.ValidColumn,
+			addressrule.Table:                 addressrule.ValidColumn,
+			assignmentcontrol.Table:           assignmentcontrol.ValidColumn,
+			auditrecord.Table:                 auditrecord.ValidColumn,
+			commandreceipt.Table:              commandreceipt.ValidColumn,
+			contributionsupport.Table:         contributionsupport.ValidColumn,
+			correctiondirtytransmission.Table: correctiondirtytransmission.ValidColumn,
+			credential.Table:                  credential.ValidColumn,
+			domainevent.Table:                 domainevent.ValidColumn,
+			fieldpermission.Table:             fieldpermission.ValidColumn,
+			gateway.Table:                     gateway.ValidColumn,
+			gatewaycredential.Table:           gatewaycredential.ValidColumn,
+			gatewaynetwork.Table:              gatewaynetwork.ValidColumn,
+			grant.Table:                       grant.ValidColumn,
+			groupingcontrol.Table:             groupingcontrol.ValidColumn,
+			identitycontrol.Table:             identitycontrol.ValidColumn,
+			loginattempt.Table:                loginattempt.ValidColumn,
+			membership.Table:                  membership.ValidColumn,
+			message.Table:                     message.ValidColumn,
+			messagecontribution.Table:         messagecontribution.ValidColumn,
+			network.Table:                     network.ValidColumn,
+			organization.Table:                organization.ValidColumn,
+			pendingassignmentscope.Table:      pendingassignmentscope.ValidColumn,
+			processingcandidate.Table:         processingcandidate.ValidColumn,
+			processingcontrol.Table:           processingcontrol.ValidColumn,
+			processinginstance.Table:          processinginstance.ValidColumn,
+			processinginstanceversion.Table:   processinginstanceversion.ValidColumn,
+			processingresult.Table:            processingresult.ValidColumn,
+			targetsuppression.Table:           targetsuppression.ValidColumn,
+			transmission.Table:                transmission.ValidColumn,
+			transmissiontarget.Table:          transmissiontarget.ValidColumn,
+			unit.Table:                        unit.ValidColumn,
+			unitcollection.Table:              unitcollection.ValidColumn,
+			unittemplate.Table:                unittemplate.ValidColumn,
+			usergroup.Table:                   usergroup.ValidColumn,
+			workflow.Table:                    workflow.ValidColumn,
+			workflowscopereference.Table:      workflowscopereference.ValidColumn,
+			workflowversion.Table:             workflowversion.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

@@ -25,6 +25,26 @@ const (
 	FieldReason = "reason"
 	// FieldRecordedAt holds the string denoting the recorded_at field in the database.
 	FieldRecordedAt = "recorded_at"
+	// FieldState holds the string denoting the state field in the database.
+	FieldState = "state"
+	// FieldHighWaterAcceptedAt holds the string denoting the high_water_accepted_at field in the database.
+	FieldHighWaterAcceptedAt = "high_water_accepted_at"
+	// FieldHighWaterTransmissionID holds the string denoting the high_water_transmission_id field in the database.
+	FieldHighWaterTransmissionID = "high_water_transmission_id"
+	// FieldCursorAcceptedAt holds the string denoting the cursor_accepted_at field in the database.
+	FieldCursorAcceptedAt = "cursor_accepted_at"
+	// FieldCursorTransmissionID holds the string denoting the cursor_transmission_id field in the database.
+	FieldCursorTransmissionID = "cursor_transmission_id"
+	// FieldAttempts holds the string denoting the attempts field in the database.
+	FieldAttempts = "attempts"
+	// FieldLeaseUntil holds the string denoting the lease_until field in the database.
+	FieldLeaseUntil = "lease_until"
+	// FieldFencingToken holds the string denoting the fencing_token field in the database.
+	FieldFencingToken = "fencing_token"
+	// FieldAccessRevision holds the string denoting the access_revision field in the database.
+	FieldAccessRevision = "access_revision"
+	// FieldFailureCode holds the string denoting the failure_code field in the database.
+	FieldFailureCode = "failure_code"
 	// Table holds the table name of the pendingassignmentscope in the database.
 	Table = "assignment_pending_scopes"
 )
@@ -37,6 +57,16 @@ var Columns = []string{
 	FieldUnitID,
 	FieldReason,
 	FieldRecordedAt,
+	FieldState,
+	FieldHighWaterAcceptedAt,
+	FieldHighWaterTransmissionID,
+	FieldCursorAcceptedAt,
+	FieldCursorTransmissionID,
+	FieldAttempts,
+	FieldLeaseUntil,
+	FieldFencingToken,
+	FieldAccessRevision,
+	FieldFailureCode,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -59,6 +89,20 @@ var (
 	Policy ent.Policy
 	// AssignmentRevisionValidator is a validator for the "assignment_revision" field. It is called by the builders before save.
 	AssignmentRevisionValidator func(int64) error
+	// DefaultAttempts holds the default value on creation for the "attempts" field.
+	DefaultAttempts int
+	// AttemptsValidator is a validator for the "attempts" field. It is called by the builders before save.
+	AttemptsValidator func(int) error
+	// DefaultFencingToken holds the default value on creation for the "fencing_token" field.
+	DefaultFencingToken int64
+	// FencingTokenValidator is a validator for the "fencing_token" field. It is called by the builders before save.
+	FencingTokenValidator func(int64) error
+	// DefaultAccessRevision holds the default value on creation for the "access_revision" field.
+	DefaultAccessRevision int64
+	// AccessRevisionValidator is a validator for the "access_revision" field. It is called by the builders before save.
+	AccessRevisionValidator func(int64) error
+	// FailureCodeValidator is a validator for the "failure_code" field. It is called by the builders before save.
+	FailureCodeValidator func(string) error
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -68,8 +112,9 @@ type Reason string
 
 // Reason values.
 const (
-	ReasonRuleChange  Reason = "rule-change"
-	ReasonUnitDeleted Reason = "unit-deleted"
+	ReasonRuleChange        Reason = "rule-change"
+	ReasonUnitDeleted       Reason = "unit-deleted"
+	ReasonSuppressionChange Reason = "suppression-change"
 )
 
 func (r Reason) String() string {
@@ -79,10 +124,39 @@ func (r Reason) String() string {
 // ReasonValidator is a validator for the "reason" field enum values. It is called by the builders before save.
 func ReasonValidator(r Reason) error {
 	switch r {
-	case ReasonRuleChange, ReasonUnitDeleted:
+	case ReasonRuleChange, ReasonUnitDeleted, ReasonSuppressionChange:
 		return nil
 	default:
 		return fmt.Errorf("pendingassignmentscope: invalid enum value for reason field: %q", r)
+	}
+}
+
+// State defines the type for the "state" enum field.
+type State string
+
+// StateQueued is the default value of the State enum.
+const DefaultState = StateQueued
+
+// State values.
+const (
+	StateQueued     State = "queued"
+	StateRunning    State = "running"
+	StateCompleted  State = "completed"
+	StateFailed     State = "failed"
+	StateSuperseded State = "superseded"
+)
+
+func (s State) String() string {
+	return string(s)
+}
+
+// StateValidator is a validator for the "state" field enum values. It is called by the builders before save.
+func StateValidator(s State) error {
+	switch s {
+	case StateQueued, StateRunning, StateCompleted, StateFailed, StateSuperseded:
+		return nil
+	default:
+		return fmt.Errorf("pendingassignmentscope: invalid enum value for state field: %q", s)
 	}
 }
 
@@ -112,4 +186,54 @@ func ByReason(opts ...sql.OrderTermOption) OrderOption {
 // ByRecordedAt orders the results by the recorded_at field.
 func ByRecordedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRecordedAt, opts...).ToFunc()
+}
+
+// ByState orders the results by the state field.
+func ByState(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldState, opts...).ToFunc()
+}
+
+// ByHighWaterAcceptedAt orders the results by the high_water_accepted_at field.
+func ByHighWaterAcceptedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldHighWaterAcceptedAt, opts...).ToFunc()
+}
+
+// ByHighWaterTransmissionID orders the results by the high_water_transmission_id field.
+func ByHighWaterTransmissionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldHighWaterTransmissionID, opts...).ToFunc()
+}
+
+// ByCursorAcceptedAt orders the results by the cursor_accepted_at field.
+func ByCursorAcceptedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCursorAcceptedAt, opts...).ToFunc()
+}
+
+// ByCursorTransmissionID orders the results by the cursor_transmission_id field.
+func ByCursorTransmissionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCursorTransmissionID, opts...).ToFunc()
+}
+
+// ByAttempts orders the results by the attempts field.
+func ByAttempts(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAttempts, opts...).ToFunc()
+}
+
+// ByLeaseUntil orders the results by the lease_until field.
+func ByLeaseUntil(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLeaseUntil, opts...).ToFunc()
+}
+
+// ByFencingToken orders the results by the fencing_token field.
+func ByFencingToken(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldFencingToken, opts...).ToFunc()
+}
+
+// ByAccessRevision orders the results by the access_revision field.
+func ByAccessRevision(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAccessRevision, opts...).ToFunc()
+}
+
+// ByFailureCode orders the results by the failure_code field.
+func ByFailureCode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldFailureCode, opts...).ToFunc()
 }

@@ -22,6 +22,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/auditrecord"
 	"github.com/gopager/gopager/internal/persistence/ent/commandreceipt"
 	"github.com/gopager/gopager/internal/persistence/ent/contributionsupport"
+	"github.com/gopager/gopager/internal/persistence/ent/correctiondirtytransmission"
 	"github.com/gopager/gopager/internal/persistence/ent/credential"
 	"github.com/gopager/gopager/internal/persistence/ent/domainevent"
 	"github.com/gopager/gopager/internal/persistence/ent/fieldpermission"
@@ -36,16 +37,19 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/message"
 	"github.com/gopager/gopager/internal/persistence/ent/messagecontribution"
 	"github.com/gopager/gopager/internal/persistence/ent/network"
+	"github.com/gopager/gopager/internal/persistence/ent/organization"
 	"github.com/gopager/gopager/internal/persistence/ent/pendingassignmentscope"
 	"github.com/gopager/gopager/internal/persistence/ent/processingcandidate"
 	"github.com/gopager/gopager/internal/persistence/ent/processingcontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/processinginstance"
 	"github.com/gopager/gopager/internal/persistence/ent/processinginstanceversion"
 	"github.com/gopager/gopager/internal/persistence/ent/processingresult"
+	"github.com/gopager/gopager/internal/persistence/ent/targetsuppression"
 	"github.com/gopager/gopager/internal/persistence/ent/transmission"
 	"github.com/gopager/gopager/internal/persistence/ent/transmissiontarget"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
 	"github.com/gopager/gopager/internal/persistence/ent/unitcollection"
+	"github.com/gopager/gopager/internal/persistence/ent/unittemplate"
 	"github.com/gopager/gopager/internal/persistence/ent/usergroup"
 	"github.com/gopager/gopager/internal/persistence/ent/workflow"
 	"github.com/gopager/gopager/internal/persistence/ent/workflowscopereference"
@@ -69,6 +73,8 @@ type Client struct {
 	CommandReceipt *CommandReceiptClient
 	// ContributionSupport is the client for interacting with the ContributionSupport builders.
 	ContributionSupport *ContributionSupportClient
+	// CorrectionDirtyTransmission is the client for interacting with the CorrectionDirtyTransmission builders.
+	CorrectionDirtyTransmission *CorrectionDirtyTransmissionClient
 	// Credential is the client for interacting with the Credential builders.
 	Credential *CredentialClient
 	// DomainEvent is the client for interacting with the DomainEvent builders.
@@ -97,6 +103,8 @@ type Client struct {
 	MessageContribution *MessageContributionClient
 	// Network is the client for interacting with the Network builders.
 	Network *NetworkClient
+	// Organization is the client for interacting with the Organization builders.
+	Organization *OrganizationClient
 	// PendingAssignmentScope is the client for interacting with the PendingAssignmentScope builders.
 	PendingAssignmentScope *PendingAssignmentScopeClient
 	// ProcessingCandidate is the client for interacting with the ProcessingCandidate builders.
@@ -109,6 +117,8 @@ type Client struct {
 	ProcessingInstanceVersion *ProcessingInstanceVersionClient
 	// ProcessingResult is the client for interacting with the ProcessingResult builders.
 	ProcessingResult *ProcessingResultClient
+	// TargetSuppression is the client for interacting with the TargetSuppression builders.
+	TargetSuppression *TargetSuppressionClient
 	// Transmission is the client for interacting with the Transmission builders.
 	Transmission *TransmissionClient
 	// TransmissionTarget is the client for interacting with the TransmissionTarget builders.
@@ -117,6 +127,8 @@ type Client struct {
 	Unit *UnitClient
 	// UnitCollection is the client for interacting with the UnitCollection builders.
 	UnitCollection *UnitCollectionClient
+	// UnitTemplate is the client for interacting with the UnitTemplate builders.
+	UnitTemplate *UnitTemplateClient
 	// UserGroup is the client for interacting with the UserGroup builders.
 	UserGroup *UserGroupClient
 	// Workflow is the client for interacting with the Workflow builders.
@@ -142,6 +154,7 @@ func (c *Client) init() {
 	c.AuditRecord = NewAuditRecordClient(c.config)
 	c.CommandReceipt = NewCommandReceiptClient(c.config)
 	c.ContributionSupport = NewContributionSupportClient(c.config)
+	c.CorrectionDirtyTransmission = NewCorrectionDirtyTransmissionClient(c.config)
 	c.Credential = NewCredentialClient(c.config)
 	c.DomainEvent = NewDomainEventClient(c.config)
 	c.FieldPermission = NewFieldPermissionClient(c.config)
@@ -156,16 +169,19 @@ func (c *Client) init() {
 	c.Message = NewMessageClient(c.config)
 	c.MessageContribution = NewMessageContributionClient(c.config)
 	c.Network = NewNetworkClient(c.config)
+	c.Organization = NewOrganizationClient(c.config)
 	c.PendingAssignmentScope = NewPendingAssignmentScopeClient(c.config)
 	c.ProcessingCandidate = NewProcessingCandidateClient(c.config)
 	c.ProcessingControl = NewProcessingControlClient(c.config)
 	c.ProcessingInstance = NewProcessingInstanceClient(c.config)
 	c.ProcessingInstanceVersion = NewProcessingInstanceVersionClient(c.config)
 	c.ProcessingResult = NewProcessingResultClient(c.config)
+	c.TargetSuppression = NewTargetSuppressionClient(c.config)
 	c.Transmission = NewTransmissionClient(c.config)
 	c.TransmissionTarget = NewTransmissionTargetClient(c.config)
 	c.Unit = NewUnitClient(c.config)
 	c.UnitCollection = NewUnitCollectionClient(c.config)
+	c.UnitTemplate = NewUnitTemplateClient(c.config)
 	c.UserGroup = NewUserGroupClient(c.config)
 	c.Workflow = NewWorkflowClient(c.config)
 	c.WorkflowScopeReference = NewWorkflowScopeReferenceClient(c.config)
@@ -260,42 +276,46 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:                       ctx,
-		config:                    cfg,
-		Account:                   NewAccountClient(cfg),
-		AddressRule:               NewAddressRuleClient(cfg),
-		AssignmentControl:         NewAssignmentControlClient(cfg),
-		AuditRecord:               NewAuditRecordClient(cfg),
-		CommandReceipt:            NewCommandReceiptClient(cfg),
-		ContributionSupport:       NewContributionSupportClient(cfg),
-		Credential:                NewCredentialClient(cfg),
-		DomainEvent:               NewDomainEventClient(cfg),
-		FieldPermission:           NewFieldPermissionClient(cfg),
-		Gateway:                   NewGatewayClient(cfg),
-		GatewayCredential:         NewGatewayCredentialClient(cfg),
-		GatewayNetwork:            NewGatewayNetworkClient(cfg),
-		Grant:                     NewGrantClient(cfg),
-		GroupingControl:           NewGroupingControlClient(cfg),
-		IdentityControl:           NewIdentityControlClient(cfg),
-		LoginAttempt:              NewLoginAttemptClient(cfg),
-		Membership:                NewMembershipClient(cfg),
-		Message:                   NewMessageClient(cfg),
-		MessageContribution:       NewMessageContributionClient(cfg),
-		Network:                   NewNetworkClient(cfg),
-		PendingAssignmentScope:    NewPendingAssignmentScopeClient(cfg),
-		ProcessingCandidate:       NewProcessingCandidateClient(cfg),
-		ProcessingControl:         NewProcessingControlClient(cfg),
-		ProcessingInstance:        NewProcessingInstanceClient(cfg),
-		ProcessingInstanceVersion: NewProcessingInstanceVersionClient(cfg),
-		ProcessingResult:          NewProcessingResultClient(cfg),
-		Transmission:              NewTransmissionClient(cfg),
-		TransmissionTarget:        NewTransmissionTargetClient(cfg),
-		Unit:                      NewUnitClient(cfg),
-		UnitCollection:            NewUnitCollectionClient(cfg),
-		UserGroup:                 NewUserGroupClient(cfg),
-		Workflow:                  NewWorkflowClient(cfg),
-		WorkflowScopeReference:    NewWorkflowScopeReferenceClient(cfg),
-		WorkflowVersion:           NewWorkflowVersionClient(cfg),
+		ctx:                         ctx,
+		config:                      cfg,
+		Account:                     NewAccountClient(cfg),
+		AddressRule:                 NewAddressRuleClient(cfg),
+		AssignmentControl:           NewAssignmentControlClient(cfg),
+		AuditRecord:                 NewAuditRecordClient(cfg),
+		CommandReceipt:              NewCommandReceiptClient(cfg),
+		ContributionSupport:         NewContributionSupportClient(cfg),
+		CorrectionDirtyTransmission: NewCorrectionDirtyTransmissionClient(cfg),
+		Credential:                  NewCredentialClient(cfg),
+		DomainEvent:                 NewDomainEventClient(cfg),
+		FieldPermission:             NewFieldPermissionClient(cfg),
+		Gateway:                     NewGatewayClient(cfg),
+		GatewayCredential:           NewGatewayCredentialClient(cfg),
+		GatewayNetwork:              NewGatewayNetworkClient(cfg),
+		Grant:                       NewGrantClient(cfg),
+		GroupingControl:             NewGroupingControlClient(cfg),
+		IdentityControl:             NewIdentityControlClient(cfg),
+		LoginAttempt:                NewLoginAttemptClient(cfg),
+		Membership:                  NewMembershipClient(cfg),
+		Message:                     NewMessageClient(cfg),
+		MessageContribution:         NewMessageContributionClient(cfg),
+		Network:                     NewNetworkClient(cfg),
+		Organization:                NewOrganizationClient(cfg),
+		PendingAssignmentScope:      NewPendingAssignmentScopeClient(cfg),
+		ProcessingCandidate:         NewProcessingCandidateClient(cfg),
+		ProcessingControl:           NewProcessingControlClient(cfg),
+		ProcessingInstance:          NewProcessingInstanceClient(cfg),
+		ProcessingInstanceVersion:   NewProcessingInstanceVersionClient(cfg),
+		ProcessingResult:            NewProcessingResultClient(cfg),
+		TargetSuppression:           NewTargetSuppressionClient(cfg),
+		Transmission:                NewTransmissionClient(cfg),
+		TransmissionTarget:          NewTransmissionTargetClient(cfg),
+		Unit:                        NewUnitClient(cfg),
+		UnitCollection:              NewUnitCollectionClient(cfg),
+		UnitTemplate:                NewUnitTemplateClient(cfg),
+		UserGroup:                   NewUserGroupClient(cfg),
+		Workflow:                    NewWorkflowClient(cfg),
+		WorkflowScopeReference:      NewWorkflowScopeReferenceClient(cfg),
+		WorkflowVersion:             NewWorkflowVersionClient(cfg),
 	}, nil
 }
 
@@ -313,42 +333,46 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:                       ctx,
-		config:                    cfg,
-		Account:                   NewAccountClient(cfg),
-		AddressRule:               NewAddressRuleClient(cfg),
-		AssignmentControl:         NewAssignmentControlClient(cfg),
-		AuditRecord:               NewAuditRecordClient(cfg),
-		CommandReceipt:            NewCommandReceiptClient(cfg),
-		ContributionSupport:       NewContributionSupportClient(cfg),
-		Credential:                NewCredentialClient(cfg),
-		DomainEvent:               NewDomainEventClient(cfg),
-		FieldPermission:           NewFieldPermissionClient(cfg),
-		Gateway:                   NewGatewayClient(cfg),
-		GatewayCredential:         NewGatewayCredentialClient(cfg),
-		GatewayNetwork:            NewGatewayNetworkClient(cfg),
-		Grant:                     NewGrantClient(cfg),
-		GroupingControl:           NewGroupingControlClient(cfg),
-		IdentityControl:           NewIdentityControlClient(cfg),
-		LoginAttempt:              NewLoginAttemptClient(cfg),
-		Membership:                NewMembershipClient(cfg),
-		Message:                   NewMessageClient(cfg),
-		MessageContribution:       NewMessageContributionClient(cfg),
-		Network:                   NewNetworkClient(cfg),
-		PendingAssignmentScope:    NewPendingAssignmentScopeClient(cfg),
-		ProcessingCandidate:       NewProcessingCandidateClient(cfg),
-		ProcessingControl:         NewProcessingControlClient(cfg),
-		ProcessingInstance:        NewProcessingInstanceClient(cfg),
-		ProcessingInstanceVersion: NewProcessingInstanceVersionClient(cfg),
-		ProcessingResult:          NewProcessingResultClient(cfg),
-		Transmission:              NewTransmissionClient(cfg),
-		TransmissionTarget:        NewTransmissionTargetClient(cfg),
-		Unit:                      NewUnitClient(cfg),
-		UnitCollection:            NewUnitCollectionClient(cfg),
-		UserGroup:                 NewUserGroupClient(cfg),
-		Workflow:                  NewWorkflowClient(cfg),
-		WorkflowScopeReference:    NewWorkflowScopeReferenceClient(cfg),
-		WorkflowVersion:           NewWorkflowVersionClient(cfg),
+		ctx:                         ctx,
+		config:                      cfg,
+		Account:                     NewAccountClient(cfg),
+		AddressRule:                 NewAddressRuleClient(cfg),
+		AssignmentControl:           NewAssignmentControlClient(cfg),
+		AuditRecord:                 NewAuditRecordClient(cfg),
+		CommandReceipt:              NewCommandReceiptClient(cfg),
+		ContributionSupport:         NewContributionSupportClient(cfg),
+		CorrectionDirtyTransmission: NewCorrectionDirtyTransmissionClient(cfg),
+		Credential:                  NewCredentialClient(cfg),
+		DomainEvent:                 NewDomainEventClient(cfg),
+		FieldPermission:             NewFieldPermissionClient(cfg),
+		Gateway:                     NewGatewayClient(cfg),
+		GatewayCredential:           NewGatewayCredentialClient(cfg),
+		GatewayNetwork:              NewGatewayNetworkClient(cfg),
+		Grant:                       NewGrantClient(cfg),
+		GroupingControl:             NewGroupingControlClient(cfg),
+		IdentityControl:             NewIdentityControlClient(cfg),
+		LoginAttempt:                NewLoginAttemptClient(cfg),
+		Membership:                  NewMembershipClient(cfg),
+		Message:                     NewMessageClient(cfg),
+		MessageContribution:         NewMessageContributionClient(cfg),
+		Network:                     NewNetworkClient(cfg),
+		Organization:                NewOrganizationClient(cfg),
+		PendingAssignmentScope:      NewPendingAssignmentScopeClient(cfg),
+		ProcessingCandidate:         NewProcessingCandidateClient(cfg),
+		ProcessingControl:           NewProcessingControlClient(cfg),
+		ProcessingInstance:          NewProcessingInstanceClient(cfg),
+		ProcessingInstanceVersion:   NewProcessingInstanceVersionClient(cfg),
+		ProcessingResult:            NewProcessingResultClient(cfg),
+		TargetSuppression:           NewTargetSuppressionClient(cfg),
+		Transmission:                NewTransmissionClient(cfg),
+		TransmissionTarget:          NewTransmissionTargetClient(cfg),
+		Unit:                        NewUnitClient(cfg),
+		UnitCollection:              NewUnitCollectionClient(cfg),
+		UnitTemplate:                NewUnitTemplateClient(cfg),
+		UserGroup:                   NewUserGroupClient(cfg),
+		Workflow:                    NewWorkflowClient(cfg),
+		WorkflowScopeReference:      NewWorkflowScopeReferenceClient(cfg),
+		WorkflowVersion:             NewWorkflowVersionClient(cfg),
 	}, nil
 }
 
@@ -379,13 +403,14 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.Account, c.AddressRule, c.AssignmentControl, c.AuditRecord, c.CommandReceipt,
-		c.ContributionSupport, c.Credential, c.DomainEvent, c.FieldPermission,
-		c.Gateway, c.GatewayCredential, c.GatewayNetwork, c.Grant, c.GroupingControl,
-		c.IdentityControl, c.LoginAttempt, c.Membership, c.Message,
-		c.MessageContribution, c.Network, c.PendingAssignmentScope,
-		c.ProcessingCandidate, c.ProcessingControl, c.ProcessingInstance,
-		c.ProcessingInstanceVersion, c.ProcessingResult, c.Transmission,
-		c.TransmissionTarget, c.Unit, c.UnitCollection, c.UserGroup, c.Workflow,
+		c.ContributionSupport, c.CorrectionDirtyTransmission, c.Credential,
+		c.DomainEvent, c.FieldPermission, c.Gateway, c.GatewayCredential,
+		c.GatewayNetwork, c.Grant, c.GroupingControl, c.IdentityControl,
+		c.LoginAttempt, c.Membership, c.Message, c.MessageContribution, c.Network,
+		c.Organization, c.PendingAssignmentScope, c.ProcessingCandidate,
+		c.ProcessingControl, c.ProcessingInstance, c.ProcessingInstanceVersion,
+		c.ProcessingResult, c.TargetSuppression, c.Transmission, c.TransmissionTarget,
+		c.Unit, c.UnitCollection, c.UnitTemplate, c.UserGroup, c.Workflow,
 		c.WorkflowScopeReference, c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
@@ -397,13 +422,14 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.Account, c.AddressRule, c.AssignmentControl, c.AuditRecord, c.CommandReceipt,
-		c.ContributionSupport, c.Credential, c.DomainEvent, c.FieldPermission,
-		c.Gateway, c.GatewayCredential, c.GatewayNetwork, c.Grant, c.GroupingControl,
-		c.IdentityControl, c.LoginAttempt, c.Membership, c.Message,
-		c.MessageContribution, c.Network, c.PendingAssignmentScope,
-		c.ProcessingCandidate, c.ProcessingControl, c.ProcessingInstance,
-		c.ProcessingInstanceVersion, c.ProcessingResult, c.Transmission,
-		c.TransmissionTarget, c.Unit, c.UnitCollection, c.UserGroup, c.Workflow,
+		c.ContributionSupport, c.CorrectionDirtyTransmission, c.Credential,
+		c.DomainEvent, c.FieldPermission, c.Gateway, c.GatewayCredential,
+		c.GatewayNetwork, c.Grant, c.GroupingControl, c.IdentityControl,
+		c.LoginAttempt, c.Membership, c.Message, c.MessageContribution, c.Network,
+		c.Organization, c.PendingAssignmentScope, c.ProcessingCandidate,
+		c.ProcessingControl, c.ProcessingInstance, c.ProcessingInstanceVersion,
+		c.ProcessingResult, c.TargetSuppression, c.Transmission, c.TransmissionTarget,
+		c.Unit, c.UnitCollection, c.UnitTemplate, c.UserGroup, c.Workflow,
 		c.WorkflowScopeReference, c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
@@ -425,6 +451,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.CommandReceipt.mutate(ctx, m)
 	case *ContributionSupportMutation:
 		return c.ContributionSupport.mutate(ctx, m)
+	case *CorrectionDirtyTransmissionMutation:
+		return c.CorrectionDirtyTransmission.mutate(ctx, m)
 	case *CredentialMutation:
 		return c.Credential.mutate(ctx, m)
 	case *DomainEventMutation:
@@ -453,6 +481,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.MessageContribution.mutate(ctx, m)
 	case *NetworkMutation:
 		return c.Network.mutate(ctx, m)
+	case *OrganizationMutation:
+		return c.Organization.mutate(ctx, m)
 	case *PendingAssignmentScopeMutation:
 		return c.PendingAssignmentScope.mutate(ctx, m)
 	case *ProcessingCandidateMutation:
@@ -465,6 +495,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.ProcessingInstanceVersion.mutate(ctx, m)
 	case *ProcessingResultMutation:
 		return c.ProcessingResult.mutate(ctx, m)
+	case *TargetSuppressionMutation:
+		return c.TargetSuppression.mutate(ctx, m)
 	case *TransmissionMutation:
 		return c.Transmission.mutate(ctx, m)
 	case *TransmissionTargetMutation:
@@ -473,6 +505,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Unit.mutate(ctx, m)
 	case *UnitCollectionMutation:
 		return c.UnitCollection.mutate(ctx, m)
+	case *UnitTemplateMutation:
+		return c.UnitTemplate.mutate(ctx, m)
 	case *UserGroupMutation:
 		return c.UserGroup.mutate(ctx, m)
 	case *WorkflowMutation:
@@ -1303,6 +1337,140 @@ func (c *ContributionSupportClient) mutate(ctx context.Context, m *ContributionS
 		return (&ContributionSupportDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown ContributionSupport mutation op: %q", m.Op())
+	}
+}
+
+// CorrectionDirtyTransmissionClient is a client for the CorrectionDirtyTransmission schema.
+type CorrectionDirtyTransmissionClient struct {
+	config
+}
+
+// NewCorrectionDirtyTransmissionClient returns a client for the CorrectionDirtyTransmission from the given config.
+func NewCorrectionDirtyTransmissionClient(c config) *CorrectionDirtyTransmissionClient {
+	return &CorrectionDirtyTransmissionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `correctiondirtytransmission.Hooks(f(g(h())))`.
+func (c *CorrectionDirtyTransmissionClient) Use(hooks ...Hook) {
+	c.hooks.CorrectionDirtyTransmission = append(c.hooks.CorrectionDirtyTransmission, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `correctiondirtytransmission.Intercept(f(g(h())))`.
+func (c *CorrectionDirtyTransmissionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CorrectionDirtyTransmission = append(c.inters.CorrectionDirtyTransmission, interceptors...)
+}
+
+// Create returns a builder for creating a CorrectionDirtyTransmission entity.
+func (c *CorrectionDirtyTransmissionClient) Create() *CorrectionDirtyTransmissionCreate {
+	mutation := newCorrectionDirtyTransmissionMutation(c.config, OpCreate)
+	return &CorrectionDirtyTransmissionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CorrectionDirtyTransmission entities.
+func (c *CorrectionDirtyTransmissionClient) CreateBulk(builders ...*CorrectionDirtyTransmissionCreate) *CorrectionDirtyTransmissionCreateBulk {
+	return &CorrectionDirtyTransmissionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CorrectionDirtyTransmissionClient) MapCreateBulk(slice any, setFunc func(*CorrectionDirtyTransmissionCreate, int)) *CorrectionDirtyTransmissionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CorrectionDirtyTransmissionCreateBulk{err: fmt.Errorf("calling to CorrectionDirtyTransmissionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CorrectionDirtyTransmissionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CorrectionDirtyTransmissionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CorrectionDirtyTransmission.
+func (c *CorrectionDirtyTransmissionClient) Update() *CorrectionDirtyTransmissionUpdate {
+	mutation := newCorrectionDirtyTransmissionMutation(c.config, OpUpdate)
+	return &CorrectionDirtyTransmissionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CorrectionDirtyTransmissionClient) UpdateOne(_m *CorrectionDirtyTransmission) *CorrectionDirtyTransmissionUpdateOne {
+	mutation := newCorrectionDirtyTransmissionMutation(c.config, OpUpdateOne, withCorrectionDirtyTransmission(_m))
+	return &CorrectionDirtyTransmissionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CorrectionDirtyTransmissionClient) UpdateOneID(id int) *CorrectionDirtyTransmissionUpdateOne {
+	mutation := newCorrectionDirtyTransmissionMutation(c.config, OpUpdateOne, withCorrectionDirtyTransmissionID(id))
+	return &CorrectionDirtyTransmissionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CorrectionDirtyTransmission.
+func (c *CorrectionDirtyTransmissionClient) Delete() *CorrectionDirtyTransmissionDelete {
+	mutation := newCorrectionDirtyTransmissionMutation(c.config, OpDelete)
+	return &CorrectionDirtyTransmissionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CorrectionDirtyTransmissionClient) DeleteOne(_m *CorrectionDirtyTransmission) *CorrectionDirtyTransmissionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CorrectionDirtyTransmissionClient) DeleteOneID(id int) *CorrectionDirtyTransmissionDeleteOne {
+	builder := c.Delete().Where(correctiondirtytransmission.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CorrectionDirtyTransmissionDeleteOne{builder}
+}
+
+// Query returns a query builder for CorrectionDirtyTransmission.
+func (c *CorrectionDirtyTransmissionClient) Query() *CorrectionDirtyTransmissionQuery {
+	return &CorrectionDirtyTransmissionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCorrectionDirtyTransmission},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CorrectionDirtyTransmission entity by its id.
+func (c *CorrectionDirtyTransmissionClient) Get(ctx context.Context, id int) (*CorrectionDirtyTransmission, error) {
+	return c.Query().Where(correctiondirtytransmission.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CorrectionDirtyTransmissionClient) GetX(ctx context.Context, id int) *CorrectionDirtyTransmission {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *CorrectionDirtyTransmissionClient) Hooks() []Hook {
+	hooks := c.hooks.CorrectionDirtyTransmission
+	return append(hooks[:len(hooks):len(hooks)], correctiondirtytransmission.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *CorrectionDirtyTransmissionClient) Interceptors() []Interceptor {
+	return c.inters.CorrectionDirtyTransmission
+}
+
+func (c *CorrectionDirtyTransmissionClient) mutate(ctx context.Context, m *CorrectionDirtyTransmissionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CorrectionDirtyTransmissionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CorrectionDirtyTransmissionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CorrectionDirtyTransmissionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CorrectionDirtyTransmissionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CorrectionDirtyTransmission mutation op: %q", m.Op())
 	}
 }
 
@@ -3182,6 +3350,172 @@ func (c *NetworkClient) mutate(ctx context.Context, m *NetworkMutation) (Value, 
 	}
 }
 
+// OrganizationClient is a client for the Organization schema.
+type OrganizationClient struct {
+	config
+}
+
+// NewOrganizationClient returns a client for the Organization from the given config.
+func NewOrganizationClient(c config) *OrganizationClient {
+	return &OrganizationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `organization.Hooks(f(g(h())))`.
+func (c *OrganizationClient) Use(hooks ...Hook) {
+	c.hooks.Organization = append(c.hooks.Organization, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `organization.Intercept(f(g(h())))`.
+func (c *OrganizationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Organization = append(c.inters.Organization, interceptors...)
+}
+
+// Create returns a builder for creating a Organization entity.
+func (c *OrganizationClient) Create() *OrganizationCreate {
+	mutation := newOrganizationMutation(c.config, OpCreate)
+	return &OrganizationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Organization entities.
+func (c *OrganizationClient) CreateBulk(builders ...*OrganizationCreate) *OrganizationCreateBulk {
+	return &OrganizationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *OrganizationClient) MapCreateBulk(slice any, setFunc func(*OrganizationCreate, int)) *OrganizationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &OrganizationCreateBulk{err: fmt.Errorf("calling to OrganizationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*OrganizationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &OrganizationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Organization.
+func (c *OrganizationClient) Update() *OrganizationUpdate {
+	mutation := newOrganizationMutation(c.config, OpUpdate)
+	return &OrganizationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *OrganizationClient) UpdateOne(_m *Organization) *OrganizationUpdateOne {
+	mutation := newOrganizationMutation(c.config, OpUpdateOne, withOrganization(_m))
+	return &OrganizationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *OrganizationClient) UpdateOneID(id uuid.UUID) *OrganizationUpdateOne {
+	mutation := newOrganizationMutation(c.config, OpUpdateOne, withOrganizationID(id))
+	return &OrganizationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Organization.
+func (c *OrganizationClient) Delete() *OrganizationDelete {
+	mutation := newOrganizationMutation(c.config, OpDelete)
+	return &OrganizationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *OrganizationClient) DeleteOne(_m *Organization) *OrganizationDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *OrganizationClient) DeleteOneID(id uuid.UUID) *OrganizationDeleteOne {
+	builder := c.Delete().Where(organization.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &OrganizationDeleteOne{builder}
+}
+
+// Query returns a query builder for Organization.
+func (c *OrganizationClient) Query() *OrganizationQuery {
+	return &OrganizationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeOrganization},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Organization entity by its id.
+func (c *OrganizationClient) Get(ctx context.Context, id uuid.UUID) (*Organization, error) {
+	return c.Query().Where(organization.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *OrganizationClient) GetX(ctx context.Context, id uuid.UUID) *Organization {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUnits queries the units edge of a Organization.
+func (c *OrganizationClient) QueryUnits(_m *Organization) *UnitQuery {
+	query := (&UnitClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organization.Table, organization.FieldID, id),
+			sqlgraph.To(unit.Table, unit.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, organization.UnitsTable, organization.UnitsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryTemplates queries the templates edge of a Organization.
+func (c *OrganizationClient) QueryTemplates(_m *Organization) *UnitTemplateQuery {
+	query := (&UnitTemplateClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(organization.Table, organization.FieldID, id),
+			sqlgraph.To(unittemplate.Table, unittemplate.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, organization.TemplatesTable, organization.TemplatesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *OrganizationClient) Hooks() []Hook {
+	hooks := c.hooks.Organization
+	return append(hooks[:len(hooks):len(hooks)], organization.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *OrganizationClient) Interceptors() []Interceptor {
+	return c.inters.Organization
+}
+
+func (c *OrganizationClient) mutate(ctx context.Context, m *OrganizationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&OrganizationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&OrganizationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&OrganizationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&OrganizationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Organization mutation op: %q", m.Op())
+	}
+}
+
 // PendingAssignmentScopeClient is a client for the PendingAssignmentScope schema.
 type PendingAssignmentScopeClient struct {
 	config
@@ -3986,6 +4320,140 @@ func (c *ProcessingResultClient) mutate(ctx context.Context, m *ProcessingResult
 	}
 }
 
+// TargetSuppressionClient is a client for the TargetSuppression schema.
+type TargetSuppressionClient struct {
+	config
+}
+
+// NewTargetSuppressionClient returns a client for the TargetSuppression from the given config.
+func NewTargetSuppressionClient(c config) *TargetSuppressionClient {
+	return &TargetSuppressionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `targetsuppression.Hooks(f(g(h())))`.
+func (c *TargetSuppressionClient) Use(hooks ...Hook) {
+	c.hooks.TargetSuppression = append(c.hooks.TargetSuppression, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `targetsuppression.Intercept(f(g(h())))`.
+func (c *TargetSuppressionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.TargetSuppression = append(c.inters.TargetSuppression, interceptors...)
+}
+
+// Create returns a builder for creating a TargetSuppression entity.
+func (c *TargetSuppressionClient) Create() *TargetSuppressionCreate {
+	mutation := newTargetSuppressionMutation(c.config, OpCreate)
+	return &TargetSuppressionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of TargetSuppression entities.
+func (c *TargetSuppressionClient) CreateBulk(builders ...*TargetSuppressionCreate) *TargetSuppressionCreateBulk {
+	return &TargetSuppressionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TargetSuppressionClient) MapCreateBulk(slice any, setFunc func(*TargetSuppressionCreate, int)) *TargetSuppressionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TargetSuppressionCreateBulk{err: fmt.Errorf("calling to TargetSuppressionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TargetSuppressionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TargetSuppressionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for TargetSuppression.
+func (c *TargetSuppressionClient) Update() *TargetSuppressionUpdate {
+	mutation := newTargetSuppressionMutation(c.config, OpUpdate)
+	return &TargetSuppressionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TargetSuppressionClient) UpdateOne(_m *TargetSuppression) *TargetSuppressionUpdateOne {
+	mutation := newTargetSuppressionMutation(c.config, OpUpdateOne, withTargetSuppression(_m))
+	return &TargetSuppressionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TargetSuppressionClient) UpdateOneID(id uuid.UUID) *TargetSuppressionUpdateOne {
+	mutation := newTargetSuppressionMutation(c.config, OpUpdateOne, withTargetSuppressionID(id))
+	return &TargetSuppressionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for TargetSuppression.
+func (c *TargetSuppressionClient) Delete() *TargetSuppressionDelete {
+	mutation := newTargetSuppressionMutation(c.config, OpDelete)
+	return &TargetSuppressionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TargetSuppressionClient) DeleteOne(_m *TargetSuppression) *TargetSuppressionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TargetSuppressionClient) DeleteOneID(id uuid.UUID) *TargetSuppressionDeleteOne {
+	builder := c.Delete().Where(targetsuppression.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TargetSuppressionDeleteOne{builder}
+}
+
+// Query returns a query builder for TargetSuppression.
+func (c *TargetSuppressionClient) Query() *TargetSuppressionQuery {
+	return &TargetSuppressionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTargetSuppression},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a TargetSuppression entity by its id.
+func (c *TargetSuppressionClient) Get(ctx context.Context, id uuid.UUID) (*TargetSuppression, error) {
+	return c.Query().Where(targetsuppression.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TargetSuppressionClient) GetX(ctx context.Context, id uuid.UUID) *TargetSuppression {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *TargetSuppressionClient) Hooks() []Hook {
+	hooks := c.hooks.TargetSuppression
+	return append(hooks[:len(hooks):len(hooks)], targetsuppression.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *TargetSuppressionClient) Interceptors() []Interceptor {
+	return c.inters.TargetSuppression
+}
+
+func (c *TargetSuppressionClient) mutate(ctx context.Context, m *TargetSuppressionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TargetSuppressionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TargetSuppressionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TargetSuppressionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TargetSuppressionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown TargetSuppression mutation op: %q", m.Op())
+	}
+}
+
 // TransmissionClient is a client for the Transmission schema.
 type TransmissionClient struct {
 	config
@@ -4394,6 +4862,22 @@ func (c *UnitClient) QueryAddressRules(_m *Unit) *AddressRuleQuery {
 	return query
 }
 
+// QueryOrganization queries the organization edge of a Unit.
+func (c *UnitClient) QueryOrganization(_m *Unit) *OrganizationQuery {
+	query := (&OrganizationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(unit.Table, unit.FieldID, id),
+			sqlgraph.To(organization.Table, organization.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, unit.OrganizationTable, unit.OrganizationColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *UnitClient) Hooks() []Hook {
 	hooks := c.hooks.Unit
@@ -4567,6 +5051,156 @@ func (c *UnitCollectionClient) mutate(ctx context.Context, m *UnitCollectionMuta
 		return (&UnitCollectionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown UnitCollection mutation op: %q", m.Op())
+	}
+}
+
+// UnitTemplateClient is a client for the UnitTemplate schema.
+type UnitTemplateClient struct {
+	config
+}
+
+// NewUnitTemplateClient returns a client for the UnitTemplate from the given config.
+func NewUnitTemplateClient(c config) *UnitTemplateClient {
+	return &UnitTemplateClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `unittemplate.Hooks(f(g(h())))`.
+func (c *UnitTemplateClient) Use(hooks ...Hook) {
+	c.hooks.UnitTemplate = append(c.hooks.UnitTemplate, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `unittemplate.Intercept(f(g(h())))`.
+func (c *UnitTemplateClient) Intercept(interceptors ...Interceptor) {
+	c.inters.UnitTemplate = append(c.inters.UnitTemplate, interceptors...)
+}
+
+// Create returns a builder for creating a UnitTemplate entity.
+func (c *UnitTemplateClient) Create() *UnitTemplateCreate {
+	mutation := newUnitTemplateMutation(c.config, OpCreate)
+	return &UnitTemplateCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of UnitTemplate entities.
+func (c *UnitTemplateClient) CreateBulk(builders ...*UnitTemplateCreate) *UnitTemplateCreateBulk {
+	return &UnitTemplateCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *UnitTemplateClient) MapCreateBulk(slice any, setFunc func(*UnitTemplateCreate, int)) *UnitTemplateCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &UnitTemplateCreateBulk{err: fmt.Errorf("calling to UnitTemplateClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*UnitTemplateCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &UnitTemplateCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for UnitTemplate.
+func (c *UnitTemplateClient) Update() *UnitTemplateUpdate {
+	mutation := newUnitTemplateMutation(c.config, OpUpdate)
+	return &UnitTemplateUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *UnitTemplateClient) UpdateOne(_m *UnitTemplate) *UnitTemplateUpdateOne {
+	mutation := newUnitTemplateMutation(c.config, OpUpdateOne, withUnitTemplate(_m))
+	return &UnitTemplateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *UnitTemplateClient) UpdateOneID(id uuid.UUID) *UnitTemplateUpdateOne {
+	mutation := newUnitTemplateMutation(c.config, OpUpdateOne, withUnitTemplateID(id))
+	return &UnitTemplateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for UnitTemplate.
+func (c *UnitTemplateClient) Delete() *UnitTemplateDelete {
+	mutation := newUnitTemplateMutation(c.config, OpDelete)
+	return &UnitTemplateDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *UnitTemplateClient) DeleteOne(_m *UnitTemplate) *UnitTemplateDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *UnitTemplateClient) DeleteOneID(id uuid.UUID) *UnitTemplateDeleteOne {
+	builder := c.Delete().Where(unittemplate.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &UnitTemplateDeleteOne{builder}
+}
+
+// Query returns a query builder for UnitTemplate.
+func (c *UnitTemplateClient) Query() *UnitTemplateQuery {
+	return &UnitTemplateQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeUnitTemplate},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a UnitTemplate entity by its id.
+func (c *UnitTemplateClient) Get(ctx context.Context, id uuid.UUID) (*UnitTemplate, error) {
+	return c.Query().Where(unittemplate.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *UnitTemplateClient) GetX(ctx context.Context, id uuid.UUID) *UnitTemplate {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryOrganization queries the organization edge of a UnitTemplate.
+func (c *UnitTemplateClient) QueryOrganization(_m *UnitTemplate) *OrganizationQuery {
+	query := (&OrganizationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(unittemplate.Table, unittemplate.FieldID, id),
+			sqlgraph.To(organization.Table, organization.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, unittemplate.OrganizationTable, unittemplate.OrganizationColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *UnitTemplateClient) Hooks() []Hook {
+	hooks := c.hooks.UnitTemplate
+	return append(hooks[:len(hooks):len(hooks)], unittemplate.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *UnitTemplateClient) Interceptors() []Interceptor {
+	return c.inters.UnitTemplate
+}
+
+func (c *UnitTemplateClient) mutate(ctx context.Context, m *UnitTemplateMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&UnitTemplateCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&UnitTemplateUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&UnitTemplateUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&UnitTemplateDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown UnitTemplate mutation op: %q", m.Op())
 	}
 }
 
@@ -5190,22 +5824,24 @@ func (c *WorkflowVersionClient) mutate(ctx context.Context, m *WorkflowVersionMu
 type (
 	hooks struct {
 		Account, AddressRule, AssignmentControl, AuditRecord, CommandReceipt,
-		ContributionSupport, Credential, DomainEvent, FieldPermission, Gateway,
-		GatewayCredential, GatewayNetwork, Grant, GroupingControl, IdentityControl,
-		LoginAttempt, Membership, Message, MessageContribution, Network,
-		PendingAssignmentScope, ProcessingCandidate, ProcessingControl,
-		ProcessingInstance, ProcessingInstanceVersion, ProcessingResult, Transmission,
-		TransmissionTarget, Unit, UnitCollection, UserGroup, Workflow,
+		ContributionSupport, CorrectionDirtyTransmission, Credential, DomainEvent,
+		FieldPermission, Gateway, GatewayCredential, GatewayNetwork, Grant,
+		GroupingControl, IdentityControl, LoginAttempt, Membership, Message,
+		MessageContribution, Network, Organization, PendingAssignmentScope,
+		ProcessingCandidate, ProcessingControl, ProcessingInstance,
+		ProcessingInstanceVersion, ProcessingResult, TargetSuppression, Transmission,
+		TransmissionTarget, Unit, UnitCollection, UnitTemplate, UserGroup, Workflow,
 		WorkflowScopeReference, WorkflowVersion []ent.Hook
 	}
 	inters struct {
 		Account, AddressRule, AssignmentControl, AuditRecord, CommandReceipt,
-		ContributionSupport, Credential, DomainEvent, FieldPermission, Gateway,
-		GatewayCredential, GatewayNetwork, Grant, GroupingControl, IdentityControl,
-		LoginAttempt, Membership, Message, MessageContribution, Network,
-		PendingAssignmentScope, ProcessingCandidate, ProcessingControl,
-		ProcessingInstance, ProcessingInstanceVersion, ProcessingResult, Transmission,
-		TransmissionTarget, Unit, UnitCollection, UserGroup, Workflow,
+		ContributionSupport, CorrectionDirtyTransmission, Credential, DomainEvent,
+		FieldPermission, Gateway, GatewayCredential, GatewayNetwork, Grant,
+		GroupingControl, IdentityControl, LoginAttempt, Membership, Message,
+		MessageContribution, Network, Organization, PendingAssignmentScope,
+		ProcessingCandidate, ProcessingControl, ProcessingInstance,
+		ProcessingInstanceVersion, ProcessingResult, TargetSuppression, Transmission,
+		TransmissionTarget, Unit, UnitCollection, UnitTemplate, UserGroup, Workflow,
 		WorkflowScopeReference, WorkflowVersion []ent.Interceptor
 	}
 )

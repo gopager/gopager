@@ -494,7 +494,7 @@ func TestProcessingSyntheticPreviewHonorsCurrentUnitScope(t *testing.T) {
 	login := managementRequest(t, client, origin, http.MethodPost, "/api/v1/auth/login",
 		`{"schemaVersion":1,"username":"operator","password":"initial-password"}`, "", "", http.StatusOK)
 	unitResponse := managementRequest(t, client, origin, http.MethodPost, "/api/v1/units",
-		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Matched Unit","collectionIds":[]}`,
+		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Matched Unit","collectionIds":[],"organizationId":null,"settings":{}}`,
 		login.CSRFToken, "", http.StatusCreated)
 	unitID, _ := managementResultID(t, unitResponse)
 	managementRequest(t, client, origin, http.MethodPost, "/api/v1/address-rules",

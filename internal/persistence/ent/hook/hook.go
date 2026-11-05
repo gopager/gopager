@@ -81,6 +81,18 @@ func (f ContributionSupportFunc) Mutate(ctx context.Context, m ent.Mutation) (en
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ContributionSupportMutation", m)
 }
 
+// The CorrectionDirtyTransmissionFunc type is an adapter to allow the use of ordinary
+// function as CorrectionDirtyTransmission mutator.
+type CorrectionDirtyTransmissionFunc func(context.Context, *ent.CorrectionDirtyTransmissionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CorrectionDirtyTransmissionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CorrectionDirtyTransmissionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CorrectionDirtyTransmissionMutation", m)
+}
+
 // The CredentialFunc type is an adapter to allow the use of ordinary
 // function as Credential mutator.
 type CredentialFunc func(context.Context, *ent.CredentialMutation) (ent.Value, error)
@@ -249,6 +261,18 @@ func (f NetworkFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, err
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.NetworkMutation", m)
 }
 
+// The OrganizationFunc type is an adapter to allow the use of ordinary
+// function as Organization mutator.
+type OrganizationFunc func(context.Context, *ent.OrganizationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f OrganizationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.OrganizationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.OrganizationMutation", m)
+}
+
 // The PendingAssignmentScopeFunc type is an adapter to allow the use of ordinary
 // function as PendingAssignmentScope mutator.
 type PendingAssignmentScopeFunc func(context.Context, *ent.PendingAssignmentScopeMutation) (ent.Value, error)
@@ -321,6 +345,18 @@ func (f ProcessingResultFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.V
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ProcessingResultMutation", m)
 }
 
+// The TargetSuppressionFunc type is an adapter to allow the use of ordinary
+// function as TargetSuppression mutator.
+type TargetSuppressionFunc func(context.Context, *ent.TargetSuppressionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f TargetSuppressionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.TargetSuppressionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.TargetSuppressionMutation", m)
+}
+
 // The TransmissionFunc type is an adapter to allow the use of ordinary
 // function as Transmission mutator.
 type TransmissionFunc func(context.Context, *ent.TransmissionMutation) (ent.Value, error)
@@ -367,6 +403,18 @@ func (f UnitCollectionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Val
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UnitCollectionMutation", m)
+}
+
+// The UnitTemplateFunc type is an adapter to allow the use of ordinary
+// function as UnitTemplate mutator.
+type UnitTemplateFunc func(context.Context, *ent.UnitTemplateMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f UnitTemplateFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.UnitTemplateMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UnitTemplateMutation", m)
 }
 
 // The UserGroupFunc type is an adapter to allow the use of ordinary

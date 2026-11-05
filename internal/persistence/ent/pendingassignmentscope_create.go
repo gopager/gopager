@@ -59,6 +59,146 @@ func (_c *PendingAssignmentScopeCreate) SetRecordedAt(v time.Time) *PendingAssig
 	return _c
 }
 
+// SetState sets the "state" field.
+func (_c *PendingAssignmentScopeCreate) SetState(v pendingassignmentscope.State) *PendingAssignmentScopeCreate {
+	_c.mutation.SetState(v)
+	return _c
+}
+
+// SetNillableState sets the "state" field if the given value is not nil.
+func (_c *PendingAssignmentScopeCreate) SetNillableState(v *pendingassignmentscope.State) *PendingAssignmentScopeCreate {
+	if v != nil {
+		_c.SetState(*v)
+	}
+	return _c
+}
+
+// SetHighWaterAcceptedAt sets the "high_water_accepted_at" field.
+func (_c *PendingAssignmentScopeCreate) SetHighWaterAcceptedAt(v time.Time) *PendingAssignmentScopeCreate {
+	_c.mutation.SetHighWaterAcceptedAt(v)
+	return _c
+}
+
+// SetNillableHighWaterAcceptedAt sets the "high_water_accepted_at" field if the given value is not nil.
+func (_c *PendingAssignmentScopeCreate) SetNillableHighWaterAcceptedAt(v *time.Time) *PendingAssignmentScopeCreate {
+	if v != nil {
+		_c.SetHighWaterAcceptedAt(*v)
+	}
+	return _c
+}
+
+// SetHighWaterTransmissionID sets the "high_water_transmission_id" field.
+func (_c *PendingAssignmentScopeCreate) SetHighWaterTransmissionID(v uuid.UUID) *PendingAssignmentScopeCreate {
+	_c.mutation.SetHighWaterTransmissionID(v)
+	return _c
+}
+
+// SetNillableHighWaterTransmissionID sets the "high_water_transmission_id" field if the given value is not nil.
+func (_c *PendingAssignmentScopeCreate) SetNillableHighWaterTransmissionID(v *uuid.UUID) *PendingAssignmentScopeCreate {
+	if v != nil {
+		_c.SetHighWaterTransmissionID(*v)
+	}
+	return _c
+}
+
+// SetCursorAcceptedAt sets the "cursor_accepted_at" field.
+func (_c *PendingAssignmentScopeCreate) SetCursorAcceptedAt(v time.Time) *PendingAssignmentScopeCreate {
+	_c.mutation.SetCursorAcceptedAt(v)
+	return _c
+}
+
+// SetNillableCursorAcceptedAt sets the "cursor_accepted_at" field if the given value is not nil.
+func (_c *PendingAssignmentScopeCreate) SetNillableCursorAcceptedAt(v *time.Time) *PendingAssignmentScopeCreate {
+	if v != nil {
+		_c.SetCursorAcceptedAt(*v)
+	}
+	return _c
+}
+
+// SetCursorTransmissionID sets the "cursor_transmission_id" field.
+func (_c *PendingAssignmentScopeCreate) SetCursorTransmissionID(v uuid.UUID) *PendingAssignmentScopeCreate {
+	_c.mutation.SetCursorTransmissionID(v)
+	return _c
+}
+
+// SetNillableCursorTransmissionID sets the "cursor_transmission_id" field if the given value is not nil.
+func (_c *PendingAssignmentScopeCreate) SetNillableCursorTransmissionID(v *uuid.UUID) *PendingAssignmentScopeCreate {
+	if v != nil {
+		_c.SetCursorTransmissionID(*v)
+	}
+	return _c
+}
+
+// SetAttempts sets the "attempts" field.
+func (_c *PendingAssignmentScopeCreate) SetAttempts(v int) *PendingAssignmentScopeCreate {
+	_c.mutation.SetAttempts(v)
+	return _c
+}
+
+// SetNillableAttempts sets the "attempts" field if the given value is not nil.
+func (_c *PendingAssignmentScopeCreate) SetNillableAttempts(v *int) *PendingAssignmentScopeCreate {
+	if v != nil {
+		_c.SetAttempts(*v)
+	}
+	return _c
+}
+
+// SetLeaseUntil sets the "lease_until" field.
+func (_c *PendingAssignmentScopeCreate) SetLeaseUntil(v time.Time) *PendingAssignmentScopeCreate {
+	_c.mutation.SetLeaseUntil(v)
+	return _c
+}
+
+// SetNillableLeaseUntil sets the "lease_until" field if the given value is not nil.
+func (_c *PendingAssignmentScopeCreate) SetNillableLeaseUntil(v *time.Time) *PendingAssignmentScopeCreate {
+	if v != nil {
+		_c.SetLeaseUntil(*v)
+	}
+	return _c
+}
+
+// SetFencingToken sets the "fencing_token" field.
+func (_c *PendingAssignmentScopeCreate) SetFencingToken(v int64) *PendingAssignmentScopeCreate {
+	_c.mutation.SetFencingToken(v)
+	return _c
+}
+
+// SetNillableFencingToken sets the "fencing_token" field if the given value is not nil.
+func (_c *PendingAssignmentScopeCreate) SetNillableFencingToken(v *int64) *PendingAssignmentScopeCreate {
+	if v != nil {
+		_c.SetFencingToken(*v)
+	}
+	return _c
+}
+
+// SetAccessRevision sets the "access_revision" field.
+func (_c *PendingAssignmentScopeCreate) SetAccessRevision(v int64) *PendingAssignmentScopeCreate {
+	_c.mutation.SetAccessRevision(v)
+	return _c
+}
+
+// SetNillableAccessRevision sets the "access_revision" field if the given value is not nil.
+func (_c *PendingAssignmentScopeCreate) SetNillableAccessRevision(v *int64) *PendingAssignmentScopeCreate {
+	if v != nil {
+		_c.SetAccessRevision(*v)
+	}
+	return _c
+}
+
+// SetFailureCode sets the "failure_code" field.
+func (_c *PendingAssignmentScopeCreate) SetFailureCode(v string) *PendingAssignmentScopeCreate {
+	_c.mutation.SetFailureCode(v)
+	return _c
+}
+
+// SetNillableFailureCode sets the "failure_code" field if the given value is not nil.
+func (_c *PendingAssignmentScopeCreate) SetNillableFailureCode(v *string) *PendingAssignmentScopeCreate {
+	if v != nil {
+		_c.SetFailureCode(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *PendingAssignmentScopeCreate) SetID(v uuid.UUID) *PendingAssignmentScopeCreate {
 	_c.mutation.SetID(v)
@@ -110,6 +250,22 @@ func (_c *PendingAssignmentScopeCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *PendingAssignmentScopeCreate) defaults() error {
+	if _, ok := _c.mutation.State(); !ok {
+		v := pendingassignmentscope.DefaultState
+		_c.mutation.SetState(v)
+	}
+	if _, ok := _c.mutation.Attempts(); !ok {
+		v := pendingassignmentscope.DefaultAttempts
+		_c.mutation.SetAttempts(v)
+	}
+	if _, ok := _c.mutation.FencingToken(); !ok {
+		v := pendingassignmentscope.DefaultFencingToken
+		_c.mutation.SetFencingToken(v)
+	}
+	if _, ok := _c.mutation.AccessRevision(); !ok {
+		v := pendingassignmentscope.DefaultAccessRevision
+		_c.mutation.SetAccessRevision(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		if pendingassignmentscope.DefaultID == nil {
 			return fmt.Errorf("ent: uninitialized pendingassignmentscope.DefaultID (forgotten import ent/runtime?)")
@@ -143,6 +299,43 @@ func (_c *PendingAssignmentScopeCreate) check() error {
 	}
 	if _, ok := _c.mutation.RecordedAt(); !ok {
 		return &ValidationError{Name: "recorded_at", err: errors.New(`ent: missing required field "PendingAssignmentScope.recorded_at"`)}
+	}
+	if _, ok := _c.mutation.State(); !ok {
+		return &ValidationError{Name: "state", err: errors.New(`ent: missing required field "PendingAssignmentScope.state"`)}
+	}
+	if v, ok := _c.mutation.State(); ok {
+		if err := pendingassignmentscope.StateValidator(v); err != nil {
+			return &ValidationError{Name: "state", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.state": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.Attempts(); !ok {
+		return &ValidationError{Name: "attempts", err: errors.New(`ent: missing required field "PendingAssignmentScope.attempts"`)}
+	}
+	if v, ok := _c.mutation.Attempts(); ok {
+		if err := pendingassignmentscope.AttemptsValidator(v); err != nil {
+			return &ValidationError{Name: "attempts", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.attempts": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.FencingToken(); !ok {
+		return &ValidationError{Name: "fencing_token", err: errors.New(`ent: missing required field "PendingAssignmentScope.fencing_token"`)}
+	}
+	if v, ok := _c.mutation.FencingToken(); ok {
+		if err := pendingassignmentscope.FencingTokenValidator(v); err != nil {
+			return &ValidationError{Name: "fencing_token", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.fencing_token": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.AccessRevision(); !ok {
+		return &ValidationError{Name: "access_revision", err: errors.New(`ent: missing required field "PendingAssignmentScope.access_revision"`)}
+	}
+	if v, ok := _c.mutation.AccessRevision(); ok {
+		if err := pendingassignmentscope.AccessRevisionValidator(v); err != nil {
+			return &ValidationError{Name: "access_revision", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.access_revision": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.FailureCode(); ok {
+		if err := pendingassignmentscope.FailureCodeValidator(v); err != nil {
+			return &ValidationError{Name: "failure_code", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.failure_code": %w`, err)}
+		}
 	}
 	return nil
 }
@@ -198,6 +391,46 @@ func (_c *PendingAssignmentScopeCreate) createSpec() (*PendingAssignmentScope, *
 	if value, ok := _c.mutation.RecordedAt(); ok {
 		_spec.SetField(pendingassignmentscope.FieldRecordedAt, field.TypeTime, value)
 		_node.RecordedAt = value
+	}
+	if value, ok := _c.mutation.State(); ok {
+		_spec.SetField(pendingassignmentscope.FieldState, field.TypeEnum, value)
+		_node.State = value
+	}
+	if value, ok := _c.mutation.HighWaterAcceptedAt(); ok {
+		_spec.SetField(pendingassignmentscope.FieldHighWaterAcceptedAt, field.TypeTime, value)
+		_node.HighWaterAcceptedAt = &value
+	}
+	if value, ok := _c.mutation.HighWaterTransmissionID(); ok {
+		_spec.SetField(pendingassignmentscope.FieldHighWaterTransmissionID, field.TypeUUID, value)
+		_node.HighWaterTransmissionID = &value
+	}
+	if value, ok := _c.mutation.CursorAcceptedAt(); ok {
+		_spec.SetField(pendingassignmentscope.FieldCursorAcceptedAt, field.TypeTime, value)
+		_node.CursorAcceptedAt = &value
+	}
+	if value, ok := _c.mutation.CursorTransmissionID(); ok {
+		_spec.SetField(pendingassignmentscope.FieldCursorTransmissionID, field.TypeUUID, value)
+		_node.CursorTransmissionID = &value
+	}
+	if value, ok := _c.mutation.Attempts(); ok {
+		_spec.SetField(pendingassignmentscope.FieldAttempts, field.TypeInt, value)
+		_node.Attempts = value
+	}
+	if value, ok := _c.mutation.LeaseUntil(); ok {
+		_spec.SetField(pendingassignmentscope.FieldLeaseUntil, field.TypeTime, value)
+		_node.LeaseUntil = &value
+	}
+	if value, ok := _c.mutation.FencingToken(); ok {
+		_spec.SetField(pendingassignmentscope.FieldFencingToken, field.TypeInt64, value)
+		_node.FencingToken = value
+	}
+	if value, ok := _c.mutation.AccessRevision(); ok {
+		_spec.SetField(pendingassignmentscope.FieldAccessRevision, field.TypeInt64, value)
+		_node.AccessRevision = value
+	}
+	if value, ok := _c.mutation.FailureCode(); ok {
+		_spec.SetField(pendingassignmentscope.FieldFailureCode, field.TypeString, value)
+		_node.FailureCode = value
 	}
 	return _node, _spec
 }

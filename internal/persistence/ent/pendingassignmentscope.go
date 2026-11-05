@@ -28,7 +28,27 @@ type PendingAssignmentScope struct {
 	// Reason holds the value of the "reason" field.
 	Reason pendingassignmentscope.Reason `json:"reason,omitempty"`
 	// RecordedAt holds the value of the "recorded_at" field.
-	RecordedAt   time.Time `json:"recorded_at,omitempty"`
+	RecordedAt time.Time `json:"recorded_at,omitempty"`
+	// State holds the value of the "state" field.
+	State pendingassignmentscope.State `json:"state,omitempty"`
+	// HighWaterAcceptedAt holds the value of the "high_water_accepted_at" field.
+	HighWaterAcceptedAt *time.Time `json:"high_water_accepted_at,omitempty"`
+	// HighWaterTransmissionID holds the value of the "high_water_transmission_id" field.
+	HighWaterTransmissionID *uuid.UUID `json:"high_water_transmission_id,omitempty"`
+	// CursorAcceptedAt holds the value of the "cursor_accepted_at" field.
+	CursorAcceptedAt *time.Time `json:"cursor_accepted_at,omitempty"`
+	// CursorTransmissionID holds the value of the "cursor_transmission_id" field.
+	CursorTransmissionID *uuid.UUID `json:"cursor_transmission_id,omitempty"`
+	// Attempts holds the value of the "attempts" field.
+	Attempts int `json:"attempts,omitempty"`
+	// LeaseUntil holds the value of the "lease_until" field.
+	LeaseUntil *time.Time `json:"lease_until,omitempty"`
+	// FencingToken holds the value of the "fencing_token" field.
+	FencingToken int64 `json:"fencing_token,omitempty"`
+	// AccessRevision holds the value of the "access_revision" field.
+	AccessRevision int64 `json:"access_revision,omitempty"`
+	// FailureCode holds the value of the "failure_code" field.
+	FailureCode  string `json:"failure_code,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -37,15 +57,15 @@ func (*PendingAssignmentScope) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case pendingassignmentscope.FieldUnitID:
+		case pendingassignmentscope.FieldUnitID, pendingassignmentscope.FieldHighWaterTransmissionID, pendingassignmentscope.FieldCursorTransmissionID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		case pendingassignmentscope.FieldNetworkIds:
 			values[i] = new([]byte)
-		case pendingassignmentscope.FieldAssignmentRevision:
+		case pendingassignmentscope.FieldAssignmentRevision, pendingassignmentscope.FieldAttempts, pendingassignmentscope.FieldFencingToken, pendingassignmentscope.FieldAccessRevision:
 			values[i] = new(sql.NullInt64)
-		case pendingassignmentscope.FieldReason:
+		case pendingassignmentscope.FieldReason, pendingassignmentscope.FieldState, pendingassignmentscope.FieldFailureCode:
 			values[i] = new(sql.NullString)
-		case pendingassignmentscope.FieldRecordedAt:
+		case pendingassignmentscope.FieldRecordedAt, pendingassignmentscope.FieldHighWaterAcceptedAt, pendingassignmentscope.FieldCursorAcceptedAt, pendingassignmentscope.FieldLeaseUntil:
 			values[i] = new(sql.NullTime)
 		case pendingassignmentscope.FieldID:
 			values[i] = new(uuid.UUID)
@@ -103,6 +123,71 @@ func (_m *PendingAssignmentScope) assignValues(columns []string, values []any) e
 			} else if value.Valid {
 				_m.RecordedAt = value.Time
 			}
+		case pendingassignmentscope.FieldState:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field state", values[i])
+			} else if value.Valid {
+				_m.State = pendingassignmentscope.State(value.String)
+			}
+		case pendingassignmentscope.FieldHighWaterAcceptedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field high_water_accepted_at", values[i])
+			} else if value.Valid {
+				_m.HighWaterAcceptedAt = new(time.Time)
+				*_m.HighWaterAcceptedAt = value.Time
+			}
+		case pendingassignmentscope.FieldHighWaterTransmissionID:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field high_water_transmission_id", values[i])
+			} else if value.Valid {
+				_m.HighWaterTransmissionID = new(uuid.UUID)
+				*_m.HighWaterTransmissionID = *value.S.(*uuid.UUID)
+			}
+		case pendingassignmentscope.FieldCursorAcceptedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field cursor_accepted_at", values[i])
+			} else if value.Valid {
+				_m.CursorAcceptedAt = new(time.Time)
+				*_m.CursorAcceptedAt = value.Time
+			}
+		case pendingassignmentscope.FieldCursorTransmissionID:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field cursor_transmission_id", values[i])
+			} else if value.Valid {
+				_m.CursorTransmissionID = new(uuid.UUID)
+				*_m.CursorTransmissionID = *value.S.(*uuid.UUID)
+			}
+		case pendingassignmentscope.FieldAttempts:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field attempts", values[i])
+			} else if value.Valid {
+				_m.Attempts = int(value.Int64)
+			}
+		case pendingassignmentscope.FieldLeaseUntil:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field lease_until", values[i])
+			} else if value.Valid {
+				_m.LeaseUntil = new(time.Time)
+				*_m.LeaseUntil = value.Time
+			}
+		case pendingassignmentscope.FieldFencingToken:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field fencing_token", values[i])
+			} else if value.Valid {
+				_m.FencingToken = value.Int64
+			}
+		case pendingassignmentscope.FieldAccessRevision:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field access_revision", values[i])
+			} else if value.Valid {
+				_m.AccessRevision = value.Int64
+			}
+		case pendingassignmentscope.FieldFailureCode:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field failure_code", values[i])
+			} else if value.Valid {
+				_m.FailureCode = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -155,6 +240,46 @@ func (_m *PendingAssignmentScope) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("recorded_at=")
 	builder.WriteString(_m.RecordedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("state=")
+	builder.WriteString(fmt.Sprintf("%v", _m.State))
+	builder.WriteString(", ")
+	if v := _m.HighWaterAcceptedAt; v != nil {
+		builder.WriteString("high_water_accepted_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.HighWaterTransmissionID; v != nil {
+		builder.WriteString("high_water_transmission_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.CursorAcceptedAt; v != nil {
+		builder.WriteString("cursor_accepted_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.CursorTransmissionID; v != nil {
+		builder.WriteString("cursor_transmission_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("attempts=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Attempts))
+	builder.WriteString(", ")
+	if v := _m.LeaseUntil; v != nil {
+		builder.WriteString("lease_until=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("fencing_token=")
+	builder.WriteString(fmt.Sprintf("%v", _m.FencingToken))
+	builder.WriteString(", ")
+	builder.WriteString("access_revision=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AccessRevision))
+	builder.WriteString(", ")
+	builder.WriteString("failure_code=")
+	builder.WriteString(_m.FailureCode)
 	builder.WriteByte(')')
 	return builder.String()
 }

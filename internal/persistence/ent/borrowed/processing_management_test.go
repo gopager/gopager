@@ -3,6 +3,7 @@ package borrowed_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -94,7 +95,7 @@ func TestProcessingManagementVersionsActivationOnlyAndRetainedHistory(t *testing
 		t.Fatal(err)
 	}
 	replayed, err := service.CreateWorkflow(t.Context(), f.proof, command, input, checkedMutation)
-	if err != nil || replayed != created {
+	if err != nil || !reflect.DeepEqual(replayed, created) {
 		t.Fatalf("create replay changed identity: %+v %v", replayed, err)
 	}
 	definition := preparedProcessingDefinition(t)
@@ -104,7 +105,7 @@ func TestProcessingManagementVersionsActivationOnlyAndRetainedHistory(t *testing
 		t.Fatal(err)
 	}
 	replayed, err = service.SaveVersion(t.Context(), f.proof, saveCommand, created.ID, 1, definition, checkedMutation)
-	if err != nil || replayed != first {
+	if err != nil || !reflect.DeepEqual(replayed, first) {
 		t.Fatalf("save replay changed version/revision: %+v %v", replayed, err)
 	}
 	metadata, err := service.ReadWorkflow(t.Context(), f.proof, created.ID)

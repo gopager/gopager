@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/persistence/ent/commandreceipt"
 )
 
@@ -30,6 +32,8 @@ type CommandReceipt struct {
 	ResultID uuid.UUID `json:"result_id,omitempty"`
 	// ResultRevision holds the value of the "result_revision" field.
 	ResultRevision int64 `json:"result_revision,omitempty"`
+	// ResultItems holds the value of the "result_items" field.
+	ResultItems []commands.ResultItem `json:"result_items,omitempty"`
 	// RecordedAt holds the value of the "recorded_at" field.
 	RecordedAt   time.Time `json:"recorded_at,omitempty"`
 	selectValues sql.SelectValues
@@ -40,7 +44,7 @@ func (*CommandReceipt) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case commandreceipt.FieldFingerprint:
+		case commandreceipt.FieldFingerprint, commandreceipt.FieldResultItems:
 			values[i] = new([]byte)
 		case commandreceipt.FieldResultRevision:
 			values[i] = new(sql.NullInt64)
@@ -107,6 +111,14 @@ func (_m *CommandReceipt) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ResultRevision = value.Int64
 			}
+		case commandreceipt.FieldResultItems:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field result_items", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.ResultItems); err != nil {
+					return fmt.Errorf("unmarshal field result_items: %w", err)
+				}
+			}
 		case commandreceipt.FieldRecordedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field recorded_at", values[i])
@@ -165,6 +177,9 @@ func (_m *CommandReceipt) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("result_revision=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ResultRevision))
+	builder.WriteString(", ")
+	builder.WriteString("result_items=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ResultItems))
 	builder.WriteString(", ")
 	builder.WriteString("recorded_at=")
 	builder.WriteString(_m.RecordedAt.Format(time.ANSIC))

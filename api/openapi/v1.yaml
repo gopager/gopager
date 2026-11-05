@@ -1,0 +1,1331 @@
+openapi: 3.0.3
+info:
+  title: GoPager AP-08 Management and Correction API
+  version: 1.0.0
+  description: |
+    AP-08 Unit, Organization, collection, template, suppression, and correction
+    management operations. The pre-existing Unit-collection and Address-rule
+    routes, plus AP-07 intake and Gateway operations, remain specified by their
+    owning contracts.
+servers:
+  - url: /api/v1
+paths:
+  /organizations:
+    get:
+      operationId: listOrganizations
+      parameters:
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Caller-authorized page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationPageResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      operationId: createOrganization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrganizationRequest'
+      responses:
+        '201':
+          description: Organization created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /organizations/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      operationId: readOrganization
+      responses:
+        '200':
+          description: Caller-authorized Organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: updateOrganization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrganizationRequest'
+      responses:
+        '200':
+          description: Updated Organization revision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      operationId: deleteOrganization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteRequest'
+      responses:
+        '200':
+          description: Deleted after defaults and references were preserved atomically
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /unit-templates:
+    get:
+      operationId: listUnitTemplates
+      parameters:
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Caller-authorized page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnitTemplatePageResponse'
+    post:
+      operationId: createUnitTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUnitTemplateRequest'
+      responses:
+        '201':
+          description: Unit template created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /unit-templates/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      operationId: readUnitTemplate
+      responses:
+        '200':
+          description: Caller-authorized template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnitTemplateResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: updateUnitTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUnitTemplateRequest'
+      responses:
+        '200':
+          description: Updated template revision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      operationId: deleteUnitTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteRequest'
+      responses:
+        '200':
+          description: Template deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /units:
+    get:
+      operationId: listUnits
+      parameters:
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Caller-authorized page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnitPageResponse'
+    post:
+      operationId: createUnit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUnitRequest'
+      responses:
+        '201':
+          description: Unit created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /units/from-template:
+    post:
+      operationId: createUnitFromTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUnitFromTemplateRequest'
+      responses:
+        '201':
+          description: Unit created from the current template snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /units/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      operationId: readUnit
+      responses:
+        '200':
+          description: Caller-authorized Unit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnitResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: updateUnit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUnitRequest'
+      responses:
+        '200':
+          description: Updated Unit revision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      operationId: deleteUnit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteRequest'
+      responses:
+        '202':
+          description: Unit is nonselectable and correction is pending
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletionResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /units/bulk/preview:
+    post:
+      operationId: previewBulkUnits
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkUnitRequest'
+      responses:
+        '200':
+          description: Non-mutating caller-safe preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkPreviewResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /units/bulk:
+    post:
+      operationId: mutateBulkUnits
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkUnitCommand'
+      responses:
+        '200':
+          description: All requested changes committed atomically
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkCommandResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /suppressions:
+    get:
+      operationId: listSuppressions
+      parameters:
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Caller-authorized page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuppressionPageResponse'
+    post:
+      operationId: createSuppression
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSuppressionRequest'
+      responses:
+        '202':
+          description: Suppression committed; checked correction is pending
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuppressionCommandResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /suppressions/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      operationId: readSuppression
+      responses:
+        '200':
+          description: Caller-authorized suppression
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuppressionResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: liftSuppression
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LiftSuppressionRequest'
+      responses:
+        '202':
+          description: Suppression lifted; checked correction is pending
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuppressionCommandResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /assignment-corrections/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      operationId: readAssignmentCorrection
+      responses:
+        '200':
+          description: Caller-authorized safe correction status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CorrectionResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /assignment-corrections/{id}/retry:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      operationId: retryAssignmentCorrection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetryCorrectionRequest'
+      responses:
+        '202':
+          description: Current revision correction scheduled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CorrectionResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+components:
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Offset:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+  responses:
+    InvalidInput:
+      description: Invalid shape or value
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Operation is not permitted
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Item is unavailable or not visible
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Expected revision conflict or idempotency conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Revision:
+      type: string
+      pattern: '^[1-9][0-9]*$'
+    Envelope:
+      type: object
+      required: [schemaVersion, data]
+      properties:
+        schemaVersion:
+          type: integer
+          enum: [1]
+        data:
+          type: object
+    Request:
+      type: object
+      description: Requests are decoded with unknown-field rejection by the management adapter.
+      required: [schemaVersion]
+      properties:
+        schemaVersion:
+          type: integer
+          enum: [1]
+    CommandResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/CommandResult'
+    BulkCommandResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [commandId, operation, items]
+              properties:
+                commandId:
+                  type: string
+                  format: uuid
+                operation:
+                  type: string
+                  enum: [update, delete]
+                items:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [id, revision, status]
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      revision:
+                        $ref: '#/components/schemas/Revision'
+                      status:
+                        type: string
+                        enum: [updated, pending]
+    CommandResult:
+      type: object
+      required: [id, revision]
+      properties:
+        id:
+          type: string
+          format: uuid
+        revision:
+          $ref: '#/components/schemas/Revision'
+    DeletionResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              allOf:
+                - $ref: '#/components/schemas/CommandResult'
+                - type: object
+                  required: [status]
+                  properties:
+                    status:
+                      type: string
+                      enum: [pending]
+    Settings:
+      type: object
+      required: [color, icon, functionMeanings]
+      properties:
+        color:
+          $ref: '#/components/schemas/UnitSettingColor'
+        icon:
+          $ref: '#/components/schemas/UnitSettingIcon'
+        functionMeanings:
+          $ref: '#/components/schemas/UnitSettingFunctionMeanings'
+    Defaults:
+      type: object
+      required: [color, icon, functionMeanings]
+      properties:
+        color:
+          $ref: '#/components/schemas/DefaultColor'
+        icon:
+          $ref: '#/components/schemas/DefaultIcon'
+        functionMeanings:
+          $ref: '#/components/schemas/DefaultFunctionMeanings'
+    UnitSettingColor:
+      oneOf:
+        - type: object
+          required: [mode]
+          properties:
+            mode:
+              type: string
+              enum: [inherit, unset]
+          additionalProperties: false
+        - type: object
+          required: [mode, value]
+          properties:
+            mode:
+              type: string
+              enum: [value]
+            value:
+              $ref: '#/components/schemas/Color'
+          additionalProperties: false
+    UnitSettingIcon:
+      oneOf:
+        - type: object
+          required: [mode]
+          properties:
+            mode:
+              type: string
+              enum: [inherit, unset]
+          additionalProperties: false
+        - type: object
+          required: [mode, value]
+          properties:
+            mode:
+              type: string
+              enum: [value]
+            value:
+              $ref: '#/components/schemas/IconRef'
+          additionalProperties: false
+    UnitSettingFunctionMeanings:
+      oneOf:
+        - type: object
+          required: [mode]
+          properties:
+            mode:
+              type: string
+              enum: [inherit, unset]
+          additionalProperties: false
+        - type: object
+          required: [mode, value]
+          properties:
+            mode:
+              type: string
+              enum: [value]
+            value:
+              $ref: '#/components/schemas/FunctionMeanings'
+          additionalProperties: false
+    DefaultColor:
+      oneOf:
+        - type: object
+          required: [mode]
+          properties:
+            mode:
+              type: string
+              enum: [unset]
+          additionalProperties: false
+        - type: object
+          required: [mode, value]
+          properties:
+            mode:
+              type: string
+              enum: [value]
+            value:
+              $ref: '#/components/schemas/Color'
+          additionalProperties: false
+    DefaultIcon:
+      oneOf:
+        - type: object
+          required: [mode]
+          properties:
+            mode:
+              type: string
+              enum: [unset]
+          additionalProperties: false
+        - type: object
+          required: [mode, value]
+          properties:
+            mode:
+              type: string
+              enum: [value]
+            value:
+              $ref: '#/components/schemas/IconRef'
+          additionalProperties: false
+    DefaultFunctionMeanings:
+      oneOf:
+        - type: object
+          required: [mode]
+          properties:
+            mode:
+              type: string
+              enum: [unset]
+          additionalProperties: false
+        - type: object
+          required: [mode, value]
+          properties:
+            mode:
+              type: string
+              enum: [value]
+            value:
+              $ref: '#/components/schemas/FunctionMeanings'
+          additionalProperties: false
+    Color:
+      type: string
+      pattern: '^#[0-9A-Fa-f]{6}$'
+    IconRef:
+      type: string
+      minLength: 1
+      maxLength: 128
+      pattern: '^[A-Za-z0-9._-]+$'
+    FunctionMeanings:
+      type: object
+      maxProperties: 4
+      additionalProperties: false
+      properties:
+        '0':
+          type: string
+          minLength: 1
+          maxLength: 256
+        '1':
+          type: string
+          minLength: 1
+          maxLength: 256
+        '2':
+          type: string
+          minLength: 1
+          maxLength: 256
+        '3':
+          type: string
+          minLength: 1
+          maxLength: 256
+    Organization:
+      type: object
+      required: [id, revision, name, defaults, deleted]
+      properties:
+        id:
+          type: string
+          format: uuid
+        revision:
+          $ref: '#/components/schemas/Revision'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+        defaults:
+          $ref: '#/components/schemas/Defaults'
+        deleted:
+          type: boolean
+    UnitTemplate:
+      type: object
+      required: [id, revision, name, organizationId, settings, effectiveSettings, deleted]
+      properties:
+        id:
+          type: string
+          format: uuid
+        revision:
+          $ref: '#/components/schemas/Revision'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+        organizationId:
+          type: string
+          format: uuid
+          nullable: true
+        settings:
+          $ref: '#/components/schemas/Settings'
+        effectiveSettings:
+          $ref: '#/components/schemas/EffectiveSettings'
+        deleted:
+          type: boolean
+    Unit:
+      type: object
+      required: [id, revision, name, organizationId, collectionIds, settings, effectiveSettings, deleted]
+      properties:
+        id:
+          type: string
+          format: uuid
+        revision:
+          $ref: '#/components/schemas/Revision'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+        organizationId:
+          type: string
+          format: uuid
+          nullable: true
+        collectionIds:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+        settings:
+          $ref: '#/components/schemas/Settings'
+        effectiveSettings:
+          $ref: '#/components/schemas/EffectiveSettings'
+        deleted:
+          type: boolean
+    EffectiveSettings:
+      type: object
+      required: [color, icon, functionMeanings]
+      properties:
+        color:
+          $ref: '#/components/schemas/EffectiveColor'
+        icon:
+          $ref: '#/components/schemas/EffectiveIcon'
+        functionMeanings:
+          $ref: '#/components/schemas/EffectiveFunctionMeanings'
+    EffectiveColor:
+      type: object
+      required: [value, source]
+      properties:
+        value:
+          type: string
+          nullable: true
+          pattern: '^#[0-9A-Fa-f]{6}$'
+        source:
+          type: string
+          enum: [unit, organization, unset]
+    EffectiveIcon:
+      type: object
+      required: [value, source]
+      properties:
+        value:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 128
+          pattern: '^[A-Za-z0-9._-]+$'
+        source:
+          type: string
+          enum: [unit, organization, unset]
+    EffectiveFunctionMeanings:
+      type: object
+      required: [value, source]
+      properties:
+        value:
+          type: object
+          nullable: true
+          maxProperties: 4
+          additionalProperties: false
+          properties:
+            '0':
+              type: string
+              minLength: 1
+              maxLength: 256
+            '1':
+              type: string
+              minLength: 1
+              maxLength: 256
+            '2':
+              type: string
+              minLength: 1
+              maxLength: 256
+            '3':
+              type: string
+              minLength: 1
+              maxLength: 256
+        source:
+          type: string
+          enum: [unit, organization, unset]
+    Page:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        total:
+          type: integer
+          minimum: 0
+    OrganizationPageResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              allOf:
+                - $ref: '#/components/schemas/Page'
+                - properties:
+                    items:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/Organization'
+    UnitTemplatePageResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              allOf:
+                - $ref: '#/components/schemas/Page'
+                - properties:
+                    items:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/UnitTemplate'
+    UnitPageResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              allOf:
+                - $ref: '#/components/schemas/Page'
+                - properties:
+                    items:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/Unit'
+    OrganizationResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Organization'
+    UnitTemplateResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/UnitTemplate'
+    UnitResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Unit'
+    CreateOrganizationRequest:
+      allOf:
+        - $ref: '#/components/schemas/Request'
+        - type: object
+          required: [commandId, name, defaults]
+          properties:
+            commandId:
+              type: string
+              format: uuid
+            name:
+              type: string
+              minLength: 1
+              maxLength: 256
+            defaults:
+              $ref: '#/components/schemas/Defaults'
+    UpdateOrganizationRequest:
+      allOf:
+        - $ref: '#/components/schemas/Request'
+        - type: object
+          required: [expectedRevision, name, defaults]
+          properties:
+            expectedRevision:
+              $ref: '#/components/schemas/Revision'
+            name:
+              type: string
+              minLength: 1
+              maxLength: 256
+            defaults:
+              $ref: '#/components/schemas/Defaults'
+    CreateUnitTemplateRequest:
+      allOf:
+        - $ref: '#/components/schemas/Request'
+        - type: object
+          required: [commandId, name, settings]
+          properties:
+            commandId:
+              type: string
+              format: uuid
+            name:
+              type: string
+              minLength: 1
+              maxLength: 256
+            organizationId:
+              type: string
+              format: uuid
+              nullable: true
+            settings:
+              $ref: '#/components/schemas/Settings'
+    UpdateUnitTemplateRequest:
+      allOf:
+        - $ref: '#/components/schemas/Request'
+        - type: object
+          required: [expectedRevision, name, organizationId, settings]
+          properties:
+            expectedRevision:
+              $ref: '#/components/schemas/Revision'
+            name:
+              type: string
+              minLength: 1
+              maxLength: 256
+            organizationId:
+              type: string
+              format: uuid
+              nullable: true
+            settings:
+              $ref: '#/components/schemas/Settings'
+    CreateUnitRequest:
+      allOf:
+        - $ref: '#/components/schemas/Request'
+        - type: object
+          required: [commandId, name, collectionIds, settings]
+          properties:
+            commandId:
+              type: string
+              format: uuid
+            name:
+              type: string
+              minLength: 1
+              maxLength: 256
+            organizationId:
+              type: string
+              format: uuid
+              nullable: true
+            newOrganization:
+              type: object
+              required: [name, defaults]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 256
+                defaults:
+                  $ref: '#/components/schemas/Defaults'
+            collectionIds:
+              type: array
+              uniqueItems: true
+              items:
+                type: string
+                format: uuid
+            settings:
+              $ref: '#/components/schemas/Settings'
+        - oneOf:
+            - not:
+                anyOf:
+                  - required: [organizationId]
+                  - required: [newOrganization]
+            - allOf:
+                - required: [organizationId]
+                - not:
+                    required: [newOrganization]
+            - allOf:
+                - required: [newOrganization]
+                - not:
+                    required: [organizationId]
+    UpdateUnitRequest:
+      allOf:
+        - $ref: '#/components/schemas/Request'
+        - type: object
+          required: [expectedRevision, name, organizationId, collectionIds, settings]
+          properties:
+            expectedRevision:
+              $ref: '#/components/schemas/Revision'
+            name:
+              type: string
+              minLength: 1
+              maxLength: 256
+            organizationId:
+              type: string
+              format: uuid
+              nullable: true
+            collectionIds:
+              type: array
+              uniqueItems: true
+              items:
+                type: string
+                format: uuid
+            settings:
+              $ref: '#/components/schemas/Settings'
+    CreateUnitFromTemplateRequest:
+      allOf:
+        - $ref: '#/components/schemas/Request'
+        - type: object
+          required: [commandId, templateId, name, collectionIds]
+          properties:
+            commandId:
+              type: string
+              format: uuid
+            templateId:
+              type: string
+              format: uuid
+            name:
+              type: string
+              minLength: 1
+              maxLength: 256
+            collectionIds:
+              type: array
+              uniqueItems: true
+              items:
+                type: string
+                format: uuid
+    DeleteRequest:
+      allOf:
+        - $ref: '#/components/schemas/Request'
+        - type: object
+          required: [expectedRevision]
+          properties:
+            expectedRevision:
+              $ref: '#/components/schemas/Revision'
+    LiftSuppressionRequest:
+      allOf:
+        - $ref: '#/components/schemas/Request'
+        - type: object
+          required: [expectedRevision, expectedAssignmentRevision]
+          properties:
+            expectedRevision:
+              $ref: '#/components/schemas/Revision'
+            expectedAssignmentRevision:
+              $ref: '#/components/schemas/Revision'
+    BulkUnitRequest:
+      oneOf:
+        - $ref: '#/components/schemas/BulkUnitUpdateRequest'
+        - $ref: '#/components/schemas/BulkUnitDeleteRequest'
+    BulkUnitUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/Request'
+        - type: object
+          required: [operation, items]
+          properties:
+            operation:
+              type: string
+              enum: [update]
+            items:
+              type: array
+              minItems: 1
+              maxItems: 100
+              items:
+                allOf:
+                  - $ref: '#/components/schemas/BulkUnitItem'
+                  - type: object
+                    required: [settings]
+    BulkUnitDeleteRequest:
+      allOf:
+        - $ref: '#/components/schemas/Request'
+        - type: object
+          required: [operation, items]
+          properties:
+            operation:
+              type: string
+              enum: [delete]
+            items:
+              type: array
+              minItems: 1
+              maxItems: 100
+              items:
+                allOf:
+                  - $ref: '#/components/schemas/BulkUnitItem'
+                  - type: object
+                    not:
+                      required: [settings]
+    BulkUnitCommand:
+      allOf:
+        - $ref: '#/components/schemas/BulkUnitRequest'
+        - type: object
+          required: [commandId]
+          properties:
+            commandId:
+              type: string
+              format: uuid
+    BulkUnitItem:
+      type: object
+      required: [id, expectedRevision]
+      properties:
+        id:
+          type: string
+          format: uuid
+        expectedRevision:
+          $ref: '#/components/schemas/Revision'
+        settings:
+          $ref: '#/components/schemas/Settings'
+    BulkPreviewResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [valid, items]
+              properties:
+                valid:
+                  type: boolean
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [id, valid]
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      expectedRevision:
+                        $ref: '#/components/schemas/Revision'
+                      valid:
+                        type: boolean
+                      code:
+                        type: string
+    Suppression:
+      type: object
+      required: [id, revision, transmissionId, targetPosition, active, createdAt, liftedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        revision:
+          $ref: '#/components/schemas/Revision'
+        transmissionId:
+          type: string
+          format: uuid
+        targetPosition:
+          type: integer
+          minimum: 0
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        liftedAt:
+          type: string
+          format: date-time
+          nullable: true
+    SuppressionPageResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              allOf:
+                - $ref: '#/components/schemas/Page'
+                - properties:
+                    items:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/Suppression'
+    SuppressionResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Suppression'
+    CreateSuppressionRequest:
+      allOf:
+        - $ref: '#/components/schemas/Request'
+        - type: object
+          required: [commandId, expectedAssignmentRevision, transmissionId, targetPosition]
+          properties:
+            commandId:
+              type: string
+              format: uuid
+            expectedAssignmentRevision:
+              $ref: '#/components/schemas/Revision'
+            transmissionId:
+              type: string
+              format: uuid
+            targetPosition:
+              type: integer
+              minimum: 0
+    SuppressionCommandResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              allOf:
+                - $ref: '#/components/schemas/CommandResult'
+                - type: object
+                  required: [status, correctionId, assignmentRevision]
+                  properties:
+                    status:
+                      type: string
+                      enum: [pending]
+                    correctionId:
+                      type: string
+                      format: uuid
+                    assignmentRevision:
+                      $ref: '#/components/schemas/Revision'
+    Correction:
+      type: object
+      required: [id, assignmentRevision, state, networkCount, unitCount, processed, remaining]
+      properties:
+        id:
+          type: string
+          format: uuid
+        assignmentRevision:
+          $ref: '#/components/schemas/Revision'
+        state:
+          type: string
+          enum: [pending, running, completed, failed, superseded]
+        networkCount:
+          type: integer
+          minimum: 0
+        unitCount:
+          type: integer
+          minimum: 0
+        processed:
+          type: integer
+          minimum: 0
+        remaining:
+          type: integer
+          minimum: 0
+        failureCode:
+          type: string
+          nullable: true
+    CorrectionResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Correction'
+    RetryCorrectionRequest:
+      allOf:
+        - $ref: '#/components/schemas/Request'
+        - type: object
+          required: [commandId]
+          properties:
+            commandId:
+              type: string
+              format: uuid
+    Error:
+      type: object
+      required: [schemaVersion, code, parameters, textKey, fallback, requestId, retryable]
+      properties:
+        schemaVersion:
+          type: integer
+          enum: [1]
+        code:
+          type: string
+        parameters:
+          type: object
+          additionalProperties: true
+        textKey:
+          type: string
+        fallback:
+          type: string
+        requestId:
+          type: string
+          format: uuid
+        retryable:
+          type: boolean

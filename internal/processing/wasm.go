@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	_ "embed"
-	"encoding/json"
 	"errors"
 	"io"
 	"sync"
@@ -17,11 +16,6 @@ import (
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
 	"github.com/tetratelabs/wazero/sys"
 )
-
-//go:generate env GOOS=wasip1 GOARCH=wasm CGO_ENABLED=0 go build -trimpath -buildvcs=false -o regex.wasm ./regexguest
-
-//go:embed regex.wasm
-var coreRegex []byte
 
 type boundedOutput struct {
 	bytes.Buffer
@@ -44,12 +38,46 @@ func (w *boundedOutput) Write(data []byte) (int, error) {
 // The fixed guest memory bound is not an OS-wide Go host-memory guarantee.
 type WASMHost struct {
 	runtime wazero.Runtime
-	regex   wazero.CompiledModule
 	close   sync.Once
 	err     error
 }
 
-// NewWASMHost prepares the supplied Core guest once, outside source transactions.
+// compilation shares compiled guest code between hosts so each module is compiled once per process.
+var compilation struct {
+	sync.Mutex
+	cache wazero.CompilationCache
+}
+
+func compilationCache() wazero.CompilationCache {
+	compilation.Lock()
+	defer compilation.Unlock()
+	if compilation.cache == nil {
+		compilation.cache = wazero.NewCompilationCache()
+	}
+	return compilation.cache
+}
+
+// UseCompilationCacheDir persists compiled guest code in dir for every host created afterwards.
+// Cache entries are trusted native code, so dir must be writable only by the operator; production
+// composition keeps the in-memory default. It fails once a host has already used the cache.
+func UseCompilationCacheDir(dir string) error {
+	if dir == "" {
+		return invalid(errors.New("missing WASI compilation cache directory"))
+	}
+	compilation.Lock()
+	defer compilation.Unlock()
+	if compilation.cache != nil {
+		return invalid(errors.New("WASI compilation cache already in use"))
+	}
+	cache, err := wazero.NewCompilationCacheWithDir(dir)
+	if err != nil {
+		return invalid(err)
+	}
+	compilation.cache = cache
+	return nil
+}
+
+// NewWASMHost prepares the runtime for installed artifacts, outside source transactions.
 func NewWASMHost(ctx context.Context) (*WASMHost, error) {
 	if ctx == nil {
 		return nil, invalid(errors.New("missing WASI context"))
@@ -58,15 +86,11 @@ func NewWASMHost(ctx context.Context) (*WASMHost, error) {
 		return nil, err
 	}
 	runtime := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigCompiler().
-		WithMemoryLimitPages(1024).WithCloseOnContextDone(true))
+		WithMemoryLimitPages(1024).WithCloseOnContextDone(true).WithCompilationCache(compilationCache()))
 	if _, err := wasi_snapshot_preview1.Instantiate(ctx, runtime); err != nil {
 		return nil, errors.Join(err, runtime.Close(context.WithoutCancel(ctx)))
 	}
-	compiled, err := runtime.CompileModule(ctx, coreRegex)
-	if err != nil {
-		return nil, errors.Join(err, runtime.Close(context.WithoutCancel(ctx)))
-	}
-	return &WASMHost{runtime: runtime, regex: compiled}, nil
+	return &WASMHost{runtime: runtime}, nil
 }
 
 // Close releases prepared artifacts/runtime after dependent invocations have drained.
@@ -143,52 +167,6 @@ func (h *WASMHost) invokeMeasured(ctx context.Context, module wazero.CompiledMod
 		return invalid(errors.New("WASI output is not UTF-8"))
 	}
 	return Decode(stdout.Bytes(), output)
-}
-
-type RegexCapture struct {
-	Name  string  `json:"name"`
-	Index int     `json:"index"`
-	Text  *string `json:"text,omitempty"`
-}
-
-type RegexResult struct {
-	Matched  bool           `json:"matched"`
-	Captures []RegexCapture `json:"captures,omitempty"`
-	Names    []string       `json:"names"`
-	Failure  string         `json:"failure,omitempty"`
-}
-
-// Regex delegates both syntax inspection and matching to the embedded bounded guest.
-func (h *WASMHost) Regex(ctx context.Context, pattern string, text *string) (RegexResult, error) {
-	if h == nil {
-		return RegexResult{}, invalid(errors.New("missing WASI host"))
-	}
-	if len(pattern) > 4096 {
-		return RegexResult{}, resource(errors.New("regex pattern boundary"))
-	}
-	if !utf8.ValidString(pattern) || (text != nil && !utf8.ValidString(*text)) {
-		return RegexResult{}, invalid(errors.New("regex data is not UTF-8"))
-	}
-	input := struct {
-		Mode    string `json:"mode"`
-		Pattern string `json:"pattern"`
-		Text    string `json:"text,omitempty"`
-	}{Mode: "inspect", Pattern: pattern}
-	if text != nil {
-		input.Mode, input.Text = "match", *text
-	}
-	encoded, err := json.Marshal(input)
-	if err != nil {
-		return RegexResult{}, invalid(err)
-	}
-	var result RegexResult
-	if err := h.invoke(ctx, h.regex, encoded, &result, time.Second); err != nil {
-		return RegexResult{}, err
-	}
-	if result.Failure != "" {
-		return RegexResult{}, invalid(errors.New("Core regex rejected its input"))
-	}
-	return result, nil
 }
 
 var _ io.Writer = (*boundedOutput)(nil)

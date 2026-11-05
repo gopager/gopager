@@ -25,12 +25,12 @@ func (MissingSourceDeclarationOwner) ProcessingDeclarations(context.Context) (De
 // WorkflowDefinitionPreparer compiles immutable definitions against trusted declarations.
 type WorkflowDefinitionPreparer struct {
 	declarations SourceDeclarationOwner
-	regex        *WASMHost
+	regex        RegexEvaluator
 	artifacts    InstalledArtifacts
 }
 
 // NewWorkflowDefinitionPreparer requires the real declaration owner and the approved regex host.
-func NewWorkflowDefinitionPreparer(declarations SourceDeclarationOwner, regex *WASMHost,
+func NewWorkflowDefinitionPreparer(declarations SourceDeclarationOwner, regex RegexEvaluator,
 	artifacts InstalledArtifacts) (*WorkflowDefinitionPreparer, error) {
 	if declarations == nil || regex == nil {
 		return nil, invalid(errors.New("missing Workflow preparation dependency"))

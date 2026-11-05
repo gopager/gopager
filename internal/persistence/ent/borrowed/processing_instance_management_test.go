@@ -3,6 +3,7 @@ package borrowed_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -83,7 +84,7 @@ func TestProcessingInstanceManagementFreshAuthorityReceiptsAndAtomicFacts(t *tes
 		t.Fatal(err)
 	}
 	replayed, err := service.SaveInstance(t.Context(), f.proof, command, uuid.Nil, 0, input, checkedMutation)
-	if err != nil || replayed != first || inspector.calls != 1 || len(inspector.changes) != 1 {
+	if err != nil || !reflect.DeepEqual(replayed, first) || inspector.calls != 1 || len(inspector.changes) != 1 {
 		t.Fatalf("replayed creation inspected/duplicated state: %+v calls=%d err=%v", replayed, inspector.calls, err)
 	}
 	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {

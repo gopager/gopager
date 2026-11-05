@@ -29,19 +29,10 @@ func (d fixedDeclarations) FieldSchema(ref FieldRef) (FieldSchema, error) {
 
 func TestWorkflowDefinitionPreparerUsesOnlyTrustedDeclarations(t *testing.T) {
 	ctx := t.Context()
-	host, err := NewWASMHost(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := host.Close(ctx); err != nil {
-			t.Error(err)
-		}
-	})
 	flag := FieldRef{Namespace: "source", Path: []string{"flag"}}
 	preparer, err := NewWorkflowDefinitionPreparer(fixedDeclarationOwner{
 		declarations: fixedDeclarations{flag.key(): {Kind: BooleanValue}},
-	}, host, nil)
+	}, CoreRegex{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,16 +48,7 @@ func TestWorkflowDefinitionPreparerUsesOnlyTrustedDeclarations(t *testing.T) {
 
 func TestWorkflowDefinitionPreparerFailsClosedWithoutDeclarationOwner(t *testing.T) {
 	ctx := t.Context()
-	host, err := NewWASMHost(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := host.Close(ctx); err != nil {
-			t.Error(err)
-		}
-	})
-	preparer, err := NewWorkflowDefinitionPreparer(MissingSourceDeclarationOwner{}, host, nil)
+	preparer, err := NewWorkflowDefinitionPreparer(MissingSourceDeclarationOwner{}, CoreRegex{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +60,7 @@ func TestWorkflowDefinitionPreparerFailsClosedWithoutDeclarationOwner(t *testing
 func TestMissingDeclarationOwnerDoesNotMaskCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	preparer, err := NewWorkflowDefinitionPreparer(MissingSourceDeclarationOwner{}, &WASMHost{}, nil)
+	preparer, err := NewWorkflowDefinitionPreparer(MissingSourceDeclarationOwner{}, CoreRegex{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

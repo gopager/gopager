@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,9 +18,11 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/borrowed"
 	"github.com/gopager/gopager/internal/persistence/ent/guard"
 	"github.com/gopager/gopager/internal/persistence/ent/identitystore"
+	"github.com/gopager/gopager/internal/persistence/ent/organization"
 	"github.com/gopager/gopager/internal/persistence/ent/permissions"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
 	"github.com/gopager/gopager/internal/persistence/ent/unitcollection"
+	"github.com/gopager/gopager/internal/persistence/ent/unittemplate"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
 )
@@ -99,13 +102,357 @@ func plan(authority authz.Authority, action string, collection bool, now time.Ti
 	return result.Predicate, err
 }
 
+func organizationPlan(authority authz.Authority, action string, now time.Time) (entql.P, error) {
+	fields := []string(nil)
+	if strings.HasSuffix(action, ".read") {
+		fields = []string{"unit"}
+	}
+	result, err := permissions.ReadScope(authority, action, fields, permissions.Attributes{Scope: unitScope}, now)
+	if err != nil {
+		return nil, err
+	}
+	if authz.Authorize(authority, action, fields, authz.Target{}, now) == nil {
+		return entql.FieldNotNil("id"), nil
+	}
+	return entql.And(entql.HasEdgeWith("units"),
+		entql.Not(entql.HasEdgeWith("units", entql.Not(result.Predicate)))), nil
+}
+
 // unitDTO projects the supported public configuration without exposing Ent entities.
 func unitDTO(row *ent.Unit) units.Unit {
-	result := units.Unit{ID: row.ID, Revision: row.Revision, Name: row.Name, Deleted: row.Deleted, CollectionIDs: []uuid.UUID{}}
+	result := units.Unit{ID: row.ID, Revision: row.Revision, Name: row.Name, Deleted: row.Deleted,
+		OrganizationID: row.OrganizationID, Settings: row.Settings, CollectionIDs: []uuid.UUID{}}
+	var defaults *units.Defaults
+	if row.Edges.Organization != nil {
+		value := row.Edges.Organization.Defaults
+		defaults = &value
+	}
+	result.EffectiveSettings = units.ResolveSettings(row.Settings, defaults)
 	for _, collection := range row.Edges.Collections {
 		result.CollectionIDs = append(result.CollectionIDs, collection.ID)
 	}
 	return result
+}
+
+func (s *Store) lockOrganizations(ctx context.Context, tx platform.TransactionContext, ids ...*uuid.UUID) error {
+	unique := make(map[uuid.UUID]struct{}, len(ids))
+	for _, id := range ids {
+		if id != nil {
+			unique[*id] = struct{}{}
+		}
+	}
+	ordered := make([]uuid.UUID, 0, len(unique))
+	for id := range unique {
+		ordered = append(ordered, id)
+	}
+	slices.SortFunc(ordered, func(a, b uuid.UUID) int { return strings.Compare(a.String(), b.String()) })
+	for _, id := range ordered {
+		client, scope, err := s.client(ctx, tx, map[string]entql.P{
+			"Organization": entql.And(entql.FieldEQ("id", id), entql.FieldEQ("deleted", false)),
+		}, nil)
+		if err != nil {
+			return err
+		}
+		if _, err := client.Organization.Query().Where(organization.IDEQ(id), organization.DeletedEQ(false)).
+			ForUpdate().Only(scope); ent.IsNotFound(err) {
+			return authz.ErrRevisionConflict
+		} else if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func templateDTO(row *ent.UnitTemplate) units.UnitTemplate {
+	result := units.UnitTemplate{ID: row.ID, Revision: row.Revision, Name: row.Name,
+		OrganizationID: row.OrganizationID, Settings: row.Settings, Deleted: row.Deleted}
+	var defaults *units.Defaults
+	if row.Edges.Organization != nil {
+		value := row.Edges.Organization.Defaults
+		defaults = &value
+	}
+	result.EffectiveSettings = units.ResolveSettings(row.Settings, defaults)
+	return result
+}
+
+// ReadOrganizationContext locks an Organization and its current member rows in stable order.
+func (s *Store) ReadOrganizationContext(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (units.Organization, []units.Unit, []units.UnitTemplate, error) {
+	client, scope, err := s.client(ctx, tx, map[string]entql.P{
+		"Organization":   entql.FieldEQ("id", id),
+		"Unit":           entql.FieldEQ("organization_id", id),
+		"UnitCollection": entql.FieldNotNil("id"),
+		"UnitTemplate":   entql.FieldEQ("organization_id", id),
+	}, nil)
+	if err != nil {
+		return units.Organization{}, nil, nil, err
+	}
+	row, err := client.Organization.Query().Where(organization.IDEQ(id), organization.DeletedEQ(false)).ForUpdate().Only(scope)
+	if ent.IsNotFound(err) {
+		return units.Organization{}, nil, nil, authz.ErrNotFound
+	}
+	if err != nil {
+		return units.Organization{}, nil, nil, err
+	}
+	unitRows, err := client.Unit.Query().Where(unit.OrganizationIDEQ(id)).Order(ent.Asc(unit.FieldID)).ForUpdate().
+		WithCollections(withCollections).All(scope)
+	if err != nil {
+		return units.Organization{}, nil, nil, err
+	}
+	members := make([]units.Unit, len(unitRows))
+	for i, member := range unitRows {
+		value := units.Unit{ID: member.ID, Revision: member.Revision, Name: member.Name, Deleted: member.Deleted,
+			OrganizationID: member.OrganizationID, Settings: member.Settings, CollectionIDs: []uuid.UUID{}}
+		for _, collection := range member.Edges.Collections {
+			value.CollectionIDs = append(value.CollectionIDs, collection.ID)
+		}
+		members[i] = value
+	}
+	templateRows, err := client.UnitTemplate.Query().Where(unittemplate.OrganizationIDEQ(id)).
+		Order(ent.Asc(unittemplate.FieldID)).ForUpdate().All(scope)
+	if err != nil {
+		return units.Organization{}, nil, nil, err
+	}
+	templates := make([]units.UnitTemplate, len(templateRows))
+	for i, template := range templateRows {
+		templates[i] = templateDTO(template)
+	}
+	return units.Organization{ID: row.ID, Revision: row.Revision, Name: row.Name,
+		Defaults: row.Defaults, Deleted: row.Deleted}, members, templates, nil
+}
+
+// ReadOrganization applies all-current-member authority before returning configuration.
+func (s *Store) ReadOrganization(ctx context.Context, tx platform.TransactionContext, authority authz.Authority, action string, id uuid.UUID, now time.Time) (units.Organization, error) {
+	predicate, err := organizationPlan(authority, action, now)
+	if errors.Is(err, authz.ErrForbidden) {
+		return units.Organization{}, authz.ErrNotFound
+	}
+	if err != nil {
+		return units.Organization{}, err
+	}
+	client, scope, err := s.client(ctx, tx, map[string]entql.P{
+		"Organization": entql.And(predicate, entql.FieldEQ("id", id), entql.FieldEQ("deleted", false)),
+	}, nil)
+	if err != nil {
+		return units.Organization{}, err
+	}
+	row, err := client.Organization.Query().Only(scope)
+	if ent.IsNotFound(err) {
+		return units.Organization{}, authz.ErrNotFound
+	}
+	if err != nil {
+		return units.Organization{}, err
+	}
+	return units.Organization{ID: row.ID, Revision: row.Revision, Name: row.Name, Defaults: row.Defaults}, nil
+}
+
+// ListOrganizations filters complete current member scope before count and pagination.
+func (s *Store) ListOrganizations(ctx context.Context, tx platform.TransactionContext, authority authz.Authority, page units.PageInput, now time.Time) (units.Page[units.Organization], error) {
+	page, err := page.Validate()
+	if err != nil {
+		return units.Page[units.Organization]{}, err
+	}
+	predicate, err := organizationPlan(authority, "organization.read", now)
+	if err != nil {
+		return units.Page[units.Organization]{}, err
+	}
+	client, scope, err := s.client(ctx, tx, map[string]entql.P{
+		"Organization": entql.And(predicate, entql.FieldEQ("deleted", false)),
+	}, nil)
+	if err != nil {
+		return units.Page[units.Organization]{}, err
+	}
+	total, err := client.Organization.Query().Count(scope)
+	if err != nil {
+		return units.Page[units.Organization]{}, err
+	}
+	rows, err := client.Organization.Query().Order(ent.Asc(organization.FieldID)).
+		Offset(page.Offset).Limit(page.Limit).All(scope)
+	if err != nil {
+		return units.Page[units.Organization]{}, err
+	}
+	result := units.Page[units.Organization]{Items: make([]units.Organization, len(rows)), Total: total}
+	for i, row := range rows {
+		result.Items[i] = units.Organization{ID: row.ID, Revision: row.Revision, Name: row.Name, Defaults: row.Defaults}
+	}
+	return result, nil
+}
+
+// SaveOrganization creates or revision-checks an authorized complete replacement.
+func (s *Store) SaveOrganization(ctx context.Context, tx platform.TransactionContext, authority authz.Authority, value units.Organization, expected int64, now time.Time) error {
+	if value.ID == uuid.Nil || value.Revision != expected+1 || expected < 0 {
+		return authz.ErrInvalidInput
+	}
+	if expected == 0 {
+		client, scope, err := s.client(ctx, tx, nil, map[string]bool{"Organization": true})
+		if err != nil {
+			return err
+		}
+		return client.Organization.Create().SetID(value.ID).SetRevision(1).SetName(value.Name).
+			SetDefaults(value.Defaults).Exec(scope)
+	}
+	predicate, err := organizationPlan(authority, "organization.update", now)
+	if err != nil {
+		return err
+	}
+	client, scope, err := s.client(ctx, tx, map[string]entql.P{
+		"Organization": entql.And(predicate, entql.FieldEQ("id", value.ID),
+			entql.FieldEQ("revision", expected), entql.FieldEQ("deleted", false)),
+	}, nil)
+	if err != nil {
+		return err
+	}
+	if _, err := client.Organization.Query().Where(organization.IDEQ(value.ID),
+		organization.RevisionEQ(expected), organization.DeletedEQ(false)).ForUpdate().Only(scope); ent.IsNotFound(err) {
+		return authz.ErrRevisionConflict
+	} else if err != nil {
+		return err
+	}
+	updated, err := client.Organization.Update().SetName(value.Name).SetDefaults(value.Defaults).
+		SetRevision(value.Revision).Save(scope)
+	if err != nil {
+		return err
+	}
+	if updated != 1 {
+		return authz.ErrRevisionConflict
+	}
+	return nil
+}
+
+// DeleteOrganization preserves a revisioned tombstone after references are detached.
+func (s *Store) DeleteOrganization(ctx context.Context, tx platform.TransactionContext, _ authz.Authority, value units.Organization, expected int64, _ time.Time) error {
+	client, scope, err := s.client(ctx, tx, map[string]entql.P{
+		"Organization": entql.And(entql.FieldEQ("id", value.ID),
+			entql.FieldEQ("revision", expected), entql.FieldEQ("deleted", false)),
+	}, nil)
+	if err != nil {
+		return err
+	}
+	if _, err := client.Organization.Query().Where(organization.IDEQ(value.ID),
+		organization.RevisionEQ(expected), organization.DeletedEQ(false)).ForUpdate().Only(scope); ent.IsNotFound(err) {
+		return authz.ErrRevisionConflict
+	} else if err != nil {
+		return err
+	}
+	updated, err := client.Organization.Update().SetDeleted(true).SetRevision(value.Revision).Save(scope)
+	if err != nil {
+		return err
+	}
+	if updated != 1 {
+		return authz.ErrRevisionConflict
+	}
+	return nil
+}
+
+// ReadUnitTemplate reads a current template and resolves its current Organization defaults.
+func (s *Store) ReadUnitTemplate(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (units.UnitTemplate, error) {
+	client, scope, err := s.client(ctx, tx, map[string]entql.P{
+		"UnitTemplate": entql.And(entql.FieldEQ("id", id), entql.FieldEQ("deleted", false)),
+		"Organization": entql.FieldNotNil("id"),
+	}, nil)
+	if err != nil {
+		return units.UnitTemplate{}, err
+	}
+	row, err := client.UnitTemplate.Query().WithOrganization(func(query *ent.OrganizationQuery) {
+		query.Select(organization.FieldDefaults)
+	}).Only(scope)
+	if ent.IsNotFound(err) {
+		return units.UnitTemplate{}, authz.ErrNotFound
+	}
+	if err != nil {
+		return units.UnitTemplate{}, err
+	}
+	return templateDTO(row), nil
+}
+
+// ListUnitTemplates returns only current templates; authorization is all-scope at the service.
+func (s *Store) ListUnitTemplates(ctx context.Context, tx platform.TransactionContext, page units.PageInput) (units.Page[units.UnitTemplate], error) {
+	page, err := page.Validate()
+	if err != nil {
+		return units.Page[units.UnitTemplate]{}, err
+	}
+	client, scope, err := s.client(ctx, tx, map[string]entql.P{
+		"UnitTemplate": entql.FieldEQ("deleted", false), "Organization": entql.FieldNotNil("id"),
+	}, nil)
+	if err != nil {
+		return units.Page[units.UnitTemplate]{}, err
+	}
+	total, err := client.UnitTemplate.Query().Count(scope)
+	if err != nil {
+		return units.Page[units.UnitTemplate]{}, err
+	}
+	rows, err := client.UnitTemplate.Query().Order(ent.Asc(unittemplate.FieldID)).
+		Offset(page.Offset).Limit(page.Limit).WithOrganization(func(query *ent.OrganizationQuery) {
+		query.Select(organization.FieldDefaults)
+	}).All(scope)
+	if err != nil {
+		return units.Page[units.UnitTemplate]{}, err
+	}
+	result := units.Page[units.UnitTemplate]{Items: make([]units.UnitTemplate, len(rows)), Total: total}
+	for i, row := range rows {
+		result.Items[i] = templateDTO(row)
+	}
+	return result, nil
+}
+
+// SaveUnitTemplate creates or updates a standalone template under revision control.
+func (s *Store) SaveUnitTemplate(ctx context.Context, tx platform.TransactionContext, value units.UnitTemplate, expected int64) error {
+	if value.ID == uuid.Nil || expected < 0 || value.Revision != expected+1 {
+		return authz.ErrInvalidInput
+	}
+	predicates := map[string]entql.P{
+		"UnitTemplate": entql.FieldEQ("id", value.ID),
+		"Organization": entql.FieldNotNil("id"),
+	}
+	client, scope, err := s.client(ctx, tx, predicates, map[string]bool{"UnitTemplate": expected == 0})
+	if err != nil {
+		return err
+	}
+	if expected == 0 {
+		if err := s.lockOrganizations(ctx, tx, value.OrganizationID); err != nil {
+			return err
+		}
+		create := client.UnitTemplate.Create().SetID(value.ID).SetRevision(1).SetName(value.Name).
+			SetSettings(value.Settings)
+		if value.OrganizationID != nil {
+			create.SetOrganizationID(*value.OrganizationID)
+		}
+		return create.Exec(scope)
+	}
+	currentClient, currentScope, err := s.client(ctx, tx, predicates, nil)
+	if err != nil {
+		return err
+	}
+	current, err := currentClient.UnitTemplate.Query().Select(unittemplate.FieldOrganizationID).
+		Where(unittemplate.IDEQ(value.ID), unittemplate.RevisionEQ(expected), unittemplate.DeletedEQ(false)).
+		Only(currentScope)
+	if ent.IsNotFound(err) {
+		return authz.ErrRevisionConflict
+	}
+	if err != nil {
+		return err
+	}
+	if err := s.lockOrganizations(ctx, tx, current.OrganizationID, value.OrganizationID); err != nil {
+		return err
+	}
+	update := client.UnitTemplate.Update().Where(unittemplate.IDEQ(value.ID),
+		unittemplate.RevisionEQ(expected), unittemplate.DeletedEQ(false)).
+		SetName(value.Name).SetSettings(value.Settings).SetRevision(value.Revision)
+	if value.OrganizationID == nil {
+		update.ClearOrganizationID()
+	} else {
+		update.SetOrganizationID(*value.OrganizationID)
+	}
+	if value.Deleted {
+		update.SetDeleted(true)
+	}
+	updated, err := update.Save(scope)
+	if err != nil {
+		return err
+	}
+	if updated != 1 {
+		return authz.ErrRevisionConflict
+	}
+	return nil
 }
 
 // collectionDTO omits member enumeration and unrelated owner state.
@@ -153,11 +500,14 @@ func (s *Store) ReadUnit(ctx context.Context, tx platform.TransactionContext, au
 	client, scope, err := s.client(ctx, tx, map[string]entql.P{
 		"Unit":           entql.And(predicate, entql.FieldEQ("id", id), entql.FieldEQ("deleted", false)),
 		"UnitCollection": entql.FieldNotNil("id"),
+		"Organization":   entql.FieldNotNil("id"),
 	}, nil)
 	if err != nil {
 		return units.Unit{}, err
 	}
-	row, err := client.Unit.Query().WithCollections(withCollections).Only(scope)
+	row, err := client.Unit.Query().WithCollections(withCollections).WithOrganization(func(query *ent.OrganizationQuery) {
+		query.Select(organization.FieldDefaults)
+	}).Only(scope)
 	if ent.IsNotFound(err) {
 		return units.Unit{}, authz.ErrNotFound
 	}
@@ -165,6 +515,52 @@ func (s *Store) ReadUnit(ctx context.Context, tx platform.TransactionContext, au
 		return units.Unit{}, err
 	}
 	return unitDTO(row), nil
+}
+
+// LockUnits applies authorization before taking stable-order row locks for bulk changes.
+func (s *Store) LockUnits(ctx context.Context, tx platform.TransactionContext, authority authz.Authority, action string, ids []uuid.UUID, now time.Time) ([]units.Unit, error) {
+	if len(ids) == 0 || len(ids) > 100 {
+		return nil, authz.ErrInvalidInput
+	}
+	ordered := slices.Clone(ids)
+	slices.SortFunc(ordered, func(a, b uuid.UUID) int { return strings.Compare(a.String(), b.String()) })
+	values := make([]any, len(ordered))
+	for i, id := range ordered {
+		if id == uuid.Nil || (i > 0 && id == ordered[i-1]) {
+			return nil, authz.ErrInvalidInput
+		}
+		values[i] = id
+	}
+	predicate, err := plan(authority, action, false, now)
+	if errors.Is(err, authz.ErrForbidden) {
+		return nil, authz.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	client, scope, err := s.client(ctx, tx, map[string]entql.P{
+		"Unit":           entql.And(predicate, entql.FieldIn("id", values...), entql.FieldEQ("deleted", false)),
+		"UnitCollection": entql.FieldNotNil("id"),
+		"Organization":   entql.FieldNotNil("id"),
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := client.Unit.Query().Where(unit.IDIn(ordered...)).Order(ent.Asc(unit.FieldID)).ForUpdate().
+		WithCollections(withCollections).WithOrganization(func(query *ent.OrganizationQuery) {
+		query.Select(organization.FieldDefaults)
+	}).All(scope)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) != len(ordered) {
+		return nil, authz.ErrNotFound
+	}
+	result := make([]units.Unit, len(rows))
+	for i, row := range rows {
+		result[i] = unitDTO(row)
+	}
+	return result, nil
 }
 
 // ListUnits filters rows and fields before the count, stable order and bounded page.
@@ -178,7 +574,8 @@ func (s *Store) ListUnits(ctx context.Context, tx platform.TransactionContext, a
 		return units.Page[units.Unit]{}, err
 	}
 	client, scope, err := s.client(ctx, tx, map[string]entql.P{
-		"Unit": entql.And(predicate, entql.FieldEQ("deleted", false)), "UnitCollection": entql.FieldNotNil("id"),
+		"Unit":           entql.And(predicate, entql.FieldEQ("deleted", false)),
+		"UnitCollection": entql.FieldNotNil("id"), "Organization": entql.FieldNotNil("id"),
 	}, nil)
 	if err != nil {
 		return units.Page[units.Unit]{}, err
@@ -187,7 +584,10 @@ func (s *Store) ListUnits(ctx context.Context, tx platform.TransactionContext, a
 	if err != nil {
 		return units.Page[units.Unit]{}, err
 	}
-	rows, err := client.Unit.Query().Order(ent.Asc(unit.FieldID)).Offset(page.Offset).Limit(page.Limit).WithCollections(withCollections).All(scope)
+	rows, err := client.Unit.Query().Order(ent.Asc(unit.FieldID)).Offset(page.Offset).Limit(page.Limit).
+		WithCollections(withCollections).WithOrganization(func(query *ent.OrganizationQuery) {
+		query.Select(organization.FieldDefaults)
+	}).All(scope)
 	if err != nil {
 		return units.Page[units.Unit]{}, err
 	}
@@ -209,11 +609,19 @@ func (s *Store) SaveUnit(ctx context.Context, tx platform.TransactionContext, au
 		return authz.ErrInvalidInput
 	}
 	if expected == 0 {
+		if err := s.lockOrganizations(ctx, tx, value.OrganizationID); err != nil {
+			return err
+		}
 		client, scope, err := s.client(ctx, tx, nil, map[string]bool{"Unit": true})
 		if err != nil {
 			return err
 		}
-		return client.Unit.Create().SetID(value.ID).SetRevision(1).SetName(value.Name).AddCollectionIDs(value.CollectionIDs...).Exec(scope)
+		create := client.Unit.Create().SetID(value.ID).SetRevision(1).SetName(value.Name).
+			SetSettings(value.Settings).AddCollectionIDs(value.CollectionIDs...)
+		if value.OrganizationID != nil {
+			create.SetOrganizationID(*value.OrganizationID)
+		}
+		return create.Exec(scope)
 	}
 	action := "unit.update"
 	if value.Deleted {
@@ -228,8 +636,30 @@ func (s *Store) SaveUnit(ctx context.Context, tx platform.TransactionContext, au
 	if err != nil {
 		return err
 	}
-	updated, err := client.Unit.Update().SetName(value.Name).SetRevision(value.Revision).SetDeleted(value.Deleted).
-		ClearCollections().AddCollectionIDs(value.CollectionIDs...).Save(scope)
+	currentClient, currentScope, err := s.client(ctx, tx, map[string]entql.P{
+		"Unit": entql.And(predicate, entql.FieldEQ("id", value.ID), entql.FieldEQ("deleted", false)),
+	}, nil)
+	if err != nil {
+		return err
+	}
+	current, err := currentClient.Unit.Query().Select(unit.FieldOrganizationID).Only(currentScope)
+	if ent.IsNotFound(err) {
+		return authz.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if err := s.lockOrganizations(ctx, tx, current.OrganizationID, value.OrganizationID); err != nil {
+		return err
+	}
+	update := client.Unit.Update().SetName(value.Name).SetRevision(value.Revision).SetDeleted(value.Deleted).
+		SetSettings(value.Settings).ClearCollections().AddCollectionIDs(value.CollectionIDs...)
+	if value.OrganizationID == nil {
+		update.ClearOrganizationID()
+	} else {
+		update.SetOrganizationID(*value.OrganizationID)
+	}
+	updated, err := update.Save(scope)
 	if err != nil {
 		return err
 	}

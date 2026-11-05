@@ -112,6 +112,203 @@ func (_u *PendingAssignmentScopeUpdate) SetNillableRecordedAt(v *time.Time) *Pen
 	return _u
 }
 
+// SetState sets the "state" field.
+func (_u *PendingAssignmentScopeUpdate) SetState(v pendingassignmentscope.State) *PendingAssignmentScopeUpdate {
+	_u.mutation.SetState(v)
+	return _u
+}
+
+// SetNillableState sets the "state" field if the given value is not nil.
+func (_u *PendingAssignmentScopeUpdate) SetNillableState(v *pendingassignmentscope.State) *PendingAssignmentScopeUpdate {
+	if v != nil {
+		_u.SetState(*v)
+	}
+	return _u
+}
+
+// SetHighWaterAcceptedAt sets the "high_water_accepted_at" field.
+func (_u *PendingAssignmentScopeUpdate) SetHighWaterAcceptedAt(v time.Time) *PendingAssignmentScopeUpdate {
+	_u.mutation.SetHighWaterAcceptedAt(v)
+	return _u
+}
+
+// SetNillableHighWaterAcceptedAt sets the "high_water_accepted_at" field if the given value is not nil.
+func (_u *PendingAssignmentScopeUpdate) SetNillableHighWaterAcceptedAt(v *time.Time) *PendingAssignmentScopeUpdate {
+	if v != nil {
+		_u.SetHighWaterAcceptedAt(*v)
+	}
+	return _u
+}
+
+// ClearHighWaterAcceptedAt clears the value of the "high_water_accepted_at" field.
+func (_u *PendingAssignmentScopeUpdate) ClearHighWaterAcceptedAt() *PendingAssignmentScopeUpdate {
+	_u.mutation.ClearHighWaterAcceptedAt()
+	return _u
+}
+
+// SetHighWaterTransmissionID sets the "high_water_transmission_id" field.
+func (_u *PendingAssignmentScopeUpdate) SetHighWaterTransmissionID(v uuid.UUID) *PendingAssignmentScopeUpdate {
+	_u.mutation.SetHighWaterTransmissionID(v)
+	return _u
+}
+
+// SetNillableHighWaterTransmissionID sets the "high_water_transmission_id" field if the given value is not nil.
+func (_u *PendingAssignmentScopeUpdate) SetNillableHighWaterTransmissionID(v *uuid.UUID) *PendingAssignmentScopeUpdate {
+	if v != nil {
+		_u.SetHighWaterTransmissionID(*v)
+	}
+	return _u
+}
+
+// ClearHighWaterTransmissionID clears the value of the "high_water_transmission_id" field.
+func (_u *PendingAssignmentScopeUpdate) ClearHighWaterTransmissionID() *PendingAssignmentScopeUpdate {
+	_u.mutation.ClearHighWaterTransmissionID()
+	return _u
+}
+
+// SetCursorAcceptedAt sets the "cursor_accepted_at" field.
+func (_u *PendingAssignmentScopeUpdate) SetCursorAcceptedAt(v time.Time) *PendingAssignmentScopeUpdate {
+	_u.mutation.SetCursorAcceptedAt(v)
+	return _u
+}
+
+// SetNillableCursorAcceptedAt sets the "cursor_accepted_at" field if the given value is not nil.
+func (_u *PendingAssignmentScopeUpdate) SetNillableCursorAcceptedAt(v *time.Time) *PendingAssignmentScopeUpdate {
+	if v != nil {
+		_u.SetCursorAcceptedAt(*v)
+	}
+	return _u
+}
+
+// ClearCursorAcceptedAt clears the value of the "cursor_accepted_at" field.
+func (_u *PendingAssignmentScopeUpdate) ClearCursorAcceptedAt() *PendingAssignmentScopeUpdate {
+	_u.mutation.ClearCursorAcceptedAt()
+	return _u
+}
+
+// SetCursorTransmissionID sets the "cursor_transmission_id" field.
+func (_u *PendingAssignmentScopeUpdate) SetCursorTransmissionID(v uuid.UUID) *PendingAssignmentScopeUpdate {
+	_u.mutation.SetCursorTransmissionID(v)
+	return _u
+}
+
+// SetNillableCursorTransmissionID sets the "cursor_transmission_id" field if the given value is not nil.
+func (_u *PendingAssignmentScopeUpdate) SetNillableCursorTransmissionID(v *uuid.UUID) *PendingAssignmentScopeUpdate {
+	if v != nil {
+		_u.SetCursorTransmissionID(*v)
+	}
+	return _u
+}
+
+// ClearCursorTransmissionID clears the value of the "cursor_transmission_id" field.
+func (_u *PendingAssignmentScopeUpdate) ClearCursorTransmissionID() *PendingAssignmentScopeUpdate {
+	_u.mutation.ClearCursorTransmissionID()
+	return _u
+}
+
+// SetAttempts sets the "attempts" field.
+func (_u *PendingAssignmentScopeUpdate) SetAttempts(v int) *PendingAssignmentScopeUpdate {
+	_u.mutation.ResetAttempts()
+	_u.mutation.SetAttempts(v)
+	return _u
+}
+
+// SetNillableAttempts sets the "attempts" field if the given value is not nil.
+func (_u *PendingAssignmentScopeUpdate) SetNillableAttempts(v *int) *PendingAssignmentScopeUpdate {
+	if v != nil {
+		_u.SetAttempts(*v)
+	}
+	return _u
+}
+
+// AddAttempts adds value to the "attempts" field.
+func (_u *PendingAssignmentScopeUpdate) AddAttempts(v int) *PendingAssignmentScopeUpdate {
+	_u.mutation.AddAttempts(v)
+	return _u
+}
+
+// SetLeaseUntil sets the "lease_until" field.
+func (_u *PendingAssignmentScopeUpdate) SetLeaseUntil(v time.Time) *PendingAssignmentScopeUpdate {
+	_u.mutation.SetLeaseUntil(v)
+	return _u
+}
+
+// SetNillableLeaseUntil sets the "lease_until" field if the given value is not nil.
+func (_u *PendingAssignmentScopeUpdate) SetNillableLeaseUntil(v *time.Time) *PendingAssignmentScopeUpdate {
+	if v != nil {
+		_u.SetLeaseUntil(*v)
+	}
+	return _u
+}
+
+// ClearLeaseUntil clears the value of the "lease_until" field.
+func (_u *PendingAssignmentScopeUpdate) ClearLeaseUntil() *PendingAssignmentScopeUpdate {
+	_u.mutation.ClearLeaseUntil()
+	return _u
+}
+
+// SetFencingToken sets the "fencing_token" field.
+func (_u *PendingAssignmentScopeUpdate) SetFencingToken(v int64) *PendingAssignmentScopeUpdate {
+	_u.mutation.ResetFencingToken()
+	_u.mutation.SetFencingToken(v)
+	return _u
+}
+
+// SetNillableFencingToken sets the "fencing_token" field if the given value is not nil.
+func (_u *PendingAssignmentScopeUpdate) SetNillableFencingToken(v *int64) *PendingAssignmentScopeUpdate {
+	if v != nil {
+		_u.SetFencingToken(*v)
+	}
+	return _u
+}
+
+// AddFencingToken adds value to the "fencing_token" field.
+func (_u *PendingAssignmentScopeUpdate) AddFencingToken(v int64) *PendingAssignmentScopeUpdate {
+	_u.mutation.AddFencingToken(v)
+	return _u
+}
+
+// SetAccessRevision sets the "access_revision" field.
+func (_u *PendingAssignmentScopeUpdate) SetAccessRevision(v int64) *PendingAssignmentScopeUpdate {
+	_u.mutation.ResetAccessRevision()
+	_u.mutation.SetAccessRevision(v)
+	return _u
+}
+
+// SetNillableAccessRevision sets the "access_revision" field if the given value is not nil.
+func (_u *PendingAssignmentScopeUpdate) SetNillableAccessRevision(v *int64) *PendingAssignmentScopeUpdate {
+	if v != nil {
+		_u.SetAccessRevision(*v)
+	}
+	return _u
+}
+
+// AddAccessRevision adds value to the "access_revision" field.
+func (_u *PendingAssignmentScopeUpdate) AddAccessRevision(v int64) *PendingAssignmentScopeUpdate {
+	_u.mutation.AddAccessRevision(v)
+	return _u
+}
+
+// SetFailureCode sets the "failure_code" field.
+func (_u *PendingAssignmentScopeUpdate) SetFailureCode(v string) *PendingAssignmentScopeUpdate {
+	_u.mutation.SetFailureCode(v)
+	return _u
+}
+
+// SetNillableFailureCode sets the "failure_code" field if the given value is not nil.
+func (_u *PendingAssignmentScopeUpdate) SetNillableFailureCode(v *string) *PendingAssignmentScopeUpdate {
+	if v != nil {
+		_u.SetFailureCode(*v)
+	}
+	return _u
+}
+
+// ClearFailureCode clears the value of the "failure_code" field.
+func (_u *PendingAssignmentScopeUpdate) ClearFailureCode() *PendingAssignmentScopeUpdate {
+	_u.mutation.ClearFailureCode()
+	return _u
+}
+
 // Mutation returns the PendingAssignmentScopeMutation object of the builder.
 func (_u *PendingAssignmentScopeUpdate) Mutation() *PendingAssignmentScopeMutation {
 	return _u.mutation
@@ -154,6 +351,31 @@ func (_u *PendingAssignmentScopeUpdate) check() error {
 	if v, ok := _u.mutation.Reason(); ok {
 		if err := pendingassignmentscope.ReasonValidator(v); err != nil {
 			return &ValidationError{Name: "reason", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.reason": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.State(); ok {
+		if err := pendingassignmentscope.StateValidator(v); err != nil {
+			return &ValidationError{Name: "state", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.state": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Attempts(); ok {
+		if err := pendingassignmentscope.AttemptsValidator(v); err != nil {
+			return &ValidationError{Name: "attempts", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.attempts": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.FencingToken(); ok {
+		if err := pendingassignmentscope.FencingTokenValidator(v); err != nil {
+			return &ValidationError{Name: "fencing_token", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.fencing_token": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.AccessRevision(); ok {
+		if err := pendingassignmentscope.AccessRevisionValidator(v); err != nil {
+			return &ValidationError{Name: "access_revision", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.access_revision": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.FailureCode(); ok {
+		if err := pendingassignmentscope.FailureCodeValidator(v); err != nil {
+			return &ValidationError{Name: "failure_code", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.failure_code": %w`, err)}
 		}
 	}
 	return nil
@@ -202,6 +424,63 @@ func (_u *PendingAssignmentScopeUpdate) sqlSave(ctx context.Context) (_node int,
 	}
 	if value, ok := _u.mutation.RecordedAt(); ok {
 		_spec.SetField(pendingassignmentscope.FieldRecordedAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.State(); ok {
+		_spec.SetField(pendingassignmentscope.FieldState, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.HighWaterAcceptedAt(); ok {
+		_spec.SetField(pendingassignmentscope.FieldHighWaterAcceptedAt, field.TypeTime, value)
+	}
+	if _u.mutation.HighWaterAcceptedAtCleared() {
+		_spec.ClearField(pendingassignmentscope.FieldHighWaterAcceptedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.HighWaterTransmissionID(); ok {
+		_spec.SetField(pendingassignmentscope.FieldHighWaterTransmissionID, field.TypeUUID, value)
+	}
+	if _u.mutation.HighWaterTransmissionIDCleared() {
+		_spec.ClearField(pendingassignmentscope.FieldHighWaterTransmissionID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.CursorAcceptedAt(); ok {
+		_spec.SetField(pendingassignmentscope.FieldCursorAcceptedAt, field.TypeTime, value)
+	}
+	if _u.mutation.CursorAcceptedAtCleared() {
+		_spec.ClearField(pendingassignmentscope.FieldCursorAcceptedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.CursorTransmissionID(); ok {
+		_spec.SetField(pendingassignmentscope.FieldCursorTransmissionID, field.TypeUUID, value)
+	}
+	if _u.mutation.CursorTransmissionIDCleared() {
+		_spec.ClearField(pendingassignmentscope.FieldCursorTransmissionID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.Attempts(); ok {
+		_spec.SetField(pendingassignmentscope.FieldAttempts, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedAttempts(); ok {
+		_spec.AddField(pendingassignmentscope.FieldAttempts, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.LeaseUntil(); ok {
+		_spec.SetField(pendingassignmentscope.FieldLeaseUntil, field.TypeTime, value)
+	}
+	if _u.mutation.LeaseUntilCleared() {
+		_spec.ClearField(pendingassignmentscope.FieldLeaseUntil, field.TypeTime)
+	}
+	if value, ok := _u.mutation.FencingToken(); ok {
+		_spec.SetField(pendingassignmentscope.FieldFencingToken, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedFencingToken(); ok {
+		_spec.AddField(pendingassignmentscope.FieldFencingToken, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AccessRevision(); ok {
+		_spec.SetField(pendingassignmentscope.FieldAccessRevision, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedAccessRevision(); ok {
+		_spec.AddField(pendingassignmentscope.FieldAccessRevision, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.FailureCode(); ok {
+		_spec.SetField(pendingassignmentscope.FieldFailureCode, field.TypeString, value)
+	}
+	if _u.mutation.FailureCodeCleared() {
+		_spec.ClearField(pendingassignmentscope.FieldFailureCode, field.TypeString)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
@@ -306,6 +585,203 @@ func (_u *PendingAssignmentScopeUpdateOne) SetNillableRecordedAt(v *time.Time) *
 	return _u
 }
 
+// SetState sets the "state" field.
+func (_u *PendingAssignmentScopeUpdateOne) SetState(v pendingassignmentscope.State) *PendingAssignmentScopeUpdateOne {
+	_u.mutation.SetState(v)
+	return _u
+}
+
+// SetNillableState sets the "state" field if the given value is not nil.
+func (_u *PendingAssignmentScopeUpdateOne) SetNillableState(v *pendingassignmentscope.State) *PendingAssignmentScopeUpdateOne {
+	if v != nil {
+		_u.SetState(*v)
+	}
+	return _u
+}
+
+// SetHighWaterAcceptedAt sets the "high_water_accepted_at" field.
+func (_u *PendingAssignmentScopeUpdateOne) SetHighWaterAcceptedAt(v time.Time) *PendingAssignmentScopeUpdateOne {
+	_u.mutation.SetHighWaterAcceptedAt(v)
+	return _u
+}
+
+// SetNillableHighWaterAcceptedAt sets the "high_water_accepted_at" field if the given value is not nil.
+func (_u *PendingAssignmentScopeUpdateOne) SetNillableHighWaterAcceptedAt(v *time.Time) *PendingAssignmentScopeUpdateOne {
+	if v != nil {
+		_u.SetHighWaterAcceptedAt(*v)
+	}
+	return _u
+}
+
+// ClearHighWaterAcceptedAt clears the value of the "high_water_accepted_at" field.
+func (_u *PendingAssignmentScopeUpdateOne) ClearHighWaterAcceptedAt() *PendingAssignmentScopeUpdateOne {
+	_u.mutation.ClearHighWaterAcceptedAt()
+	return _u
+}
+
+// SetHighWaterTransmissionID sets the "high_water_transmission_id" field.
+func (_u *PendingAssignmentScopeUpdateOne) SetHighWaterTransmissionID(v uuid.UUID) *PendingAssignmentScopeUpdateOne {
+	_u.mutation.SetHighWaterTransmissionID(v)
+	return _u
+}
+
+// SetNillableHighWaterTransmissionID sets the "high_water_transmission_id" field if the given value is not nil.
+func (_u *PendingAssignmentScopeUpdateOne) SetNillableHighWaterTransmissionID(v *uuid.UUID) *PendingAssignmentScopeUpdateOne {
+	if v != nil {
+		_u.SetHighWaterTransmissionID(*v)
+	}
+	return _u
+}
+
+// ClearHighWaterTransmissionID clears the value of the "high_water_transmission_id" field.
+func (_u *PendingAssignmentScopeUpdateOne) ClearHighWaterTransmissionID() *PendingAssignmentScopeUpdateOne {
+	_u.mutation.ClearHighWaterTransmissionID()
+	return _u
+}
+
+// SetCursorAcceptedAt sets the "cursor_accepted_at" field.
+func (_u *PendingAssignmentScopeUpdateOne) SetCursorAcceptedAt(v time.Time) *PendingAssignmentScopeUpdateOne {
+	_u.mutation.SetCursorAcceptedAt(v)
+	return _u
+}
+
+// SetNillableCursorAcceptedAt sets the "cursor_accepted_at" field if the given value is not nil.
+func (_u *PendingAssignmentScopeUpdateOne) SetNillableCursorAcceptedAt(v *time.Time) *PendingAssignmentScopeUpdateOne {
+	if v != nil {
+		_u.SetCursorAcceptedAt(*v)
+	}
+	return _u
+}
+
+// ClearCursorAcceptedAt clears the value of the "cursor_accepted_at" field.
+func (_u *PendingAssignmentScopeUpdateOne) ClearCursorAcceptedAt() *PendingAssignmentScopeUpdateOne {
+	_u.mutation.ClearCursorAcceptedAt()
+	return _u
+}
+
+// SetCursorTransmissionID sets the "cursor_transmission_id" field.
+func (_u *PendingAssignmentScopeUpdateOne) SetCursorTransmissionID(v uuid.UUID) *PendingAssignmentScopeUpdateOne {
+	_u.mutation.SetCursorTransmissionID(v)
+	return _u
+}
+
+// SetNillableCursorTransmissionID sets the "cursor_transmission_id" field if the given value is not nil.
+func (_u *PendingAssignmentScopeUpdateOne) SetNillableCursorTransmissionID(v *uuid.UUID) *PendingAssignmentScopeUpdateOne {
+	if v != nil {
+		_u.SetCursorTransmissionID(*v)
+	}
+	return _u
+}
+
+// ClearCursorTransmissionID clears the value of the "cursor_transmission_id" field.
+func (_u *PendingAssignmentScopeUpdateOne) ClearCursorTransmissionID() *PendingAssignmentScopeUpdateOne {
+	_u.mutation.ClearCursorTransmissionID()
+	return _u
+}
+
+// SetAttempts sets the "attempts" field.
+func (_u *PendingAssignmentScopeUpdateOne) SetAttempts(v int) *PendingAssignmentScopeUpdateOne {
+	_u.mutation.ResetAttempts()
+	_u.mutation.SetAttempts(v)
+	return _u
+}
+
+// SetNillableAttempts sets the "attempts" field if the given value is not nil.
+func (_u *PendingAssignmentScopeUpdateOne) SetNillableAttempts(v *int) *PendingAssignmentScopeUpdateOne {
+	if v != nil {
+		_u.SetAttempts(*v)
+	}
+	return _u
+}
+
+// AddAttempts adds value to the "attempts" field.
+func (_u *PendingAssignmentScopeUpdateOne) AddAttempts(v int) *PendingAssignmentScopeUpdateOne {
+	_u.mutation.AddAttempts(v)
+	return _u
+}
+
+// SetLeaseUntil sets the "lease_until" field.
+func (_u *PendingAssignmentScopeUpdateOne) SetLeaseUntil(v time.Time) *PendingAssignmentScopeUpdateOne {
+	_u.mutation.SetLeaseUntil(v)
+	return _u
+}
+
+// SetNillableLeaseUntil sets the "lease_until" field if the given value is not nil.
+func (_u *PendingAssignmentScopeUpdateOne) SetNillableLeaseUntil(v *time.Time) *PendingAssignmentScopeUpdateOne {
+	if v != nil {
+		_u.SetLeaseUntil(*v)
+	}
+	return _u
+}
+
+// ClearLeaseUntil clears the value of the "lease_until" field.
+func (_u *PendingAssignmentScopeUpdateOne) ClearLeaseUntil() *PendingAssignmentScopeUpdateOne {
+	_u.mutation.ClearLeaseUntil()
+	return _u
+}
+
+// SetFencingToken sets the "fencing_token" field.
+func (_u *PendingAssignmentScopeUpdateOne) SetFencingToken(v int64) *PendingAssignmentScopeUpdateOne {
+	_u.mutation.ResetFencingToken()
+	_u.mutation.SetFencingToken(v)
+	return _u
+}
+
+// SetNillableFencingToken sets the "fencing_token" field if the given value is not nil.
+func (_u *PendingAssignmentScopeUpdateOne) SetNillableFencingToken(v *int64) *PendingAssignmentScopeUpdateOne {
+	if v != nil {
+		_u.SetFencingToken(*v)
+	}
+	return _u
+}
+
+// AddFencingToken adds value to the "fencing_token" field.
+func (_u *PendingAssignmentScopeUpdateOne) AddFencingToken(v int64) *PendingAssignmentScopeUpdateOne {
+	_u.mutation.AddFencingToken(v)
+	return _u
+}
+
+// SetAccessRevision sets the "access_revision" field.
+func (_u *PendingAssignmentScopeUpdateOne) SetAccessRevision(v int64) *PendingAssignmentScopeUpdateOne {
+	_u.mutation.ResetAccessRevision()
+	_u.mutation.SetAccessRevision(v)
+	return _u
+}
+
+// SetNillableAccessRevision sets the "access_revision" field if the given value is not nil.
+func (_u *PendingAssignmentScopeUpdateOne) SetNillableAccessRevision(v *int64) *PendingAssignmentScopeUpdateOne {
+	if v != nil {
+		_u.SetAccessRevision(*v)
+	}
+	return _u
+}
+
+// AddAccessRevision adds value to the "access_revision" field.
+func (_u *PendingAssignmentScopeUpdateOne) AddAccessRevision(v int64) *PendingAssignmentScopeUpdateOne {
+	_u.mutation.AddAccessRevision(v)
+	return _u
+}
+
+// SetFailureCode sets the "failure_code" field.
+func (_u *PendingAssignmentScopeUpdateOne) SetFailureCode(v string) *PendingAssignmentScopeUpdateOne {
+	_u.mutation.SetFailureCode(v)
+	return _u
+}
+
+// SetNillableFailureCode sets the "failure_code" field if the given value is not nil.
+func (_u *PendingAssignmentScopeUpdateOne) SetNillableFailureCode(v *string) *PendingAssignmentScopeUpdateOne {
+	if v != nil {
+		_u.SetFailureCode(*v)
+	}
+	return _u
+}
+
+// ClearFailureCode clears the value of the "failure_code" field.
+func (_u *PendingAssignmentScopeUpdateOne) ClearFailureCode() *PendingAssignmentScopeUpdateOne {
+	_u.mutation.ClearFailureCode()
+	return _u
+}
+
 // Mutation returns the PendingAssignmentScopeMutation object of the builder.
 func (_u *PendingAssignmentScopeUpdateOne) Mutation() *PendingAssignmentScopeMutation {
 	return _u.mutation
@@ -361,6 +837,31 @@ func (_u *PendingAssignmentScopeUpdateOne) check() error {
 	if v, ok := _u.mutation.Reason(); ok {
 		if err := pendingassignmentscope.ReasonValidator(v); err != nil {
 			return &ValidationError{Name: "reason", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.reason": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.State(); ok {
+		if err := pendingassignmentscope.StateValidator(v); err != nil {
+			return &ValidationError{Name: "state", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.state": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Attempts(); ok {
+		if err := pendingassignmentscope.AttemptsValidator(v); err != nil {
+			return &ValidationError{Name: "attempts", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.attempts": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.FencingToken(); ok {
+		if err := pendingassignmentscope.FencingTokenValidator(v); err != nil {
+			return &ValidationError{Name: "fencing_token", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.fencing_token": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.AccessRevision(); ok {
+		if err := pendingassignmentscope.AccessRevisionValidator(v); err != nil {
+			return &ValidationError{Name: "access_revision", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.access_revision": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.FailureCode(); ok {
+		if err := pendingassignmentscope.FailureCodeValidator(v); err != nil {
+			return &ValidationError{Name: "failure_code", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.failure_code": %w`, err)}
 		}
 	}
 	return nil
@@ -426,6 +927,63 @@ func (_u *PendingAssignmentScopeUpdateOne) sqlSave(ctx context.Context) (_node *
 	}
 	if value, ok := _u.mutation.RecordedAt(); ok {
 		_spec.SetField(pendingassignmentscope.FieldRecordedAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.State(); ok {
+		_spec.SetField(pendingassignmentscope.FieldState, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.HighWaterAcceptedAt(); ok {
+		_spec.SetField(pendingassignmentscope.FieldHighWaterAcceptedAt, field.TypeTime, value)
+	}
+	if _u.mutation.HighWaterAcceptedAtCleared() {
+		_spec.ClearField(pendingassignmentscope.FieldHighWaterAcceptedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.HighWaterTransmissionID(); ok {
+		_spec.SetField(pendingassignmentscope.FieldHighWaterTransmissionID, field.TypeUUID, value)
+	}
+	if _u.mutation.HighWaterTransmissionIDCleared() {
+		_spec.ClearField(pendingassignmentscope.FieldHighWaterTransmissionID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.CursorAcceptedAt(); ok {
+		_spec.SetField(pendingassignmentscope.FieldCursorAcceptedAt, field.TypeTime, value)
+	}
+	if _u.mutation.CursorAcceptedAtCleared() {
+		_spec.ClearField(pendingassignmentscope.FieldCursorAcceptedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.CursorTransmissionID(); ok {
+		_spec.SetField(pendingassignmentscope.FieldCursorTransmissionID, field.TypeUUID, value)
+	}
+	if _u.mutation.CursorTransmissionIDCleared() {
+		_spec.ClearField(pendingassignmentscope.FieldCursorTransmissionID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.Attempts(); ok {
+		_spec.SetField(pendingassignmentscope.FieldAttempts, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedAttempts(); ok {
+		_spec.AddField(pendingassignmentscope.FieldAttempts, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.LeaseUntil(); ok {
+		_spec.SetField(pendingassignmentscope.FieldLeaseUntil, field.TypeTime, value)
+	}
+	if _u.mutation.LeaseUntilCleared() {
+		_spec.ClearField(pendingassignmentscope.FieldLeaseUntil, field.TypeTime)
+	}
+	if value, ok := _u.mutation.FencingToken(); ok {
+		_spec.SetField(pendingassignmentscope.FieldFencingToken, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedFencingToken(); ok {
+		_spec.AddField(pendingassignmentscope.FieldFencingToken, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AccessRevision(); ok {
+		_spec.SetField(pendingassignmentscope.FieldAccessRevision, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedAccessRevision(); ok {
+		_spec.AddField(pendingassignmentscope.FieldAccessRevision, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.FailureCode(); ok {
+		_spec.SetField(pendingassignmentscope.FieldFailureCode, field.TypeString, value)
+	}
+	if _u.mutation.FailureCodeCleared() {
+		_spec.ClearField(pendingassignmentscope.FieldFailureCode, field.TypeString)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	_node = &PendingAssignmentScope{config: _u.config}

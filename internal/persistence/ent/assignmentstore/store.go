@@ -3,6 +3,8 @@ package assignmentstore
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"math"
 	"time"
@@ -18,7 +20,6 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/borrowed"
 	"github.com/gopager/gopager/internal/persistence/ent/guard"
 	"github.com/gopager/gopager/internal/persistence/ent/identitystore"
-	"github.com/gopager/gopager/internal/persistence/ent/pendingassignmentscope"
 	"github.com/gopager/gopager/internal/persistence/ent/permissions"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
@@ -258,7 +259,8 @@ func (s *Store) DeleteRule(ctx context.Context, tx platform.TransactionContext, 
 
 // MarkPending conservatively invalidates entire affected Networks, preserving durable unfinished work.
 func (s *Store) MarkPending(ctx context.Context, tx platform.TransactionContext, networks []uuid.UUID, unitID *uuid.UUID, reason string) (int64, error) {
-	if (reason != "rule-change" && reason != "unit-deleted") || (unitID != nil && *unitID == uuid.Nil) {
+	if (reason != "rule-change" && reason != "unit-deleted" && reason != "suppression-change") ||
+		(unitID != nil && *unitID == uuid.Nil) {
 		return 0, authz.ErrInvalidInput
 	}
 	revision, err := s.LockRevision(ctx, tx)
@@ -268,12 +270,19 @@ func (s *Store) MarkPending(ctx context.Context, tx platform.TransactionContext,
 	if revision == math.MaxInt64 {
 		return 0, platform.NewFailure(platform.CodeResourceLimit, errors.New("Assignment revision exhausted"))
 	}
-	client, scope, err := s.client(ctx, tx, map[string]entql.P{"AssignmentControl": entql.And(
-		entql.FieldEQ("id", 1), entql.FieldEQ("revision", revision))}, map[string]bool{"PendingAssignmentScope": true})
+	executor, err := s.primary.Resolve(tx)
 	if err != nil {
 		return 0, err
 	}
 	now, err := s.primary.Now(ctx, tx)
+	if err != nil {
+		return 0, err
+	}
+	access, err := identitystore.New(s.primary)
+	if err != nil {
+		return 0, err
+	}
+	accessRevision, err := access.LockAccess(ctx, tx)
 	if err != nil {
 		return 0, err
 	}
@@ -288,14 +297,116 @@ func (s *Store) MarkPending(ctx context.Context, tx platform.TransactionContext,
 			ids = append(ids, id)
 		}
 	}
-	if _, err := client.AssignmentControl.UpdateOneID(1).SetRevision(revision + 1).Save(scope); err != nil {
+	updated, err := executor.ExecContext(ctx, `UPDATE assignment_control SET revision=$2
+		WHERE id=1 AND revision=$1`, revision, revision+1)
+	if err != nil {
 		return 0, err
 	}
-	if err := client.PendingAssignmentScope.Create().SetAssignmentRevision(revision + 1).SetNetworkIds(ids).
-		SetNillableUnitID(unitID).SetReason(pendingassignmentscope.Reason(reason)).SetRecordedAt(now).Exec(scope); err != nil {
+	count, err := updated.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	if count != 1 {
+		return 0, authz.ErrRevisionConflict
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	highWaterAt, highWaterID, err := correctionHighWater(ctx, executor, ids, unitID)
+	if err != nil {
+		return 0, err
+	}
+	encodedNetworks, err := json.Marshal(ids)
+	if err != nil {
+		return 0, err
+	}
+	textIDs := make([]string, len(ids))
+	for i, id := range ids {
+		textIDs[i] = id.String()
+	}
+	if _, err := executor.ExecContext(ctx, `UPDATE message_contributions SET ready=false
+		WHERE message_id IN (
+			SELECT DISTINCT t.message_id FROM transmissions t
+			WHERE (cardinality($1::uuid[])=0 OR t.network_id=ANY($1::uuid[]))
+			AND ($2::uuid IS NULL OR EXISTS (SELECT 1 FROM transmission_targets target
+				WHERE target.transmission_id=t.id AND target.unit_id=$2)))`, ids, unitID); err != nil {
+		return 0, err
+	}
+	if _, err := executor.ExecContext(ctx, `UPDATE messages SET revision=revision+1,publication_status='pending'
+		WHERE id IN (
+			SELECT DISTINCT t.message_id FROM transmissions t
+			WHERE (cardinality($1::uuid[])=0 OR t.network_id=ANY($1::uuid[]))
+			AND ($2::uuid IS NULL OR EXISTS (SELECT 1 FROM transmission_targets target
+				WHERE target.transmission_id=t.id AND target.unit_id=$2)))`, ids, unitID); err != nil {
+		return 0, err
+	}
+	if _, err := executor.ExecContext(ctx, `UPDATE transmissions SET processing_status='pending',publication_status='pending'
+		WHERE message_id IN (
+			SELECT DISTINCT t.message_id FROM transmissions t
+			WHERE (cardinality($1::uuid[])=0 OR t.network_id=ANY($1::uuid[]))
+			AND ($2::uuid IS NULL OR EXISTS (SELECT 1 FROM transmission_targets target
+				WHERE target.transmission_id=t.id AND target.unit_id=$2)))`, ids, unitID); err != nil {
+		return 0, err
+	}
+	if _, err := executor.ExecContext(ctx, `UPDATE assignment_pending_scopes SET state='superseded',lease_until=NULL
+		WHERE state IN ('queued','running','failed') AND assignment_revision < $1
+		AND (jsonb_array_length(network_ids)=0 OR cardinality($2::text[])=0 OR EXISTS (
+			SELECT 1 FROM jsonb_array_elements_text(network_ids) AS old_network(value)
+			WHERE old_network.value=ANY($2::text[])))
+		AND ($3::uuid IS NULL OR unit_id IS NULL OR unit_id=$3)`,
+		revision+1, textIDs, unitID); err != nil {
+		return 0, err
+	}
+	if _, err := executor.ExecContext(ctx, `UPDATE assignment_pending_scopes scope SET
+		assignment_revision=$1,state='queued',attempts=0,lease_until=NULL,
+		fencing_token=fencing_token+1,cursor_accepted_at=NULL,cursor_transmission_id=NULL,
+		failure_code=NULL,
+		high_water_accepted_at=(SELECT t.accepted_at FROM transmissions t
+			WHERE (jsonb_array_length(scope.network_ids)=0 OR scope.network_ids @> jsonb_build_array(t.network_id::text))
+			AND (scope.unit_id IS NULL OR EXISTS (SELECT 1 FROM transmission_targets target
+				WHERE target.transmission_id=t.id AND target.unit_id=scope.unit_id))
+			ORDER BY t.accepted_at DESC,t.id DESC LIMIT 1),
+		high_water_transmission_id=(SELECT t.id FROM transmissions t
+			WHERE (jsonb_array_length(scope.network_ids)=0 OR scope.network_ids @> jsonb_build_array(t.network_id::text))
+			AND (scope.unit_id IS NULL OR EXISTS (SELECT 1 FROM transmission_targets target
+				WHERE target.transmission_id=t.id AND target.unit_id=scope.unit_id))
+			ORDER BY t.accepted_at DESC,t.id DESC LIMIT 1)
+		WHERE scope.state IN ('queued','running') AND scope.assignment_revision<$1
+		AND NOT ((jsonb_array_length(scope.network_ids)=0 OR cardinality($2::text[])=0 OR EXISTS (
+			SELECT 1 FROM jsonb_array_elements_text(scope.network_ids) AS old_network(value)
+			WHERE old_network.value=ANY($2::text[])))
+		AND ($3::uuid IS NULL OR scope.unit_id IS NULL OR scope.unit_id=$3))`,
+		revision+1, textIDs, unitID); err != nil {
+		return 0, err
+	}
+	if _, err := executor.ExecContext(ctx, `INSERT INTO assignment_pending_scopes
+		(id,assignment_revision,network_ids,unit_id,reason,recorded_at,state,
+		 high_water_accepted_at,high_water_transmission_id,access_revision)
+		VALUES($1,$2,$3::jsonb,$4,$5,$6,'queued',$7,$8,$9)`,
+		uuid.New(), revision+1, string(encodedNetworks), unitID, reason, now,
+		highWaterAt, highWaterID, accessRevision); err != nil {
 		return 0, err
 	}
 	return revision + 1, nil
+}
+
+func correctionHighWater(ctx context.Context, executor postgres.Executor, networks []uuid.UUID,
+	unitID *uuid.UUID,
+) (*time.Time, *uuid.UUID, error) {
+	var accepted time.Time
+	var transmission uuid.UUID
+	err := executor.QueryRowContext(ctx, `SELECT t.accepted_at,t.id FROM transmissions t
+		WHERE (cardinality($1::uuid[]) = 0 OR t.network_id=ANY($1::uuid[]))
+		AND ($2::uuid IS NULL OR EXISTS (SELECT 1 FROM transmission_targets target
+			WHERE target.transmission_id=t.id AND target.unit_id=$2))
+		ORDER BY t.accepted_at DESC,t.id DESC LIMIT 1`, networks, unitID).Scan(&accepted, &transmission)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	return &accepted, &transmission, nil
 }
 
 // NetworksForUnit reports actual current configuration uses, including disabled rules.

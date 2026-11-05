@@ -16,6 +16,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/persistence/ent/addressrule"
+	"github.com/gopager/gopager/internal/persistence/ent/organization"
 	"github.com/gopager/gopager/internal/persistence/ent/predicate"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
 	"github.com/gopager/gopager/internal/persistence/ent/unitcollection"
@@ -30,6 +31,7 @@ type UnitQuery struct {
 	predicates       []predicate.Unit
 	withCollections  *UnitCollectionQuery
 	withAddressRules *AddressRuleQuery
+	withOrganization *OrganizationQuery
 	modifiers        []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
@@ -104,6 +106,28 @@ func (_q *UnitQuery) QueryAddressRules() *AddressRuleQuery {
 			sqlgraph.From(unit.Table, unit.FieldID, selector),
 			sqlgraph.To(addressrule.Table, addressrule.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, unit.AddressRulesTable, unit.AddressRulesColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryOrganization chains the current query on the "organization" edge.
+func (_q *UnitQuery) QueryOrganization() *OrganizationQuery {
+	query := (&OrganizationClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(unit.Table, unit.FieldID, selector),
+			sqlgraph.To(organization.Table, organization.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, unit.OrganizationTable, unit.OrganizationColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -305,6 +329,7 @@ func (_q *UnitQuery) Clone() *UnitQuery {
 		predicates:       append([]predicate.Unit{}, _q.predicates...),
 		withCollections:  _q.withCollections.Clone(),
 		withAddressRules: _q.withAddressRules.Clone(),
+		withOrganization: _q.withOrganization.Clone(),
 		// clone intermediate query.
 		sql:       _q.sql.Clone(),
 		path:      _q.path,
@@ -331,6 +356,17 @@ func (_q *UnitQuery) WithAddressRules(opts ...func(*AddressRuleQuery)) *UnitQuer
 		opt(query)
 	}
 	_q.withAddressRules = query
+	return _q
+}
+
+// WithOrganization tells the query-builder to eager-load the nodes that are connected to
+// the "organization" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UnitQuery) WithOrganization(opts ...func(*OrganizationQuery)) *UnitQuery {
+	query := (&OrganizationClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withOrganization = query
 	return _q
 }
 
@@ -418,9 +454,10 @@ func (_q *UnitQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Unit, e
 	var (
 		nodes       = []*Unit{}
 		_spec       = _q.querySpec()
-		loadedTypes = [2]bool{
+		loadedTypes = [3]bool{
 			_q.withCollections != nil,
 			_q.withAddressRules != nil,
+			_q.withOrganization != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -455,6 +492,12 @@ func (_q *UnitQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Unit, e
 		if err := _q.loadAddressRules(ctx, query, nodes,
 			func(n *Unit) { n.Edges.AddressRules = []*AddressRule{} },
 			func(n *Unit, e *AddressRule) { n.Edges.AddressRules = append(n.Edges.AddressRules, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withOrganization; query != nil {
+		if err := _q.loadOrganization(ctx, query, nodes, nil,
+			func(n *Unit, e *Organization) { n.Edges.Organization = e }); err != nil {
 			return nil, err
 		}
 	}
@@ -552,6 +595,38 @@ func (_q *UnitQuery) loadAddressRules(ctx context.Context, query *AddressRuleQue
 	}
 	return nil
 }
+func (_q *UnitQuery) loadOrganization(ctx context.Context, query *OrganizationQuery, nodes []*Unit, init func(*Unit), assign func(*Unit, *Organization)) error {
+	ids := make([]uuid.UUID, 0, len(nodes))
+	nodeids := make(map[uuid.UUID][]*Unit)
+	for i := range nodes {
+		if nodes[i].OrganizationID == nil {
+			continue
+		}
+		fk := *nodes[i].OrganizationID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(organization.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "organization_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
 
 func (_q *UnitQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := _q.querySpec()
@@ -580,6 +655,9 @@ func (_q *UnitQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != unit.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
+		}
+		if _q.withOrganization != nil {
+			_spec.Node.AddColumnOnce(unit.FieldOrganizationID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

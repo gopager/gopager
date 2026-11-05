@@ -102,6 +102,7 @@ var (
 		{Name: "fingerprint", Type: field.TypeBytes},
 		{Name: "result_id", Type: field.TypeUUID},
 		{Name: "result_revision", Type: field.TypeInt64},
+		{Name: "result_items", Type: field.TypeJSON},
 		{Name: "recorded_at", Type: field.TypeTime},
 	}
 	// CommandReceiptsTable holds the schema information for the "command_receipts" table.
@@ -141,6 +142,32 @@ var (
 				Name:    "contributionsupport_contribution_id",
 				Unique:  false,
 				Columns: []*schema.Column{ContributionSupportsColumns[1]},
+			},
+		},
+	}
+	// CorrectionDirtyTransmissionsColumns holds the columns for the "correction_dirty_transmissions" table.
+	CorrectionDirtyTransmissionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "scope_id", Type: field.TypeUUID},
+		{Name: "transmission_id", Type: field.TypeUUID},
+		{Name: "accepted_at", Type: field.TypeTime},
+		{Name: "recorded_at", Type: field.TypeTime},
+	}
+	// CorrectionDirtyTransmissionsTable holds the schema information for the "correction_dirty_transmissions" table.
+	CorrectionDirtyTransmissionsTable = &schema.Table{
+		Name:       "correction_dirty_transmissions",
+		Columns:    CorrectionDirtyTransmissionsColumns,
+		PrimaryKey: []*schema.Column{CorrectionDirtyTransmissionsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "correctiondirtytransmission_scope_id_accepted_at_transmission_id",
+				Unique:  true,
+				Columns: []*schema.Column{CorrectionDirtyTransmissionsColumns[1], CorrectionDirtyTransmissionsColumns[3], CorrectionDirtyTransmissionsColumns[2]},
+			},
+			{
+				Name:    "correctiondirtytransmission_transmission_id",
+				Unique:  false,
+				Columns: []*schema.Column{CorrectionDirtyTransmissionsColumns[2]},
 			},
 		},
 	}
@@ -451,14 +478,38 @@ var (
 		Columns:    NetworksColumns,
 		PrimaryKey: []*schema.Column{NetworksColumns[0]},
 	}
+	// OrganizationsColumns holds the columns for the "organizations" table.
+	OrganizationsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "revision", Type: field.TypeInt64, Default: 1},
+		{Name: "name", Type: field.TypeString, Size: 256},
+		{Name: "defaults", Type: field.TypeJSON},
+		{Name: "deleted", Type: field.TypeBool, Default: false},
+	}
+	// OrganizationsTable holds the schema information for the "organizations" table.
+	OrganizationsTable = &schema.Table{
+		Name:       "organizations",
+		Columns:    OrganizationsColumns,
+		PrimaryKey: []*schema.Column{OrganizationsColumns[0]},
+	}
 	// AssignmentPendingScopesColumns holds the columns for the "assignment_pending_scopes" table.
 	AssignmentPendingScopesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "assignment_revision", Type: field.TypeInt64},
 		{Name: "network_ids", Type: field.TypeJSON},
 		{Name: "unit_id", Type: field.TypeUUID, Nullable: true},
-		{Name: "reason", Type: field.TypeEnum, Enums: []string{"rule-change", "unit-deleted"}},
+		{Name: "reason", Type: field.TypeEnum, Enums: []string{"rule-change", "unit-deleted", "suppression-change"}},
 		{Name: "recorded_at", Type: field.TypeTime},
+		{Name: "state", Type: field.TypeEnum, Enums: []string{"queued", "running", "completed", "failed", "superseded"}, Default: "queued"},
+		{Name: "high_water_accepted_at", Type: field.TypeTime, Nullable: true},
+		{Name: "high_water_transmission_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "cursor_accepted_at", Type: field.TypeTime, Nullable: true},
+		{Name: "cursor_transmission_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "attempts", Type: field.TypeInt, Default: 0},
+		{Name: "lease_until", Type: field.TypeTime, Nullable: true},
+		{Name: "fencing_token", Type: field.TypeInt64, Default: 0},
+		{Name: "access_revision", Type: field.TypeInt64, Default: 1},
+		{Name: "failure_code", Type: field.TypeString, Nullable: true},
 	}
 	// AssignmentPendingScopesTable holds the schema information for the "assignment_pending_scopes" table.
 	AssignmentPendingScopesTable = &schema.Table{
@@ -581,6 +632,33 @@ var (
 			},
 		},
 	}
+	// TargetSuppressionsColumns holds the columns for the "target_suppressions" table.
+	TargetSuppressionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "transmission_id", Type: field.TypeUUID},
+		{Name: "target_position", Type: field.TypeInt},
+		{Name: "revision", Type: field.TypeInt64, Default: 1},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeUUID},
+		{Name: "removed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "removed_by", Type: field.TypeUUID, Nullable: true},
+	}
+	// TargetSuppressionsTable holds the schema information for the "target_suppressions" table.
+	TargetSuppressionsTable = &schema.Table{
+		Name:       "target_suppressions",
+		Columns:    TargetSuppressionsColumns,
+		PrimaryKey: []*schema.Column{TargetSuppressionsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "targetsuppression_transmission_id_target_position",
+				Unique:  true,
+				Columns: []*schema.Column{TargetSuppressionsColumns[1], TargetSuppressionsColumns[2]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "removed_at IS NULL",
+				},
+			},
+		},
+	}
 	// TransmissionsColumns holds the columns for the "transmissions" table.
 	TransmissionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -623,6 +701,14 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{TransmissionsColumns[15], TransmissionsColumns[9], TransmissionsColumns[0]},
 			},
+			{
+				Name:    "transmissions_unpublished",
+				Unique:  false,
+				Columns: []*schema.Column{TransmissionsColumns[11], TransmissionsColumns[0]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "processing_status = 'pending' AND publication_status = 'pending'",
+				},
+			},
 		},
 	}
 	// TransmissionTargetsColumns holds the columns for the "transmission_targets" table.
@@ -660,12 +746,29 @@ var (
 		{Name: "revision", Type: field.TypeInt64, Default: 1},
 		{Name: "name", Type: field.TypeString, Size: 256},
 		{Name: "deleted", Type: field.TypeBool, Default: false},
+		{Name: "settings", Type: field.TypeJSON},
+		{Name: "organization_id", Type: field.TypeUUID, Nullable: true},
 	}
 	// UnitsTable holds the schema information for the "units" table.
 	UnitsTable = &schema.Table{
 		Name:       "units",
 		Columns:    UnitsColumns,
 		PrimaryKey: []*schema.Column{UnitsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "units_organizations_units",
+				Columns:    []*schema.Column{UnitsColumns[5]},
+				RefColumns: []*schema.Column{OrganizationsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "unit_organization_id",
+				Unique:  false,
+				Columns: []*schema.Column{UnitsColumns[5]},
+			},
+		},
 	}
 	// UnitCollectionsColumns holds the columns for the "unit_collections" table.
 	UnitCollectionsColumns = []*schema.Column{
@@ -678,6 +781,36 @@ var (
 		Name:       "unit_collections",
 		Columns:    UnitCollectionsColumns,
 		PrimaryKey: []*schema.Column{UnitCollectionsColumns[0]},
+	}
+	// UnitTemplatesColumns holds the columns for the "unit_templates" table.
+	UnitTemplatesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "revision", Type: field.TypeInt64, Default: 1},
+		{Name: "name", Type: field.TypeString, Size: 256},
+		{Name: "settings", Type: field.TypeJSON},
+		{Name: "deleted", Type: field.TypeBool, Default: false},
+		{Name: "organization_id", Type: field.TypeUUID, Nullable: true},
+	}
+	// UnitTemplatesTable holds the schema information for the "unit_templates" table.
+	UnitTemplatesTable = &schema.Table{
+		Name:       "unit_templates",
+		Columns:    UnitTemplatesColumns,
+		PrimaryKey: []*schema.Column{UnitTemplatesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "unit_templates_organizations_templates",
+				Columns:    []*schema.Column{UnitTemplatesColumns[5]},
+				RefColumns: []*schema.Column{OrganizationsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "unittemplate_organization_id",
+				Unique:  false,
+				Columns: []*schema.Column{UnitTemplatesColumns[5]},
+			},
+		},
 	}
 	// IdentityUserGroupsColumns holds the columns for the "identity_user_groups" table.
 	IdentityUserGroupsColumns = []*schema.Column{
@@ -815,6 +948,7 @@ var (
 		IdentityAuditTable,
 		CommandReceiptsTable,
 		ContributionSupportsTable,
+		CorrectionDirtyTransmissionsTable,
 		IdentityCredentialsTable,
 		DomainEventsTable,
 		IdentityFieldPermissionsTable,
@@ -829,16 +963,19 @@ var (
 		MessagesTable,
 		MessageContributionsTable,
 		NetworksTable,
+		OrganizationsTable,
 		AssignmentPendingScopesTable,
 		ProcessingCandidatesTable,
 		ProcessingControlTable,
 		ProcessingInstancesTable,
 		ProcessingInstanceVersionsTable,
 		ProcessingResultsTable,
+		TargetSuppressionsTable,
 		TransmissionsTable,
 		TransmissionTargetsTable,
 		UnitsTable,
 		UnitCollectionsTable,
+		UnitTemplatesTable,
 		IdentityUserGroupsTable,
 		ProcessingWorkflowsTable,
 		ProcessingWorkflowScopeReferencesTable,
@@ -866,6 +1003,9 @@ func init() {
 	}
 	ContributionSupportsTable.Annotation = &entsql.Annotation{
 		Table: "contribution_supports",
+	}
+	CorrectionDirtyTransmissionsTable.Annotation = &entsql.Annotation{
+		Table: "correction_dirty_transmissions",
 	}
 	IdentityCredentialsTable.Annotation = &entsql.Annotation{
 		Table: "identity_credentials",
@@ -909,6 +1049,9 @@ func init() {
 	NetworksTable.Annotation = &entsql.Annotation{
 		Table: "networks",
 	}
+	OrganizationsTable.Annotation = &entsql.Annotation{
+		Table: "organizations",
+	}
 	AssignmentPendingScopesTable.Annotation = &entsql.Annotation{
 		Table: "assignment_pending_scopes",
 	}
@@ -927,17 +1070,25 @@ func init() {
 	ProcessingResultsTable.Annotation = &entsql.Annotation{
 		Table: "processing_results",
 	}
+	TargetSuppressionsTable.Annotation = &entsql.Annotation{
+		Table: "target_suppressions",
+	}
 	TransmissionsTable.Annotation = &entsql.Annotation{
 		Table: "transmissions",
 	}
 	TransmissionTargetsTable.Annotation = &entsql.Annotation{
 		Table: "transmission_targets",
 	}
+	UnitsTable.ForeignKeys[0].RefTable = OrganizationsTable
 	UnitsTable.Annotation = &entsql.Annotation{
 		Table: "units",
 	}
 	UnitCollectionsTable.Annotation = &entsql.Annotation{
 		Table: "unit_collections",
+	}
+	UnitTemplatesTable.ForeignKeys[0].RefTable = OrganizationsTable
+	UnitTemplatesTable.Annotation = &entsql.Annotation{
+		Table: "unit_templates",
 	}
 	IdentityUserGroupsTable.Annotation = &entsql.Annotation{
 		Table: "identity_user_groups",

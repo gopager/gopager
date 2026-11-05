@@ -88,6 +88,11 @@ func run() (result error) {
 			result = errors.Join(result, runtime.Close(context.Background()))
 		}()
 		runners = append(runners, runtime.dispatcher)
+		correctionRunner, err := composeCorrectionRunner(store, processingRuntime.correctionPublication)
+		if err != nil {
+			return errors.Join(err, store.Close())
+		}
+		runners = append(runners, correctionRunner)
 	}
 	var api http.Handler
 	if slices.Contains(config.Roles, platform.RoleAPI) {
@@ -103,6 +108,46 @@ func run() (result error) {
 	slog.Info("platform started", "profile", config.Profile, "roles", config.Roles)
 	<-ctx.Done()
 	return handle.Shutdown(context.Background())
+}
+
+func composeCorrectionRunner(store *postgres.Store, publication assignments.CorrectionPublication,
+) (*assignments.CorrectionRunner, error) {
+	identityRepository, err := identitystore.New(store)
+	if err != nil {
+		return nil, err
+	}
+	unitRepository, err := unitstore.New(store)
+	if err != nil {
+		return nil, err
+	}
+	assignmentRepository, err := assignmentstore.New(store)
+	if err != nil {
+		return nil, err
+	}
+	receipts, err := commandstore.New(store)
+	if err != nil {
+		return nil, err
+	}
+	facts, err := eventstore.New(store)
+	if err != nil {
+		return nil, err
+	}
+	intakeRepository, err := ingeststore.New(store, facts, facts)
+	if err != nil {
+		return nil, err
+	}
+	resolver, err := identity.NewResolver(identityRepository, store, applicationScopeOwners{
+		identity: identityRepository, units: unitRepository, networks: intakeRepository,
+	})
+	if err != nil {
+		return nil, err
+	}
+	matcher, err := assignments.NewService(store, resolver, store, assignmentRepository,
+		unitRepository, intakeRepository, receipts, facts, facts)
+	if err != nil {
+		return nil, err
+	}
+	return assignments.NewCorrectionRunner(store, store, matcher, assignmentRepository, facts, publication)
 }
 
 // parseConfig binds only the platform's explicit flags and secret environment input.
@@ -230,7 +275,8 @@ func composeApplicationAPI(publicOrigin string, limits identity.LoginRateLimits,
 	if err != nil {
 		return nil, err
 	}
-	ruleService, err := assignments.NewService(store, resolver, store, ruleRepository, unitRepository, networkOwner, receipts, facts)
+	ruleService, err := assignments.NewService(store, resolver, store, ruleRepository, unitRepository,
+		networkOwner, receipts, facts, facts)
 	if err != nil {
 		return nil, err
 	}

@@ -64,6 +64,10 @@ func buildActionScopes() map[string][]string {
 			add(resource+"."+action, "all", "network", "unit", "unitCollection")
 		}
 	}
+	for _, action := range []string{"read", "create", "update", "delete"} {
+		add("unit-template."+action, "all")
+	}
+	add("assignment-correction.read assignment-correction.retry", "all", "network", "unit", "unitCollection")
 	for _, resource := range []string{"gateway", "network"} {
 		for _, action := range []string{"read", "create", "update", "delete"} {
 			add(resource+"."+action, "all", "network")

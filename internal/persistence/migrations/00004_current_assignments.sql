@@ -1,10 +1,30 @@
 -- +goose Up
+CREATE TABLE organizations (
+    id uuid PRIMARY KEY,
+    revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
+    name varchar(256) NOT NULL CHECK (name <> ''),
+    defaults jsonb NOT NULL,
+    deleted boolean NOT NULL DEFAULT false
+);
 CREATE TABLE units (
     id uuid PRIMARY KEY,
     revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
     name varchar(256) NOT NULL CHECK (name <> ''),
+    deleted boolean NOT NULL DEFAULT false,
+    organization_id uuid REFERENCES organizations(id),
+    settings jsonb NOT NULL DEFAULT
+        '{"color":{"mode":"inherit"},"icon":{"mode":"inherit"},"functionMeanings":{"mode":"inherit"}}'::jsonb
+);
+CREATE INDEX units_organization_id ON units (organization_id);
+CREATE TABLE unit_templates (
+    id uuid PRIMARY KEY,
+    revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
+    name varchar(256) NOT NULL CHECK (name <> ''),
+    organization_id uuid REFERENCES organizations(id),
+    settings jsonb NOT NULL,
     deleted boolean NOT NULL DEFAULT false
 );
+CREATE INDEX unit_templates_organization_id ON unit_templates (organization_id);
 CREATE TABLE unit_collections (
     id uuid PRIMARY KEY,
     revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
@@ -40,9 +60,22 @@ CREATE TABLE assignment_pending_scopes (
     assignment_revision bigint NOT NULL CHECK (assignment_revision > 0),
     network_ids jsonb NOT NULL,
     unit_id uuid,
-    reason varchar NOT NULL CHECK (reason IN ('rule-change', 'unit-deleted')),
-    recorded_at timestamptz NOT NULL
+    reason varchar NOT NULL CHECK (reason IN ('rule-change', 'unit-deleted', 'suppression-change')),
+    recorded_at timestamptz NOT NULL,
+    state varchar NOT NULL DEFAULT 'queued'
+        CHECK (state IN ('queued', 'running', 'completed', 'failed', 'superseded')),
+    high_water_accepted_at timestamptz,
+    high_water_transmission_id uuid,
+    cursor_accepted_at timestamptz,
+    cursor_transmission_id uuid,
+    attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+    lease_until timestamptz,
+    fencing_token bigint NOT NULL DEFAULT 0 CHECK (fencing_token >= 0),
+    access_revision bigint NOT NULL DEFAULT 1 CHECK (access_revision > 0),
+    failure_code varchar
 );
+CREATE INDEX assignment_pending_scopes_state_revision
+    ON assignment_pending_scopes (state, assignment_revision);
 CREATE TABLE command_receipts (
     id uuid PRIMARY KEY,
     actor_id uuid NOT NULL,
@@ -52,6 +85,7 @@ CREATE TABLE command_receipts (
     result_id uuid NOT NULL,
     result_revision bigint NOT NULL CHECK (result_revision > 0),
     recorded_at timestamptz NOT NULL,
+    result_items jsonb NOT NULL DEFAULT '[]'::jsonb,
     UNIQUE (actor_id, command_id)
 );
 
@@ -62,4 +96,6 @@ DROP TABLE assignment_control;
 DROP TABLE address_rules;
 DROP TABLE unit_collection_memberships;
 DROP TABLE unit_collections;
+DROP TABLE unit_templates;
 DROP TABLE units;
+DROP TABLE organizations;

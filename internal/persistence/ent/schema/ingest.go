@@ -127,6 +127,9 @@ func (Transmission) Indexes() []ent.Index {
 		index.Fields("gateway_id", "submission_id").Unique(),
 		index.Fields("protocol", "observed_at", "id"),
 		index.Fields("message_id", "observed_at", "id"),
+		// Supports the C-05 post-correction publication re-entry sweep over unpublished Transmissions.
+		index.Fields("accepted_at", "id").StorageKey("transmissions_unpublished").
+			Annotations(entsql.IndexWhere("processing_status = 'pending' AND publication_status = 'pending'")),
 	}
 }
 

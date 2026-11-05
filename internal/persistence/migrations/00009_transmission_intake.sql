@@ -106,6 +106,10 @@ CREATE TABLE transmissions (
 );
 CREATE INDEX transmissions_protocol_observed ON transmissions (protocol, observed_at, id);
 CREATE INDEX transmissions_message_observed ON transmissions (message_id, observed_at, id);
+-- Supports the C-05 post-correction publication re-entry sweep over unpublished Transmissions.
+CREATE INDEX transmissions_unpublished
+    ON transmissions (accepted_at, id)
+    WHERE processing_status = 'pending' AND publication_status = 'pending';
 CREATE TABLE transmission_targets (
     transmission_id uuid NOT NULL REFERENCES transmissions(id) ON DELETE CASCADE,
     position integer NOT NULL CHECK (position >= 0),

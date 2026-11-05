@@ -51,7 +51,8 @@ func (s *Store) ReadCommandReceipt(ctx context.Context, tx platform.TransactionC
 	var hash [32]byte
 	copy(hash[:], row.Fingerprint)
 	return commands.Receipt{ActorID: row.ActorID, CommandID: row.CommandID, Operation: row.Operation,
-		Fingerprint: hash, Result: commands.Result{ID: row.ResultID, Revision: row.ResultRevision}, RecordedAt: row.RecordedAt}, true, nil
+		Fingerprint: hash, Result: commands.Result{ID: row.ResultID, Revision: row.ResultRevision, Items: row.ResultItems},
+		RecordedAt: row.RecordedAt}, true, nil
 }
 
 // SaveCommandReceipt commits only the nonsecret result with the command's state and fact.
@@ -68,7 +69,8 @@ func (s *Store) SaveCommandReceipt(ctx context.Context, tx platform.TransactionC
 	scope := guard.Bind(ctx, guard.Access{Current: driver.Current, Create: map[string]bool{"CommandReceipt": true}})
 	return client.CommandReceipt.Create().SetActorID(receipt.ActorID).SetCommandID(receipt.CommandID).
 		SetOperation(receipt.Operation).SetFingerprint(receipt.Fingerprint[:]).
-		SetResultID(receipt.Result.ID).SetResultRevision(receipt.Result.Revision).SetRecordedAt(receipt.RecordedAt).Exec(scope)
+		SetResultID(receipt.Result.ID).SetResultRevision(receipt.Result.Revision).SetResultItems(receipt.Result.Items).
+		SetRecordedAt(receipt.RecordedAt).Exec(scope)
 }
 
 var _ commands.Repository = (*Store)(nil)

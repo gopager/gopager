@@ -24,6 +24,9 @@ type CommandReceipt func(*sql.Selector)
 // ContributionSupport is the predicate function for contributionsupport builders.
 type ContributionSupport func(*sql.Selector)
 
+// CorrectionDirtyTransmission is the predicate function for correctiondirtytransmission builders.
+type CorrectionDirtyTransmission func(*sql.Selector)
+
 // Credential is the predicate function for credential builders.
 type Credential func(*sql.Selector)
 
@@ -66,6 +69,9 @@ type MessageContribution func(*sql.Selector)
 // Network is the predicate function for network builders.
 type Network func(*sql.Selector)
 
+// Organization is the predicate function for organization builders.
+type Organization func(*sql.Selector)
+
 // PendingAssignmentScope is the predicate function for pendingassignmentscope builders.
 type PendingAssignmentScope func(*sql.Selector)
 
@@ -84,6 +90,9 @@ type ProcessingInstanceVersion func(*sql.Selector)
 // ProcessingResult is the predicate function for processingresult builders.
 type ProcessingResult func(*sql.Selector)
 
+// TargetSuppression is the predicate function for targetsuppression builders.
+type TargetSuppression func(*sql.Selector)
+
 // Transmission is the predicate function for transmission builders.
 type Transmission func(*sql.Selector)
 
@@ -95,6 +104,9 @@ type Unit func(*sql.Selector)
 
 // UnitCollection is the predicate function for unitcollection builders.
 type UnitCollection func(*sql.Selector)
+
+// UnitTemplate is the predicate function for unittemplate builders.
+type UnitTemplate func(*sql.Selector)
 
 // UserGroup is the predicate function for usergroup builders.
 type UserGroup func(*sql.Selector)

@@ -66,7 +66,10 @@ This glossary owns **domain term meanings**, not interface schemas or implementa
 | --- | --- | --- |
 | **Unit** | Logical recipient defined in GoPager (for example a fire brigade or a person's pager role) to which Addresses resolve. | Address, Subscriber, User |
 | **Organization** | Container of Units providing inherited defaults. | User group |
+| **Organization default** | Typed Unit setting supplied by an Organization to Units or templates that inherit that setting; materialization on deletion: [C-04](contracts/c-04-master-data.md#ap-08-master-data-management). | Global default |
+| **Unit setting override** | Explicit Unit value or explicit unset replacing an inherited Organization default; clearing the override restores inheritance. | Unit template snapshot |
 | **Unit collection** | User-defined set of Units for filtering and permissions. | User group, Message |
+| **Unit template** | Standalone master-data preset used to create a Unit; copied settings do not form a live template relationship. Ownership and snapshot boundary: [C-04](contracts/c-04-master-data.md#ap-08-unit-template-direction). | Presentation template |
 | **Address rule** | Temporal Address/Function-to-Unit rule. Shape, specificity and revision semantics: [C-05](contracts/c-05-matching-correction.md). | Assignment, audit history |
 | **Assignment** | Resolution of an original Transmission target to its current Unit, not a separate shared entity. Rules/status: [C-05](contracts/c-05-matching-correction.md). | Address rule, Message contribution, Unit appearance |
 | **Message contribution** | Stored, rebuildable address-based Message read model. Identity/fields/derivation: [C-05](contracts/c-05-matching-correction.md#target-resolution-message-contributions-and-ingest-storage). | Original Transmission target, Unit appearance, Message target |
@@ -75,6 +78,10 @@ This glossary owns **domain term meanings**, not interface schemas or implementa
 | **Rematching** | Re-evaluating original targets at their Observation times after relevant rule/Unit/Network changes, updating stored resolutions, Contribution supports and Message contributions. Never fabricates Transmission evidence or changes Grouping. | Grouping |
 | **Assignment revision** | Correction-state marker for current target resolutions and contribution derivation. Concrete revision fields/placement belong to owner contracts; not a mandatory per-entity counter or immutable rule history. | Rule Validity time, Grouping policy revision |
 | **Rematch job** | Durable correction work for an affected scope/revision; lifecycle in [C-05](contracts/c-05-matching-correction.md). | Delivery job |
+
+## AP-08 Unit Template Addendum
+
+The [D-125 term addition](authoritative-plan.md#ap-08-unit-template-ownership) supplements G-1.0 with the Unit template term only. It does not change any existing G-1.0 meaning or the separate Presentation template term.
 
 ## Identity, Access, and Delivery
 

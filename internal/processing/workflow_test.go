@@ -254,15 +254,6 @@ func TestWorkflowTargetlessAndUnusedBranchStaticDependence(t *testing.T) {
 
 func TestWorkflowExtractionBranchMappingAndParallelReuse(t *testing.T) {
 	ctx := context.Background()
-	host, err := NewWASMHost(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := host.Close(ctx); err != nil {
-			t.Error(err)
-		}
-	})
 	_, source := sourceFixture(t)
 	definition := selectedDefinition()
 	text := FieldRef{"source", []string{"text"}}
@@ -280,7 +271,7 @@ func TestWorkflowExtractionBranchMappingAndParallelReuse(t *testing.T) {
 	}
 	definition.OutputSchema["level"] = FieldSchema{Kind: IntegerValue}
 	definition.Outputs["level"] = Assignment{Field: &chosen}
-	program, err := CompileWorkflow(ctx, definition, source, host)
+	program, err := CompileWorkflow(ctx, definition, source, CoreRegex{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,7 +291,7 @@ func TestWorkflowExtractionBranchMappingAndParallelReuse(t *testing.T) {
 		{SchemaVersion: 1, Selector: definition.Selector, Outputs: map[string]Assignment{"bad": {Field: &chosen}},
 			OutputSchema: map[string]FieldSchema{"bad": {Kind: IntegerValue}}},
 	} {
-		if _, err := CompileWorkflow(ctx, invalidDefinition, source, host); err == nil {
+		if _, err := CompileWorkflow(ctx, invalidDefinition, source, CoreRegex{}); err == nil {
 			t.Fatal("duplicate/forward step reference accepted")
 		}
 	}

@@ -36,7 +36,8 @@ CREATE TABLE identity_grants (
     subject_kind varchar NOT NULL CHECK (subject_kind IN ('principal', 'userGroup')),
     actions jsonb NOT NULL,
     scope jsonb NOT NULL,
-    field_names jsonb NOT NULL,
+    -- Unpublished legacy column; retained but not used for authorization (global field permissions own it).
+    field_names jsonb NOT NULL DEFAULT '[]'::jsonb,
     max_age_seconds bigint CHECK (max_age_seconds >= 0),
     delegable boolean NOT NULL DEFAULT false
 );

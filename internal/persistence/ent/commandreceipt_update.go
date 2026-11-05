@@ -10,8 +10,10 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/persistence/ent/commandreceipt"
 	"github.com/gopager/gopager/internal/persistence/ent/predicate"
 )
@@ -110,6 +112,18 @@ func (_u *CommandReceiptUpdate) SetNillableResultRevision(v *int64) *CommandRece
 // AddResultRevision adds value to the "result_revision" field.
 func (_u *CommandReceiptUpdate) AddResultRevision(v int64) *CommandReceiptUpdate {
 	_u.mutation.AddResultRevision(v)
+	return _u
+}
+
+// SetResultItems sets the "result_items" field.
+func (_u *CommandReceiptUpdate) SetResultItems(v []commands.ResultItem) *CommandReceiptUpdate {
+	_u.mutation.SetResultItems(v)
+	return _u
+}
+
+// AppendResultItems appends value to the "result_items" field.
+func (_u *CommandReceiptUpdate) AppendResultItems(v []commands.ResultItem) *CommandReceiptUpdate {
+	_u.mutation.AppendResultItems(v)
 	return _u
 }
 
@@ -212,6 +226,14 @@ func (_u *CommandReceiptUpdate) sqlSave(ctx context.Context) (_node int, err err
 	}
 	if value, ok := _u.mutation.AddedResultRevision(); ok {
 		_spec.AddField(commandreceipt.FieldResultRevision, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.ResultItems(); ok {
+		_spec.SetField(commandreceipt.FieldResultItems, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedResultItems(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, commandreceipt.FieldResultItems, value)
+		})
 	}
 	if value, ok := _u.mutation.RecordedAt(); ok {
 		_spec.SetField(commandreceipt.FieldRecordedAt, field.TypeTime, value)
@@ -318,6 +340,18 @@ func (_u *CommandReceiptUpdateOne) SetNillableResultRevision(v *int64) *CommandR
 // AddResultRevision adds value to the "result_revision" field.
 func (_u *CommandReceiptUpdateOne) AddResultRevision(v int64) *CommandReceiptUpdateOne {
 	_u.mutation.AddResultRevision(v)
+	return _u
+}
+
+// SetResultItems sets the "result_items" field.
+func (_u *CommandReceiptUpdateOne) SetResultItems(v []commands.ResultItem) *CommandReceiptUpdateOne {
+	_u.mutation.SetResultItems(v)
+	return _u
+}
+
+// AppendResultItems appends value to the "result_items" field.
+func (_u *CommandReceiptUpdateOne) AppendResultItems(v []commands.ResultItem) *CommandReceiptUpdateOne {
+	_u.mutation.AppendResultItems(v)
 	return _u
 }
 
@@ -450,6 +484,14 @@ func (_u *CommandReceiptUpdateOne) sqlSave(ctx context.Context) (_node *CommandR
 	}
 	if value, ok := _u.mutation.AddedResultRevision(); ok {
 		_spec.AddField(commandreceipt.FieldResultRevision, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.ResultItems(); ok {
+		_spec.SetField(commandreceipt.FieldResultItems, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedResultItems(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, commandreceipt.FieldResultItems, value)
+		})
 	}
 	if value, ok := _u.mutation.RecordedAt(); ok {
 		_spec.SetField(commandreceipt.FieldRecordedAt, field.TypeTime, value)

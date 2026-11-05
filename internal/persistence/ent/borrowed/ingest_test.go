@@ -1142,7 +1142,7 @@ func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	service, err := worker.NewWithPublisher(store, processingRepository, sourceOwner, host,
+	service, err := worker.NewWithPublisher(store, processingRepository, sourceOwner, processing.CoreRegex{},
 		uuid.New(), sourceOwner)
 	if err != nil {
 		t.Fatal(err)
@@ -1359,6 +1359,53 @@ func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
 			t.Fatalf("failed work leaked publication: candidates=%d/%d transmission=%s/%s message=%s results/facts=%d/%d",
 				pendingCandidates, failedCandidates, processingStatus, publicationStatus,
 				messagePublication, publishedResults, completionEvents)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		_, err := assignmentRepository.MarkPending(tx.Context(), tx, []uuid.UUID{network}, nil, "rule-change")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	err = store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		return sourceOwner.Publish(tx.Context(), tx, receipt.TransmissionID)
+	})
+	if platform.FailureCode(err) != platform.CodeRevisionConflict {
+		t.Fatalf("Processing publication ignored pending correction: %v", err)
+	}
+	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		var processingStatus, publicationStatus, messagePublication string
+		var publishedResults, completionFacts int
+		if err := executor.QueryRowContext(tx.Context(), `SELECT processing_status,publication_status
+			FROM transmissions WHERE id=$1`, receipt.TransmissionID).
+			Scan(&processingStatus, &publicationStatus); err != nil {
+			return err
+		}
+		if err := executor.QueryRowContext(tx.Context(), `SELECT publication_status FROM messages WHERE id=$1`,
+			receipt.MessageID).Scan(&messagePublication); err != nil {
+			return err
+		}
+		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM processing_results
+			WHERE message_id=$1 AND published_at IS NOT NULL`, receipt.MessageID).Scan(&publishedResults); err != nil {
+			return err
+		}
+		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM domain_events
+			WHERE envelope->>'type'='processing.completed'
+			AND envelope->'data'->>'transmissionId'=$1`, receipt.TransmissionID.String()).
+			Scan(&completionFacts); err != nil {
+			return err
+		}
+		if processingStatus != "pending" || publicationStatus != "pending" ||
+			messagePublication != "pending" || publishedResults != 2 || completionFacts != 2 {
+			t.Fatalf("correction restored stale Processing publication: transmission=%s/%s message=%s results/facts=%d/%d",
+				processingStatus, publicationStatus, messagePublication, publishedResults, completionFacts)
 		}
 		return nil
 	}); err != nil {

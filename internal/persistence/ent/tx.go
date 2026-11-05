@@ -24,6 +24,8 @@ type Tx struct {
 	CommandReceipt *CommandReceiptClient
 	// ContributionSupport is the client for interacting with the ContributionSupport builders.
 	ContributionSupport *ContributionSupportClient
+	// CorrectionDirtyTransmission is the client for interacting with the CorrectionDirtyTransmission builders.
+	CorrectionDirtyTransmission *CorrectionDirtyTransmissionClient
 	// Credential is the client for interacting with the Credential builders.
 	Credential *CredentialClient
 	// DomainEvent is the client for interacting with the DomainEvent builders.
@@ -52,6 +54,8 @@ type Tx struct {
 	MessageContribution *MessageContributionClient
 	// Network is the client for interacting with the Network builders.
 	Network *NetworkClient
+	// Organization is the client for interacting with the Organization builders.
+	Organization *OrganizationClient
 	// PendingAssignmentScope is the client for interacting with the PendingAssignmentScope builders.
 	PendingAssignmentScope *PendingAssignmentScopeClient
 	// ProcessingCandidate is the client for interacting with the ProcessingCandidate builders.
@@ -64,6 +68,8 @@ type Tx struct {
 	ProcessingInstanceVersion *ProcessingInstanceVersionClient
 	// ProcessingResult is the client for interacting with the ProcessingResult builders.
 	ProcessingResult *ProcessingResultClient
+	// TargetSuppression is the client for interacting with the TargetSuppression builders.
+	TargetSuppression *TargetSuppressionClient
 	// Transmission is the client for interacting with the Transmission builders.
 	Transmission *TransmissionClient
 	// TransmissionTarget is the client for interacting with the TransmissionTarget builders.
@@ -72,6 +78,8 @@ type Tx struct {
 	Unit *UnitClient
 	// UnitCollection is the client for interacting with the UnitCollection builders.
 	UnitCollection *UnitCollectionClient
+	// UnitTemplate is the client for interacting with the UnitTemplate builders.
+	UnitTemplate *UnitTemplateClient
 	// UserGroup is the client for interacting with the UserGroup builders.
 	UserGroup *UserGroupClient
 	// Workflow is the client for interacting with the Workflow builders.
@@ -217,6 +225,7 @@ func (tx *Tx) init() {
 	tx.AuditRecord = NewAuditRecordClient(tx.config)
 	tx.CommandReceipt = NewCommandReceiptClient(tx.config)
 	tx.ContributionSupport = NewContributionSupportClient(tx.config)
+	tx.CorrectionDirtyTransmission = NewCorrectionDirtyTransmissionClient(tx.config)
 	tx.Credential = NewCredentialClient(tx.config)
 	tx.DomainEvent = NewDomainEventClient(tx.config)
 	tx.FieldPermission = NewFieldPermissionClient(tx.config)
@@ -231,16 +240,19 @@ func (tx *Tx) init() {
 	tx.Message = NewMessageClient(tx.config)
 	tx.MessageContribution = NewMessageContributionClient(tx.config)
 	tx.Network = NewNetworkClient(tx.config)
+	tx.Organization = NewOrganizationClient(tx.config)
 	tx.PendingAssignmentScope = NewPendingAssignmentScopeClient(tx.config)
 	tx.ProcessingCandidate = NewProcessingCandidateClient(tx.config)
 	tx.ProcessingControl = NewProcessingControlClient(tx.config)
 	tx.ProcessingInstance = NewProcessingInstanceClient(tx.config)
 	tx.ProcessingInstanceVersion = NewProcessingInstanceVersionClient(tx.config)
 	tx.ProcessingResult = NewProcessingResultClient(tx.config)
+	tx.TargetSuppression = NewTargetSuppressionClient(tx.config)
 	tx.Transmission = NewTransmissionClient(tx.config)
 	tx.TransmissionTarget = NewTransmissionTargetClient(tx.config)
 	tx.Unit = NewUnitClient(tx.config)
 	tx.UnitCollection = NewUnitCollectionClient(tx.config)
+	tx.UnitTemplate = NewUnitTemplateClient(tx.config)
 	tx.UserGroup = NewUserGroupClient(tx.config)
 	tx.Workflow = NewWorkflowClient(tx.config)
 	tx.WorkflowScopeReference = NewWorkflowScopeReferenceClient(tx.config)

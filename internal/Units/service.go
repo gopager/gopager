@@ -3,6 +3,7 @@ package units
 import (
 	"context"
 	"errors"
+	"reflect"
 	"slices"
 	"time"
 
@@ -21,11 +22,11 @@ type Service struct {
 	repository   Repository
 	rules        RuleOwner
 	commands     commands.Repository
-	facts        events.ConfigurationAppender
+	facts        events.MasterDataAppender
 }
 
 // NewService composes only the approved early Unit/collection operations.
-func NewService(transactions identity.Transactions, resolver *identity.Resolver, clock platform.Clock, repository Repository, rules RuleOwner, receipts commands.Repository, facts events.ConfigurationAppender) (*Service, error) {
+func NewService(transactions identity.Transactions, resolver *identity.Resolver, clock platform.Clock, repository Repository, rules RuleOwner, receipts commands.Repository, facts events.MasterDataAppender) (*Service, error) {
 	if transactions == nil || resolver == nil || clock == nil || repository == nil || rules == nil || receipts == nil || facts == nil {
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing Unit service dependency"))
 	}
@@ -140,6 +141,22 @@ func (s *Service) authorizeUnitUses(ctx context.Context, tx platform.Transaction
 	return nil
 }
 
+func (s *Service) authorizeOrganizationReference(ctx context.Context, tx platform.TransactionContext, authority authz.Authority, id uuid.UUID, now time.Time) error {
+	_, members, _, err := s.repository.ReadOrganizationContext(ctx, tx, id)
+	if err != nil {
+		return err
+	}
+	if len(members) == 0 {
+		return authz.Authorize(authority, "organization.read", nil, authz.Target{}, now)
+	}
+	for _, member := range members {
+		if err := s.authorizeUnitUses(ctx, tx, authority, "organization.read", member, now); err != nil {
+			return authz.ErrForbidden
+		}
+	}
+	return nil
+}
+
 // checkMembership checks existing collections and the caller's right to change each affected relation.
 func (s *Service) checkMembership(ctx context.Context, tx platform.TransactionContext, authority authz.Authority, before, after []uuid.UUID, now time.Time) error {
 	for _, pair := range [][2][]uuid.UUID{{before, after}, {after, before}} {
@@ -167,7 +184,7 @@ func (s *Service) record(ctx context.Context, tx platform.TransactionContext, au
 	if err := s.repository.RecordChange(ctx, tx, actor, target, action, now); err != nil {
 		return err
 	}
-	_, err = s.facts.AppendConfigurationFact(ctx, tx, events.ConfigurationFact{ID: uuid.New(),
+	_, err = s.facts.AppendMasterDataFact(ctx, tx, events.MasterDataFact{ID: uuid.New(),
 		Aggregate: events.EntityRef{Type: kind, ID: target}, Revision: revision, OccurredAt: now, CausationID: command, ChangeKind: change})
 	return err
 }
@@ -199,6 +216,16 @@ func (s *Service) CreateUnit(ctx context.Context, proof identity.Proof, command 
 		if err := authz.Authorize(authority, "unit.create", nil, authz.Target{UnitID: id, UnitCollections: input.CollectionIDs}, now); err != nil {
 			return err
 		}
+		if input.NewOrganization != nil {
+			if err := authz.Authorize(authority, "organization.create", nil, authz.Target{}, now); err != nil {
+				return err
+			}
+		}
+		if input.OrganizationID != nil {
+			if err := s.authorizeOrganizationReference(tx.Context(), tx, authority, *input.OrganizationID, now); err != nil {
+				return err
+			}
+		}
 		if err := s.checkMembership(tx.Context(), tx, authority, nil, input.CollectionIDs, now); err != nil {
 			return err
 		}
@@ -206,7 +233,21 @@ func (s *Service) CreateUnit(ctx context.Context, proof identity.Proof, command 
 			result, err = receipt.Check("unit.create", hash)
 			return err
 		}
-		value := Unit{ID: id, Revision: 1, Name: input.Name, CollectionIDs: input.CollectionIDs}
+		if input.NewOrganization != nil {
+			organizationID := uuid.New()
+			organization := Organization{ID: organizationID, Revision: 1,
+				Name: input.NewOrganization.Name, Defaults: input.NewOrganization.Defaults}
+			if err := s.repository.SaveOrganization(tx.Context(), tx, authority, organization, 0, now); err != nil {
+				return err
+			}
+			if err := s.record(tx.Context(), tx, authority, organizationID, 1, "organization",
+				"created", "organization.create", &command, now); err != nil {
+				return err
+			}
+			input.OrganizationID = &organizationID
+		}
+		value := Unit{ID: id, Revision: 1, Name: input.Name, OrganizationID: input.OrganizationID,
+			CollectionIDs: input.CollectionIDs, Settings: input.Settings}
 		if err := s.repository.SaveUnit(tx.Context(), tx, authority, value, 0, now); err != nil {
 			return err
 		}
@@ -226,7 +267,7 @@ func (s *Service) CreateUnit(ctx context.Context, proof identity.Proof, command 
 // ChangeUnit changes only supported fields after checking both old and proposed authority contexts.
 func (s *Service) ChangeUnit(ctx context.Context, proof identity.Proof, id uuid.UUID, expected int64, input UnitInput, check func(identity.Authentication) error) (commands.Result, error) {
 	input, err := input.Canonical()
-	if err != nil || id == uuid.Nil || expected <= 0 {
+	if err != nil || id == uuid.Nil || expected <= 0 || input.NewOrganization != nil {
 		return commands.Result{}, authz.ErrInvalidInput
 	}
 	var result commands.Result
@@ -243,12 +284,23 @@ func (s *Service) ChangeUnit(ctx context.Context, proof identity.Proof, id uuid.
 			return err
 		}
 		proposed := current
-		proposed.Name, proposed.CollectionIDs, proposed.Revision = input.Name, input.CollectionIDs, next
+		proposed.Name, proposed.OrganizationID, proposed.CollectionIDs = input.Name, input.OrganizationID, input.CollectionIDs
+		proposed.Settings, proposed.Revision = input.Settings, next
 		if err := s.authorizeUnitUses(tx.Context(), tx, authority, "unit.update", proposed, now); err != nil {
 			return err
 		}
+		if proposed.OrganizationID != nil {
+			if err := s.authorizeOrganizationReference(tx.Context(), tx, authority, *proposed.OrganizationID, now); err != nil {
+				return err
+			}
+		}
 		if err := s.checkMembership(tx.Context(), tx, authority, current.CollectionIDs, input.CollectionIDs, now); err != nil {
 			return err
+		}
+		if current.Name == proposed.Name && equalUUIDPointer(current.OrganizationID, proposed.OrganizationID) &&
+			slices.Equal(current.CollectionIDs, proposed.CollectionIDs) && reflect.DeepEqual(current.Settings, proposed.Settings) {
+			result = commands.Result{ID: id, Revision: current.Revision}
+			return nil
 		}
 		if err := s.repository.SaveUnit(tx.Context(), tx, authority, proposed, expected, now); err != nil {
 			return err

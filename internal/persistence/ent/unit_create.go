@@ -10,7 +10,9 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
+	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/persistence/ent/addressrule"
+	"github.com/gopager/gopager/internal/persistence/ent/organization"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
 	"github.com/gopager/gopager/internal/persistence/ent/unitcollection"
 )
@@ -56,6 +58,26 @@ func (_c *UnitCreate) SetNillableDeleted(v *bool) *UnitCreate {
 	return _c
 }
 
+// SetOrganizationID sets the "organization_id" field.
+func (_c *UnitCreate) SetOrganizationID(v uuid.UUID) *UnitCreate {
+	_c.mutation.SetOrganizationID(v)
+	return _c
+}
+
+// SetNillableOrganizationID sets the "organization_id" field if the given value is not nil.
+func (_c *UnitCreate) SetNillableOrganizationID(v *uuid.UUID) *UnitCreate {
+	if v != nil {
+		_c.SetOrganizationID(*v)
+	}
+	return _c
+}
+
+// SetSettings sets the "settings" field.
+func (_c *UnitCreate) SetSettings(v units.Settings) *UnitCreate {
+	_c.mutation.SetSettings(v)
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *UnitCreate) SetID(v uuid.UUID) *UnitCreate {
 	_c.mutation.SetID(v)
@@ -98,6 +120,11 @@ func (_c *UnitCreate) AddAddressRules(v ...*AddressRule) *UnitCreate {
 		ids[i] = v[i].ID
 	}
 	return _c.AddAddressRuleIDs(ids...)
+}
+
+// SetOrganization sets the "organization" edge to the Organization entity.
+func (_c *UnitCreate) SetOrganization(v *Organization) *UnitCreate {
+	return _c.SetOrganizationID(v.ID)
 }
 
 // Mutation returns the UnitMutation object of the builder.
@@ -176,6 +203,9 @@ func (_c *UnitCreate) check() error {
 	if _, ok := _c.mutation.Deleted(); !ok {
 		return &ValidationError{Name: "deleted", err: errors.New(`ent: missing required field "Unit.deleted"`)}
 	}
+	if _, ok := _c.mutation.Settings(); !ok {
+		return &ValidationError{Name: "settings", err: errors.New(`ent: missing required field "Unit.settings"`)}
+	}
 	return nil
 }
 
@@ -223,6 +253,10 @@ func (_c *UnitCreate) createSpec() (*Unit, *sqlgraph.CreateSpec) {
 		_spec.SetField(unit.FieldDeleted, field.TypeBool, value)
 		_node.Deleted = value
 	}
+	if value, ok := _c.mutation.Settings(); ok {
+		_spec.SetField(unit.FieldSettings, field.TypeJSON, value)
+		_node.Settings = value
+	}
 	if nodes := _c.mutation.CollectionsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2M,
@@ -253,6 +287,23 @@ func (_c *UnitCreate) createSpec() (*Unit, *sqlgraph.CreateSpec) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.OrganizationIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   unit.OrganizationTable,
+			Columns: []string{unit.OrganizationColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(organization.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.OrganizationID = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

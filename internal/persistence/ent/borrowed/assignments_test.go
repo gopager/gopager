@@ -1,7 +1,9 @@
 package borrowed_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"math"
 	"reflect"
@@ -18,6 +20,7 @@ import (
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/events"
 	"github.com/gopager/gopager/internal/identity"
+	"github.com/gopager/gopager/internal/ingest"
 	"github.com/gopager/gopager/internal/persistence/ent"
 	"github.com/gopager/gopager/internal/persistence/ent/assignmentstore"
 	"github.com/gopager/gopager/internal/persistence/ent/borrowed"
@@ -27,6 +30,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/grant"
 	"github.com/gopager/gopager/internal/persistence/ent/guard"
 	"github.com/gopager/gopager/internal/persistence/ent/identitystore"
+	"github.com/gopager/gopager/internal/persistence/ent/ingeststore"
 	"github.com/gopager/gopager/internal/persistence/ent/unitstore"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
@@ -83,6 +87,28 @@ type matcherFixture struct {
 	networks  []uuid.UUID
 }
 
+type staleUnitSaveRepository struct {
+	units.Repository
+	store   *postgres.Store
+	staleID uuid.UUID
+}
+
+func (r *staleUnitSaveRepository) SaveUnit(ctx context.Context, tx platform.TransactionContext,
+	authority authz.Authority, value units.Unit, expected int64, now time.Time,
+) error {
+	if value.ID == r.staleID {
+		executor, err := r.store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(ctx, `UPDATE units SET revision=revision+1 WHERE id=$1`, value.ID); err != nil {
+			return err
+		}
+		r.staleID = uuid.Nil
+	}
+	return r.Repository.SaveUnit(ctx, tx, authority, value, expected, now)
+}
+
 // newMatcherFixture composes real primary adapters and explicitly bootstrapped management rights.
 func newMatcherFixture(t *testing.T) matcherFixture {
 	t.Helper()
@@ -131,7 +157,7 @@ func newMatcherFixture(t *testing.T) matcherFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ruleService, err := assignments.NewService(store, resolver, store, ruleRepository, unitRepository, owners, receipts, facts)
+	ruleService, err := assignments.NewService(store, resolver, store, ruleRepository, unitRepository, owners, receipts, facts, facts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,6 +203,10 @@ func (f failingConfigurationFacts) AppendConfigurationFact(context.Context, plat
 	return uuid.Nil, f.failure
 }
 
+func (f failingConfigurationFacts) AppendMasterDataFact(context.Context, platform.TransactionContext, events.MasterDataFact) (uuid.UUID, error) {
+	return uuid.Nil, f.failure
+}
+
 func TestCurrentMatcherAtomicCreationRetryPreviewAndRollback(t *testing.T) {
 	f := newMatcherFixture(t)
 	command := uuid.New()
@@ -187,7 +217,7 @@ func TestCurrentMatcherAtomicCreationRetryPreviewAndRollback(t *testing.T) {
 	}
 	before := configurationCounts(t, f)
 	retry, err := f.units.CreateUnit(t.Context(), f.proof, command, input, checkedMutation)
-	if err != nil || retry != unit || configurationCounts(t, f) != before {
+	if err != nil || !reflect.DeepEqual(retry, unit) || configurationCounts(t, f) != before {
 		t.Fatalf("Unit retry duplicated state or facts: %v", err)
 	}
 	input.Name = "changed"
@@ -206,7 +236,7 @@ func TestCurrentMatcherAtomicCreationRetryPreviewAndRollback(t *testing.T) {
 	before = configurationCounts(t, f)
 	ruleValues.Selector.Functions = []uint16{1, 3}
 	retry, err = f.rules.CreateRule(t.Context(), f.proof, ruleCommand, ruleValues, checkedMutation)
-	if err != nil || retry != rule || configurationCounts(t, f) != before {
+	if err != nil || !reflect.DeepEqual(retry, rule) || configurationCounts(t, f) != before {
 		t.Fatalf("set-equivalent Rule retry duplicated state: %v", err)
 	}
 	failure := errors.New("configuration fact unavailable")
@@ -558,6 +588,600 @@ func TestCurrentMatcherNativeMixedScopesAndRestrictingKeysMatchPointDecisions(t 
 				t.Fatalf("hidden conflicting rule was ignored: %v", err)
 			}
 		}
+	}
+}
+
+func TestPendingScopeSupersessionAndRebaseRespectAllScopeAndUnitIntersections(t *testing.T) {
+	f := newMatcherFixture(t)
+	mark := func(networks []uuid.UUID, unit *uuid.UUID) int64 {
+		t.Helper()
+		var revision int64
+		if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+			var err error
+			revision, err = f.ruleStore.MarkPending(tx.Context(), tx, networks, unit, "rule-change")
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return revision
+	}
+	state := func(id uuid.UUID) (string, int64) {
+		t.Helper()
+		var got string
+		var revision int64
+		if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+			executor, err := f.store.Resolve(tx)
+			if err != nil {
+				return err
+			}
+			return executor.QueryRowContext(tx.Context(), `SELECT state,assignment_revision
+				FROM assignment_pending_scopes WHERE id=$1`, id).Scan(&got, &revision)
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return got, revision
+	}
+	scopeID := func(revision int64) uuid.UUID {
+		t.Helper()
+		var id uuid.UUID
+		if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+			executor, err := f.store.Resolve(tx)
+			if err != nil {
+				return err
+			}
+			return executor.QueryRowContext(tx.Context(), `SELECT id FROM assignment_pending_scopes
+				WHERE assignment_revision=$1`, revision).Scan(&id)
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+
+	firstRevision := mark([]uuid.UUID{f.networks[0]}, nil)
+	firstID := scopeID(firstRevision)
+	allRevision := mark(nil, nil)
+	if got, _ := state(firstID); got != "superseded" {
+		t.Fatalf("all-Network scope did not supersede overlapping scope: %s", got)
+	}
+	allID := scopeID(allRevision)
+
+	unitA, unitB := uuid.New(), uuid.New()
+	unitARevision := mark([]uuid.UUID{f.networks[0]}, &unitA)
+	unitAID := scopeID(unitARevision)
+	unitBRevision := mark([]uuid.UUID{f.networks[0]}, &unitB)
+	unitBID := scopeID(unitBRevision)
+	if got, revision := state(allID); got != "superseded" {
+		t.Fatalf("Network/Unit scope did not supersede all-scope job: %s at %d", got, revision)
+	}
+	if got, revision := state(unitAID); got != "queued" || revision != unitBRevision {
+		t.Fatalf("disjoint Unit job was not rebased: %s at %d, want queued at %d", got, revision, unitBRevision)
+	}
+	if got, revision := state(unitBID); got != "queued" || revision != unitBRevision {
+		t.Fatalf("new Unit job has incorrect state/revision: %s at %d", got, revision)
+	}
+}
+
+func TestCorrectionLeaseExpiryReclaimsAndFencesPriorToken(t *testing.T) {
+	f := newMatcherFixture(t)
+	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		_, err := f.ruleStore.MarkPending(tx.Context(), tx, []uuid.UUID{f.networks[0]}, nil, "rule-change")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	claim := func() (assignments.CorrectionLease, bool) {
+		t.Helper()
+		var lease assignments.CorrectionLease
+		var claimed bool
+		err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+			now, err := f.store.Now(tx.Context(), tx)
+			if err != nil {
+				return err
+			}
+			lease, claimed, err = f.ruleStore.ClaimCorrection(tx.Context(), tx, now, time.Second)
+			return err
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return lease, claimed
+	}
+	first, claimed := claim()
+	if !claimed || first.FencingToken != 1 {
+		t.Fatalf("first correction claim=%+v claimed=%t", first, claimed)
+	}
+	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := f.store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		_, err = executor.ExecContext(tx.Context(), `UPDATE assignment_pending_scopes
+			SET lease_until=clock_timestamp()-interval '1 second' WHERE id=$1`, first.ID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	second, claimed := claim()
+	if !claimed || second.ID != first.ID || second.FencingToken != first.FencingToken+1 {
+		t.Fatalf("expired correction lease was not reclaimed with a new fence: first=%+v second=%+v claimed=%t",
+			first, second, claimed)
+	}
+	err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		_, err := f.ruleStore.CompleteCorrection(tx.Context(), tx, first)
+		return err
+	})
+	if !errors.Is(err, authz.ErrRevisionConflict) {
+		t.Fatalf("prior lease token completed reclaimed work: %v", err)
+	}
+	var completed bool
+	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		var err error
+		completed, err = f.ruleStore.CompleteCorrection(tx.Context(), tx, second)
+		return err
+	}); err != nil || !completed {
+		t.Fatalf("current lease could not complete: completed=%t err=%v", completed, err)
+	}
+}
+
+func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidence(t *testing.T) {
+	f := newMatcherFixture(t)
+	networkID, gatewayID := f.networks[0], uuid.New()
+	unitA, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
+		units.UnitInput{Name: "Station A", CollectionIDs: []uuid.UUID{}}, checkedMutation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unitB, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
+		units.UnitInput{Name: "Station B", CollectionIDs: []uuid.UUID{}}, checkedMutation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rule, err := f.rules.CreateRule(t.Context(), f.proof, uuid.New(),
+		ruleInput(networkID, unitA.ID, 10, 20, 1), checkedMutation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	function := uint8(1)
+	target := protocols.Target{Address: protocols.NumericAddress(10), Function: &function}
+	original, err := json.Marshal(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	targets, err := json.Marshal([]protocols.Target{target})
+	if err != nil {
+		t.Fatal(err)
+	}
+	observed := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	accepted := observed.Add(time.Second)
+	submission := ingest.Submission{SchemaVersion: 1, SubmissionID: "correction-dirty-intake",
+		Protocol: protocols.POCSAG, ObservationTime: observed.Add(2 * time.Second).Format(time.RFC3339),
+		GatewayNetworkIdentifier: "default", Payload: json.RawMessage(`{"form":"tone-only"}`),
+		TransmissionTargets: []protocols.Target{target}}
+	encodedSubmission, err := json.Marshal(submission)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identitySubmission, err := submission.Validate(len(encodedSubmission), accepted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	messageID, transmissionID := uuid.New(), uuid.New()
+	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := f.store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		var assignmentRevision int64
+		if err := executor.QueryRowContext(tx.Context(), `SELECT revision FROM assignment_control WHERE id=1`).
+			Scan(&assignmentRevision); err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO networks (id,name,protocol) VALUES($1,'Test','pocsag')`, networkID); err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateways (id) VALUES($1)`, gatewayID); err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateway_networks
+			(id,gateway_id,gateway_network_identifier,network_id,is_default)
+			VALUES($1,$2,'default',$3,true)`, uuid.New(), gatewayID, networkID); err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO messages
+			(id,identity_form,identity_subtype,identity_value,first_observed_at,last_observed_at,publication_status)
+			VALUES($1,$2,$3,$4,$5,$5,'ready')`, messageID, identitySubmission.Identity.Form,
+			identitySubmission.Identity.Subtype, identitySubmission.Identity.Value, observed); err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO transmissions
+			(id,gateway_id,network_id,submission_id,submission_fingerprint,network_resolution,protocol,payload,targets,
+			 observed_at,observation_offset_seconds,accepted_at,source_revision,message_id,processing_status,publication_status)
+			VALUES($1,$2,$3,$4,$5,'declared','pocsag','{}',$6,$7,0,$8,1,$9,'completed','ready')`,
+			transmissionID, gatewayID, networkID, uuid.NewString(), make([]byte, 32), string(targets),
+			observed, accepted, messageID); err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO transmission_targets
+			(transmission_id,position,original,resolution_status,unit_id,matched_rule_id,assignment_revision)
+			VALUES($1,0,$2,'assigned',$3,$4,$5)`,
+			transmissionID, string(original), unitA.ID, rule.ID, assignmentRevision); err != nil {
+			return err
+		}
+		var contributionID = uuid.New()
+		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO message_contributions
+			(id,message_id,unit_id,contribution_time,age_anchor,ready) VALUES($1,$2,$3,$4,$4,true)`,
+			contributionID, messageID, unitA.ID, observed); err != nil {
+			return err
+		}
+		_, err = executor.ExecContext(tx.Context(), `INSERT INTO contribution_supports
+			(id,contribution_id,transmission_id,target_position,observed_at,accepted_at)
+			VALUES($1,$2,$3,0,$4,$5)`, uuid.New(), contributionID, transmissionID, observed, accepted)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.rules.UpdateRule(t.Context(), f.proof, rule.ID, rule.Revision,
+		ruleInput(networkID, unitB.ID, 10, 20, 1), checkedMutation); err != nil {
+		t.Fatal(err)
+	}
+	intakeRepository, err := ingeststore.New(f.store, f.facts, f.facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lateReceipt ingest.Receipt
+	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		acceptedAt, err := f.store.Now(tx.Context(), tx)
+		if err != nil {
+			return err
+		}
+		validated, err := submission.Validate(4096, acceptedAt)
+		if err != nil {
+			return err
+		}
+		validated.ResolvedNetwork, validated.Resolution = networkID, "declared"
+		matched, err := f.rules.MatchTargets(tx.Context(), tx, networkID, protocols.POCSAG,
+			validated.ObservedAt, validated.TransmissionTargets)
+		if err != nil {
+			return err
+		}
+		lateReceipt, err = intakeRepository.AcceptTransmission(tx.Context(), tx, gatewayID,
+			validated, acceptedAt, matched)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lateReceipt.MessageID != messageID {
+		t.Fatalf("late intake did not join the existing Message: got=%s want=%s", lateReceipt.MessageID, messageID)
+	}
+	var oldLease assignments.CorrectionLease
+	claimed := false
+	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		now, err := f.store.Now(tx.Context(), tx)
+		if err != nil {
+			return err
+		}
+		oldLease, claimed, err = f.ruleStore.ClaimCorrection(tx.Context(), tx, now, 30*time.Second)
+		return err
+	})
+	if err != nil || !claimed {
+		t.Fatalf("r2 correction was not claimed: claimed=%t err=%v", claimed, err)
+	}
+	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := f.store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		var dirty int
+		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM correction_dirty_transmissions
+			WHERE scope_id=$1 AND transmission_id=$2`, oldLease.ID, lateReceipt.TransmissionID).Scan(&dirty); err != nil {
+			return err
+		}
+		if dirty != 1 {
+			t.Fatalf("concurrent intake dirty capture count=%d, want 1", dirty)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var dirtyItem assignments.CorrectionBatchItem
+	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		items, err := f.ruleStore.ReadCorrectionBatch(tx.Context(), tx, oldLease, 100)
+		if err != nil {
+			return err
+		}
+		if len(items) != 1 || !items[0].Dirty || items[0].TransmissionID != lateReceipt.TransmissionID {
+			t.Fatalf("correction did not select dirty intake: %+v", items)
+		}
+		dirtyItem = items[0]
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var staleMatch assignments.MatchResult
+	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		var err error
+		staleMatch, err = f.rules.MatchTargets(tx.Context(), tx, networkID, protocols.POCSAG,
+			dirtyItem.ObservedAt, dirtyItem.Targets)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := f.store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		_, err = executor.ExecContext(tx.Context(), `UPDATE identity_control
+			SET access_revision=access_revision+1 WHERE id=1`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		_, err := f.ruleStore.ApplyCorrectionBatch(tx.Context(), tx, oldLease,
+			[]assignments.CorrectionUpdate{{Item: dirtyItem, Match: staleMatch}})
+		return err
+	})
+	if !errors.Is(err, authz.ErrRevisionConflict) {
+		t.Fatalf("correction applied under a stale access revision: %v", err)
+	}
+	if _, err := f.rules.UpdateRule(t.Context(), f.proof, rule.ID, rule.Revision+1,
+		ruleInput(networkID, unitA.ID, 10, 20, 1), checkedMutation); err != nil {
+		t.Fatal(err)
+	}
+	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		_, err := f.ruleStore.ApplyCorrectionBatch(tx.Context(), tx, oldLease,
+			[]assignments.CorrectionUpdate{{Item: dirtyItem, Match: staleMatch}})
+		return err
+	})
+	if !errors.Is(err, authz.ErrRevisionConflict) {
+		t.Fatalf("superseded r2 worker committed derived changes: %v", err)
+	}
+	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		_, err := f.ruleStore.CompleteCorrection(tx.Context(), tx, oldLease)
+		return err
+	})
+	if !errors.Is(err, authz.ErrRevisionConflict) {
+		t.Fatalf("superseded r2 worker was not fenced: %v", err)
+	}
+	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, f.ruleStore, f.facts, noCorrectionPublication{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
+		t.Fatalf("historical correction did not run: worked=%t err=%v", worked, err)
+	}
+	assertCorrected := func(wantUnit uuid.UUID, wantSupport bool) int64 {
+		t.Helper()
+		var revision int64
+		err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+			executor, err := f.store.Resolve(tx)
+			if err != nil {
+				return err
+			}
+			var unitID uuid.UUID
+			var savedOriginal []byte
+			if err := executor.QueryRowContext(tx.Context(), `SELECT unit_id,original FROM transmission_targets
+				WHERE transmission_id=$1 AND position=0`, transmissionID).Scan(&unitID, &savedOriginal); err != nil {
+				return err
+			}
+			if unitID != wantUnit || !bytes.Equal(savedOriginal, original) {
+				t.Fatalf("correction changed target evidence/resolution: unit=%s", unitID)
+			}
+			var lateUnitID uuid.UUID
+			var lateOriginal []byte
+			if err := executor.QueryRowContext(tx.Context(), `SELECT unit_id,original FROM transmission_targets
+				WHERE transmission_id=$1 AND position=0`, lateReceipt.TransmissionID).
+				Scan(&lateUnitID, &lateOriginal); err != nil {
+				return err
+			}
+			if lateUnitID != wantUnit || !bytes.Equal(lateOriginal, original) {
+				t.Fatalf("r3 did not rebuild the dirty intake target: unit=%s", lateUnitID)
+			}
+			var supports int
+			if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM contribution_supports
+				WHERE transmission_id=$1 AND target_position=0`, transmissionID).Scan(&supports); err != nil {
+				return err
+			}
+			if wantSupport && supports != 1 || !wantSupport && supports != 0 {
+				t.Fatalf("unexpected support count %d (wantSupport=%t)", supports, wantSupport)
+			}
+			var lateSupports int
+			if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM contribution_supports
+				WHERE transmission_id=$1 AND target_position=0`, lateReceipt.TransmissionID).Scan(&lateSupports); err != nil {
+				return err
+			}
+			if lateSupports != 1 {
+				t.Fatalf("dirty-intake support count=%d, want 1", lateSupports)
+			}
+			if err := executor.QueryRowContext(tx.Context(), `SELECT revision FROM assignment_control WHERE id=1`).
+				Scan(&revision); err != nil {
+				return err
+			}
+			var state string
+			if err := executor.QueryRowContext(tx.Context(), `SELECT state FROM assignment_pending_scopes
+				WHERE assignment_revision=$1 ORDER BY recorded_at DESC LIMIT 1`, revision).Scan(&state); err != nil {
+				return err
+			}
+			if state != "completed" {
+				t.Fatalf("correction status is %q, want completed", state)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return revision
+	}
+	revision := assertCorrected(unitA.ID, true)
+	suppressed, err := f.rules.CreateSuppression(t.Context(), f.proof, uuid.New(),
+		assignments.CreateSuppressionInput{TransmissionID: transmissionID, TargetPosition: 0,
+			ExpectedAssignmentRevision: revision}, checkedMutation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
+		t.Fatalf("suppression correction did not run: worked=%t err=%v", worked, err)
+	}
+	revision = assertCorrected(unitA.ID, false)
+	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := f.store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		var contributions int
+		var contributionTime time.Time
+		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*),MIN(contribution_time) FROM message_contributions
+			WHERE message_id=$1 AND unit_id=$2`, messageID, unitA.ID).Scan(&contributions, &contributionTime); err != nil {
+			return err
+		}
+		if contributions != 1 {
+			t.Fatalf("suppressing one of two supports removed their shared contribution: %d", contributions)
+		}
+		// F-82: the surviving 12:00:02-equivalent support re-anchors the contribution time.
+		if want := observed.Add(2 * time.Second); !contributionTime.Equal(want) {
+			t.Fatalf("contribution time=%s after suppressing the earlier support, want %s", contributionTime, want)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.rules.LiftSuppression(t.Context(), f.proof, suppressed.Suppression.ID,
+		suppressed.Suppression.Revision, revision, checkedMutation); err != nil {
+		t.Fatal(err)
+	}
+	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
+		t.Fatalf("suppression lift correction did not run: worked=%t err=%v", worked, err)
+	}
+	revision = assertCorrected(unitA.ID, true)
+	unassignedTarget := protocols.Target{Address: protocols.NumericAddress(99), Function: &function}
+	unassignedOriginal, err := json.Marshal(unassignedTarget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unassignedTargets, err := json.Marshal([]protocols.Target{unassignedTarget})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unassignedMessageID, unassignedTransmissionID := uuid.New(), uuid.New()
+	unassignedFingerprint := make([]byte, 32)
+	fingerprintID := uuid.New()
+	copy(unassignedFingerprint, fingerprintID[:])
+	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := f.store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		var currentRevision int64
+		if err := executor.QueryRowContext(tx.Context(), `SELECT revision FROM assignment_control WHERE id=1`).
+			Scan(&currentRevision); err != nil {
+			return err
+		}
+		if currentRevision != revision {
+			t.Fatalf("assignment revision changed before unassigned-target case: got=%d want=%d",
+				currentRevision, revision)
+		}
+		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO messages
+			(id,identity_form,identity_value,first_observed_at,last_observed_at,publication_status)
+			VALUES($1,'test',$2,$3,$3,'ready')`, unassignedMessageID, []byte{2}, observed.Add(3*time.Second)); err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO transmissions
+			(id,gateway_id,network_id,submission_id,submission_fingerprint,network_resolution,protocol,payload,targets,
+			 observed_at,observation_offset_seconds,accepted_at,source_revision,message_id,processing_status,publication_status)
+			VALUES($1,$2,$3,$4,$5,'declared','pocsag','{}',$6,$7,0,$8,1,$9,'completed','ready')`,
+			unassignedTransmissionID, gatewayID, networkID, uuid.NewString(), unassignedFingerprint,
+			string(unassignedTargets), observed.Add(3*time.Second), accepted.Add(3*time.Second), unassignedMessageID); err != nil {
+			return err
+		}
+		_, err = executor.ExecContext(tx.Context(), `INSERT INTO transmission_targets
+			(transmission_id,position,original,resolution_status,unit_id,matched_rule_id,assignment_revision)
+			VALUES($1,0,$2,'unassigned',NULL,NULL,$3)`,
+			unassignedTransmissionID, string(unassignedOriginal), currentRevision)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	suppressedUnassigned, err := f.rules.CreateSuppression(t.Context(), f.proof, uuid.New(),
+		assignments.CreateSuppressionInput{TransmissionID: unassignedTransmissionID, TargetPosition: 0,
+			ExpectedAssignmentRevision: revision}, checkedMutation)
+	if err != nil {
+		t.Fatalf("unassigned-target suppression failed (%T): %#v", err, err)
+	}
+	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
+		t.Fatalf("unassigned-target suppression correction did not run: worked=%t err=%v", worked, err)
+	}
+	assertUnassigned := func() {
+		t.Helper()
+		if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+			executor, err := f.store.Resolve(tx)
+			if err != nil {
+				return err
+			}
+			var resolution string
+			var unitID uuid.NullUUID
+			var supports int
+			if err := executor.QueryRowContext(tx.Context(), `SELECT resolution_status,unit_id FROM transmission_targets
+				WHERE transmission_id=$1 AND position=0`, unassignedTransmissionID).Scan(&resolution, &unitID); err != nil {
+				return err
+			}
+			if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM contribution_supports
+				WHERE transmission_id=$1 AND target_position=0`, unassignedTransmissionID).Scan(&supports); err != nil {
+				return err
+			}
+			if resolution != "unassigned" || unitID.Valid || supports != 0 {
+				t.Fatalf("unassigned target acquired a Unit/support: resolution=%s unit=%+v supports=%d",
+					resolution, unitID, supports)
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertUnassigned()
+	currentRevision := assertCorrected(unitA.ID, true)
+	if _, err := f.rules.LiftSuppression(t.Context(), f.proof, suppressedUnassigned.Suppression.ID,
+		suppressedUnassigned.Suppression.Revision, currentRevision, checkedMutation); err != nil {
+		t.Fatal(err)
+	}
+	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
+		t.Fatalf("unassigned-target suppression lift correction did not run: worked=%t err=%v", worked, err)
+	}
+	assertUnassigned()
+	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := f.store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		var transmissions, messages int
+		if err := executor.QueryRowContext(tx.Context(), `SELECT
+			(SELECT count(*) FROM transmissions WHERE id IN ($1,$3,$5)),
+			(SELECT count(*) FROM messages WHERE id IN ($2,$4,$6))`,
+			transmissionID, messageID, lateReceipt.TransmissionID, lateReceipt.MessageID,
+			unassignedTransmissionID, unassignedMessageID).
+			Scan(&transmissions, &messages); err != nil {
+			return err
+		}
+		wantMessages := 1
+		if messageID != lateReceipt.MessageID {
+			wantMessages++
+		}
+		if unassignedMessageID != messageID && unassignedMessageID != lateReceipt.MessageID {
+			wantMessages++
+		}
+		if transmissions != 3 || messages != wantMessages {
+			t.Fatal("correction or suppression created Message membership/evidence")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

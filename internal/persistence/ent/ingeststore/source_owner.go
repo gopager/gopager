@@ -59,6 +59,7 @@ type sourceSnapshot struct {
 	networkName       string
 	matched           assignments.MatchResult
 	targetsCurrent    bool
+	suppressed        map[int]bool
 }
 
 type selectedWorkflow struct {
@@ -441,12 +442,25 @@ func (o *ProcessingSourceOwner) readSource(ctx context.Context, tx platform.Tran
 	if err != nil {
 		return sourceSnapshot{}, err
 	}
+	snapshot.suppressed, err = o.suppressedTargets(ctx, tx, transmission)
+	if err != nil {
+		return sourceSnapshot{}, err
+	}
 	snapshot.targetsCurrent, err = o.targetsMatch(ctx, tx, snapshot)
 	if err != nil {
 		return sourceSnapshot{}, err
 	}
+	projectedMatch := snapshot.matched
+	projectedMatch.Resolutions = slices.Clone(snapshot.matched.Resolutions)
+	for position := range projectedMatch.Resolutions {
+		if snapshot.suppressed[position] {
+			projectedMatch.Resolutions[position].Status = "unassigned"
+			projectedMatch.Resolutions[position].UnitID = nil
+			projectedMatch.Resolutions[position].AddressRuleID = nil
+		}
+	}
 	snapshot.projection, err = projectProcessingSource(ctx, transmission, snapshot.network, snapshot.networkName,
-		snapshot.protocol, snapshot.payload, snapshot.observedAt, snapshot.sourceRevision, snapshot.matched, snapshot.targets)
+		snapshot.protocol, snapshot.payload, snapshot.observedAt, snapshot.sourceRevision, projectedMatch, snapshot.targets)
 	if err != nil {
 		return sourceSnapshot{}, err
 	}
@@ -458,12 +472,49 @@ func (o *ProcessingSourceOwner) readSource(ctx context.Context, tx platform.Tran
 	return snapshot, err
 }
 
+func (o *ProcessingSourceOwner) suppressedTargets(ctx context.Context, tx platform.TransactionContext,
+	transmission uuid.UUID,
+) (map[int]bool, error) {
+	executor, err := o.store.primary.Resolve(tx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := executor.QueryContext(ctx, `SELECT target_position FROM target_suppressions
+		WHERE transmission_id=$1 AND removed_at IS NULL`, transmission)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make(map[int]bool)
+	for rows.Next() {
+		var position int
+		if err := rows.Scan(&position); err != nil {
+			return nil, err
+		}
+		result[position] = true
+	}
+	return result, rows.Err()
+}
+
 func (o *ProcessingSourceOwner) targetsMatch(ctx context.Context, tx platform.TransactionContext,
 	snapshot sourceSnapshot,
 ) (bool, error) {
 	executor, err := o.store.primary.Resolve(tx)
 	if err != nil {
 		return false, err
+	}
+	var correctionPending bool
+	if err := executor.QueryRowContext(ctx, `SELECT EXISTS(
+		SELECT 1 FROM assignment_pending_scopes scope
+		WHERE scope.state IN ('queued','running','failed')
+		AND (jsonb_array_length(scope.network_ids)=0 OR scope.network_ids @> jsonb_build_array($1::text) OR EXISTS (
+			SELECT 1 FROM transmission_targets affected
+			WHERE affected.transmission_id=$2 AND affected.unit_id=scope.unit_id)))`,
+		snapshot.network, snapshot.transmission).Scan(&correctionPending); err != nil {
+		return false, err
+	}
+	if correctionPending {
+		return false, nil
 	}
 	rows, err := executor.QueryContext(ctx, `SELECT position,resolution_status,unit_id::text,matched_rule_id::text,
 		assignment_revision FROM transmission_targets WHERE transmission_id=$1 ORDER BY position FOR UPDATE`,
@@ -495,7 +546,7 @@ func (o *ProcessingSourceOwner) targetsMatch(ctx context.Context, tx platform.Tr
 		}
 		if actualPosition != position || expected.TargetPosition != position ||
 			status != expected.Status || !equalUUIDPointer(actualUnit, expected.UnitID) ||
-			!equalUUIDPointer(actualRule, expected.AddressRuleID) || revision != snapshot.matched.Revision {
+			!equalUUIDPointer(actualRule, expected.AddressRuleID) || revision <= 0 {
 			return false, nil
 		}
 		position++
@@ -596,9 +647,11 @@ func (o *ProcessingSourceOwner) evaluationScope(ctx context.Context, tx platform
 	workflow selectedWorkflow, snapshot sourceSnapshot,
 ) (processing.EvaluationScope, error) {
 	if workflow.scope != "unit" {
-		positions := make([]uint32, len(snapshot.targets))
-		for i := range positions {
-			positions[i] = uint32(i)
+		positions := make([]uint32, 0, len(snapshot.targets))
+		for i := range snapshot.targets {
+			if !snapshot.suppressed[i] {
+				positions = append(positions, uint32(i))
+			}
 		}
 		return processing.EvaluationScope{SourceEligible: true, TargetPositions: positions}, nil
 	}
@@ -625,7 +678,8 @@ func (o *ProcessingSourceOwner) evaluationScope(ctx context.Context, tx platform
 	}
 	var positions []uint32
 	for _, resolution := range snapshot.matched.Resolutions {
-		if resolution.UnitID != nil && allowed[*resolution.UnitID] {
+		if !snapshot.suppressed[resolution.TargetPosition] &&
+			resolution.UnitID != nil && allowed[*resolution.UnitID] {
 			positions = append(positions, uint32(resolution.TargetPosition))
 		}
 	}

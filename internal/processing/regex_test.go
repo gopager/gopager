@@ -1,0 +1,120 @@
+package processing
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/gopager/gopager/internal/platform"
+)
+
+func TestCoreRegexSemanticsAndBoundaries(t *testing.T) {
+	ctx := context.Background()
+	regex := CoreRegex{}
+	pattern := `(?P<unit>A)(?P<number>[0-9]+)?`
+	result, err := regex.Regex(ctx, pattern, nil)
+	if err != nil || result.Matched || strings.Join(result.Names, ",") != ",unit,number" {
+		t.Fatalf("inspection: %+v, %v", result, err)
+	}
+	text := "A"
+	result, err = regex.Regex(ctx, pattern, &text)
+	if err != nil || !result.Matched || len(result.Captures) != 2 ||
+		result.Captures[0].Text == nil || *result.Captures[0].Text != "A" || result.Captures[1].Text != nil {
+		t.Fatalf("unmatched capture lost absence: %+v, %v", result, err)
+	}
+	text = "no match"
+	result, err = regex.Regex(ctx, pattern, &text)
+	if err != nil || result.Matched || len(result.Captures) != 0 {
+		t.Fatalf("no-match became a failure: %+v, %v", result, err)
+	}
+	text = "xA123"
+	result, err = regex.Regex(ctx, pattern, &text)
+	if err != nil || !result.Matched || *result.Captures[1].Text != "123" {
+		t.Fatalf("capture: %+v, %v", result, err)
+	}
+	text = "äöü A7"
+	result, err = regex.Regex(ctx, pattern, &text)
+	if err != nil || !result.Matched || *result.Captures[0].Text != "A" || *result.Captures[1].Text != "7" {
+		t.Fatalf("multi-byte input shifted byte indexes: %+v, %v", result, err)
+	}
+	for _, unsupported := range []string{`(?<=secret)a`, `(a)\1`} {
+		if _, err := regex.Regex(ctx, unsupported, nil); platform.FailureCode(err) != platform.CodeInvalidInput ||
+			strings.Contains(err.Error(), "secret") {
+			t.Fatalf("unsupported pattern was not safely rejected: %v", err)
+		}
+	}
+	if _, err := regex.Regex(ctx, strings.Repeat("a", maxRegexPatternBytes), nil); err != nil {
+		t.Fatalf("exact pattern boundary failed: %v", err)
+	}
+	if _, err := regex.Regex(ctx, strings.Repeat("a", maxRegexPatternBytes+1), nil); platform.FailureCode(err) != platform.CodeResourceLimit {
+		t.Fatalf("pattern +1 accepted: %v", err)
+	}
+	text = strings.Repeat("x", maxRegexTextBytes)
+	if _, err := regex.Regex(ctx, `(?P<tail>x)$`, &text); err != nil {
+		t.Fatalf("exact text boundary failed: %v", err)
+	}
+	text += "x"
+	if _, err := regex.Regex(ctx, `x`, &text); platform.FailureCode(err) != platform.CodeResourceLimit {
+		t.Fatalf("text +1 accepted: %v", err)
+	}
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := regex.Regex(cancelled, pattern, nil); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled invocation started: %v", err)
+	}
+}
+
+// d61CaptureExpansion is the D-61/E-38 counterexample that OOM-killed a 512 MiB native process.
+func d61CaptureExpansion() string {
+	var pattern strings.Builder
+	for n := 0; pattern.Len() < 4070; n++ {
+		fmt.Fprintf(&pattern, "(?P<c%d>a?){1000}", n)
+	}
+	pattern.WriteString("b")
+	return pattern.String()
+}
+
+func TestCoreRegexRejectsCaptureExpansionBeforeCompilation(t *testing.T) {
+	pattern := d61CaptureExpansion()
+	if len(pattern) != 4085 {
+		t.Fatalf("counterexample drifted: %d bytes", len(pattern))
+	}
+	text := strings.Repeat("a", 1024)
+	start := time.Now()
+	if _, err := (CoreRegex{}).Regex(context.Background(), pattern, &text); platform.FailureCode(err) != platform.CodeResourceLimit {
+		t.Fatalf("capture expansion was admitted: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
+		t.Fatalf("rejection compiled the oversized program first: %s", elapsed)
+	}
+	for _, oversized := range []string{`(a{1000}){1000}`, `((((a{100}){100}){100}){100})`, `(?:x{1000}){30}`} {
+		// Go's parser already rejects some nested repeats; either rejection is a safe non-admission.
+		code := platform.FailureCode(func() error { _, err := (CoreRegex{}).Regex(context.Background(), oversized, nil); return err }())
+		if code != platform.CodeResourceLimit && code != platform.CodeInvalidInput {
+			err := errors.New(string(code))
+			t.Fatalf("%s was admitted: %v", oversized, err)
+		}
+	}
+}
+
+func TestCoreRegexAdmittedWorstCaseStaysBoundedAndCancellable(t *testing.T) {
+	// Close to the instruction bound with captures: admitted, and the full 1 MiB scan still terminates.
+	pattern := `(?P<a>x?){1000}(?P<b>x?){1000}y`
+	text := strings.Repeat("x", maxRegexTextBytes)
+	result, err := (CoreRegex{}).Regex(context.Background(), pattern, nil)
+	if err != nil || len(result.Names) != 3 {
+		t.Fatalf("near-bound pattern rejected: %+v %v", result, err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	if _, err := (CoreRegex{}).Regex(ctx, pattern, &text); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expired scan was not reported as failure: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("cancellation was not cooperative: %s", elapsed)
+	}
+}
