@@ -1,9 +1,5 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "enabledPlugins": {
-    "gopls-lsp@claude-plugins-official": true,
-    "claude-security@claude-plugins-official": true
-  },
   "hooks": {
     "PostToolUse": [
       {
@@ -16,5 +12,12 @@
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "gopls-lsp@claude-plugins-official": true,
+    "claude-security@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true,
+    "security-guidance@claude-plugins-official": true,
+    "claude-code-setup@claude-plugins-official": true
   }
 }
