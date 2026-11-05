@@ -17,6 +17,8 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
+// Store is the PostgreSQL platform.Store. It is safe for concurrent use; its
+// connection pool is limited to 10 open connections.
 type Store struct {
 	db            *sql.DB
 	mu            sync.RWMutex
@@ -26,6 +28,12 @@ type Store struct {
 	migrationOnce sync.Once
 }
 
+// NewStore parses databaseURL (CodeInvalidInput on parse failure) and opens a
+// lazily connecting pool. A host or fallback host that is neither loopback nor
+// a Unix socket and does not verify the server certificate counts as an
+// insecure remote; that fails with CodeInvalidInput unless allowInsecureRemote
+// is set. The boolean result reports whether such an insecure remote was
+// accepted, so the caller can warn about it.
 func NewStore(databaseURL string, allowInsecureRemote bool) (*Store, bool, error) {
 	config, err := pgx.ParseConfig(databaseURL)
 	if err != nil {
@@ -47,6 +55,7 @@ func NewStore(databaseURL string, allowInsecureRemote bool) (*Store, bool, error
 	return &Store{db: db}, insecureRemote, nil
 }
 
+// Ping verifies database connectivity, failing with CodeStorageUnavailable.
 func (s *Store) Ping(ctx context.Context) error {
 	if err := s.db.PingContext(ctx); err != nil {
 		return platform.NewFailure(platform.CodeStorageUnavailable, err)
@@ -54,6 +63,9 @@ func (s *Store) Ping(ctx context.Context) error {
 	return nil
 }
 
+// CheckWriteAuthority fails with CodeAuthorityUnavailable unless the session is
+// connected to a primary (not in recovery) whose default transaction mode is
+// read-write.
 func (s *Store) CheckWriteAuthority(ctx context.Context) error {
 	var primary bool
 	var readOnly bool
@@ -69,6 +81,8 @@ func (s *Store) CheckWriteAuthority(ctx context.Context) error {
 	return nil
 }
 
+// Close closes the pool, failing with CodeStorageUnavailable. The Store must not
+// be used afterwards.
 func (s *Store) Close() error {
 	if err := s.db.Close(); err != nil {
 		return platform.NewFailure(platform.CodeStorageUnavailable, err)

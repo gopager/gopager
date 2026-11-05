@@ -11,7 +11,9 @@ import (
 	"github.com/gopager/gopager/internal/protocols"
 )
 
-// NetworkOwner supplies current existence/Protocol through DOM-01's transaction-participating port.
+// NetworkOwner is implemented by the Network owner (transmission intake) and
+// reports a Network's current existence and Protocol inside the caller's
+// transaction.
 type NetworkOwner interface {
 	ReadNetworkProtocol(context.Context, platform.TransactionContext, uuid.UUID) (protocols.Protocol, error)
 }
@@ -45,12 +47,17 @@ func (input RuleInput) Rule(id uuid.UUID, revision int64) Rule {
 		Protocol: input.Protocol, Selector: input.Selector, ValidFrom: input.ValidFrom, ValidUntil: input.ValidUntil, Enabled: input.Enabled}
 }
 
+// MatchResult is the resolution of one transmission's targets at assignment
+// Revision. Resolutions has one entry per target position; UnitContext holds
+// the current context of every assigned Unit.
 type MatchResult struct {
 	Revision    int64
 	Resolutions []Resolution
 	UnitContext map[uuid.UUID]units.Context
 }
 
+// NetworkCandidates lists, at assignment Revision, the allowed Networks whose
+// current rules assign at least one of the targets, without duplicates.
 type NetworkCandidates struct {
 	Revision int64
 	Networks []uuid.UUID

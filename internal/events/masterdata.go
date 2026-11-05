@@ -9,6 +9,10 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
+// MasterDataFact is the producer input for a configuration.changed fact emitted
+// by master-data management when a unit, unit collection, organization or unit
+// template is created, updated, deleted, has its membership or defaults
+// changed, or is bulk-updated.
 type MasterDataFact struct {
 	ID            uuid.UUID
 	Aggregate     EntityRef
@@ -19,10 +23,13 @@ type MasterDataFact struct {
 	ChangeKind    string
 }
 
+// MasterDataData is the data payload of a master-data envelope.
 type MasterDataData struct {
 	ChangeKind string `json:"changeKind"`
 }
 
+// MasterDataEnvelope is the persisted serialization of a MasterDataFact,
+// classified "configuration".
 type MasterDataEnvelope struct {
 	SchemaVersion     int            `json:"schemaVersion"`
 	DomainEventID     uuid.UUID      `json:"domainEventId"`
@@ -39,10 +46,16 @@ type MasterDataEnvelope struct {
 	ReplayMode        string         `json:"replayMode"`
 }
 
+// MasterDataAppender records master-data facts through the caller's active
+// platform transaction. AppendMasterDataFact returns the fact ID, or
+// ErrInvalidFact when the fact fails Envelope validation.
 type MasterDataAppender interface {
 	AppendMasterDataFact(context.Context, platform.TransactionContext, MasterDataFact) (uuid.UUID, error)
 }
 
+// Envelope validates the aggregate type and change kind and returns the
+// configuration.changed envelope stamped with recordedAt. It returns
+// ErrInvalidFact when validation fails.
 func (fact MasterDataFact) Envelope(recordedAt time.Time) (MasterDataEnvelope, error) {
 	if fact.ID == uuid.Nil || fact.Aggregate.ID == uuid.Nil || fact.Revision <= 0 ||
 		!slices.Contains([]string{"unit", "unitCollection", "organization", "unitTemplate"}, fact.Aggregate.Type) ||
@@ -54,7 +67,7 @@ func (fact MasterDataFact) Envelope(recordedAt time.Time) (MasterDataEnvelope, e
 		return MasterDataEnvelope{}, ErrInvalidFact
 	}
 	return MasterDataEnvelope{SchemaVersion: 1, DomainEventID: fact.ID, Type: ConfigurationChanged,
-		Producer:     Producer{Domain: "DOM-03", Version: "master-data-management1.0"},
+		Producer:     Producer{Domain: "masterdata", Version: "master-data-management1.0"},
 		AggregateRef: fact.Aggregate, AggregateRevision: fact.Revision,
 		OccurredAt: fact.OccurredAt.UTC(), RecordedAt: recordedAt.UTC(),
 		CausationID: fact.CausationID, CorrelationID: fact.CorrelationID,

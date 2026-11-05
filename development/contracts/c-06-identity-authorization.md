@@ -4,11 +4,13 @@
 
 Referenced contracts (follow only when relevant): [C-07](c-07-query-live.md), [C-12](c-12-persistence-operations.md#application-http-transport).
 
-**Implementation planning:** Each [domain AP](../work-packages.md#revised-execution-path) owns its supporting authorization slice; DOM-05 participates within that AP. AP-14 owns general identity/lifecycle. Preserve fixed proof/field semantics.
+**Implementation planning:** Each [domain AP](../work-packages.md#revised-execution-path) owns its supporting authorization slice; Identity participates within that AP. AP-14 owns general identity/lifecycle. Preserve fixed proof/field semantics.
 
 **Traceability:** [REQ-051..060](../requirements-catalog.md#f-access-rights-and-guests), [REQ-061/063..070](../requirements-catalog.md#g-accounts-and-login), [REQ-071..079](../requirements-catalog.md#h-recovery-and-access-keys), [REQ-105/107..110](../requirements-catalog.md#k-installed-web-app-and-security-behavior). Issue references: [P-09/P-10/P-14/P-17](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
-**Version/status:** 0.1-draft. **Owner:** DOM-05. **Parties:** every protected administrative/query/Gateway/live/worker path. OIDC/SCIM remain extension boundaries, not accelerated Delivery.
+**Version/status:** 0.1-draft. **Owner:** Identity. **Parties:** every protected administrative/query/Gateway/live/worker path. OIDC/SCIM remain extension boundaries, not accelerated Delivery.
+
+**Authoritative artifact (change rule 9):** The implemented HTTP authentication routes (`POST /auth/login`, `GET /auth/session`, `POST /auth/logout`), their request/response schemas and the credential selection on every route (security schemes `sessionCookie`, `csrfToken`, `accessKey`, `gatewayCredential`) are defined by [OpenAPI v1](../../api/openapi/v1.yaml) (OpenAPI 3.0.3, `info.version` 1.0.0, tag `Auth`). Grants, actions, field groups, credential lifecycle and other planned identity behavior remain specified here. Implemented behavior is described in [HTTP API: Authentication](../../docs/http-api.md#authentication) and [Authorization](../../docs/http-api.md#authorization).
 
 | Draft interface | Input -> result |
 | --- | --- |
@@ -59,7 +61,7 @@ An Access key contains allowed actions/scopes/fields and optional shorter age/li
 
 ## Fixed Field Group Review Candidate
 
-**Version/status:** field-group-review 0.1-candidate under [D-68](../authoritative-plan.md#field-visibility-grouping-direction); documentary preparation only. **Owner:** DOM-05/integration; **consumers:** DOM-06 query/detail, DOM-08 source/result projection, DOM-07 Delivery materialization. Existing frozen identity field identifiers and meanings remain unchanged. This candidate inventories the existing groups and identifies unresolved membership rather than silently splitting them or adding grant predicates.
+**Version/status:** field-group-review 0.1-candidate under [D-68](../authoritative-plan.md#field-visibility-grouping-direction); documentary preparation only. **Owner:** Identity/integration; **consumers:** the Query domain (query/detail), the Processing domain (source/result projection) and the Delivery domain (Delivery materialization). Existing frozen identity field identifiers and meanings remain unchanged. This candidate inventories the existing groups and identifies unresolved membership rather than silently splitting them or adding grant predicates.
 
 | Existing field group | Candidate readable information boundary | Own-search eligibility / exclusions |
 | --- | --- | --- |
@@ -83,7 +85,7 @@ Review cases are [REQ-134..137](../requirements-catalog.md#n-delegated-administr
 
 ### Unscoped Field Visibility Product Clarification
 
-**Status:** explicit product direction under [D-69](../authoritative-plan.md#unscoped-field-visibility-clarification), not a frozen replacement identity schema or implemented behavior. **Owner:** DOM-05/integration; consumers DOM-06/DOM-07/DOM-08.
+**Status:** explicit product direction under [D-69](../authoritative-plan.md#unscoped-field-visibility-clarification), not a frozen replacement identity schema or implemented behavior. **Owner:** Identity/integration; consumers the Query, Delivery and Processing domains.
 
 Field-group visibility has no Network, Unit, Unit-collection, Gateway or other data scope. A user's effective permission to see Address details is either enabled or disabled across data that user may otherwise access. Do not encode "Address visible only for Unit X", per-grant scoped field evaluation, or an equivalent source-context condition as field visibility.
 
@@ -95,7 +97,7 @@ The inspected scoped `Grant.Fields`, group combination/delegability, restricting
 
 ### Unscoped Field Permission Replacement Candidate
 
-**Version/status:** identity-fields 1.0, explicitly frozen 2026-11-01 by the user (`unscoped_field_contract_freeze=approve-identity-fields-1.0`) under D-69/D-70; implementation start remains separate. **Owner:** DOM-05/integration; producers identity configuration/authority, consumers point authorization, native Ent filtering and source/field projection. Scope is only the required AP-06/AP-08/AP-12 identity prerequisite correction, not general account/Recovery/key issuance management.
+**Version/status:** identity-fields 1.0, explicitly frozen 2026-11-01 by the user (`unscoped_field_contract_freeze=approve-identity-fields-1.0`) under D-69/D-70; implementation start remains separate. **Owner:** Identity/integration; producers identity configuration/authority, consumers point authorization, native Ent filtering and source/field projection. Scope is only the required AP-06/AP-08/AP-12 identity prerequisite correction, not general account/Recovery/key issuance management.
 
 Authoritative implemented record types are [FieldPermission](../../internal/authz/fields.go) and [Grant, Restrictions and Authority](../../internal/authz/grants.go); the [identity Ent schema](../../internal/persistence/ent/schema/identity.go) owns storage shape. FieldPermissions have no actions, data scope, Network/Unit/Gateway references or age restriction. Duplicate permission effects combine additively; effective groups are the union of the active Principal's direct and current group records. Absence grants no fields. Removing a permission/group membership revokes its effect at the current access revision. No ordered deny/override language or implicit administrator fields.
 
@@ -115,7 +117,7 @@ Required conformance: scope A plus global Address permission permits Address fie
 
 ## HTTP Transport and Human Authentication
 
-**D-52; version/status:** Application-wide HTTP support is approved; contract remains draft pending AP-04 owner review/freeze. **Owner:** DOM-05 for identity/authentication, with Operations/persistence owning application transport in [C-12](c-12-persistence-operations.md#application-http-transport). **Consumers:** all application routes, including AP-06 T022.
+**D-52; version/status:** Application-wide HTTP support is approved; contract remains draft pending AP-04 owner review/freeze. **Owner:** Identity for identity/authentication, with Operations/persistence owning application transport in [C-12](c-12-persistence-operations.md#application-http-transport). **Consumers:** all application routes, including AP-06 T022.
 
 Every application function, including human login, Recovery, protected administrative routes and Session-backed use, must work over HTTP. GoPager does not require TLS, force an HTTP-to-HTTPS redirect or require a separate HTTP setting. Operators may terminate TLS at a reverse proxy; direct HTTP also remains supported. On direct HTTP, an on-path observer can read or alter passwords, Recovery proofs, bearer credentials, Session cookies, Payloads, metadata and responses, and may impersonate users. GoPager makes no confidentiality or server-authentication claim for HTTP. Under the explicitly approved D-52 clarification, Session cookies use `Secure` when the configured public application Origin is HTTPS and omit it when that Origin is HTTP; a proxy-to-GoPager HTTP hop does not determine the browser cookie attribute.
 
@@ -125,13 +127,13 @@ The configured public application Origin is an absolute HTTP(S) scheme/host/opti
 
 ### HTTP Credential Selection Addendum
 
-**Version/status:** HTTP credential-selection 1.0, frozen 2026-10-26 by explicit [D-57 approval](../authoritative-plan.md#http-credential-selection-decision). **Owner:** DOM-05; producer/consumers and implementation scope remain those of the approved identity prerequisite.
+**Version/status:** HTTP credential-selection 1.0, frozen 2026-10-26 by explicit [D-57 approval](../authoritative-plan.md#http-credential-selection-decision). **Owner:** Identity; producer/consumers and implementation scope remain those of the approved identity prerequisite.
 
 An explicitly present Authorization header selects API-key bearer authentication even when a Session cookie is also present. Exactly one well-formed bearer credential is required. Invalid, empty, unsupported or duplicate Authorization values reject authentication; they never fall back to the Cookie or Guest. Only absence of Authorization permits Session-cookie selection; only absence of both permits explicitly anonymous Guest resolution. A bad or duplicate Session cookie likewise never becomes anonymous. Session-bound CSRF/Origin checks apply when Cookie authentication is selected, not to an ignored Cookie beside an explicit bearer credential.
 
 ## Local Identity and Authorization Handover Candidate
 
-**Version/status:** identity-core 1.0, frozen 2026-10-26 by explicit user approval in the [plan](../authoritative-plan.md#workflow-and-approval-gates) for the [AP-07 prerequisite binding](../execution/ap-04.md#ap-07-prerequisite-consumer-binding-proposal). **Owner:** DOM-05; integration owns composition. **Producer:** AP-07 T025/T026 and the C-13 deletion/invalidation boundary. **Consumers:** AP-06 protected management and Gateway credential administration, AP-08 master data/matching and AP-12 Workflow administration. This partial freeze includes the existing explicit action/grant/scope/field/age/key and local identity/Recovery/Session rules, qualified by D-52/D-54. It grants no implicit administrator role and does not freeze the Gateway credential/Submission slice or the whole C-06 file.
+**Version/status:** identity-core 1.0, frozen 2026-10-26 by explicit user approval in the [plan](../authoritative-plan.md#workflow-and-approval-gates) for the [AP-07 prerequisite binding](../execution/ap-04.md#ap-07-prerequisite-consumer-binding-proposal). **Owner:** Identity; integration owns composition. **Producer:** AP-07 T025/T026 and the C-13 deletion/invalidation boundary. **Consumers:** AP-06 protected management and Gateway credential administration, AP-08 master data/matching and AP-12 Workflow administration. This partial freeze includes the existing explicit action/grant/scope/field/age/key and local identity/Recovery/Session rules, qualified by D-52/D-54. It grants no implicit administrator role and does not freeze the Gateway credential/Submission slice or the whole C-06 file.
 
 ### Local Identity Inputs
 
@@ -147,13 +149,13 @@ Account creation, credential creation and bulk commands use the shared actor-bou
 
 ### Ordinary Login Addendum
 
-**Version/status:** ordinary-login 1.0, frozen 2026-10-27 by explicit [D-58 approval](../authoritative-plan.md#ordinary-login-decision). **Owner:** DOM-05; producer/consumers and implementation scope remain those of the approved identity prerequisite.
+**Version/status:** ordinary-login 1.0, frozen 2026-10-27 by explicit [D-58 approval](../authoritative-plan.md#ordinary-login-decision). **Owner:** Identity; producer/consumers and implementation scope remain those of the approved identity prerequisite.
 
 `AuthenticateLocal` requires only username and password, not a Command ID. Every successful login may create a new Session, including a retry after a lost response. No login receipt, retry-status protocol or secret retrieval is required. This supersedes the general credential-creation command-identity requirement above only for Sessions created by login. Password verification, current `password.local` authority, generic rejection, bounded persistent throttling and the existing Session/HTTP protections remain in force. Administrative side-effect commands retain their actor-bound command identities.
 
-Implementation entry points are [ordinary login/Session services](../../internal/identity/login.go), [current-authority resolution](../../internal/identity/authority.go), [point authorization](../../internal/authz/decision.go), [native query constraints](../../internal/persistence/ent/permissions/filter.go) and [identity HTTP routes/DTOs](../../internal/identity/handler.go). These are partial implementation artifacts, not whole identity-core acceptance or a replacement for the later API-wide OpenAPI deliverable. Login failures never return password/hash/session-secret material in JSON or diagnostics.
+Implementation entry points are [ordinary login/Session services](../../internal/identity/login.go), [current-authority resolution](../../internal/identity/authority.go), [point authorization](../../internal/authz/decision.go), [native query constraints](../../internal/persistence/ent/permissions/filter.go) and [identity HTTP routes/DTOs](../../internal/identity/handler.go). These are partial implementation artifacts, not whole identity-core acceptance. Their HTTP request/response shapes are OpenAPI v1 `LoginRequest`, `LoginResponse` and `SessionResponse` (tag `Auth`). Login failures never return password/hash/session-secret material in JSON or diagnostics.
 
-The current browser can recover its own Session ID, Principal ID, CSRF token and expiry after a reload via `GET /api/v1/auth/session`, using the same primary-authoritative Session resolution. The [handler DTO](../../internal/identity/handler.go) owns the exact representation; it includes neither grants nor a reusable Session secret. Responses are `no-store`; absent/invalid/non-Session credentials yield `LOGIN_REQUIRED`, with D-57 selection unchanged. This is self-Session inspection, not account/profile or credential administration.
+The current browser can recover its own Session ID, Principal ID, CSRF token and expiry after a reload via `GET /api/v1/auth/session`, using the same primary-authoritative Session resolution. OpenAPI v1 `SessionResponse` is the exact representation, implemented by the [handler DTO](../../internal/identity/handler.go); it includes neither grants nor a reusable Session secret. Responses are `no-store`; absent/invalid/non-Session credentials yield `LOGIN_REQUIRED`, with D-57 selection unchanged. This is self-Session inspection, not account/profile or credential administration.
 
 ### Shared Authorization Surface
 
@@ -167,7 +169,7 @@ Private operations load primary-authoritative credential/account/grants and rele
 
 ### Detail Field Authorization Addendum
 
-**Version/status:** identity-core 1.1, frozen 2026-10-26 by the user's explicit [D-55 approval](../authoritative-plan.md#detail-field-authorization-decision). **Owner:** DOM-05; producer/consumers and permitted execution scope remain those of identity-core 1.0. This addendum resolves only the field-right composition for detail access; the 1.0 freeze remains approval history.
+**Version/status:** identity-core 1.1, frozen 2026-10-26 by the user's explicit [D-55 approval](../authoritative-plan.md#detail-field-authorization-decision). **Owner:** Identity; producer/consumers and permitted execution scope remain those of identity-core 1.0. This addendum resolves only the field-right composition for detail access; the 1.0 freeze remains approval history.
 
 Historical pre-D-69 field composition, superseded by [identity-fields1.0](#unscoped-field-permission-replacement-candidate): `message.detail` originally obtained requested fields from matching read grants and combined that read predicate with a separate detail predicate on the same target/contribution. Current field eligibility is checked globally once, independently of those scopes. Both action predicates retain their own applicable scopes and age restrictions; an unrestricted detail grant does not widen read permissions or age. Restricting-key actions/scopes/age intersect data rights, and its fields intersect global owner field permissions. Detail alone grants neither reading nor any field. Hidden co-targets remain independently protected.
 
@@ -188,7 +190,7 @@ AP-07 must cover direct/multiple-group grant union, independent read/write scope
 
 ## AP-06 Gateway Bearer Credentials
 
-**D-45/D-47/D-48; version/status:** HTTP support, Bearer mechanism and lifecycle policy approved; credential issuance/wire/storage details remain draft until AP-04 freezes C-01/C-06. **Owner:** DOM-05 for authentication/authorization; DOM-01 owns Gateway submission and Network assignment. **Consumer:** AP-06 T022; Gateway adapter implementations remain outside AP-06.
+**D-45/D-47/D-48; version/status:** HTTP support, Bearer mechanism and lifecycle policy approved; credential issuance/wire/storage details remain draft until AP-04 freezes C-01/C-06. **Owner:** Identity for authentication/authorization; Intake owns Gateway submission and Network assignment. **Consumer:** AP-06 T022; Gateway adapter implementations remain outside AP-06.
 
 Each Gateway has a Gateway-specific reusable Bearer credential, distinct from a Principal/API key. It authenticates exactly one Gateway and grants no rights beyond current Gateway Network assignments or the applicable C-06 action. An administrator authorized for `gateway.update` issues and revokes it for that Gateway using the Gateway's expected revision; `gateway.read` can inspect credential status. A credential consists of 32 cryptographically random bytes encoded as 43-character unpadded base64url; display it once and store only its SHA-256 hash with its nonsecret UUID credential ID, Gateway, creation/use and revocation state. Issuance returns the secret once; a lost response does not reveal or reissue it. The administrator can inspect the nonsecret ID/status, revoke that pending credential and issue another. Credential administration uses the normal protected administrative channel; D-45's HTTP exception applies to Gateway-authenticated requests, not human login or credential management. Requests carry the credential only in the HTTP `Authorization: Bearer <credential>` header, never in a URL or request body. Exactly one Authorization credential is accepted; duplicate or malformed Authorization headers are rejected. Never log or expose the credential in error details. Invalid credentials return the generic `LOGIN_REQUIRED` response without revealing whether the Gateway or credential exists.
 
@@ -200,7 +202,7 @@ Credentials have no automatic expiry and remain valid until revoked. Rotation al
 
 ### AP-07 Gateway HTTP Authorization
 
-**Version/status:** AP-07 Gateway HTTP Authorization 1.0, frozen under [D-119](../authoritative-plan.md#ap-07-contract-freeze-proposal). **Owner:** DOM-05; DOM-01 owns the C-01 operations and Gateway Network assignment meaning. The product endpoints are in [C-01 AP-07 HTTP Surface](c-01-transmission-acceptance.md#ap-07-http-surface), selected under [D-104..D-118](../authoritative-plan.md#ap-07-gateway-http-submission-boundary-decision).
+**Version/status:** AP-07 Gateway HTTP Authorization 1.0, frozen under [D-119](../authoritative-plan.md#ap-07-contract-freeze-proposal). **Owner:** Identity; Intake owns the C-01 operations and Gateway Network assignment meaning. The product endpoints are in [C-01 AP-07 HTTP Surface](c-01-transmission-acceptance.md#ap-07-http-surface), selected under [D-104..D-118](../authoritative-plan.md#ap-07-gateway-http-submission-boundary-decision).
 
 `SubmitTransmission` and `ReportGatewayState` carry the Gateway-specific credential in the existing `Authorization: Bearer <credential>` transport defined by AP-06 C-06. It is not a Principal/API key: resolve it to exactly one registered Gateway before C-01 handles the operation, and derive Gateway identity only from that proof. The caller cannot select or override the Gateway identity. C-01 then applies current Gateway Network assignments and its operation-specific rules; credential authentication alone does not authorize an unassigned Network or bypass validation.
 
@@ -208,7 +210,7 @@ Credentials have no automatic expiry and remain valid until revoked. Rotation al
 
 ### AP-07 Gateway Credential-Management HTTP Addendum
 
-**Version/status:** AP-07 Gateway credential-management HTTP 1.1, approved under [D-121](../authoritative-plan.md#ap-07-gateway-credential-management-http-addendum). This supplements, but does not rewrite, the frozen Gateway HTTP Authorization 1.0 slice above. **Owner:** DOM-05; DOM-01 owns Gateway assignment and revision semantics.
+**Version/status:** AP-07 Gateway credential-management HTTP 1.1, approved under [D-121](../authoritative-plan.md#ap-07-gateway-credential-management-http-addendum). This supplements, but does not rewrite, the frozen Gateway HTTP Authorization 1.0 slice above. **Owner:** Identity; Intake owns Gateway assignment and revision semantics.
 
 Credential issue/revoke operations require an Administrative Principal with `gateway.update` coverage over every current Network assigned to the Gateway, or an `all`-scope grant. Status reads require `gateway.read` over every current assignment or `all`. All checks use authoritative current Gateway and Network state in the same transaction as the protected operation. The Gateway-specific credential remains distinct from Principal/API-key authority and authenticates only its Gateway.
 
@@ -216,7 +218,7 @@ Credential management uses the normal protected administrative HTTP channel, inc
 
 ## AP-08 Master-data Authorization
 
-**Version/status:** master-data-authorization 1.0, defined and frozen for AP-08 T060 before implementation. **Owner:** DOM-05; DOM-03 supplies server-derived Unit/Organization/template references. This additive action slice does not change frozen identity proof, field, key-restriction, or grant-delegation semantics.
+**Version/status:** master-data-authorization 1.0, defined and frozen for AP-08 T060 before implementation. **Owner:** Identity; Master data supplies server-derived Unit/Organization/template references. This additive action slice does not change frozen identity proof, field, key-restriction, or grant-delegation semantics.
 
 Add the explicit actions `unit-template.read`, `unit-template.create`, `unit-template.update`, and `unit-template.delete`. Because a standalone Unit template has no Unit, Network, collection, or Account owner scope, these actions accept only `all` scope. No new grant scope kind or implicit administrator right is introduced. Template permissions are not inferred from `unit.*` or `organization.*`.
 

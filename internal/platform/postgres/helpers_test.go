@@ -69,7 +69,7 @@ func createTestSchema(t testing.TB) string {
 	if _, err := rand.Read(random[:]); err != nil {
 		t.Fatalf("generate test schema name: %v", err)
 	}
-	schema := fmt.Sprintf("ap05_%x", random[:])
+	schema := fmt.Sprintf("test_%x", random[:])
 	if _, err := db.ExecContext(context.Background(), `CREATE SCHEMA "`+schema+`"`); err != nil {
 		t.Fatalf("create isolated test schema: %v", err)
 	}

@@ -1,4 +1,6 @@
-# GoPager Documentation
+# GoPager Development-Process Documentation
+
+This tree holds the working documents of the agent-assisted delivery process: plan, work packages, contract drafts and execution evidence. Permanent product and code documentation is a separate tree in [docs/](../docs/README.md) with its own [documentation rules](../CONTRIBUTING.md#documentation). This tree is temporary and will be deleted. Do not copy content between the trees; see [Permanent Documentation](#permanent-documentation) and [Naming](#naming).
 
 ## Document Authority
 
@@ -18,9 +20,18 @@ One fact has one maintained definition. Other documents link to it; they do not 
 | Shared session and immutable-AP workflow | [Execution rules](work-packages/shared-rules.md) | Integration |
 | REQ-to-package coverage and planned evidence categories | [Requirement mapping](work-packages/requirement-mapping.md) | Integration |
 | External source provenance, reuse assessment and documentation-review evidence | [Source/evidence notes](requirements-evidence.md) | Documentation / assessing owner |
-| Human navigation | Root [README](../README.md), [package directory](work-packages.md), [contract directory](domain-contracts.md) | Documentation |
-| Agent entry route | [AGENTS.md](../AGENTS.md) | Integration; links only, no duplicate rules |
+| Implemented behavior for operators, API clients, plugin authors and contributors: architecture and data flow, operations/configuration, HTTP usage, Workflows, plugins, build/test/lint commands, repository layout and code conventions | [docs/](../docs/README.md) | Implementing owner, in the same change as the code |
+| Implemented HTTP routes and request/response schemas | [api/openapi/v1.yaml](../api/openapi/v1.yaml) | Implementing owner; the owning C-ID file records it as authoritative ([change rule 9](#change-rules)) |
+| Implemented plugin wire protocol and Go plugin SDK | [api/plugin/v2/plugin.proto](../api/plugin/v2/plugin.proto), [pluginsdk/](../pluginsdk/) | Implementing owner; [C-10](contracts/c-10-plugin-host.md) records them as authoritative (change rule 9) |
+| Identifier-level behavior of Go code | Go doc comments (`go doc`) | Implementing owner |
+| Project description and getting started; contribution and documentation rules | Root [README](../README.md); [CONTRIBUTING.md](../CONTRIBUTING.md) | Integration / documentation |
+| Agent entry route for code work | [AGENTS.md](../AGENTS.md), imported by [CLAUDE.md](../CLAUDE.md) | Integration; links into `docs/` only, no duplicate rules |
+| Project agent tooling: plugins, hooks, skills, MCP servers | [.claude/settings.json](../.claude/settings.json), `.claude/skills/`, [.mcp.json](../.mcp.json); list and purpose in [Skills, Agents and MCP Servers](#skills-agents-and-mcp-servers) | Integration |
+| Boundary between this tree and permanent documentation; naming rules | [Permanent Documentation](#permanent-documentation), [Naming](#naming); decision [D-132](authoritative-plan.md#documentation-and-naming-separation) | Integration / documentation |
+| Process navigation | [Package directory](work-packages.md), [contract directory](domain-contracts.md) | Documentation |
 | Repository-wide library reuse policy | [Library reuse](#library-reuse) | Architecture / integration |
+
+Permanent documentation and generated/published artifacts describe implemented behavior and are authoritative for implemented schemas once recorded under change rule 9. Contracts in this tree remain planning contracts: they own planned behavior, gates and boundaries, link to those artifacts instead of repeating their fields, and a disagreement between code and a contract is reported here, not resolved by editing permanent documentation to match the contract.
 
 Roles are not named assignees. An assignee or a completed task does not grant scope/execution approval; approvals belong only to the plan.
 
@@ -39,6 +50,38 @@ For Go, prefer the `go-pkgs` MCP tools for package discovery and current package
 Record substantial selections/exceptions with alternatives and evidence at the technology/implementation owner; link from execution evidence. Reassess unnecessary reinvention. Library adoption must remain within assigned scope and fixed contracts.
 
 For a repository-wide library reassessment, use disjoint scopes and separate generated artifacts. Coordinate repeated needs at the architecture owner before choosing shared replacements; validate behavior within approved write scopes.
+
+## Permanent Documentation
+
+Decision: [D-132](authoritative-plan.md#documentation-and-naming-separation). Permanent documentation is everything outside this tree: `docs/`, `api/` (OpenAPI, proto), Go doc comments, `README.md`, `AGENTS.md`, `CLAUDE.md` and `CONTRIBUTING.md`. Rules:
+
+1. It describes implemented behavior only: no history, decision rationale, alternatives, status, plans or approvals.
+2. READMEs follow ordinary README conventions: project description, requirements, getting started, links. No meta prose about audience, authority or how the documentation is maintained. Contributor rules go in `CONTRIBUTING.md`, agent routing in `AGENTS.md`.
+3. Every registered HTTP route is in `api/openapi/v1.yaml`. Prose links to the schema instead of repeating fields. Every exported Go identifier in hand-written code, including the Ent schema definitions in internal/persistence/ent/schema/, has a self-contained doc comment. Generated files (header `Code generated … DO NOT EDIT`) are exempt and are never edited by hand.
+4. Update it in the same change as the code it describes. Verify statements against code; when this tree and the code disagree, the code is documented and the disagreement is reported here.
+5. It never references this tree, by link, path, document name or planning ID. This also applies to code identifiers, test names, environment variables, database object names, persisted values and hyphenless forms such as `AP05` or `ap07_`.
+
+## Naming
+
+1. Planning IDs (REQ, D, P, C, AP, T, F, E, TECH and similar) are used exclusively inside this tree.
+2. Domains have fixed names, listed in [Domains and Data Ownership](architecture.md#domains-and-data-ownership): Intake, Grouping, Master data, Assignment, Identity, Query, Delivery, Processing. This tree uses those names. Code uses the lowercase identifier from that table where a domain must be named, for example `producer.domain` in Domain events. Numbered domain IDs are not used.
+3. New concepts get descriptive names that also work in code and permanent documentation. Terms follow the [glossary](glossary.md#maintenance-rules).
+
+## Skills, Agents and MCP Servers
+
+1. Use the available skills, subagents, plugins, hooks and MCP servers wherever they help with the task.
+2. When a recurring task would benefit from a skill, subagent, MCP server or hook that does not exist yet, create or install it at project scope (`.claude/skills/`, `.claude/agents/`, `.claude/settings.json`, `.mcp.json`) instead of repeating manual steps, and add it to the list below. Tools that encode this delivery process may reference this tree and are removed with it; all others must not reference it.
+3. Prefer reviewed, maintained sources (for example the official Anthropic plugin marketplace). Review third-party skills before adoption, as with [library reuse](#library-reuse).
+
+Current project setup:
+
+| Tool | Purpose |
+| --- | --- |
+| `go-pkgs` MCP server (`.mcp.json`) | Go package discovery and version facts for library reuse |
+| `gopls-lsp` plugin (`.claude/settings.json`) | Go diagnostics, definitions and references; requires `gopls` on `PATH` |
+| gofmt hook (`.claude/settings.json`) | Formats every edited `.go` file |
+| `claude-security` plugin (`.claude/settings.json`) | On-demand vulnerability scanning with verified findings and patch proposals |
+| `execute-work-package` skill | Executes an AP under these rules (process tool) |
 
 ## Status Terms
 

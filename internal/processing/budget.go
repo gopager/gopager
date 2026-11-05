@@ -4,7 +4,17 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"github.com/gopager/gopager/internal/platform"
 )
+
+// computeAllowance is the accumulated built-in compute allowance of one Workflow evaluation.
+// It is a variable only so tests can exercise exhaustion without waiting for the production bound.
+var computeAllowance = time.Second
+
+// errComputeBudgetExhausted is the cancellation cause recorded when a run's own compute allowance
+// expires, which distinguishes it from cancellation of the caller's context.
+var errComputeBudgetExhausted = errors.New("accumulated compute budget exhausted")
 
 // startCompute gives a run one accumulated built-in allowance, separate from installed guest waits.
 func (b *executionBudget) startCompute(parent context.Context, allowance time.Duration) {
@@ -13,7 +23,7 @@ func (b *executionBudget) startCompute(parent context.Context, allowance time.Du
 }
 
 func (b *executionBudget) resumeCompute() {
-	b.active, b.cancel = context.WithTimeout(b.parent, b.remaining)
+	b.active, b.cancel = context.WithTimeoutCause(b.parent, b.remaining, errComputeBudgetExhausted)
 	b.started = time.Now()
 }
 
@@ -25,17 +35,37 @@ func (b *executionBudget) closeCompute() {
 	}
 }
 
+// exhausted is the explicit resource failure reported when the compute allowance runs out.
+func exhausted() error {
+	return resource(errComputeBudgetExhausted)
+}
+
+// bound turns a context error caused by this run's own compute allowance into the explicit
+// resource failure. Cancellation or expiry of the caller's context stays a cancellation, and
+// every already classified failure is returned unchanged.
+func (b *executionBudget) bound(err error) error {
+	if err == nil || b == nil || b.parent == nil || b.active == nil || b.parent.Err() != nil ||
+		platform.FailureCode(err) != platform.CodeInternalError ||
+		(!errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled)) {
+		return err
+	}
+	if errors.Is(context.Cause(b.active), errComputeBudgetExhausted) {
+		return exhausted()
+	}
+	return err
+}
+
 // guestWait pauses only guest instantiation/execution; preparation and result checks remain charged.
 func (b *executionBudget) guestWait(run func(context.Context) error) error {
 	if b.active == nil || b.parent == nil || b.started.IsZero() {
 		return invalid(errors.New("invalid accumulated compute budget"))
 	}
 	if err := b.active.Err(); err != nil {
-		return err
+		return b.bound(err)
 	}
 	b.remaining -= time.Since(b.started)
 	if b.remaining <= 0 {
-		return context.DeadlineExceeded
+		return exhausted()
 	}
 	b.cancel()
 	b.started = time.Time{}

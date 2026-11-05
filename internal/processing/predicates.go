@@ -61,12 +61,19 @@ func (d Dependency) validate() error {
 	return nil
 }
 
+// FieldState classifies a field value as present, readably absent, or hidden from the
+// current authority. Hidden fields carry no Value and make dependent predicates
+// Indeterminate.
 type FieldState string
 
 const (
+	// FieldPresent marks a field with a Value (possibly an explicit null).
 	FieldPresent FieldState = "present"
-	FieldAbsent  FieldState = "absent"
-	FieldHidden  FieldState = "hidden"
+	// FieldAbsent marks a field the reader may see but that has no value; only optional
+	// fields may be absent.
+	FieldAbsent FieldState = "absent"
+	// FieldHidden marks a field whose value the current authority may not read.
+	FieldHidden FieldState = "hidden"
 )
 
 // FieldValue distinguishes readable absence from hidden data and retains dependencies.
@@ -95,14 +102,20 @@ type Predicate struct {
 	Args   []Predicate `json:"args,omitempty"`
 }
 
+// Truth is the three-valued outcome of a predicate.
 type Truth string
 
+// The predicate outcomes.
 const (
 	DefiniteFalse Truth = "false"
 	DefiniteTrue  Truth = "true"
+	// Indeterminate means the result depends on a hidden field. Branch steps fail with an
+	// authority-unavailable failure rather than choosing a side.
 	Indeterminate Truth = "indeterminate"
 )
 
+// PredicateResult is a predicate outcome together with the union of the source
+// dependencies of every field it read.
 type PredicateResult struct {
 	Truth        Truth
 	Dependencies []Dependency
@@ -124,6 +137,9 @@ type PredicateProgram struct {
 	byteComparisons []byteComparison
 }
 
+// MaxPredicateCELCost is the CEL cost budget for one predicate evaluation, shared between
+// the CEL program and the byte-wise comparisons of bytes operands. Exceeding it is a
+// resource-limit failure.
 const MaxPredicateCELCost uint64 = 2_000_000
 
 type byteComparison struct {

@@ -1,4 +1,4 @@
-// GoPager plugin-runtime 2.0 wire contract (D-131, C-10).
+// GoPager plugin-runtime 2.0 wire contract.
 //
 // The Core starts a plugin executable through HashiCorp go-plugin (gRPC protocol) and calls Invoke.
 // A plugin written in any language must:
@@ -8,7 +8,7 @@
 //      (go-plugin core protocol 1, application protocol 2; "tcp" with host:port is also accepted).
 // See https://github.com/hashicorp/go-plugin/blob/main/docs/guide-plugin-write-non-go.md.
 //
-// Request and response values are UTF-8 JSON documents defined by C-10:
+// Request and response values are UTF-8 JSON documents (see docs/plugins.md):
 // the invocation envelope (schemaVersion 2) and the response ({"schemaVersion":2,"fields":...}
 // or {"schemaVersion":2,"failure":"<reason>"}).
 syntax = "proto3";

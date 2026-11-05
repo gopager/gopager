@@ -11,7 +11,8 @@ import (
 )
 
 // PublicationReentries lists unpublished Transmissions with no unfinished Processing candidate and no
-// overlapping unfinished correction, oldest first (C-05 post-correction publication re-entry).
+// overlapping unfinished correction, oldest first, so they can re-enter publication after an
+// Assignment correction. limit must be within 1..100.
 func (o *ProcessingSourceOwner) PublicationReentries(ctx context.Context, tx platform.TransactionContext,
 	limit int,
 ) ([]uuid.UUID, error) {

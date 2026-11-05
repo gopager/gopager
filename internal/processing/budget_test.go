@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/gopager/gopager/internal/platform"
 )
 
 func TestWorkflowComputeBudgetAccumulatesWithoutGuestWaitReset(t *testing.T) {
@@ -27,7 +29,7 @@ func TestWorkflowComputeBudgetAccumulatesWithoutGuestWaitReset(t *testing.T) {
 	if err := budget.guestWait(func(context.Context) error {
 		called = true
 		return nil
-	}); !errors.Is(err, context.DeadlineExceeded) || called {
+	}); platform.FailureCode(err) != platform.CodeResourceLimit || called {
 		t.Fatalf("second step obtained fresh allowance: called=%v, %v", called, err)
 	}
 }
@@ -42,7 +44,8 @@ func TestWorkflowComputeBudgetPreservesCallerCancellationDuringGuest(t *testing.
 		cancel()
 		return ctx.Err()
 	})
-	if !errors.Is(err, context.Canceled) || !errors.Is(budget.computeContext().Err(), context.Canceled) {
+	if !errors.Is(err, context.Canceled) || !errors.Is(budget.computeContext().Err(), context.Canceled) ||
+		platform.FailureCode(budget.bound(err)) == platform.CodeResourceLimit {
 		t.Fatalf("guest wait detached caller cancellation: %v", err)
 	}
 }
@@ -63,5 +66,52 @@ func TestWorkflowComputeBudgetExcludesActualElapsedGuestWait(t *testing.T) {
 	<-budget.computeContext().Done()
 	if !errors.Is(budget.computeContext().Err(), context.DeadlineExceeded) {
 		t.Fatalf("resumed host lost its finite allowance: %v", budget.computeContext().Err())
+	}
+}
+
+func TestWorkflowComputeBudgetExpiryIsExplicitResourceLimit(t *testing.T) {
+	budget := &executionBudget{}
+	budget.startCompute(context.Background(), time.Nanosecond)
+	defer budget.closeCompute()
+	<-budget.computeContext().Done()
+	err := budget.bound(budget.computeContext().Err())
+	if platform.FailureCode(err) != platform.CodeResourceLimit {
+		t.Fatalf("compute budget expiry was not RESOURCE_LIMIT: %v", err)
+	}
+	if err := budget.guestWait(func(context.Context) error { return nil }); platform.FailureCode(err) != platform.CodeResourceLimit {
+		t.Fatalf("guest wait after compute expiry was not RESOURCE_LIMIT: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	parentBudget := &executionBudget{}
+	parentBudget.startCompute(ctx, time.Second)
+	defer parentBudget.closeCompute()
+	cancel()
+	err = parentBudget.bound(parentBudget.computeContext().Err())
+	if !errors.Is(err, context.Canceled) || platform.FailureCode(err) == platform.CodeResourceLimit {
+		t.Fatalf("caller cancellation became a resource bound: %v", err)
+	}
+}
+
+func TestWorkflowEvaluationComputeExhaustionAndCallerCancellation(t *testing.T) {
+	_, source := sourceFixture(t)
+	program, err := CompileWorkflow(context.Background(), selectedDefinition(), source, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := computeAllowance
+	computeAllowance = 0
+	result, err := program.Evaluate(context.Background(), source)
+	computeAllowance = original
+	if platform.FailureCode(err) != platform.CodeResourceLimit || result.Selected {
+		t.Fatalf("compute budget exhaustion was not RESOURCE_LIMIT: %+v, %v", result, err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	result, err = program.Evaluate(ctx, source)
+	if !errors.Is(err, context.Canceled) || platform.FailureCode(err) == platform.CodeResourceLimit || result.Selected {
+		t.Fatalf("caller cancellation was not reported as cancellation: %+v, %v", result, err)
+	}
+	if result, err := program.Evaluate(context.Background(), source); err != nil || !result.Selected {
+		t.Fatalf("evaluation after restored allowance failed: %+v, %v", result, err)
 	}
 }

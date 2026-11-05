@@ -21,7 +21,7 @@ import (
 	"github.com/gopager/gopager/internal/protocols"
 )
 
-// noCorrectionPublication isolates correction derivation tests from C-11 re-entry, which is covered below.
+// noCorrectionPublication isolates correction derivation tests from Processing re-entry, which is covered below.
 type noCorrectionPublication struct{}
 
 func (noCorrectionPublication) PublicationReentries(context.Context, platform.TransactionContext, int) ([]uuid.UUID, error) {
@@ -32,8 +32,8 @@ func (noCorrectionPublication) ReenterPublication(context.Context, platform.Tran
 	return false, nil
 }
 
-// TestCorrectionPublicationReentryWaitsForCompletionAndRepublishes covers C-05 post-correction publication
-// re-entry, the F-83 unavailable-until-completion rule and the F-84 refusal of stale Processing publication.
+// TestCorrectionPublicationReentryWaitsForCompletionAndRepublishes covers post-correction publication
+// re-entry, unavailability until correction completes, and refusal of stale Processing publication.
 func TestCorrectionPublicationReentryWaitsForCompletionAndRepublishes(t *testing.T) {
 	f := newMatcherFixture(t)
 	intakeRepository, err := ingeststore.New(f.store, f.facts, f.facts)
@@ -192,7 +192,7 @@ func TestCorrectionPublicationReentryWaitsForCompletionAndRepublishes(t *testing
 	}
 	expect("dirty intake", second, "ready", unitB.ID, true)
 
-	// F-84: stale Processing publication and re-entry are refused while correction is unfinished.
+	// Stale Processing publication and re-entry are refused while correction is unfinished.
 	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		return sourceOwner.Publish(tx.Context(), tx, first.TransmissionID)
 	}); platform.FailureCode(err) != platform.CodeRevisionConflict {
@@ -235,7 +235,7 @@ func TestCorrectionPublicationReentryWaitsForCompletionAndRepublishes(t *testing
 	expect("completed correction", first, "pending", unitB.ID, false)
 	expect("rebuilt dirty intake", second, "pending", unitB.ID, false)
 
-	// The next pass re-enters both into C-11 and admits current Workflow candidates.
+	// The next pass re-enters both into Processing and admits current Workflow candidates.
 	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
 		t.Fatalf("publication re-entry did not run: worked=%t err=%v", worked, err)
 	}
@@ -295,7 +295,7 @@ func (failingCorrectionReads) ReadCorrectionBatch(context.Context, platform.Tran
 	return nil, errors.New("injected correction derivation failure")
 }
 
-// TestCorrectionExhaustionFailsSafelyAndRetryCreatesCurrentWork covers the F-84 failure/retry slice of C-05.
+// TestCorrectionExhaustionFailsSafelyAndRetryCreatesCurrentWork covers correction failure and retry.
 func TestCorrectionExhaustionFailsSafelyAndRetryCreatesCurrentWork(t *testing.T) {
 	f := newMatcherFixture(t)
 	var revision int64

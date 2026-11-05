@@ -14,7 +14,8 @@ type syntheticDeclarations struct {
 	fields map[string]FieldSchema
 }
 
-// NewSyntheticDeclarationOwner returns the closed server-owned C-02 synthetic form catalog.
+// NewSyntheticDeclarationOwner returns the closed, server-owned catalog of field declarations for
+// synthetic preview sources (one fixed schema per Protocol form); it is not configurable.
 func NewSyntheticDeclarationOwner() SourceDeclarationOwner {
 	return syntheticDeclarationOwner{}
 }

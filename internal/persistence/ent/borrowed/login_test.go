@@ -334,6 +334,19 @@ func TestLoginLogoutHTTPWithPrimaryAuthorityAndTLSProxy(t *testing.T) {
 				return content, response.Cookies()
 			}
 			send("/api/v1/auth/login", body, "https://foreign.example", "", http.StatusForbidden)
+			prefix, suffix := `{"schemaVersion":1,"username":"http-user","password":"`, `"}`
+			oversized := prefix + strings.Repeat("x", 16*1024+1-len(prefix)-len(suffix)) + suffix
+			if len(oversized) != 16*1024+1 {
+				t.Fatal("oversized login body has the wrong length")
+			}
+			limited, _ := send("/api/v1/auth/login", oversized, edge.URL, "", http.StatusRequestEntityTooLarge)
+			var limitError struct {
+				Code      string `json:"code"`
+				Retryable bool   `json:"retryable"`
+			}
+			if err := json.Unmarshal(limited, &limitError); err != nil || limitError.Code != "RESOURCE_LIMIT" || limitError.Retryable {
+				t.Fatalf("oversized login body was not RESOURCE_LIMIT: %s", limited)
+			}
 			content, cookies := send("/api/v1/auth/login", body, edge.URL, "", http.StatusOK)
 			var result struct {
 				SchemaVersion int    `json:"schemaVersion"`

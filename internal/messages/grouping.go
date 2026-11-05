@@ -10,26 +10,43 @@ import (
 	"github.com/gopager/gopager/internal/protocols"
 )
 
+// ErrInvalidGrouping is returned by Decide for an invalid policy, an invalid
+// or already grouped Transmission, or inconsistent existing Messages.
 var ErrInvalidGrouping = errors.New("invalid Grouping input")
 
+// MaxGroupingWindowSeconds is the largest accepted grouping window; it equals
+// the largest integer exactly representable in a JSON (IEEE 754) number.
 const MaxGroupingWindowSeconds int64 = 9007199254740991
 
+// Policy is the active grouping configuration. WindowSeconds is the inclusive
+// distance in whole seconds within which identical Payloads join one Message;
+// 0 disables grouping. Revision must be positive.
 type Policy struct {
 	Revision      int64
 	WindowSeconds int64
 }
 
+// Member is one Transmission considered for grouping. ObservedAt must be a
+// whole-second time in years 0..9999 and Identity must have a non-empty Form.
 type Member struct {
 	TransmissionID uuid.UUID
 	ObservedAt     time.Time
 	Identity       protocols.PayloadIdentity
 }
 
+// ExistingMessage is a candidate Message with its current member
+// Transmissions.
 type ExistingMessage struct {
 	ID      uuid.UUID
 	Members []Member
 }
 
+// Decision is a grouping outcome. Kind is "created" (new MessageID),
+// "joined" (MessageID is the single matching Message) or "merged" (MessageID
+// is the surviving Message with the lowest ID and AbsorbedMessage lists the
+// other matching Messages to fold into it); Joined is true for the latter two.
+// Decide leaves MessageRevision and LateJoin zero; the persistence layer fills
+// them when it applies the decision.
 type Decision struct {
 	Kind            string
 	MessageID       uuid.UUID

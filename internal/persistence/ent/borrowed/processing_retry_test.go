@@ -24,7 +24,7 @@ type processingRetrySourceFixture struct {
 	calls   int
 }
 
-// CheckRetrySource is explicit synthetic eligibility, not an AP-06 source/publication owner.
+// CheckRetrySource is explicit synthetic eligibility, not a production source/publication owner.
 func (f *processingRetrySourceFixture) CheckRetrySource(_ context.Context, _ platform.TransactionContext, candidate processing.Candidate) error {
 	f.calls++
 	if candidate.CandidateBinding != f.binding {

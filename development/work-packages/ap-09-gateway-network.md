@@ -4,7 +4,7 @@
 
 ## Session Context
 
-- **Owner:** DOM-01 with DOM-05 and integration participating inside this AP.
+- **Owner:** Intake with Identity and integration participating inside this AP.
 - **Requirements:** [REQ-041..050](../requirements-catalog.md#e-transmission-networks-and-gateways), REQ-051/054/055 and [REQ-134](../requirements-catalog.md#n-delegated-administration-and-restricted-views) subject to its explicit delivery disposition.
 - **Planning references:** [C-01](../contracts/c-01-transmission-acceptance.md), [C-06](../contracts/c-06-identity-authorization.md), [C-08](../contracts/c-08-events-jobs.md), [C-12](../contracts/c-12-persistence-operations.md), [F-60..F-68 intake/credential cases](../contracts/reference-cases.md#ap-07-intake-cases), [domain ownership](../architecture.md#domains-and-data-ownership). Add management/timeout cases at those canonical owners.
 - **Prerequisites:** [AP-05](../execution/ap-05.md) transaction/primary clock/lifecycle, [identity/AuthZ handover](../execution/source-ap-07.md#handover), [AP-07](../execution/ap-07.md) Gateway credentials/Network replacement/state reports/intake and [AP-08](ap-08-master-data-correction-after-intake.md)'s completed master-data/correction handover.

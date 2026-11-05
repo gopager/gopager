@@ -14,6 +14,10 @@ import (
 	"github.com/gopager/gopager/internal/platform/postgres"
 )
 
+// Driver is an Ent dialect.Driver that runs every statement in a platform transaction it
+// does not own. It never begins, commits or closes anything, and every call fails once the
+// transaction is no longer active. A Driver is only valid for the lifetime of that
+// transaction.
 type Driver struct {
 	store      *postgres.Store
 	capability platform.TransactionContext
@@ -47,6 +51,8 @@ func (d *Driver) connection(ctx context.Context) (entsql.Conn, error) {
 	return entsql.Conn{ExecQuerier: executor}, nil
 }
 
+// Exec runs a statement in the borrowed transaction. It fails if the transaction has ended
+// or if ctx carries an Ent privacy decision override.
 func (d *Driver) Exec(ctx context.Context, query string, args, result any) error {
 	connection, err := d.connection(ctx)
 	if err != nil {
@@ -55,6 +61,8 @@ func (d *Driver) Exec(ctx context.Context, query string, args, result any) error
 	return connection.Exec(ctx, query, args, result)
 }
 
+// Query runs a query in the borrowed transaction. It fails if the transaction has ended
+// or if ctx carries an Ent privacy decision override.
 func (d *Driver) Query(ctx context.Context, query string, args, result any) error {
 	connection, err := d.connection(ctx)
 	if err != nil {
@@ -63,6 +71,7 @@ func (d *Driver) Query(ctx context.Context, query string, args, result any) erro
 	return connection.Query(ctx, query, args, result)
 }
 
+// Dialect reports PostgreSQL.
 func (d *Driver) Dialect() string { return dialect.Postgres }
 
 // Tx lets Ent compose its statements without opening or completing another transaction.

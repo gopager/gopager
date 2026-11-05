@@ -107,7 +107,8 @@ func (s *Service) Publish(ctx context.Context, tx platform.TransactionContext, t
 	return s.source.ApplyReadiness(ctx, tx, binding)
 }
 
-// MissingSourceOwner blocks publication until AP-06 supplies its actual source/barrier participant.
+// MissingSourceOwner is a placeholder publication source owner for deployments without the real
+// ingest source/readiness-barrier participant; every operation fails as unavailable.
 type MissingSourceOwner struct{}
 
 // CapturePublication rejects missing source ownership without inventing Message IDs or readiness.

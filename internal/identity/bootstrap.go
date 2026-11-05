@@ -36,6 +36,9 @@ func (b BootstrapAccount) LogValue() slog.Value {
 	return slog.GroupValue(slog.String("id", b.ID.String()))
 }
 
+// BootstrapRepository persists the initial account, guest account, grants and
+// password credential. InitializeIdentity must fail if the installation is
+// already initialized.
 type BootstrapRepository interface {
 	InitializeIdentity(context.Context, platform.TransactionContext, BootstrapAccount) error
 }

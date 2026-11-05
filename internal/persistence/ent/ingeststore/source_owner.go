@@ -15,6 +15,7 @@ import (
 	"github.com/gopager/gopager/internal/events"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
+	processingmanagement "github.com/gopager/gopager/internal/processing/management"
 	"github.com/gopager/gopager/internal/processing/publication"
 	"github.com/gopager/gopager/internal/processing/worker"
 	"github.com/gopager/gopager/internal/protocols"
@@ -100,6 +101,7 @@ var _ worker.WorkSourceOwner = (*ProcessingSourceOwner)(nil)
 var _ worker.Publisher = (*ProcessingSourceOwner)(nil)
 var _ publication.SourceOwner = (*ProcessingSourceOwner)(nil)
 var _ processing.InvocationSourceOwner = (*ProcessingSourceOwner)(nil)
+var _ processingmanagement.RetrySource = (*ProcessingSourceOwner)(nil)
 
 // CaptureCandidate returns a detached original source and a run-owned installed invocation boundary.
 func (o *ProcessingSourceOwner) CaptureCandidate(ctx context.Context, tx platform.TransactionContext,
@@ -187,6 +189,46 @@ func (o *ProcessingSourceOwner) CheckCandidate(ctx context.Context, tx platform.
 		return platform.NewFailure(platform.CodeRevisionConflict, errors.New("captured source differs from current source"))
 	}
 	return o.checkDefinitionInstances(ctx, tx, capture.Definition)
+}
+
+// CheckRetrySource verifies, in the retrying transaction, that a failed candidate may be
+// manually retried: its Transmission is still unpublished with current targets and the
+// same source and context revisions, its Workflow is still selected at the same version
+// and Workflow revision, the Processing configuration revision is unchanged, and every
+// installed plugin instance its definition references is still valid. Any staleness is
+// a revision conflict; a missing Transmission is authz.ErrNotFound.
+func (o *ProcessingSourceOwner) CheckRetrySource(ctx context.Context, tx platform.TransactionContext,
+	candidate processing.Candidate,
+) error {
+	snapshot, err := o.readSource(ctx, tx, candidate.TransmissionID)
+	if err != nil {
+		return err
+	}
+	if !snapshot.targetsCurrent || snapshot.identity.SourceRevision != candidate.SourceRevision ||
+		snapshot.identity.ContextRevision != candidate.ContextRevision {
+		return platform.NewFailure(platform.CodeRevisionConflict, errors.New("candidate source context changed"))
+	}
+	workflows, err := o.selectWorkflows(ctx, tx, snapshot)
+	if err != nil {
+		return err
+	}
+	selected := findSelectedWorkflow(workflows, candidate.WorkflowID)
+	if selected == nil || selected.version != candidate.DefinitionVersionID ||
+		selected.revision != candidate.WorkflowRevision {
+		return platform.NewFailure(platform.CodeRevisionConflict, errors.New("candidate Workflow is no longer selected"))
+	}
+	revision, err := o.repository.LockRevision(ctx, tx)
+	if err != nil {
+		return err
+	}
+	if revision != candidate.ConfigurationRevision {
+		return platform.NewFailure(platform.CodeRevisionConflict, errors.New("Processing configuration changed"))
+	}
+	definition, err := o.readDefinition(ctx, tx, selected.id, selected.version)
+	if err != nil {
+		return err
+	}
+	return o.checkDefinitionInstances(ctx, tx, definition)
 }
 
 // ReconcileCandidate supersedes obsolete bindings and admits the current selected Workflow set.
@@ -742,6 +784,11 @@ func (o *ProcessingSourceOwner) supersedeCandidates(ctx context.Context, tx plat
 	return result, nil
 }
 
+// CapturePublication locks the Transmission's Message and the processing configuration
+// revision and returns the publication binding (fenced by the Message revision) plus one
+// candidate binding per Workflow currently selected for the source. It fails with a
+// revision conflict when the current target context differs from the accepted one, and
+// with authz.ErrNotFound when the Message is missing.
 func (o *ProcessingSourceOwner) CapturePublication(ctx context.Context, tx platform.TransactionContext,
 	transmission uuid.UUID,
 ) (processing.PublicationBinding, []processing.CandidateBinding, error) {
@@ -784,6 +831,13 @@ func (o *ProcessingSourceOwner) CapturePublication(ctx context.Context, tx platf
 		SourceFence: snapshot.messageRevision}, bindings, nil
 }
 
+// CheckItem rechecks, in the publishing transaction, that one publication item is still
+// current: same source identity and Message revision, the candidate's Workflow still
+// selected at the same version, Workflow and configuration revisions, and every
+// referenced plugin instance still valid. For items with a result it also checks every
+// published target lies in the current Workflow scope and every dependency is readable
+// by each installed step's execution Principal. Staleness is a revision conflict; a
+// missing Message is authz.ErrNotFound.
 func (o *ProcessingSourceOwner) CheckItem(ctx context.Context, tx platform.TransactionContext,
 	binding processing.PublicationBinding, item processing.PublicationItem,
 ) error {
@@ -801,6 +855,9 @@ func (o *ProcessingSourceOwner) CheckItem(ctx context.Context, tx platform.Trans
 	}
 	if err := executor.QueryRowContext(ctx, `SELECT revision FROM messages WHERE id=$1 FOR UPDATE`,
 		binding.MessageID).Scan(&messageRevision); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return authz.ErrNotFound
+		}
 		return err
 	}
 	if messageRevision != binding.SourceFence {
@@ -899,6 +956,12 @@ func (o *ProcessingSourceOwner) checkPublicationAuthority(ctx context.Context, t
 	return authorizeAll(item.Definition.Steps)
 }
 
+// ApplyReadiness is the publication barrier. It requires a completed, barrier-stamped
+// candidate for every currently selected Workflow (otherwise a revision conflict), then
+// marks the Transmission processed and ready. When this makes every Transmission of the
+// Message ready, the Message and all its contributions are marked ready as well. The
+// source identity and Message revision must still match binding; a missing Message is
+// authz.ErrNotFound.
 func (o *ProcessingSourceOwner) ApplyReadiness(ctx context.Context, tx platform.TransactionContext,
 	binding processing.PublicationBinding,
 ) error {
@@ -916,6 +979,9 @@ func (o *ProcessingSourceOwner) ApplyReadiness(ctx context.Context, tx platform.
 	var messageRevision int64
 	if err := executor.QueryRowContext(ctx, `SELECT revision FROM messages WHERE id=$1 FOR UPDATE`,
 		binding.MessageID).Scan(&messageRevision); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return authz.ErrNotFound
+		}
 		return err
 	}
 	if messageRevision != binding.SourceFence {

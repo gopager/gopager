@@ -55,7 +55,7 @@ func newStoreWithMigrations(t *testing.T, files fs.FS) *postgres.Store {
 		t.Fatal(err)
 	}
 	admin := stdlib.OpenDB(*config)
-	name := "ap07_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	name := "test_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	if _, err := admin.ExecContext(t.Context(), `CREATE SCHEMA "`+name+`"`); err != nil {
 		t.Fatal(err)
 	}

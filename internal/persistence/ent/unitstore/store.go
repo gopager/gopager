@@ -27,6 +27,9 @@ import (
 	"github.com/gopager/gopager/internal/platform/postgres"
 )
 
+// Store persists Units, Organizations, Unit templates and Unit collections, filtering rows
+// natively by the caller's authority. It holds no transaction of its own: every method
+// runs in the caller's active primary transaction.
 type Store struct{ primary *postgres.Store }
 
 // New binds all owner operations to the existing platform Primary.

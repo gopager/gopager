@@ -61,7 +61,7 @@ The [AP-04 protocol cases F-42..F-44](#ap-04-protocol-cases) are approved D-34 a
 
 ## AP-04 Protocol Cases
 
-Approved D-34 additions; owner DOM-02 with DOM-01. These are backend contract cases, not RF decoder or Gateway implementation tests.
+Approved D-34 additions; owner Grouping with Intake. These are backend contract cases, not RF decoder or Gateway implementation tests.
 
 | Case / owner | Input | Expected result |
 | --- | --- | --- |
@@ -127,7 +127,7 @@ Approved D-34 additions; owner DOM-02 with DOM-01. These are backend contract ca
 
 ## AP-04 Plugin Configuration Cases
 
-D-33 clarification; owner plugin host/integration with DOM-07. Planned contract examples, not executed SDK/API or provider tests.
+D-33 clarification; owner plugin host/integration with Delivery. Planned contract examples, not executed SDK/API or provider tests.
 
 | Case / owner | Input | Expected result |
 | --- | --- | --- |
@@ -138,7 +138,7 @@ D-33 clarification; owner plugin host/integration with DOM-07. Planned contract 
 
 ## AP-05 Foundation Cases
 
-D-35 approved freeze cases; owner persistence/operations/integration with DOM-01/DOM-07 for participation. These are future AP-05 tests, not AP-04 runtime evidence. Synthetic tables model repository participation only and must not become GoPager domain schemas.
+D-35 approved freeze cases; owner persistence/operations/integration with Intake/Delivery for participation. These are future AP-05 tests, not AP-04 runtime evidence. Synthetic tables model repository participation only and must not become GoPager domain schemas.
 
 | Case / owner | Concrete input | Expected result |
 | --- | --- | --- |

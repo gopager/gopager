@@ -1,4 +1,4 @@
-// Package pluginsdk is the Go SDK for GoPager plugins (plugin-runtime 2.0, D-131).
+// Package pluginsdk is the Go SDK for GoPager plugins (plugin-runtime 2.0).
 //
 // A plugin is an executable that the GoPager Core starts as a child process through HashiCorp
 // go-plugin and calls over gRPC. The wire contract is api/plugin/v2/plugin.proto: one Invoke
@@ -26,13 +26,16 @@ import (
 const (
 	// ProtocolVersion is the go-plugin application protocol version of plugin-runtime 2.0.
 	ProtocolVersion = 2
-	// MagicCookieKey and MagicCookieValue let a plugin refuse to run when not started by the Core.
-	MagicCookieKey   = "GOPAGER_PLUGIN"
+	// MagicCookieKey is the environment variable the Core sets when starting a
+	// plugin; a plugin refuses to run when it is missing or wrong.
+	MagicCookieKey = "GOPAGER_PLUGIN"
+	// MagicCookieValue is the value expected in MagicCookieKey.
 	MagicCookieValue = "gopager-plugin-runtime-2"
 	// PluginName is the go-plugin dispense name of the single invocation service.
 	PluginName = "gopager"
-	// ServiceName and InvokeMethod are the gRPC identifiers published in plugin.proto.
-	ServiceName  = "gopager.plugin.v2.Plugin"
+	// ServiceName is the fully qualified gRPC service name published in plugin.proto.
+	ServiceName = "gopager.plugin.v2.Plugin"
+	// InvokeMethod is the full gRPC method path of the Invoke call.
 	InvokeMethod = "/" + ServiceName + "/Invoke"
 )
 

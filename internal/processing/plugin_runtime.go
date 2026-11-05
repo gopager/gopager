@@ -19,11 +19,29 @@ import (
 // pluginStartTimeout bounds the go-plugin handshake of a freshly started plugin process.
 const pluginStartTimeout = 10 * time.Second
 
-// pluginEnvironment lists the only Core environment variables passed to plugin processes (D-131).
+// installedInvocationTimeout bounds one installed invocation, including starting its plugin process.
+// It is a variable only so tests can exercise the bound without waiting for the production value.
+var installedInvocationTimeout = 30 * time.Second
+
+// errInvocationDeadline is the cancellation cause recorded when an invocation's own deadline
+// expires, which distinguishes it from cancellation of the caller's context.
+var errInvocationDeadline = errors.New("installed invocation deadline exceeded")
+
+// invocationErr reports why an invocation context ended: expiry of the invocation's own deadline
+// is the explicit resource failure, while caller cancellation or expiry is returned unchanged.
+func invocationErr(ctx context.Context) error {
+	err := ctx.Err()
+	if err != nil && errors.Is(context.Cause(ctx), errInvocationDeadline) {
+		return resource(errInvocationDeadline)
+	}
+	return err
+}
+
+// pluginEnvironment lists the only Core environment variables passed to plugin processes.
 // Core configuration such as GOPAGER_DATABASE_URL is never inherited.
 var pluginEnvironment = []string{"PATH", "HOME", "LANG", "LC_ALL", "TZ", "TMPDIR"}
 
-// PluginHost owns the plugin processes started for loaded artifacts (plugin-runtime 2.0, D-131).
+// PluginHost owns the plugin processes started for loaded artifacts (plugin-runtime 2.0).
 // Each loaded artifact, and therefore each configured instance, gets its own process.
 type PluginHost struct {
 	mu        sync.Mutex
@@ -144,11 +162,13 @@ func (a *InstalledArtifact) stop() {
 
 // call performs one bounded invocation. A deadline, cancellation or transport failure kills the
 // process so an uncooperative plugin cannot keep running; the next call starts a new one.
+// Expiry of the invocation's own deadline is RESOURCE_LIMIT; caller cancellation stays a
+// cancellation and any other transport failure is INVALID_INPUT.
 func (a *InstalledArtifact) call(ctx context.Context, input []byte, output any, duration time.Duration, budget *executionBudget) error {
 	if a == nil || ctx == nil || output == nil || duration <= 0 {
 		return invalid(errors.New("missing plugin invocation participant"))
 	}
-	if err := ctx.Err(); err != nil {
+	if err := invocationErr(ctx); err != nil {
 		return err
 	}
 	if len(input) > MaxInputBytes {
@@ -157,7 +177,7 @@ func (a *InstalledArtifact) call(ctx context.Context, input []byte, output any, 
 	if !utf8.Valid(input) {
 		return invalid(errors.New("plugin input is not UTF-8"))
 	}
-	ctx, cancel := context.WithTimeout(ctx, duration)
+	ctx, cancel := context.WithTimeoutCause(ctx, duration, errInvocationDeadline)
 	defer cancel()
 	var response []byte
 	invoke := func(context.Context) error {
@@ -168,8 +188,8 @@ func (a *InstalledArtifact) call(ctx context.Context, input []byte, output any, 
 		response, err = stub.Invoke(ctx, input, MaxOutputBytes)
 		if err != nil {
 			a.stopIf(client)
-			if ctx.Err() != nil {
-				return ctx.Err()
+			if err := invocationErr(ctx); err != nil {
+				return err
 			}
 			return invalid(errors.New("plugin invocation failed"))
 		}
@@ -184,12 +204,12 @@ func (a *InstalledArtifact) call(ctx context.Context, input []byte, output any, 
 	if err != nil {
 		return err
 	}
-	if err := ctx.Err(); err != nil {
+	if err := invocationErr(ctx); err != nil {
 		return err
 	}
 	if budget != nil {
 		if err := budget.computeContext().Err(); err != nil {
-			return err
+			return budget.bound(err)
 		}
 	}
 	if len(response) > MaxOutputBytes {

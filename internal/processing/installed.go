@@ -100,11 +100,11 @@ func (a *InstalledArtifact) invokeProjectedBudget(ctx context.Context, envelope 
 	parent := ctx
 	if budget != nil {
 		if err := budget.computeContext().Err(); err != nil {
-			return nil, err
+			return nil, budget.bound(err)
 		}
 		parent = budget.parent
 	}
-	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
+	ctx, cancel := context.WithTimeoutCause(parent, installedInvocationTimeout, errInvocationDeadline)
 	defer cancel()
 	envelope.Deadline, _ = ctx.Deadline()
 	encoded, err := json.Marshal(envelope)
@@ -112,7 +112,7 @@ func (a *InstalledArtifact) invokeProjectedBudget(ctx context.Context, envelope 
 		return nil, invalid(err)
 	}
 	var response invocationResponse
-	if err := a.call(ctx, encoded, &response, 30*time.Second, budget); err != nil {
+	if err := a.call(ctx, encoded, &response, installedInvocationTimeout, budget); err != nil {
 		return nil, err
 	}
 	if response.SchemaVersion != 2 || (response.Fields == nil) == (response.Failure == "") {
@@ -135,7 +135,7 @@ func (a *InstalledArtifact) invokeProjectedBudget(ctx context.Context, envelope 
 	}
 	if budget != nil {
 		if err := budget.computeContext().Err(); err != nil {
-			return nil, err
+			return nil, budget.bound(err)
 		}
 	}
 	return *response.Fields, nil

@@ -10,11 +10,11 @@ argument-hint: "AP ID or assignment path"
 
 Read the assigned AP and relevant sections of:
 
-- [Shared execution rules](../../../docs/work-packages/shared-rules.md)
-- [Document authority](../../../docs/README.md#document-authority)
-- [Evidence format](../../../docs/execution/README.md)
+- [Shared execution rules](../../../development/work-packages/shared-rules.md)
+- [Document authority](../../../development/README.md#document-authority)
+- [Evidence format](../../../development/execution/README.md)
 
-These are the canonical rules. Follow task-specific links for requirements, fixed contracts, decisions, glossary terms and exact producer handovers. Do not preload source assignments, unrelated contracts or change history.
+Apply the [permanent documentation](../../../development/README.md#permanent-documentation), [naming](../../../development/README.md#naming) and [tooling](../../../development/README.md#skills-agents-and-mcp-servers) rules. These are the canonical rules. Follow task-specific links for requirements, fixed contracts, decisions, glossary terms and exact producer handovers. Do not preload source assignments, unrelated contracts or change history.
 
 ## Procedure
 
@@ -23,8 +23,8 @@ These are the canonical rules. Follow task-specific links for requirements, fixe
 3. Define the assigned contract/decision slices at their canonical owners before using them. Execution authorizes this in-scope work; do not request additional permission or ask how much to plan.
 4. Implement only current tasks and supporting write paths. Preserve fixed earlier behavior. Later consumers are compatibility context, not unfinished inputs or work to perform early.
 5. Run the smallest checks covering the actual acceptance cases. Distinguish PostgreSQL, HTTP/SSE, browser, real provider and operational evidence from fixtures/compile checks.
-6. Apply [mandatory documentation maintenance](../../../docs/work-packages/shared-rules.md#mandatory-documentation-maintenance) in every work step. Record results and hand over artifact paths/versions, producer tasks, consumer inputs, limitations and gaps in the execution record; do not copy definitions or task wording.
-7. After each task, partial slice or check, reconcile the execution record with every assigned task, required output and acceptance case. Select the next actionable in-scope item and repeat planning, implementation, verification and documentation until the completion check passes. Follow the canonical [continuation and stop conditions](../../../docs/work-packages/shared-rules.md#mandatory-continuation-and-stop-conditions).
+6. Apply [mandatory documentation maintenance](../../../development/work-packages/shared-rules.md#mandatory-documentation-maintenance) in every work step. Record results and hand over artifact paths/versions, producer tasks, consumer inputs, limitations and gaps in the execution record; do not copy definitions or task wording.
+7. After each task, partial slice or check, reconcile the execution record with every assigned task, required output and acceptance case. Select the next actionable in-scope item and repeat planning, implementation, verification and documentation until the completion check passes. Follow the canonical [continuation and stop conditions](../../../development/work-packages/shared-rules.md#mandatory-continuation-and-stop-conditions).
 
 Progress updates and execution checkpoints are intermediate state, not final handovers. Passing focused tests for a foundation slice does not discharge the remaining AP tasks or acceptance checks.
 

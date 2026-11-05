@@ -75,8 +75,8 @@ func TestInstalledPluginWireInvocationRestartAndIsolation(t *testing.T) {
 				t.Fatalf("installed success failed (also after restart): %+v, %v", fields, err)
 			}
 		case "loop":
-			if !errors.Is(err, context.DeadlineExceeded) || fields != nil {
-				t.Fatalf("plugin loop escaped deadline: %+v, %v", fields, err)
+			if !errors.Is(err, context.DeadlineExceeded) || platform.FailureCode(err) == platform.CodeResourceLimit || fields != nil {
+				t.Fatalf("plugin loop escaped caller deadline or became a resource bound: %+v, %v", fields, err)
 			}
 		case "env":
 			if err != nil || string(fields["text"].Value) != `""` {
@@ -106,6 +106,38 @@ func TestInstalledPluginWireInvocationRestartAndIsolation(t *testing.T) {
 	artifact.manifest.ConfigurationPolicy.Secret = new(bool)
 	if _, err := artifact.invokeProjected(ctx, envelope, false); platform.FailureCode(err) != platform.CodeInvalidInput {
 		t.Fatalf("envelope without instance ID was accepted: %v", err)
+	}
+}
+
+func TestInstalledPluginOwnDeadlineIsResourceLimit(t *testing.T) {
+	ctx := context.Background()
+	host := NewPluginHost()
+	t.Cleanup(func() {
+		if err := host.Close(ctx); err != nil {
+			t.Error(err)
+		}
+	})
+	artifact, pin := loadCommandPlugin(t, host, map[string]FieldSchema{"mode": {Kind: StringValue}, "text": {Kind: StringValue}})
+	original := installedInvocationTimeout
+	installedInvocationTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { installedInvocationTimeout = original })
+	for _, mode := range []string{"loop", "ok"} {
+		value, err := Literal(StringValue, mode)
+		if err != nil {
+			t.Fatal(err)
+		}
+		envelope := installedEnvelope(t, pin, map[string]Value{"mode": value, "text": value})
+		fields, err := artifact.invokeProjected(ctx, envelope, true)
+		switch mode {
+		case "loop":
+			if platform.FailureCode(err) != platform.CodeResourceLimit || fields != nil {
+				t.Fatalf("plugin exceeding its own deadline was not RESOURCE_LIMIT: %+v, %v", fields, err)
+			}
+		case "ok":
+			if err != nil || string(fields["text"].Value) != `"ok"` {
+				t.Fatalf("plugin was not restarted after its deadline: %+v, %v", fields, err)
+			}
+		}
 	}
 }
 

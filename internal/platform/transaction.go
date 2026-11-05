@@ -8,4 +8,6 @@ type TransactionContext interface {
 	Context() context.Context
 }
 
+// TxFunc is a transaction callback. It must not retain the TransactionContext
+// beyond its return; returning a non-nil error rolls the transaction back.
 type TxFunc func(TransactionContext) error

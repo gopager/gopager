@@ -1,6 +1,6 @@
 # GoPager Work Packages
 
-Start from the assigned AP. Read its required inputs and planning references, not the entire documentation tree. [Shared rules](work-packages/shared-rules.md) govern execution; the [plan](authoritative-plan.md#delivery-scope) owns delivery scope and approval; [execution records](execution/README.md) own results.
+Start from the assigned AP. Read its required inputs and planning references, not the entire development-process tree or the permanent [docs/](../docs/README.md). [Shared rules](work-packages/shared-rules.md) govern execution; the [plan](authoritative-plan.md#delivery-scope) owns delivery scope and approval; [execution records](execution/README.md) own results.
 
 <a id="package-directory"></a>
 ## Revised Execution Path

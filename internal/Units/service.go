@@ -15,6 +15,12 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
+// Service implements authorized Unit, collection, Organization and Unit
+// template operations. Every method resolves the caller's proof inside a new
+// platform transaction; mutations require a non-nil check callback and record
+// an audit change plus an events.MasterDataFact in that transaction. Create
+// operations are idempotent per actor and command ID via command receipts.
+// Create it with NewService.
 type Service struct {
 	transactions identity.Transactions
 	resolver     *identity.Resolver
@@ -321,6 +327,9 @@ func (s *Service) ChangeUnit(ctx context.Context, proof identity.Proof, id uuid.
 	return result, nil
 }
 
+// Deletion is the result of DeleteUnit. Status is "pending": the Unit's address
+// rules are disabled in the same transaction, but historical assignment
+// correction for the affected networks is only queued and runs later.
 type Deletion struct {
 	commands.Result
 	Status string `json:"status"`

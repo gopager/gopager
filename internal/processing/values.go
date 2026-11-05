@@ -16,17 +16,30 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
+// Processing size and shape limits. Exceeding one is rejected as invalid input or a
+// resource-limit failure, never truncated.
 const (
-	MaxInputBytes  = 1 << 20
+	// MaxInputBytes bounds an encoded input document, value or predicate (1 MiB).
+	MaxInputBytes = 1 << 20
+	// MaxOutputBytes bounds an encoded evaluation result or plugin response (256 KiB).
 	MaxOutputBytes = 256 << 10
-	MaxDepth       = 32
-	MaxCollection  = 1000
-	MaxArguments   = 1024
-	MaxSteps       = 128
+	// MaxDepth bounds nesting of values, schemas, field paths, predicates and steps.
+	MaxDepth = 32
+	// MaxCollection bounds schema properties, output fields and list page sizes.
+	MaxCollection = 1000
+	// MaxArguments bounds predicate arguments/values, dependency groups and the targets of
+	// one Transmission.
+	MaxArguments = 1024
+	// MaxSteps bounds the total number of steps in a Workflow definition, nested branch
+	// steps included.
+	MaxSteps = 128
 )
 
+// ValueKind is the closed set of typed value kinds used in field schemas and values.
 type ValueKind string
 
+// The value kinds. ObjectValue and ListValue are composite; NullValue is the kind of an
+// explicit null, which a schema admits only when Nullable is set.
 const (
 	StringValue    ValueKind = "string"
 	BooleanValue   ValueKind = "boolean"

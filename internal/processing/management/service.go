@@ -28,6 +28,11 @@ type UnitNetworks interface {
 	NetworksForUnit(context.Context, platform.TransactionContext, uuid.UUID) ([]uuid.UUID, error)
 }
 
+// Service manages Workflow configuration: reads, saves and versioning. Every operation
+// resolves the caller's proof, locks the configuration revision and reads the primary
+// clock inside one transaction; mutations additionally require a non-nil check callback
+// and record the audit change, the Processing configuration fact and, for commands
+// carrying a command ID, an idempotency receipt in that same transaction.
 type Service struct {
 	transactions identity.Transactions
 	resolver     *identity.Resolver
@@ -205,7 +210,7 @@ func (input MetadataInput) canonical() (MetadataInput, error) {
 	return result, nil
 }
 
-// record atomically joins own/shared revision, safe audit and the separate DOM-08 configuration fact.
+// record atomically joins own/shared revision, safe audit and the separate Processing configuration fact.
 func (s *Service) record(tx platform.TransactionContext, authority authz.Authority,
 	value processing.WorkflowConfiguration, action, change string, command *uuid.UUID, now time.Time) error {
 	actor, err := uuid.Parse(authority.PrincipalID)

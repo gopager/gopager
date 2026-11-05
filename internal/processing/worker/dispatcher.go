@@ -13,8 +13,17 @@ import (
 	"github.com/gopager/gopager/internal/processing"
 )
 
+// DefaultDispatchConcurrency is the number of candidates processed in parallel when
+// DispatchConfig.Concurrency is zero.
 const DefaultDispatchConcurrency = 2
+
+// DefaultDispatchPollInterval is the idle polling interval used when
+// DispatchConfig.PollInterval is zero.
 const DefaultDispatchPollInterval = 5 * time.Second
+
+// maxDispatchBackoff bounds the delay before the next selection attempt after
+// consecutive transient storage failures.
+const maxDispatchBackoff = 30 * time.Second
 
 // DispatchConfig separates scheduling policy from mechanism without exposing an Operator setting yet.
 type DispatchConfig struct {
@@ -84,8 +93,12 @@ type dispatchOutcome struct {
 	err error
 }
 
-// Run dispatches at most the approved concurrency and joins all work on cancellation or list failure.
+// Run dispatches at most the approved concurrency and joins all work before returning.
 // Failed slots cool down until the next wake/poll, avoiding a tight loop on unchanged rejected work.
+// A transient selection failure (STORAGE_UNAVAILABLE, AUTHORITY_UNAVAILABLE, COMMIT_UNCERTAIN or
+// REVISION_CONFLICT) is logged and retried after a backoff that starts at the poll interval and
+// doubles up to 30 s; wake-ups and polls do not select while backing off. Run returns nil on
+// cancellation and returns any other selection failure.
 func (d *Dispatcher) Run(ctx context.Context) error {
 	if !d.running.CompareAndSwap(false, true) {
 		return platform.NewFailure(platform.CodeRevisionConflict, errors.New("Processing dispatcher already running"))
@@ -163,7 +176,39 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 		}
 		return nil
 	}
-	if err := fill(); err != nil {
+	failures := 0
+	var retry *time.Timer
+	var retryC <-chan time.Time
+	defer func() {
+		if retry != nil {
+			retry.Stop()
+		}
+	}()
+	// attempt selects work unless backing off; it absorbs transient failures.
+	attempt := func() error {
+		if retryC != nil {
+			return nil
+		}
+		err := fill()
+		if err == nil {
+			if failures > 0 {
+				d.logger.Info("Processing dispatch selection recovered", "failures", failures)
+				failures = 0
+			}
+			return nil
+		}
+		if ctx.Err() != nil || !transientFailure(err) {
+			return err
+		}
+		failures++
+		delay := dispatchBackoff(d.config.PollInterval, failures)
+		d.logger.Warn("Processing dispatch selection failed; retrying",
+			"code", platform.FailureCode(err), "failures", failures, "retryIn", delay)
+		retry = time.NewTimer(delay)
+		retryC = retry.C
+		return nil
+	}
+	if err := attempt(); err != nil {
 		if ctx.Err() != nil {
 			return nil
 		}
@@ -183,6 +228,8 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 			} else {
 				delete(reserved, outcome.id)
 			}
+		case <-retryC:
+			retryC = nil
 		case <-ticker.C:
 			for id, active := range reserved {
 				if !active {
@@ -196,11 +243,30 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 				}
 			}
 		}
-		if err := fill(); err != nil {
+		if err := attempt(); err != nil {
 			if ctx.Err() != nil {
 				return nil
 			}
 			return err
 		}
 	}
+}
+
+// transientFailure reports storage failures that a later attempt can overcome.
+func transientFailure(err error) bool {
+	switch platform.FailureCode(err) {
+	case platform.CodeStorageUnavailable, platform.CodeAuthorityUnavailable,
+		platform.CodeCommitUncertain, platform.CodeRevisionConflict:
+		return true
+	}
+	return false
+}
+
+// dispatchBackoff doubles base per consecutive failure, bounded by maxDispatchBackoff.
+func dispatchBackoff(base time.Duration, failures int) time.Duration {
+	delay := base
+	for i := 1; i < failures && delay < maxDispatchBackoff; i++ {
+		delay *= 2
+	}
+	return min(delay, max(base, maxDispatchBackoff))
 }

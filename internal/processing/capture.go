@@ -331,7 +331,8 @@ type SourceOwner interface {
 	Capture(context.Context, platform.TransactionContext, uuid.UUID) (*CapturedSource, error)
 }
 
-// MissingSourceOwner explicitly blocks real-source operations before AP-06 wires its owner.
+// MissingSourceOwner is a placeholder SourceOwner for deployments without a real Transmission
+// source owner; every real-source operation fails as authority-unavailable.
 type MissingSourceOwner struct{}
 
 // Capture reports unavailable authority rather than substituting synthetic/raw data.

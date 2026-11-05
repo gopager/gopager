@@ -4,7 +4,9 @@ This directory owns execution state and evidence, not task definitions, decision
 
 ## Record Location
 
-For AP-NN, use `docs/execution/ap-NN.md`. Create it when that package starts. An absent record means no recorded execution, not approval or completion. Follow the same path rule for prerequisite producers; do not create an independent status matrix.
+For AP-NN, use `development/execution/ap-NN.md`. Create it when that package starts. An absent record means no recorded execution, not approval or completion. Follow the same path rule for prerequisite producers; do not create an independent status matrix.
+
+Records written before 2026-11-06 refer to this tree under its former path `docs/` (for example `docs/execution/ap-NN.md` or `git diff -- docs/work-packages` in recorded commands) and to former test identifiers. Those commands and results are preserved as observed; read `docs/` there as today's `development/`. Renamed test identifiers ([D-132](../authoritative-plan.md#documentation-and-naming-separation)): environment variables `GOPAGER_AP05_PROCESS_HELPER` → `GOPAGER_TEST_PROCESS_HELPER` and `GOPAGER_AP05_TEST_LISTEN` → `GOPAGER_TEST_LISTEN`; test schema prefixes `ap05_`, `ap07_`, `ap08_` → `test_`, `test_cli_`, `test_http_`; trigger `ap07_intake_failpoint` → `test_intake_failpoint`; regex test helper `d61CaptureExpansion` → `captureExpansionCounterexample`. Recorded numbered domain IDs correspond to the fixed [domain names](../architecture.md#domains-and-data-ownership).
 
 The [package directory](../work-packages.md#revised-execution-path) owns order and assignment navigation. Read prerequisite records only for their required handover and evidence. Do not preload unrelated execution history or create records for packages that have not started.
 

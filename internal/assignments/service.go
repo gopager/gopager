@@ -16,6 +16,11 @@ import (
 	"github.com/gopager/gopager/internal/protocols"
 )
 
+// Service implements authorized Address-rule, suppression and correction
+// management and the ingest-time matcher. Management methods resolve the
+// caller's proof in a new platform transaction and require a non-nil check
+// callback for mutations; MatchTargets and NetworksWithMatches join the
+// caller's transaction instead. Create it with NewService.
 type Service struct {
 	transactions    identity.Transactions
 	resolver        *identity.Resolver
@@ -192,13 +197,18 @@ func (s *Service) ListRules(ctx context.Context, proof identity.Proof, page unit
 	return result, nil
 }
 
-// Preview validates creation or an expected-revision update without facts or pending work.
-func (s *Service) Preview(ctx context.Context, proof identity.Proof, id uuid.UUID, expected int64, input RuleInput) error {
+// Preview validates creation or an expected-revision update without facts or
+// pending work. A non-nil check is applied to the resolved caller before any
+// read, so transports can enforce request-bound protections such as Origin and
+// CSRF for Cookie Sessions.
+func (s *Service) Preview(ctx context.Context, proof identity.Proof, id uuid.UUID, expected int64, input RuleInput,
+	check func(identity.Authentication) error,
+) error {
 	input, err := canonicalInput(input)
 	if err != nil || (id == uuid.Nil) != (expected == 0) || expected < 0 {
 		return authz.ErrInvalidInput
 	}
-	return s.within(ctx, proof, false, nil, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
+	return s.within(ctx, proof, false, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
 		if _, err := s.repository.LockRevision(tx.Context(), tx); err != nil {
 			return err
 		}

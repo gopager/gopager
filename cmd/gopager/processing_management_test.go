@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -87,15 +88,14 @@ func (owner previewFixtureNetworks) ScopeExists(ctx context.Context, tx platform
 
 func TestWorkflowRetryResponseIsBounded(t *testing.T) {
 	response := workflowRetryResponse{
-		SchemaVersion: 1,
-		CandidateID:   uuid.MustParse("b29f0e2e-f49d-4c69-90c9-a27e28f4c26c"),
-		Revision:      3,
+		CandidateID: uuid.MustParse("b29f0e2e-f49d-4c69-90c9-a27e28f4c26c"),
+		Revision:    3,
 	}
 	encoded, err := json.Marshal(response)
 	if err != nil {
 		t.Fatal(err)
 	}
-	const want = `{"schemaVersion":1,"candidateId":"b29f0e2e-f49d-4c69-90c9-a27e28f4c26c","revision":"3"}`
+	const want = `{"candidateId":"b29f0e2e-f49d-4c69-90c9-a27e28f4c26c","revision":"3"}`
 	if string(encoded) != want {
 		t.Fatalf("retry response = %s, want %s", encoded, want)
 	}
@@ -596,9 +596,21 @@ func TestProcessingSyntheticPreviewHonorsCurrentUnitScope(t *testing.T) {
 	}
 }
 
-func TestProcessingSyntheticPreviewFailsUnavailableWithoutNetworkOwner(t *testing.T) {
+func TestProcessingSyntheticPreviewUsesProductionNetworkOwner(t *testing.T) {
 	store := newManagementStoreWithFields(t,
 		[]string{"unit", "address", "payload", "gateway", "derived"})
+	live, deleted := uuid.New(), uuid.New()
+	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		_, err = executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol,deleted)
+			VALUES($1,'Live POCSAG','pocsag',false),($2,'Deleted POCSAG','pocsag',true)`, live, deleted)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
 	runtime, err := composeProcessingAPIRuntime(t.Context(), store, nil, pluginFixtureRoot(t))
 	if err != nil {
 		t.Fatal(err)
@@ -626,7 +638,7 @@ func TestProcessingSyntheticPreviewFailsUnavailableWithoutNetworkOwner(t *testin
 	login := managementRequest(t, client, origin, http.MethodPost, "/api/v1/auth/login",
 		`{"schemaVersion":1,"username":"operator","password":"initial-password"}`, "", "", http.StatusOK)
 	workflowResponse := managementRequest(t, client, origin, http.MethodPost, "/api/v1/workflows",
-		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Unavailable Network",`+
+		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Production Network",`+
 			`"scope":{"kind":"all"},"enabled":true}`,
 		login.CSRFToken, "", http.StatusCreated)
 	workflowID, _ := managementResultID(t, workflowResponse)
@@ -643,22 +655,38 @@ func TestProcessingSyntheticPreviewFailsUnavailableWithoutNetworkOwner(t *testin
 		"/api/v1/workflows/"+workflowID.String()+"/versions/"+versionID.String()+"/activate",
 		`{"schemaVersion":1,"expectedRevision":"2"}`, login.CSRFToken, "", http.StatusOK)
 	before := processingPreviewSideEffects(t, store)
-	input := synthetic.Input{SchemaVersion: 1, Protocol: protocols.POCSAG, Form: "text",
-		NetworkID: uuid.New(), Payload: json.RawMessage(`{"value":"no fallback"}`),
-		Targets: []protocols.Target{}}
-	encodedInput, err := json.Marshal(input)
-	if err != nil {
-		t.Fatal(err)
+	preview := func(protocol protocols.Protocol, network uuid.UUID, expected int) managementResponse {
+		t.Helper()
+		input := synthetic.Input{SchemaVersion: 1, Protocol: protocol, Form: "text",
+			NetworkID: network, Payload: json.RawMessage(`{"value":"production network"}`),
+			Targets: []protocols.Target{}}
+		encodedInput, err := json.Marshal(input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return managementRequest(t, client, origin, http.MethodPost,
+			"/api/v1/workflows/"+workflowID.String()+"/preview",
+			`{"schemaVersion":1,"versionId":"`+versionID.String()+`","syntheticJson":`+
+				string(encodedInput)+`}`, login.CSRFToken, "", expected)
 	}
-	response := managementRequest(t, client, origin, http.MethodPost,
-		"/api/v1/workflows/"+workflowID.String()+"/preview",
-		`{"schemaVersion":1,"versionId":"`+versionID.String()+`","syntheticJson":`+
-			string(encodedInput)+`}`, login.CSRFToken, "", http.StatusServiceUnavailable)
-	if response.Code != string(platform.CodeAuthorityUnavailable) {
-		t.Fatalf("missing production Network owner error = %q, want authority unavailable", response.Code)
+	response := preview(protocols.POCSAG, live, http.StatusOK)
+	var evaluation processing.Evaluation
+	if err := json.Unmarshal(response.Data, &evaluation); err != nil || !evaluation.Selected {
+		t.Fatalf("production Network preview = %+v, decode error = %v", evaluation, err)
+	}
+	for name, failure := range map[string]managementResponse{
+		"deleted Network":   preview(protocols.POCSAG, deleted, http.StatusServiceUnavailable),
+		"Protocol mismatch": preview(protocols.FLEX, live, http.StatusServiceUnavailable),
+	} {
+		if failure.Code != string(platform.CodeAuthorityUnavailable) {
+			t.Fatalf("%s preview error = %q, want authority unavailable", name, failure.Code)
+		}
+	}
+	if missing := preview(protocols.POCSAG, uuid.New(), http.StatusNotFound); missing.Code != "NOT_FOUND" {
+		t.Fatalf("unknown Network preview error = %q, want not found", missing.Code)
 	}
 	if after := processingPreviewSideEffects(t, store); before != after {
-		t.Fatalf("unavailable preview wrote durable results/candidates/events: before=%v after=%v", before, after)
+		t.Fatalf("production Network preview wrote durable results/candidates/events: before=%v after=%v", before, after)
 	}
 }
 
@@ -1520,4 +1548,213 @@ func TestProcessingStatusHTTPFiltersWorkflowPagesAndHidesPrivateEvidence(t *test
 	revokeReadReviewer(t, store, reviewerID)
 	managementRequest(t, reviewerClient, origin, http.MethodGet,
 		"/api/v1/workflows/"+workflowA.String()+"/candidates", "", "", "", http.StatusForbidden)
+}
+
+// failProcessingCandidateTerminally moves a pending candidate to the terminal failed state
+// after exhausting its automatic attempts, as the worker does for a final failure.
+func failProcessingCandidateTerminally(t *testing.T, store *postgres.Store, candidateID uuid.UUID) {
+	t.Helper()
+	err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		driver, err := borrowed.New(store, tx)
+		if err != nil {
+			return err
+		}
+		client := ent.NewClient(ent.Driver(driver))
+		scope := guard.Bind(tx.Context(), guard.Access{Current: driver.Current,
+			Predicates: map[string]entql.P{"ProcessingCandidate": entql.FieldEQ("id", candidateID)}})
+		return client.ProcessingCandidate.UpdateOneID(candidateID).AddRevision(1).
+			SetState(processingcandidate.StateFailed).SetAttempts(processing.MaxAutomaticAttempts).
+			SetAutomaticAttempts(processing.MaxAutomaticAttempts).
+			SetFailureCode(string(platform.CodeResourceLimit)).Exec(scope)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// rawProcessingRequest posts body with one authentication header and decodes the JSON
+// response into result.
+func rawProcessingRequest(t *testing.T, client *http.Client, origin, path, body, header, value string,
+	expected int, result any) {
+	t.Helper()
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, origin+path, strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Origin", origin)
+	request.Header.Set(header, value)
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decodeErr := json.NewDecoder(response.Body).Decode(result)
+	if err := response.Body.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != expected || decodeErr != nil {
+		t.Fatalf("POST %s returned %d (want %d), decode error = %v", path, response.StatusCode, expected, decodeErr)
+	}
+}
+
+func TestProcessingCandidateRetryHTTPUsesCurrentSourceOwner(t *testing.T) {
+	store := newManagementStore(t)
+	network, gateway := uuid.New(), uuid.New()
+	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol)
+			VALUES($1,'Retry Network','pocsag')`, network); err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateways(id) VALUES($1)`, gateway); err != nil {
+			return err
+		}
+		_, err = executor.ExecContext(tx.Context(), `INSERT INTO gateway_networks
+			(id,gateway_id,gateway_network_identifier,network_id,is_default) VALUES($1,$2,'retry',$3,true)`,
+			uuid.New(), gateway, network)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := composeProcessingAPIRuntime(t.Context(), store, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := runtime.Close(t.Context()); err != nil {
+			t.Error(err)
+		}
+	})
+	backend := httptest.NewUnstartedServer(nil)
+	t.Cleanup(backend.Close)
+	origin := "http://" + backend.Listener.Addr().String()
+	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, nil, nil, runtime.routes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend.Config.Handler = handler
+	backend.Start()
+	client := backend.Client()
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.Jar = jar
+	login := managementRequest(t, client, origin, http.MethodPost, "/api/v1/auth/login",
+		`{"schemaVersion":1,"username":"operator","password":"initial-password"}`, "", "", http.StatusOK)
+
+	workflowResponse := managementRequest(t, client, origin, http.MethodPost, "/api/v1/workflows",
+		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Retry","scope":{"kind":"all"},"enabled":true}`,
+		login.CSRFToken, "", http.StatusCreated)
+	workflowID, _ := managementResultID(t, workflowResponse)
+	versionInput, err := json.Marshal(workflowVersionMutation{SchemaVersion: 1,
+		CommandID: uuid.New(), ExpectedRevision: 1, Definition: sourceProtocolPreviewDefinition(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	versionResponse := managementRequest(t, client, origin, http.MethodPost,
+		"/api/v1/workflows/"+workflowID.String()+"/versions", string(versionInput),
+		login.CSRFToken, "", http.StatusCreated)
+	versionID, _ := managementResultID(t, versionResponse)
+	activated := managementRequest(t, client, origin, http.MethodPost,
+		"/api/v1/workflows/"+workflowID.String()+"/versions/"+versionID.String()+"/activate",
+		`{"schemaVersion":1,"expectedRevision":"2"}`, login.CSRFToken, "", http.StatusOK)
+	_, workflowRevision := managementResultID(t, activated)
+
+	var credential gatewayCredentialResponse
+	rawProcessingRequest(t, client, origin, "/api/v1/gateways/"+gateway.String()+"/credentials",
+		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","expectedRevision":"1"}`,
+		identity.CSRFHeaderName, login.CSRFToken, http.StatusCreated, &credential)
+	if credential.Secret == "" {
+		t.Fatal("credential issue returned no secret")
+	}
+	var submitted struct {
+		Data struct {
+			TransmissionID   uuid.UUID `json:"transmissionId"`
+			ProcessingStatus string    `json:"processingStatus"`
+		} `json:"data"`
+	}
+	rawProcessingRequest(t, client, origin, "/api/v1/transmissions",
+		`{"schemaVersion":1,"submissionId":"retry-submission","protocol":"pocsag",`+
+			`"observationTime":"2026-11-04T12:00:00Z","gatewayNetworkIdentifier":"retry",`+
+			`"payload":{"form":"tone-only"},"transmissionTargets":[]}`,
+		"Authorization", "Bearer "+credential.Secret, http.StatusAccepted, &submitted)
+	receipt := submitted.Data
+	if receipt.TransmissionID == uuid.Nil || receipt.ProcessingStatus != "pending" {
+		t.Fatalf("accepted Transmission receipt = %+v, want pending Processing", receipt)
+	}
+	var candidateID uuid.UUID
+	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		return executor.QueryRowContext(tx.Context(), `SELECT id FROM processing_candidates
+			WHERE transmission_id=$1 AND workflow_id=$2`, receipt.TransmissionID, workflowID).Scan(&candidateID)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	failProcessingCandidateTerminally(t, store, candidateID)
+
+	candidatePath := "/api/v1/workflows/" + workflowID.String() + "/candidates/" + candidateID.String()
+	readCandidate := func() (string, string) {
+		t.Helper()
+		response := managementRequest(t, client, origin, http.MethodGet, candidatePath, "", "", "", http.StatusOK)
+		var status struct {
+			State    string `json:"state"`
+			Revision string `json:"revision"`
+		}
+		if err := json.Unmarshal(response.Data, &status); err != nil {
+			t.Fatal(err)
+		}
+		return status.State, status.Revision
+	}
+	state, revision := readCandidate()
+	if state != "failed" {
+		t.Fatalf("seeded candidate state = %q, want failed", state)
+	}
+	retried := managementRequest(t, client, origin, http.MethodPost, candidatePath+"/retry",
+		`{"schemaVersion":1,"expectedRevision":"`+revision+`"}`, login.CSRFToken, "", http.StatusOK)
+	var retryResult map[string]json.RawMessage
+	if err := json.Unmarshal(retried.Data, &retryResult); err != nil {
+		t.Fatal(err)
+	}
+	if _, nested := retryResult["schemaVersion"]; nested || string(retryResult["candidateId"]) != `"`+candidateID.String()+`"` {
+		t.Fatalf("retry response data = %s", retried.Data)
+	}
+	var retriedState string
+	var retriedRevision int64
+	var runnable, manual bool
+	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		return executor.QueryRowContext(tx.Context(), `SELECT state,revision,due_at<=now() AND worker_id IS NULL,
+			manual_retry_pending FROM processing_candidates WHERE id=$1`, candidateID).
+			Scan(&retriedState, &retriedRevision, &runnable, &manual)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if retriedState != "pending" || strconv.FormatInt(retriedRevision, 10) == revision || !runnable || !manual {
+		t.Fatalf("retried candidate state=%s revision=%d runnable=%v manualRetryPending=%v, want runnable pending manual retry",
+			retriedState, retriedRevision, runnable, manual)
+	}
+
+	failProcessingCandidateTerminally(t, store, candidateID)
+	_, failedRevision := readCandidate()
+	managementRequest(t, client, origin, http.MethodPut, "/api/v1/workflows/"+workflowID.String(),
+		`{"schemaVersion":1,"expectedRevision":"`+workflowRevision+`","name":"Retry renamed","scope":{"kind":"all"},"enabled":true}`,
+		login.CSRFToken, "", http.StatusOK)
+	stale := managementRequest(t, client, origin, http.MethodPost, candidatePath+"/retry",
+		`{"schemaVersion":1,"expectedRevision":"`+failedRevision+`"}`, login.CSRFToken, "", http.StatusConflict)
+	if stale.Code != string(platform.CodeRevisionConflict) {
+		t.Fatalf("retry after Workflow change error = %q, want revision conflict", stale.Code)
+	}
+	if state, _ := readCandidate(); state != "failed" {
+		t.Fatalf("stale retry changed candidate state to %q", state)
+	}
 }

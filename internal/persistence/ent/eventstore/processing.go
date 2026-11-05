@@ -36,7 +36,8 @@ func (s *Store) appendProcessing(ctx context.Context, tx platform.TransactionCon
 	return envelope.DomainEventID, nil
 }
 
-// AppendProcessingConfiguration records DOM-08 without widening older producer vocabularies.
+// AppendProcessingConfiguration records a Workflow configuration change fact, stamped with primary
+// time, in the caller's transaction without widening older producer vocabularies.
 func (s *Store) AppendProcessingConfiguration(ctx context.Context, tx platform.TransactionContext, fact events.ProcessingConfigurationFact) (uuid.UUID, error) {
 	return s.appendProcessing(ctx, tx, func() (events.ProcessingEnvelope, error) {
 		now, err := s.primary.Now(ctx, tx)

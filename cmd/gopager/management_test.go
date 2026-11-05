@@ -16,7 +16,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
+	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/identity"
+	"github.com/gopager/gopager/internal/ingest"
 	"github.com/gopager/gopager/internal/persistence/ent/eventstore"
 	"github.com/gopager/gopager/internal/persistence/ent/identitystore"
 	"github.com/gopager/gopager/internal/persistence/migrations"
@@ -65,7 +67,7 @@ func newManagementStoreWithFields(t *testing.T, fields []string) *postgres.Store
 		t.Fatal(err)
 	}
 	admin := stdlib.OpenDB(*config)
-	name := "ap08_http_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	name := "test_http_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	if _, err := admin.ExecContext(t.Context(), `CREATE SCHEMA "`+name+`"`); err != nil {
 		t.Fatal(err)
 	}
@@ -151,6 +153,33 @@ func managementRequest(t *testing.T, client *http.Client, origin, method, path, 
 			method, path, response.StatusCode, result.Code, expected, result.Data)
 	}
 	return result
+}
+
+// managementRequestWithoutOrigin sends a Cookie-authenticated POST that omits
+// the Origin header, so only Session state and the optional CSRF token are
+// presented, and asserts the response status and error envelope.
+func managementRequestWithoutOrigin(t *testing.T, client *http.Client, origin, path, body, csrf string, expected int) {
+	t.Helper()
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, origin+path, strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	if csrf != "" {
+		request.Header.Set(identity.CSRFHeaderName, csrf)
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var result managementResponse
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1024*1024)).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != expected || result.SchemaVersion != 1 {
+		t.Fatalf("POST %s without Origin returned %d/%s, expected %d", path, response.StatusCode, result.Code, expected)
+	}
 }
 
 // managementResultID reads only the reference/revision DTO, not an internal persistence entity.
@@ -246,6 +275,10 @@ func TestManagementHTTPAndTLSReverseProxyWithHTTPUpstream(t *testing.T) {
 				`","expectedRevision":"1","settings":` + bulkSettings + `}]}`
 			bulk := `{"schemaVersion":1,"commandId":"` + uuid.NewString() + `",` + bulkItems
 			bulkPreview := `{"schemaVersion":1,` + bulkItems
+			managementRequest(t, client, origin, "POST", "/api/v1/units/bulk/preview",
+				bulkPreview, "", "", http.StatusForbidden)
+			managementRequestWithoutOrigin(t, client, origin, "/api/v1/units/bulk/preview",
+				bulkPreview, login.CSRFToken, http.StatusForbidden)
 			preview := managementRequest(t, client, origin, "POST", "/api/v1/units/bulk/preview",
 				bulkPreview, login.CSRFToken, "", http.StatusOK)
 			var previewData struct {
@@ -260,7 +293,7 @@ func TestManagementHTTPAndTLSReverseProxyWithHTTPUpstream(t *testing.T) {
 				`{"schemaVersion":1,"expectedRevision":"1"}`, login.CSRFToken, "", http.StatusOK)
 			managementRequest(t, client, origin, "GET", "/api/v1/unit-templates/"+templateID.String(),
 				"", "", "", http.StatusOK)
-			// AP-08 suppression/correction routes return only the safe version-1 error shape.
+			// Suppression/correction routes return only the safe version-1 error shape.
 			managementRequest(t, client, origin, "GET", "/api/v1/suppressions", "", "", "", http.StatusOK)
 			unknownTransmission := uuid.NewString()
 			missingTarget := managementRequest(t, client, origin, "POST", "/api/v1/suppressions",
@@ -295,7 +328,10 @@ func TestManagementHTTPAndTLSReverseProxyWithHTTPUpstream(t *testing.T) {
 			managementRequest(t, client, origin, "GET", "/api/v1/units", "", "", "Bearer malformed", http.StatusUnauthorized)
 			ruleValues := `"networkId":"` + network.id.String() + `","unitId":"` + unitID.String() +
 				`","protocol":"pocsag","selector":{"from":10,"to":20,"mode":"function-bit","functions":[1,3]},"enabled":true`
-			managementRequest(t, client, origin, "POST", "/api/v1/address-rules/preview", `{"schemaVersion":1,`+ruleValues+`}`, "", "", http.StatusOK)
+			managementRequest(t, client, origin, "POST", "/api/v1/address-rules/preview", `{"schemaVersion":1,`+ruleValues+`}`, "", "", http.StatusForbidden)
+			managementRequestWithoutOrigin(t, client, origin, "/api/v1/address-rules/preview",
+				`{"schemaVersion":1,`+ruleValues+`}`, login.CSRFToken, http.StatusForbidden)
+			managementRequest(t, client, origin, "POST", "/api/v1/address-rules/preview", `{"schemaVersion":1,`+ruleValues+`}`, login.CSRFToken, "", http.StatusOK)
 			rule := managementRequest(t, client, origin, "POST", "/api/v1/address-rules",
 				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`",`+ruleValues+`}`, login.CSRFToken, "", http.StatusCreated)
 			ruleID, _ := managementResultID(t, rule)
@@ -460,10 +496,44 @@ func TestManagementProductionNetworkOwnerHidesUnknownNetwork(t *testing.T) {
 	}
 	unitID, _ := managementResultID(t, unit)
 	rule := call("/api/v1/address-rules/preview", `{"schemaVersion":1,"networkId":"`+uuid.NewString()+`","unitId":"`+unitID.String()+
-		`","protocol":"pocsag","selector":{"from":10,"to":20,"mode":"function-bit"},"enabled":true}`, "", cookies[0])
+		`","protocol":"pocsag","selector":{"from":10,"to":20,"mode":"function-bit"},"enabled":true}`, authentication.CSRFToken, cookies[0])
 	var failure managementResponse
 	if err := json.Unmarshal(rule.Body.Bytes(), &failure); err != nil || rule.Code != http.StatusForbidden || failure.Code != "FORBIDDEN" {
 		t.Fatalf("production Network owner exposed an unauthorized Network: %d %v", rule.Code, err)
+	}
+}
+
+func TestManagementErrorFallbacksAndRetryability(t *testing.T) {
+	for _, test := range []struct {
+		err       error
+		status    int
+		code      string
+		fallback  string
+		retryable bool
+	}{
+		{authz.ErrNotFound, http.StatusNotFound, "NOT_FOUND", "The requested item is not available.", false},
+		{commands.ErrIdempotencyConflict, http.StatusConflict, "IDEMPOTENCY_CONFLICT",
+			"This operation identifier was already used differently.", false},
+		{ingest.ErrSubmissionConflict, http.StatusConflict, "IDEMPOTENCY_CONFLICT",
+			"This operation identifier was already used differently.", false},
+		{authz.ErrRevisionConflict, http.StatusConflict, "REVISION_CONFLICT",
+			"This item changed. Reload before saving.", true},
+	} {
+		recorder := httptest.NewRecorder()
+		writeManagementError(recorder, test.err)
+		var result struct {
+			Code      string `json:"code"`
+			TextKey   string `json:"textKey"`
+			Fallback  string `json:"fallback"`
+			Retryable bool   `json:"retryable"`
+		}
+		if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		if recorder.Code != test.status || result.Code != test.code || result.TextKey != "error."+test.code ||
+			result.Fallback != test.fallback || result.Retryable != test.retryable {
+			t.Fatalf("%v mapped to %d %+v", test.err, recorder.Code, result)
+		}
 	}
 }
 
@@ -476,6 +546,7 @@ func TestManagementErrorMapping(t *testing.T) {
 		{authz.ErrForbidden, http.StatusForbidden, "FORBIDDEN"},
 		{authz.ErrNotFound, http.StatusNotFound, "NOT_FOUND"},
 		{authz.ErrRevisionConflict, http.StatusConflict, "REVISION_CONFLICT"},
+		{commands.ErrIdempotencyConflict, http.StatusConflict, "IDEMPOTENCY_CONFLICT"},
 		{platform.NewFailure(platform.CodeResourceLimit, errors.New("private infrastructure detail")), http.StatusRequestEntityTooLarge, "RESOURCE_LIMIT"},
 	} {
 		recorder := httptest.NewRecorder()

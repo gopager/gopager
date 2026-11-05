@@ -18,6 +18,8 @@ type RetrySource interface {
 	CheckRetrySource(context.Context, platform.TransactionContext, processing.Candidate) error
 }
 
+// RetryService performs operator-requested manual retries of failed processing
+// candidates. Each call runs in its own primary transaction with a fresh proof check.
 type RetryService struct {
 	management *Service
 	repository processing.CandidateRetryRepository

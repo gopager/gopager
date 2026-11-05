@@ -14,6 +14,8 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
+// CreateSuppressionInput identifies the target position to suppress.
+// ExpectedAssignmentRevision must equal the current global assignment revision.
 type CreateSuppressionInput struct {
 	TransmissionID             uuid.UUID `json:"transmissionId"`
 	TargetPosition             int       `json:"targetPosition"`
@@ -31,6 +33,11 @@ func (s *Service) correctionRepository() (CorrectionRepository, error) {
 	return repository, nil
 }
 
+// ListSuppressions returns a page of suppressions (active and lifted) whose
+// target the caller may read; suppressions on hidden or missing targets are
+// silently omitted and not counted in Total. It fails with a
+// CodeAuthorityUnavailable failure when the Service was built without
+// correction support.
 func (s *Service) ListSuppressions(ctx context.Context, proof identity.Proof, page units.PageInput) (units.Page[Suppression], error) {
 	page, err := page.Validate()
 	if err != nil {
@@ -117,6 +124,17 @@ func suppressionResult(value Suppression, correction CorrectionStatus) Suppressi
 	return SuppressionResult{Suppression: value, Correction: correction}
 }
 
+// CreateSuppression suppresses one target position and, in the same
+// transaction, bumps the assignment revision, queues a correction scope for the
+// target's Network (and current Unit), records an audit change, appends a
+// suppression.changed fact and stores a command receipt. It returns
+// authz.ErrInvalidInput for invalid input or a nil check,
+// authz.ErrRevisionConflict when the expected assignment revision is stale or
+// the target is already actively suppressed, commands.ErrIdempotencyConflict
+// when the command ID was already used with different input, and authorization
+// errors when the caller may not create suppressions for the target. Replaying
+// the same command ID with the same input returns the stored result even after
+// the assignment revision has advanced.
 func (s *Service) CreateSuppression(ctx context.Context, proof identity.Proof, command uuid.UUID,
 	input CreateSuppressionInput, check func(identity.Authentication) error,
 ) (SuppressionResult, error) {
@@ -138,9 +156,6 @@ func (s *Service) CreateSuppression(ctx context.Context, proof identity.Proof, c
 		if err != nil {
 			return err
 		}
-		if currentRevision != input.ExpectedAssignmentRevision {
-			return authz.ErrRevisionConflict
-		}
 		target, err := repository.ReadTargetContext(tx.Context(), tx, input.TransmissionID, input.TargetPosition)
 		if err != nil {
 			return err
@@ -148,11 +163,8 @@ func (s *Service) CreateSuppression(ctx context.Context, proof identity.Proof, c
 		if err := s.targetAuthority(tx.Context(), tx, authority, "suppression.create", target, now); err != nil {
 			return err
 		}
-		if _, active, err := repository.FindActiveSuppression(tx.Context(), tx, input.TransmissionID, input.TargetPosition); err != nil {
-			return err
-		} else if active {
-			return authz.ErrRevisionConflict
-		}
+		// A same-command replay (for example after COMMIT_UNCERTAIN) must return the
+		// stored result even though the revision moved and the suppression is active.
 		actor, err := uuid.Parse(authority.PrincipalID)
 		if err != nil {
 			return platform.NewFailure(platform.CodeAuthorityUnavailable, err)
@@ -179,6 +191,14 @@ func (s *Service) CreateSuppression(ctx context.Context, proof identity.Proof, c
 			}
 			result = suppressionResult(suppression, correction)
 			return nil
+		}
+		if currentRevision != input.ExpectedAssignmentRevision {
+			return authz.ErrRevisionConflict
+		}
+		if _, active, err := repository.FindActiveSuppression(tx.Context(), tx, input.TransmissionID, input.TargetPosition); err != nil {
+			return err
+		} else if active {
+			return authz.ErrRevisionConflict
 		}
 		value := Suppression{ID: uuid.New(), TransmissionID: target.TransmissionID,
 			TargetPosition: target.Position, Revision: 1, CreatedAt: now}
@@ -213,6 +233,9 @@ func (s *Service) CreateSuppression(ctx context.Context, proof identity.Proof, c
 	return result, nil
 }
 
+// ReadSuppression returns the suppression without correction status. It
+// returns authz.ErrNotFound when the suppression, its target, or the caller's
+// read permission on the target is missing.
 func (s *Service) ReadSuppression(ctx context.Context, proof identity.Proof, id uuid.UUID) (SuppressionResult, error) {
 	if id == uuid.Nil {
 		return SuppressionResult{}, authz.ErrInvalidInput
@@ -245,6 +268,12 @@ func (s *Service) ReadSuppression(ctx context.Context, proof identity.Proof, id 
 	return result, nil
 }
 
+// LiftSuppression lifts the suppression at revision expected when the global
+// assignment revision equals expectedAssignment, then bumps the assignment
+// revision, queues a correction scope, records an audit change and appends a
+// suppression.changed fact in the same transaction. It returns
+// authz.ErrRevisionConflict for stale revisions and authz.ErrNotFound when the
+// caller may not delete suppressions for the target.
 func (s *Service) LiftSuppression(ctx context.Context, proof identity.Proof, id uuid.UUID, expected,
 	expectedAssignment int64, check func(identity.Authentication) error,
 ) (SuppressionResult, error) {
@@ -338,6 +367,9 @@ func (s *Service) correctionAuthority(ctx context.Context, tx platform.Transacti
 	return nil
 }
 
+// ReadCorrection returns a correction scope's status if the caller may read
+// assignment corrections for every Network (and the Unit) in its scope;
+// otherwise it returns authz.ErrNotFound.
 func (s *Service) ReadCorrection(ctx context.Context, proof identity.Proof, id uuid.UUID) (CorrectionStatus, error) {
 	if id == uuid.Nil {
 		return CorrectionStatus{}, authz.ErrInvalidInput
@@ -363,6 +395,12 @@ func (s *Service) ReadCorrection(ctx context.Context, proof identity.Proof, id u
 	return result, nil
 }
 
+// RetryCorrection replaces a failed correction scope with a new queued scope at
+// the current assignment revision and returns the new scope. It is idempotent
+// per actor and command ID. It returns authz.ErrRevisionConflict when the
+// scope is not failed, commands.ErrIdempotencyConflict when the command ID was
+// already used with different input, and authz.ErrNotFound when it is unknown
+// or not visible.
 func (s *Service) RetryCorrection(ctx context.Context, proof identity.Proof, id uuid.UUID,
 	command uuid.UUID, check func(identity.Authentication) error,
 ) (CorrectionStatus, error) {

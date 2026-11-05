@@ -10,6 +10,12 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
+// CorrectionFact is the producer input for a historical-correction fact. Type
+// selects the vocabulary: "assignment.changed" records that a correction run
+// changed a stored message target's resolution (Aggregate is the message;
+// Before and After are required and must differ; Reason must be "corrected"),
+// and "suppression.changed" records that an operator created or lifted a
+// suppression (Aggregate is the suppression; ChangeKind is created or lifted).
 type CorrectionFact struct {
 	ID             uuid.UUID
 	Type           string
@@ -28,6 +34,8 @@ type CorrectionFact struct {
 	Reason         string
 }
 
+// CorrectionData is the data payload of a correction envelope; only the fields
+// relevant to the envelope type are set.
 type CorrectionData struct {
 	TargetPosition *int              `json:"targetPosition,omitempty"`
 	TransmissionID uuid.UUID         `json:"transmissionId,omitempty"`
@@ -40,6 +48,8 @@ type CorrectionData struct {
 	Reason         string            `json:"reason,omitempty"`
 }
 
+// CorrectionEnvelope is the persisted serialization of a CorrectionFact,
+// classified "operational".
 type CorrectionEnvelope struct {
 	SchemaVersion     int            `json:"schemaVersion"`
 	DomainEventID     uuid.UUID      `json:"domainEventId"`
@@ -55,10 +65,17 @@ type CorrectionEnvelope struct {
 	ReplayMode        string         `json:"replayMode"`
 }
 
+// CorrectionAppender records correction facts through the caller's active
+// platform transaction. AppendCorrectionFact returns the fact ID, or
+// ErrInvalidFact when the fact fails Envelope validation.
 type CorrectionAppender interface {
 	AppendCorrectionFact(context.Context, platform.TransactionContext, CorrectionFact) (uuid.UUID, error)
 }
 
+// Envelope validates the fact for its Type and returns the envelope stamped with
+// recordedAt, attributed to the historical-correction producer. It returns
+// ErrInvalidFact for missing fields, invalid resolutions, an unchanged
+// assignment, or an unknown Type.
 func (fact CorrectionFact) Envelope(recordedAt time.Time) (CorrectionEnvelope, error) {
 	if fact.ID == uuid.Nil || fact.Aggregate.ID == uuid.Nil || fact.Revision <= 0 ||
 		fact.OccurredAt.IsZero() || recordedAt.IsZero() ||
@@ -67,7 +84,7 @@ func (fact CorrectionFact) Envelope(recordedAt time.Time) (CorrectionEnvelope, e
 		return CorrectionEnvelope{}, ErrInvalidFact
 	}
 	envelope := CorrectionEnvelope{SchemaVersion: 1, DomainEventID: fact.ID, Type: fact.Type,
-		Producer:     Producer{Domain: "DOM-04", Version: "historical-correction1.0"},
+		Producer:     Producer{Domain: "assignment", Version: "historical-correction1.0"},
 		AggregateRef: fact.Aggregate, AggregateRevision: fact.Revision,
 		OccurredAt: fact.OccurredAt.UTC(), RecordedAt: recordedAt.UTC(),
 		CausationID: fact.CausationID, Classification: "operational", ReplayMode: "normal"}

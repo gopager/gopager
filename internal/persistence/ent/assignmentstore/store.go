@@ -26,6 +26,9 @@ import (
 	"github.com/gopager/gopager/internal/protocols"
 )
 
+// Store persists Address rules, target suppressions and the durable correction scopes that
+// re-resolve stored Message targets after Assignment changes. It holds no transaction of
+// its own: every method runs in the caller's active primary transaction.
 type Store struct{ primary *postgres.Store }
 
 // New uses the existing Primary and borrowed transaction boundary.

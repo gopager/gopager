@@ -1,7 +1,33 @@
 # GoPager
 
-Start with the [documentation directory and ownership rules](docs/README.md). For assigned work, open the relevant [AP file](docs/work-packages.md#revised-execution-path) and follow its Session Context.
+GoPager receives pager transmissions from radio gateways, groups them into messages, assigns them to units, processes them with configurable workflows and plugins, and serves the results through an HTTP API.
 
-For development, see the [repository layout](docs/architecture.md#package-placement), [test commands](docs/architecture.md#running-tests), [formatting and linting](docs/architecture.md#formatting-and-linting), [backend entry point](cmd/gopager/) and [internal packages](internal/).
+## Requirements
 
-This file is navigation only. Product scope and approval are maintained in the [plan](docs/authoritative-plan.md); implementation progress and evidence are maintained in [execution records](docs/execution/README.md).
+- Go (version in [go.mod](go.mod))
+- PostgreSQL
+- Docker, for the integration test suite
+
+## Getting Started
+
+```sh
+go build ./cmd/gopager
+make                                                  # format check and go vet
+go test ./...                                         # unit tests
+GOPAGER_INTEGRATION=1 go test -race -count=1 ./...    # full suite against PostgreSQL containers
+```
+
+To configure and run a deployment, see [docs/operations.md](docs/operations.md).
+
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Operations](docs/operations.md)
+- [HTTP API](docs/http-api.md)
+- [Workflows](docs/workflows.md)
+- [Plugins](docs/plugins.md)
+- [Development](docs/development.md)
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).

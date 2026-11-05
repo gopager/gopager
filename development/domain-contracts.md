@@ -2,7 +2,7 @@
 
 Navigation only. Each C-ID file owns its contract owner, version/status, producers/consumers, REQ references, invariants and boundary-specific remaining gates. Approval and open-issue status belong to the [plan](authoritative-plan.md#workflow-and-approval-gates); role responsibilities belong to the [architecture](architecture.md#domains-and-data-ownership).
 
-This file contains no interface definitions. Follow the C-ID owner for representation, version/status and actual API/schema/SDK artifacts, when introduced.
+This file contains no interface definitions. Follow the C-ID owner for representation, version/status and the authoritative published artifacts it links: [api/openapi/v1.yaml](../api/openapi/v1.yaml) for implemented HTTP schemas, [api/plugin/v2/plugin.proto](../api/plugin/v2/plugin.proto) and [pluginsdk/](../pluginsdk/) for the plugin protocol. Contracts here remain planning contracts ([document authority](README.md#document-authority)).
 
 ## Targeted Reading
 

@@ -8,6 +8,21 @@ Date: 2026-10-26. Status: **G-1.0, frozen for the AP-05 foundation slice** under
 
 This glossary owns **domain term meanings**, not interface schemas or implementation algorithms. Code/API/UI names derive from these terms; exact wire identifiers and their behavior are owned together in the [contract registry routes](#ap-02-identifier-registry). UI labels may be localized without introducing new meanings. Terms in the [prohibited terms](#prohibited-and-restricted-terms) list are not domain names.
 
+## Domains
+
+Fixed names of the architecture domains. Ownership and boundaries: [Domains and Data Ownership](architecture.md#domains-and-data-ownership). The code identifier is used where code must name a domain, for example as `producer.domain` in Domain events. Where a domain name coincides with a term below, write "the ... domain" in prose.
+
+| Domain | Code identifier | Scope | Not to be confused with |
+| --- | --- | --- | --- |
+| **Intake** | `intake` | Gateways, Networks, Submissions, Transmissions and Transmission targets | Ingest package name (`internal/ingest`) |
+| **Grouping** | `grouping` | Protocol model, Payload identity and Message Grouping | Grouping (the process), User group, Unit collection |
+| **Master data** | `masterdata` | Units, organizations, Unit collections and templates | Configuration in general |
+| **Assignment** | `assignment` | Address rules, target resolution, Message contributions, suppression and correction | Assignment as a separate shared entity (prohibited), Unit assignment of a Transmission target |
+| **Identity** | `identity` | Principals, credentials, sessions, User groups, grants and central authorization | Gateway identity |
+| **Query** | `query` | Search, feed, details and live projections | Projection |
+| **Delivery** | `delivery` | Domain event records/outbox, Subscriptions, Delivery targets, Delivery jobs and attempts | Delivery (one outbound send) |
+| **Processing** | `processing` | Workflows, Processing results, presentation configuration and the publication barrier | Processing of a Transmission in general, Workflow execution |
+
 ## Radio and Gateway Side
 
 | Term | Definition | Not to be confused with |
@@ -23,7 +38,7 @@ This glossary owns **domain term meanings**, not interface schemas or implementa
 | **Network resolution** | Server-side derivation of a Transmission's Network. Precedence, states and rematching boundary: [C-01](contracts/c-01-transmission-acceptance.md). | Grouping |
 | **Protocol** | The radio or transport protocol (POCSAG, FLEX, ZVEI, EAS, SMTP-based formats). | Payload form |
 | **Protocol definition** | Server-side, versioned description of a Protocol: which submitted fields are Payload, which are Address/Function, and how each protocol message type maps to a Payload form and Canonical payload. | Protocol |
-| **FLEX short signal** | A FLEX Short Message carrying a Source code rather than normal text. Protocol meaning and comparison are owned by DOM-02 in [C-02](contracts/c-02-protocol-payload.md#ap-04-flex-clarification); introduced by AP-04/D-34. | Tone-only call, Gateway/source identity |
+| **FLEX short signal** | A FLEX Short Message carrying a Source code rather than normal text. Protocol meaning and comparison are owned by the Grouping domain in [C-02](contracts/c-02-protocol-payload.md#ap-04-flex-clarification); introduced by AP-04/D-34. | Tone-only call, Gateway/source identity |
 | **Group call** | Protocol feature in which one Emission addresses several Addresses (for example FLEX group messaging, Swissphone Express-Alarm (product feature name), SMTP with several targets in the body). Results in one Transmission per receiving Gateway with several Transmission targets. | Message, User group, Unit collection |
 
 ## Transmission and Payload
@@ -104,7 +119,7 @@ The [D-125 term addition](authoritative-plan.md#ap-08-unit-template-ownership) s
 | **Personal Subscription** | Subscription acting as its owning User within that User's delegable rights. | Global Subscription |
 | **Global Subscription** | Administratively managed Subscription acting as an explicitly assigned technical Principal, within its delegated rights. Never implicitly acts as an unrestricted administrator. | Personal Subscription |
 | **Delivery input** | Bounded, materialized, authorized data computed by Core for a Delivery plugin, including plugin-declared fields and rendered template output; independently usable without reading the original Message. | Original Payload, unrestricted object copy |
-| **Fact transport reference** | Internal pointer to a canonical Domain event for durable transport, not another fact history or authorization grant. DOM-07/integration owns [C-08's publication subset](contracts/c-08-events-jobs.md#postgresql-fact-publication); introduced under D-94. | Domain event envelope, Delivery job, consumer receipt |
+| **Fact transport reference** | Internal pointer to a canonical Domain event for durable transport, not another fact history or authorization grant. The Delivery domain and integration own [C-08's publication subset](contracts/c-08-events-jobs.md#postgresql-fact-publication); introduced under D-94. | Domain event envelope, Delivery job, consumer receipt |
 | **Delivery job** | Durable work to create or execute a Delivery, retaining trigger identity, Subscriber, selected Delivery target, revision context, and expiry. | Delivery, Delivery attempt |
 | **Delivery attempt** | One recorded authorization/start and external execution attempt for a Delivery, with an explicit result including possible uncertainty. | Provider acceptance, confirmation of reading |
 | **Recovery request** | Account-bound request entering the common local password recovery workflow, whether automatically fulfilled through a trusted integration or approved by an authorized manager. | Subscription |
@@ -120,7 +135,7 @@ The [D-125 term addition](authoritative-plan.md#ap-08-unit-template-ownership) s
 | **Core** | GoPager's application and authoritative domain services, excluding operator-installed extension code. | Plugin host |
 | **Integration** | Configured use of an operator-installed plugin and its declared capabilities; not an additional permission bypass or global Unit-to-Delivery-target mapping. | Integration ownership role |
 | **Plugin manifest** | Versioned declaration of an artifact's identity, SDK compatibility, capabilities, internal data access, configuration/Secret fields, extension fields, and input/result schemas. | Grant |
-| **Processing instance** | Separately revisioned administrative binding of a provisioned pure processing capability, its execution Principal and configuration; optionally binds an independent pure preview. Owner: [C-10](contracts/c-10-plugin-host.md#early-installed-processing-invocation-candidate). | Workflow, module artifact, Delivery target |
+| **Processing instance** | Separately revisioned administrative binding of a provisioned pure processing capability, its execution Principal and configuration; optionally binds an independent pure preview. Owner: [C-10](contracts/c-10-plugin-host.md#installed-processing-invocation). | Workflow, module artifact, Delivery target |
 | **Plugin host** | Core runtime that verifies Operator-provisioned plugin executables, starts each configured plugin instance as a managed child process (D-131), invokes it over the published protocol, and records bounded outcomes. Trust does not imply a hostile-code sandbox guarantee. | External plugin process |
 | **Plugin instance** | One separately configured and revisioned use of a plugin (for example one Pushover application token, one printer or one SMTP server). Several instances of the same plugin are independent and run in separate processes. | Plugin artifact, Processing instance |
 | **Host capability** | SDK-mediated ability declared by a plugin and explicitly approved for an instance, including optional network, filesystem, or command access. | Domain Capability/Grant |
@@ -131,8 +146,8 @@ The [D-125 term addition](authoritative-plan.md#ap-08-unit-template-ownership) s
 | **Workflow definition version** | Immutable saved selector/step/output-schema definition referenced by a Workflow's active pointer and source-bound Processing results. Saving is not activation or historical reprocessing. | Mutable Workflow revision, Address-rule validity |
 | **Ingest publication barrier** | Requirement that selected ingest Workflows and current target/contribution derivation are ready before their new evidence/results enter normal GUI/search/Delivery projections. It does not delay honest original-intake acknowledgement or erase previously ready evidence. | Provider acceptance, whole-Message retention |
 | **Workflow selector** | Explicit trigger and correlated domain/Payload predicate deciding whether a Workflow runs for a particular Transmission. | Grant |
-| **Workflow candidate work** | Durable evaluation work for a scope-eligible Workflow; its admission does not prove that the selector matched. DOM-08/DOM-07 own its [approved lifecycle](contracts/c-08-events-jobs.md#processing-durable-selection-placement-review), introduced under D-75. | Selected Workflow execution, published Processing result |
-| **Execution generation proposal** | Unapproved D-77 alternative for separately identifiable evaluation work under the stable logical candidate key. DOM-08/DOM-07 own the [reselection binding review](contracts/c-08-events-jobs.md#processing-same-input-reselection-review); it is not the current adopted schema or a second queue. | Candidate revision, Fencing token, automatically renewed retry budget |
+| **Workflow candidate work** | Durable evaluation work for a scope-eligible Workflow; its admission does not prove that the selector matched. The Processing and Delivery domains own its [approved lifecycle](contracts/c-08-events-jobs.md#processing-durable-selection-placement-review), introduced under D-75. | Selected Workflow execution, published Processing result |
+| **Execution generation proposal** | Unapproved D-77 alternative for separately identifiable evaluation work under the stable logical candidate key. The Processing and Delivery domains own the [reselection binding review](contracts/c-08-events-jobs.md#processing-same-input-reselection-review); it is not the current adopted schema or a second queue. | Candidate revision, Fencing token, automatically renewed retry budget |
 | **Processing result** | Typed, namespaced derived fields and status from one Workflow version and input Transmission. A field such as `level` is data, not a Domain event. | Original Payload, Domain event type |
 | **Target-result binding candidate** | Stable historical heading for [C-11's approved target-result binding](contracts/c-11-processing-presentation.md#target-result-binding-candidate): target-correlated field sets inside one Processing result, not a new original target/Message. | Per-target Transmission splitting, field permission scope |
 | **Presentation template** | Versioned, permission-filtered rendering definition using an established template engine's constrained logic and escaped data interpolation. | Arbitrary browser script |
@@ -228,6 +243,7 @@ These rules bind every work package and every agent or person working on GoPager
 
 | Date | Old name(s) | New name | Meaning / reason | Package |
 | --- | --- | --- | --- | --- |
+| 2026-11-06 | DOM-01..DOM-08 | Intake, Grouping, Master data, Assignment, Identity, Query, Delivery, Processing | Numbered domain IDs replaced by fixed names usable in code (`producer.domain`) and permanent documentation. | Documentation |
 | 2026-10-26 | Mandatory Message aliases / enduring Message identity | Message merge without identity-continuity requirement | D-40 withdraws old-link and ID-mapping requirements; authorization-relevant identities and operation-specific deduplication are unaffected. | AP-05 |
 | 2026-10-25 | Reception, Observation (noun) | Transmission | Record that one Gateway received one Emission; same name on Gateway and server side. | AP-01 |
 | 2026-10-25 | Transmission (physical send) | Emission | Physical radio/SMTP send event, freed "Transmission" for the record. | AP-01 |

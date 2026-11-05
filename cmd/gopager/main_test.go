@@ -63,7 +63,7 @@ func TestParseConfigBindsExplicitInputs(t *testing.T) {
 	}
 }
 
-// TestParseConfigReadsPluginRootFromEnvironment covers the D-131 Docker provisioning path.
+// TestParseConfigReadsPluginRootFromEnvironment covers plugin-directory provisioning through the environment, as used by container deployments.
 func TestParseConfigReadsPluginRootFromEnvironment(t *testing.T) {
 	fromEnv, fromFlag := t.TempDir(), t.TempDir()
 	environment := func(root string) func(string) string {

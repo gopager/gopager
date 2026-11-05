@@ -11,7 +11,7 @@ import (
 	"unicode/utf8"
 )
 
-// Core regex admission bounds (D-129). Go's regexp runs in linear time, but its NFA keeps one capture
+// Core regex admission bounds. Go's regexp runs in linear time, but its NFA keeps one capture
 // slice per program instruction, so memory grows with instructions x capture slots. Both are known
 // before matching, so oversized programs are rejected deterministically instead of being sandboxed.
 const (
@@ -23,12 +23,17 @@ const (
 	regexCancelInterval  = 256
 )
 
+// RegexCapture is one named capture group of a match. Index is the group's position in
+// RegexResult.Names; Text is nil when the group did not participate in the match.
 type RegexCapture struct {
 	Name  string  `json:"name"`
 	Index int     `json:"index"`
 	Text  *string `json:"text,omitempty"`
 }
 
+// RegexResult reports the pattern's group names (Names[0] is the whole match and unnamed
+// groups are "") and, when text was supplied, whether it matched and the named captures.
+// Unnamed groups are never reported as captures.
 type RegexResult struct {
 	Matched  bool           `json:"matched"`
 	Captures []RegexCapture `json:"captures,omitempty"`

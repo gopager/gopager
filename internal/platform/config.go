@@ -7,20 +7,30 @@ import (
 	"strings"
 )
 
+// Role names a process role that Start composes into a running handle.
 type Role string
 
+// Supported process roles. RoleAPI serves the HTTP listener (health and
+// application routes); RoleWorker runs the registered background Runners.
 const (
 	RoleAPI    Role = "api"
 	RoleWorker Role = "worker"
 )
 
+// MigrationMode selects whether startup only verifies the database schema or
+// may also apply pending migrations.
 type MigrationMode string
 
+// Migration modes. MigrationCheck (the default) refuses to start against a
+// schema that is not exactly current; MigrationApply first applies pending
+// migrations under the store's migration lock.
 const (
 	MigrationCheck MigrationMode = "check"
 	MigrationApply MigrationMode = "apply"
 )
 
+// Config is the validated process configuration consumed by Start.
+// DatabaseURL is private and never reported through Status.
 type Config struct {
 	Profile            string
 	Roles              []Role
@@ -30,6 +40,8 @@ type Config struct {
 	AllowInsecureDBTLS bool
 }
 
+// WithDefaults returns a copy of c with an empty MigrationMode replaced by
+// MigrationCheck. Other fields are left unchanged.
 func (c Config) WithDefaults() Config {
 	if c.MigrationMode == "" {
 		c.MigrationMode = MigrationCheck
@@ -37,6 +49,11 @@ func (c Config) WithDefaults() Config {
 	return c
 }
 
+// Validate checks c after applying WithDefaults. It requires profile "full", a
+// known migration mode, a non-blank DatabaseURL and a non-empty, duplicate-free
+// list of known roles; when RoleAPI is present ListenAddress must be an explicit
+// host:port with a port in 1..65535. Every violation is a *Failure with
+// CodeInvalidInput whose message does not reveal the offending value.
 func (c Config) Validate() error {
 	c = c.WithDefaults()
 	if c.Profile != "full" {

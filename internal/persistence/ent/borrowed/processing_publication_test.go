@@ -17,7 +17,7 @@ import (
 	"github.com/gopager/gopager/internal/processing/publication"
 )
 
-// publicationSourceFixture owns a real SQL test barrier, not a production AP-06 Original or Message.
+// publicationSourceFixture owns a real SQL test barrier, not a production Original or Message.
 type publicationSourceFixture struct {
 	primary    *postgres.Store
 	repository *processingstore.Store

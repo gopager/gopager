@@ -35,7 +35,8 @@ func (h *RunningHandle) applicationHandler(api http.Handler) http.Handler {
 	return mux
 }
 
-// writeAPIUnavailable emits only the public C-07 authority failure envelope.
+// writeAPIUnavailable answers 503 with the public JSON error envelope for
+// CodeAuthorityUnavailable (retryable, fresh request ID) and nothing else.
 func writeAPIUnavailable(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")

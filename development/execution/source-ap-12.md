@@ -4,7 +4,7 @@
 
 Source: unchanged [original AP-12 at its baseline](https://github.com/gopager/gopager/blob/24318de414b3b35f77b6b288905125c1debf46f4/docs/work-packages/ap-12-processing-presentation.md), starting HEAD `24318de414b3b35f77b6b288905125c1debf46f4`. Extensive earlier uncommitted changes exist in command composition, contracts/architecture/plan, identity/authorization, matching/Units, Ent/persistence/events/protocols and their tests; no clean worktree or committed-only prerequisite baseline is claimed. Preserve them. Only the previously approved AP-15 topology amendment exists in the AP baseline diff.
 
-Assignee: current GoPager executing agent, sequentially, for T043 and its required standalone T045 tests. Approved scope/input/write/verification/non-goal binding: [AP-04](ap-04.md#processing-kernel-execution-binding); explicit owner freeze and separate actual start: [D-66](../authoritative-plan.md#t043-shared-predicate-binding-proposal). Five owner subsets are frozen at 1.0. Prerequisite evidence: [AP-05](ap-05.md), [AP-07 global-field correction](ap-07.md#unscoped-field-correction-verification-and-handover), [AP-08 matcher](ap-08.md); regex/CEL feasibility evidence remains AP-04 history, not kernel production validation.
+Assignee: current GoPager executing agent, sequentially, for T043 and its required standalone T045 tests. Approved scope/input/write/verification/non-goal binding: [AP-04](ap-04.md#processing-kernel-execution-binding); explicit owner freeze and separate actual start: [D-66](../authoritative-plan.md#t043-shared-predicate-binding-proposal). Five owner subsets are frozen at 1.0. Prerequisite evidence: [AP-05](ap-05.md), [AP-07 global-field correction](source-ap-07.md#unscoped-field-correction-verification-and-handover), [AP-08 matcher](ap-08.md); regex/CEL feasibility evidence remains AP-04 history, not kernel production validation.
 
 ## Task Outcomes
 
@@ -41,7 +41,7 @@ Started selected dependency integration in the existing [manifest](../../go.mod)
 
 ### E-04 Product Predicate, Classification and Supplied Core Guest
 
-Date: 2026-11-01. Added the product [restricted CEL compiler/evaluator](../../internal/processing/predicates.go), [classification union](../../internal/processing/dependencies.go), [isolated WASI host](../../internal/processing/wasm.go), [supplied Go/WASI regex command](../../internal/processing/regexguest/main.go) and their [predicate](../../internal/processing/predicates_test.go)/[guest](../../internal/processing/wasm_test.go) tests. The embedded generated artifact is `internal/processing/regex.wasm`; the host's `go:generate` directive reproduces it. No native host regex compiler/matcher is used.
+Date: 2026-11-01. Added the product [restricted CEL compiler/evaluator](../../internal/processing/predicates.go), [classification union](../../internal/processing/dependencies.go), isolated WASI host (`internal/processing/wasm.go`), supplied Go/WASI regex command (`internal/processing/regexguest/main.go`) and their [predicate](../../internal/processing/predicates_test.go)/guest (`internal/processing/wasm_test.go`) tests (the WASI files were later removed under D-129/D-131). The embedded generated artifact is `internal/processing/regex.wasm`; the host's `go:generate` directive reproduces it. No native host regex compiler/matcher is used.
 
 From the target repository:
 
@@ -154,7 +154,7 @@ go vet ./internal/processing
 
 All exited 0; Race took 42.063s. Actual command output, mixed success/failure, unknown/private failure text, declared failure, caller cancellation, later host reuse, unavailable pure-preview capability and unresolved Secret configuration were tested. This internal wire does not accept an HTTP envelope as Principal/configuration authority. No installed administrative service or general SDK/language parity is claimed.
 
-### E-12 Separate Typed DOM-08 Fact Factories
+### E-12 Separate Typed Processing Fact Factories
 
 Date: 2026-11-01. Implemented [Processing configuration/completion factories](../../internal/events/processing.go), [factory tests](../../internal/events/processing_test.go) and the separate [caller-transaction append participant](../../internal/persistence/ent/eventstore/processing.go). They were initially implemented under the Processing package and later moved to the approved event-producer location in E-14; the historical command paths below reflect the actual original check, not current locations. Existing identity/master-data vocabularies and methods remain unchanged. `gofmt -w internal/processing/facts.go internal/processing/facts_test.go internal/persistence/ent/eventstore/processing.go`, `go test -race -count=1 ./internal/processing -run 'TestProcessing'`, `go vet ./internal/processing ./internal/persistence/ent/eventstore` and `git diff --check` exited 0; Race took 1.705s.
 
@@ -184,7 +184,7 @@ PostgreSQL uses the existing isolated real-primary fixture/all migrations. Inval
 
 ### E-14 Fact Owner Location and Retry-bound Finding
 
-Date: 2026-11-01. Aligned the new DOM-08 fact factories/tests with the approved [execution binding](ap-04.md#processing-kernel-execution-binding): moved them into `internal/events/processing.go`/`processing_test.go`, reused shared event Producer/EntityRef types and exposed the existing classified-field validator rather than duplicate its type/state checks. No existing identity/master-data factory or vocabulary changed. A misplaced wrapper declaration was caught by formatting and corrected before validation.
+Date: 2026-11-01. Aligned the new Processing fact factories/tests with the approved [execution binding](ap-04.md#processing-kernel-execution-binding): moved them into `internal/events/processing.go`/`processing_test.go`, reused shared event Producer/EntityRef types and exposed the existing classified-field validator rather than duplicate its type/state checks. No existing identity/master-data factory or vocabulary changed. A misplaced wrapper declaration was caught by formatting and corrected before validation.
 
 ```text
 gofmt -w internal/events/processing.go internal/events/processing_test.go internal/processing/capture.go internal/persistence/ent/eventstore/processing.go internal/persistence/ent/borrowed/processing_facts_test.go

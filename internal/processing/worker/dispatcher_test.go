@@ -276,3 +276,133 @@ func TestDispatcherConfigurationValidationAndCustomScheduling(t *testing.T) {
 		}
 	})
 }
+
+// flakyTransactions fails the first failures transactions with the given error, then delegates.
+type flakyTransactions struct {
+	mu       sync.Mutex
+	inner    processing.ExecutionTransactions
+	failures int
+	err      error
+	calls    int
+}
+
+// WithinTransaction simulates a transient storage outage before delegating to the fixture.
+func (f *flakyTransactions) WithinTransaction(ctx context.Context, callback platform.TxFunc) error {
+	f.mu.Lock()
+	f.calls++
+	failing := f.failures > 0
+	if failing {
+		f.failures--
+	}
+	f.mu.Unlock()
+	if failing {
+		return f.err
+	}
+	return f.inner.WithinTransaction(ctx, callback)
+}
+
+func (f *flakyTransactions) snapshot() (calls, failures int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.calls, f.failures
+}
+
+func TestDispatcherSurvivesTransientSelectionFailures(t *testing.T) {
+	for _, code := range []platform.ErrorCode{platform.CodeStorageUnavailable,
+		platform.CodeAuthorityUnavailable, platform.CodeCommitUncertain} {
+		t.Run(string(code), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				f := newDispatchFixture(3)
+				transactions := &flakyTransactions{inner: f, failures: 3,
+					err: platform.NewFailure(code, errors.New("database restarting"))}
+				dispatcher, err := NewDispatcher(transactions, f, f,
+					slog.New(slog.NewTextHandler(io.Discard, nil)), DispatchConfig{})
+				if err != nil {
+					t.Fatal(err)
+				}
+				ctx, cancel := context.WithCancel(t.Context())
+				done := make(chan error, 1)
+				go func() { done <- dispatcher.Run(ctx) }()
+				synctest.Wait()
+				if calls, _ := transactions.snapshot(); calls != 1 {
+					t.Fatalf("selection attempts=%d want 1 before backoff", calls)
+				}
+				// Wake-ups during backoff must not bypass it.
+				dispatcher.Wake()
+				synctest.Wait()
+				if calls, _ := transactions.snapshot(); calls != 1 {
+					t.Fatalf("wake bypassed backoff: attempts=%d", calls)
+				}
+				// Backoff doubles from the poll interval: 5 s, 10 s, 20 s.
+				time.Sleep(DefaultDispatchPollInterval)
+				synctest.Wait()
+				if calls, _ := transactions.snapshot(); calls != 2 {
+					t.Fatalf("attempts=%d want 2 after first backoff", calls)
+				}
+				time.Sleep(2*DefaultDispatchPollInterval - time.Nanosecond)
+				synctest.Wait()
+				if calls, _ := transactions.snapshot(); calls != 2 {
+					t.Fatalf("second backoff did not double: attempts=%d", calls)
+				}
+				time.Sleep(time.Nanosecond)
+				synctest.Wait()
+				time.Sleep(4 * DefaultDispatchPollInterval)
+				synctest.Wait()
+				select {
+				case err := <-done:
+					t.Fatalf("dispatcher stopped on transient failure: %v", err)
+				default:
+				}
+				if _, failures := transactions.snapshot(); failures != 0 {
+					t.Fatalf("remaining injected failures=%d", failures)
+				}
+				// Recovered selection drains the queue at the approved concurrency.
+				time.Sleep(DefaultDispatchPollInterval)
+				synctest.Wait()
+				if starts, remaining, _, _, _ := f.counts(); starts != 3 || remaining != 0 {
+					t.Fatalf("work not processed after recovery: starts=%d remaining=%d", starts, remaining)
+				}
+				cancel()
+				synctest.Wait()
+				if err := <-done; err != nil {
+					t.Fatal(err)
+				}
+			})
+		})
+	}
+}
+
+func TestDispatcherStopsPromptlyWhileBackingOff(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		f := newDispatchFixture(1)
+		transactions := &flakyTransactions{inner: f, failures: 1000,
+			err: platform.NewFailure(platform.CodeStorageUnavailable, errors.New("down"))}
+		dispatcher, err := NewDispatcher(transactions, f, f, slog.New(slog.NewTextHandler(io.Discard, nil)), DispatchConfig{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan error, 1)
+		go func() { done <- dispatcher.Run(ctx) }()
+		time.Sleep(time.Hour)
+		synctest.Wait()
+		// Backoff caps at 30 s: roughly 120 attempts per hour, never a tight loop or a stall.
+		if calls, _ := transactions.snapshot(); calls < 110 || calls > 130 {
+			t.Fatalf("backoff not bounded: %d attempts in an hour", calls)
+		}
+		start := time.Now()
+		cancel()
+		synctest.Wait()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+		default:
+			t.Fatal("dispatcher did not stop on cancellation during backoff")
+		}
+		if time.Since(start) != 0 {
+			t.Fatal("cancellation waited for backoff")
+		}
+	})
+}

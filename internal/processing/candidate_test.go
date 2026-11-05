@@ -170,11 +170,19 @@ func TestCandidateClaimAndRenewUseExactLeaseAndAttemptBoundaries(t *testing.T) {
 func TestCandidateManualRetryRequiresFailedExpectedStateWithoutResettingHistory(t *testing.T) {
 	current := candidateFixture()
 	current.State = "failed"
+	failure := "INVALID_INPUT"
+	current.FailureCode = &failure
 	next, err := current.RetryFailed(current.Revision, current.UpdatedAt)
 	if err != nil || next.ID != current.ID || next.Revision != current.Revision+1 ||
 		next.State != "pending" || !next.ManualRetryPending || next.Attempts != current.Attempts ||
 		next.AutomaticAttempts != 5 || next.FencingToken != current.FencingToken {
 		t.Fatalf("manual retry lost history: %+v err=%v", next, err)
+	}
+	if next.FailureCode != nil || next.FailureStep != nil {
+		t.Fatalf("manual retry kept the previous failure: %+v", next)
+	}
+	if err := next.Validate(); err != nil {
+		t.Fatalf("retried candidate is not a valid pending candidate: %v", err)
 	}
 	if _, err := next.RetryFailed(next.Revision, next.UpdatedAt); !errors.Is(err, authz.ErrRevisionConflict) {
 		t.Fatalf("pending manual attempt duplicated: %v", err)

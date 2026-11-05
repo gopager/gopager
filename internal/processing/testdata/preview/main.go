@@ -1,4 +1,4 @@
-// Preview is an independently supplied pure plugin fixture, not the processing entrypoint (D-131).
+// Preview is an independently supplied pure plugin fixture, not the processing entrypoint.
 package main
 
 import (

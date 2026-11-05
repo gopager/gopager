@@ -8,8 +8,10 @@ import (
 	"strconv"
 )
 
+// Protocol identifies a paging protocol by its stable lowercase wire name.
 type Protocol string
 
+// Supported protocols; Protocol.Valid accepts exactly these.
 const (
 	POCSAG Protocol = "pocsag"
 	FLEX   Protocol = "flex"
@@ -17,6 +19,8 @@ const (
 	EAS    Protocol = "eas"
 )
 
+// ErrInvalidTarget is returned for any malformed or unsupported target,
+// Address or address range.
 var ErrInvalidTarget = errors.New("invalid Protocol target")
 
 // Address preserves the Protocol's integer/string distinction without floating point.
@@ -78,6 +82,9 @@ func (a *Address) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// Target is one addressed recipient of a Transmission. Function is the
+// POCSAG function bit pair (0..3), required for POCSAG and forbidden for all
+// other protocols; nil means absent.
 type Target struct {
 	Address  Address `json:"address"`
 	Function *uint8  `json:"function,omitempty"`

@@ -23,12 +23,19 @@ import (
 	"github.com/gopager/gopager/internal/protocols"
 )
 
+// Store persists gateway intake (Transmissions, Messages, targets and contributions),
+// Networks, gateways and gateway credentials, and appends the matching intake facts. It
+// holds no transaction of its own: every method runs in the caller's active primary
+// transaction.
 type Store struct {
 	primary       *postgres.Store
 	facts         events.IntakeAppender
 	identityFacts events.Appender
 }
 
+// New returns a Store bound to the primary database. All dependencies are required; facts
+// receives intake facts and identityFacts receives the credential-revoked configuration
+// fact emitted when a pending gateway credential replaces the current one.
 func New(primary *postgres.Store, facts events.IntakeAppender, identityFacts events.Appender) (*Store, error) {
 	if primary == nil || facts == nil || identityFacts == nil {
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing intake persistence dependency"))
@@ -78,7 +85,8 @@ func (s *Store) AuthenticateGatewayCredential(ctx context.Context, tx platform.T
 			}
 			if _, err := s.identityFacts.AppendIdentityFact(ctx, tx, events.IdentityFact{
 				ID: uuid.New(), Type: events.ConfigurationChanged,
-				Aggregate: events.EntityRef{Type: "credential", ID: previousCredential}, Revision: 1,
+				// Issuance is credential revision 1; the final revocation is revision 2.
+				Aggregate: events.EntityRef{Type: "credential", ID: previousCredential}, Revision: 2,
 				OccurredAt: now, ChangeKind: events.CredentialRevoked,
 			}); err != nil {
 				return identity.GatewayAuthentication{}, err
@@ -749,6 +757,9 @@ func (s *Store) appendFact(ctx context.Context, tx platform.TransactionContext, 
 	return err
 }
 
+// RecordRejectedSubmission appends a SubmissionRejected intake fact for the gateway,
+// stamped with the gateway's current revision; nothing else is stored. It returns
+// authz.ErrNotFound for an unknown gateway.
 func (s *Store) RecordRejectedSubmission(ctx context.Context, tx platform.TransactionContext, gateway uuid.UUID,
 	submissionID, reasonCode string, now time.Time) error {
 	executor, err := s.primary.Resolve(tx)

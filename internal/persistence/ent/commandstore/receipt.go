@@ -15,6 +15,8 @@ import (
 	"github.com/gopager/gopager/internal/platform/postgres"
 )
 
+// Store reads and writes per-actor command receipts. It holds no transaction of its own;
+// every method runs in the caller's active primary transaction.
 type Store struct{ primary *postgres.Store }
 
 // New binds receipt participation to the existing Primary, without an extra pool.

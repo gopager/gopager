@@ -18,13 +18,20 @@ const (
 	correctionBatchSize = 100
 	correctionLease     = 30 * time.Second
 	correctionPoll      = 500 * time.Millisecond
+	correctionMaxRetry  = 30 * time.Second
 )
 
+// CorrectionMatcher re-matches stored targets against current rules inside the
+// runner's transaction; Service.MatchTargets implements it.
 type CorrectionMatcher interface {
 	MatchTargets(context.Context, platform.TransactionContext, uuid.UUID, protocols.Protocol,
 		time.Time, []protocols.Target) (MatchResult, error)
 }
 
+// CorrectionRunner is the background worker that drains pending correction
+// scopes and re-enters held-back transmissions into publication. Create it
+// with NewCorrectionRunner. Concurrent runners are safe: scopes are claimed
+// under a lease with a fencing token.
 type CorrectionRunner struct {
 	transactions identity.Transactions
 	clock        platform.Clock
@@ -34,6 +41,8 @@ type CorrectionRunner struct {
 	publication  CorrectionPublication
 }
 
+// NewCorrectionRunner returns a runner using the given ports. It returns
+// authz.ErrInvalidInput if any dependency is nil.
 func NewCorrectionRunner(transactions identity.Transactions, clock platform.Clock, matcher CorrectionMatcher,
 	repository CorrectionWorkRepository, facts events.CorrectionAppender, publication CorrectionPublication,
 ) (*CorrectionRunner, error) {
@@ -45,21 +54,69 @@ func NewCorrectionRunner(transactions identity.Transactions, clock platform.Cloc
 		repository: repository, facts: facts, publication: publication}, nil
 }
 
+// Run calls RunOnce every 500ms until ctx is cancelled, returning ctx.Err().
+// A transient storage failure from RunOnce (STORAGE_UNAVAILABLE,
+// AUTHORITY_UNAVAILABLE, COMMIT_UNCERTAIN or REVISION_CONFLICT) is logged and
+// retried after a backoff that starts at 500ms and doubles up to 30s; any
+// other RunOnce error is returned.
 func (r *CorrectionRunner) Run(ctx context.Context) error {
-	ticker := time.NewTicker(correctionPoll)
-	defer ticker.Stop()
+	failures := 0
 	for {
+		wait := correctionPoll
 		if _, err := r.RunOnce(ctx); err != nil {
-			return err
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if !transientFailure(err) {
+				return err
+			}
+			failures++
+			wait = correctionRetryDelay(failures)
+			slog.Warn("correction runner storage failure; retrying", "code", platform.FailureCode(err),
+				"failures", failures, "retryIn", wait)
+		} else if failures > 0 {
+			slog.Info("correction runner recovered", "failures", failures)
+			failures = 0
 		}
+		timer := time.NewTimer(wait)
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return ctx.Err()
-		case <-ticker.C:
+		case <-timer.C:
 		}
 	}
 }
 
+// transientFailure reports storage failures that a later attempt can overcome.
+func transientFailure(err error) bool {
+	switch platform.FailureCode(err) {
+	case platform.CodeStorageUnavailable, platform.CodeAuthorityUnavailable,
+		platform.CodeCommitUncertain, platform.CodeRevisionConflict:
+		return true
+	}
+	return false
+}
+
+// correctionRetryDelay doubles the poll interval per consecutive failure, bounded by correctionMaxRetry.
+func correctionRetryDelay(failures int) time.Duration {
+	delay := correctionPoll
+	for i := 1; i < failures && delay < correctionMaxRetry; i++ {
+		delay *= 2
+	}
+	return min(delay, correctionMaxRetry)
+}
+
+// RunOnce claims one due correction scope and processes it in batches of up to
+// 100 transmissions, each batch in its own transaction that re-matches the
+// targets, applies changed resolutions and appends an assignment.changed
+// correction fact per changed target. A batch or completion failure is
+// recorded on the scope with exponential backoff and is not returned; RunOnce
+// returns an error only when it cannot claim or reschedule. A reschedule
+// failure is joined ahead of the batch failure, so FailureCode reports why
+// the scope could not be rescheduled. When no scope is
+// due it instead re-enters one batch of held-back transmissions into
+// publication. The bool reports whether any work was done.
 func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 	var lease CorrectionLease
 	var claimed bool
@@ -134,7 +191,7 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 				return r.repository.FailCorrection(tx.Context(), tx, lease, code, delay)
 			})
 			if rescheduleErr != nil {
-				return true, errors.Join(err, rescheduleErr)
+				return true, errors.Join(rescheduleErr, err)
 			}
 			return true, nil
 		}
@@ -153,7 +210,7 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 				return r.repository.FailCorrection(tx.Context(), tx, lease, "CORRECTION_FAILED", delay)
 			})
 			if rescheduleErr != nil {
-				return true, errors.Join(err, rescheduleErr)
+				return true, errors.Join(rescheduleErr, err)
 			}
 			return true, nil
 		}
@@ -163,7 +220,7 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 	}
 }
 
-// reenterPublication hands at most one batch of unpublished Transmissions back to C-11 publication.
+// reenterPublication hands at most one batch of unpublished Transmissions back to publication.
 // Each Transmission uses its own short transaction; failures stay eligible for a later pass.
 func (r *CorrectionRunner) reenterPublication(ctx context.Context) bool {
 	var transmissions []uuid.UUID

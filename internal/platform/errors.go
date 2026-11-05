@@ -5,8 +5,14 @@ import (
 	"log/slog"
 )
 
+// ErrorCode is the stable, locale-independent identifier of a failure class
+// exposed to callers and API clients.
 type ErrorCode string
 
+// Platform error codes. CodeCommitUncertain means a commit may or may not have
+// taken effect, so callers must look the operation up by its identifier rather
+// than blindly retrying; CodeInternalError is the fallback for unknown codes and
+// for errors that are not a *Failure.
 const (
 	CodeInvalidInput         ErrorCode = "INVALID_INPUT"
 	CodeRevisionConflict     ErrorCode = "REVISION_CONFLICT"
@@ -29,11 +35,18 @@ var englishFallbacks = map[ErrorCode]string{
 	CodeInternalError:        "The operation could not be completed.",
 }
 
+// Failure is the platform error type: a public ErrorCode plus a private cause.
+// Error returns only the code's generic English fallback text, so the cause is
+// never leaked through messages or structured logs; it remains reachable via
+// errors.Unwrap/errors.Is/errors.As. All methods are safe on a nil *Failure,
+// which behaves like CodeInternalError.
 type Failure struct {
 	code  ErrorCode
 	cause error
 }
 
+// NewFailure returns a Failure with the given code and cause. An unknown code is
+// replaced by CodeInternalError. cause may be nil.
 func NewFailure(code ErrorCode, cause error) *Failure {
 	if _, ok := englishFallbacks[code]; !ok {
 		code = CodeInternalError
@@ -41,6 +54,8 @@ func NewFailure(code ErrorCode, cause error) *Failure {
 	return &Failure{code: code, cause: cause}
 }
 
+// Error returns the generic English fallback text for the failure's code; it
+// never includes the wrapped cause.
 func (f *Failure) Error() string {
 	if f == nil {
 		return englishFallbacks[CodeInternalError]
@@ -48,6 +63,7 @@ func (f *Failure) Error() string {
 	return englishFallbacks[f.code]
 }
 
+// Code returns the failure's error code, or CodeInternalError for a nil receiver.
 func (f *Failure) Code() ErrorCode {
 	if f == nil {
 		return CodeInternalError
@@ -55,6 +71,7 @@ func (f *Failure) Code() ErrorCode {
 	return f.code
 }
 
+// Unwrap returns the private cause, or nil for a nil receiver.
 func (f *Failure) Unwrap() error {
 	if f == nil {
 		return nil
@@ -62,6 +79,9 @@ func (f *Failure) Unwrap() error {
 	return f.cause
 }
 
+// FailureCode returns the code of the first *Failure in err's chain. It returns
+// "" for a nil error and CodeInternalError for any non-nil error without a
+// *Failure.
 func FailureCode(err error) ErrorCode {
 	var failure *Failure
 	if errors.As(err, &failure) {

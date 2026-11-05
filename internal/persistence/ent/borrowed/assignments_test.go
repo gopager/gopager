@@ -18,6 +18,7 @@ import (
 	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/assignments"
 	"github.com/gopager/gopager/internal/authz"
+	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/events"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/ingest"
@@ -37,7 +38,7 @@ import (
 	"github.com/gopager/gopager/internal/protocols"
 )
 
-// matcherOwners supplies declared standalone fixture Networks, not production DOM-01 composition.
+// matcherOwners supplies declared standalone fixture Networks, not production Intake composition.
 type matcherOwners struct {
 	identity *identitystore.Store
 	units    *unitstore.Store
@@ -221,12 +222,12 @@ func TestCurrentMatcherAtomicCreationRetryPreviewAndRollback(t *testing.T) {
 		t.Fatalf("Unit retry duplicated state or facts: %v", err)
 	}
 	input.Name = "changed"
-	if _, err := f.units.CreateUnit(t.Context(), f.proof, command, input, checkedMutation); !errors.Is(err, authz.ErrRevisionConflict) {
+	if _, err := f.units.CreateUnit(t.Context(), f.proof, command, input, checkedMutation); !errors.Is(err, commands.ErrIdempotencyConflict) {
 		t.Fatalf("conflicting Unit command reuse accepted: %v", err)
 	}
 	ruleCommand := uuid.New()
 	ruleValues := ruleInput(f.networks[0], unit.ID, 10, 20, 3, 1)
-	if err := f.rules.Preview(t.Context(), f.proof, uuid.Nil, 0, ruleValues); err != nil || configurationCounts(t, f) != before {
+	if err := f.rules.Preview(t.Context(), f.proof, uuid.Nil, 0, ruleValues, nil); err != nil || configurationCounts(t, f) != before {
 		t.Fatalf("preview changed configuration: %v", err)
 	}
 	rule, err := f.rules.CreateRule(t.Context(), f.proof, ruleCommand, ruleValues, checkedMutation)
@@ -457,7 +458,7 @@ func TestCurrentMatcherNativeFilteringAndAllUseChecks(t *testing.T) {
 	if configurationCounts(t, f) != before {
 		t.Fatal("denied all-use mutation changed state")
 	}
-	if err := f.rules.Preview(t.Context(), f.proof, uuid.Nil, 0, ruleInput(f.networks[0], shared.ID, 10, 10)); !errors.Is(err, assignments.ErrRuleConflict) {
+	if err := f.rules.Preview(t.Context(), f.proof, uuid.Nil, 0, ruleInput(f.networks[0], shared.ID, 10, 10), nil); !errors.Is(err, assignments.ErrRuleConflict) {
 		t.Fatalf("preview ignored current conflicting configuration: %v", err)
 	}
 }
@@ -584,7 +585,7 @@ func TestCurrentMatcherNativeMixedScopesAndRestrictingKeysMatchPointDecisions(t 
 			}
 		}
 		if scope.Kind == "unit" {
-			if err := f.rules.Preview(t.Context(), proof, uuid.Nil, 0, ruleInput(f.networks[1], ids[0], 20, 20)); !errors.Is(err, assignments.ErrRuleConflict) {
+			if err := f.rules.Preview(t.Context(), proof, uuid.Nil, 0, ruleInput(f.networks[1], ids[0], 20, 20), nil); !errors.Is(err, assignments.ErrRuleConflict) {
 				t.Fatalf("hidden conflicting rule was ignored: %v", err)
 			}
 		}
@@ -1019,11 +1020,30 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 		return revision
 	}
 	revision := assertCorrected(unitA.ID, true)
-	suppressed, err := f.rules.CreateSuppression(t.Context(), f.proof, uuid.New(),
-		assignments.CreateSuppressionInput{TransmissionID: transmissionID, TargetPosition: 0,
-			ExpectedAssignmentRevision: revision}, checkedMutation)
+	suppressionCommand := uuid.New()
+	suppressionInput := assignments.CreateSuppressionInput{TransmissionID: transmissionID, TargetPosition: 0,
+		ExpectedAssignmentRevision: revision}
+	suppressed, err := f.rules.CreateSuppression(t.Context(), f.proof, suppressionCommand,
+		suppressionInput, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// A replay after an uncertain commit carries the now-stale expected revision
+	// for an already active suppression and must still return the stored result.
+	beforeReplay := configurationCounts(t, f)
+	replayed, err := f.rules.CreateSuppression(t.Context(), f.proof, suppressionCommand,
+		suppressionInput, checkedMutation)
+	if err != nil || replayed.Suppression.ID != suppressed.Suppression.ID ||
+		replayed.Suppression.Revision != suppressed.Suppression.Revision ||
+		replayed.Correction.ID != suppressed.Correction.ID || configurationCounts(t, f) != beforeReplay {
+		t.Fatalf("suppression replay did not return the stored result without new state: %v", err)
+	}
+	changedInput := suppressionInput
+	changedInput.ExpectedAssignmentRevision = beforeReplay[6]
+	if _, err := f.rules.CreateSuppression(t.Context(), f.proof, suppressionCommand,
+		changedInput, checkedMutation); !errors.Is(err, commands.ErrIdempotencyConflict) ||
+		configurationCounts(t, f) != beforeReplay {
+		t.Fatalf("changed suppression input under a reused command ID was not an idempotency conflict: %v", err)
 	}
 	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
 		t.Fatalf("suppression correction did not run: worked=%t err=%v", worked, err)
@@ -1043,7 +1063,7 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 		if contributions != 1 {
 			t.Fatalf("suppressing one of two supports removed their shared contribution: %d", contributions)
 		}
-		// F-82: the surviving 12:00:02-equivalent support re-anchors the contribution time.
+		// The surviving 12:00:02-equivalent support re-anchors the contribution time.
 		if want := observed.Add(2 * time.Second); !contributionTime.Equal(want) {
 			t.Fatalf("contribution time=%s after suppressing the earlier support, want %s", contributionTime, want)
 		}
@@ -1426,7 +1446,7 @@ func TestCurrentMatcherCreationReceiptsAreActorBound(t *testing.T) {
 	if err != nil || second.ID == first.ID {
 		t.Fatalf("another actor received the original actor's command result: %v", err)
 	}
-	if _, err := f.units.CreateCollection(t.Context(), f.proof, command, "Stations", checkedMutation); !errors.Is(err, authz.ErrRevisionConflict) {
+	if _, err := f.units.CreateCollection(t.Context(), f.proof, command, "Stations", checkedMutation); !errors.Is(err, commands.ErrIdempotencyConflict) {
 		t.Fatalf("one actor reused a command identity for another operation: %v", err)
 	}
 }

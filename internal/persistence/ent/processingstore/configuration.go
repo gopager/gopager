@@ -26,6 +26,9 @@ import (
 	"github.com/gopager/gopager/internal/processing"
 )
 
+// Store persists Processing state: Workflows and their versions and scope references,
+// plugin instances, candidates, results and publication participation. It holds no
+// transaction of its own: every method runs in the caller's active primary transaction.
 type Store struct{ primary *postgres.Store }
 
 // New binds this owner to the existing primary store, never an independent connection.

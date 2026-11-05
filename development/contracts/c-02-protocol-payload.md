@@ -6,7 +6,7 @@ Referenced contracts (follow only when relevant): [C-01](c-01-transmission-accep
 
 **Traceability:** [REQ-020](../requirements-catalog.md#b-search-filters-and-details), [REQ-031..032/037..038](../requirements-catalog.md#d-correct-assignment-and-history), [REQ-121..122](../requirements-catalog.md#m-additional-domain-capabilities). Issue references: [P-08/P-09](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
-**Version/status:** 0.2-draft, AP-04 D-34 amendment to the 0.1-draft baseline; not frozen as a whole. The AP-07 transmission-input slice is frozen as 1.0 under [D-119](../authoritative-plan.md#ap-07-contract-freeze-proposal), without changing the prior decision set's meaning. **Owner:** DOM-02; DOM-01 owns submitted originals. **Parties:** Gateway submits finalized Transmission reports; ingest, Assignment and Grouping consume them. **Failure:** Missing required fields or invalid declared-form data are rejected, not treated as empty/certain. A valid report of partial reception is different and must be retained.
+**Version/status:** 0.2-draft, AP-04 D-34 amendment to the 0.1-draft baseline; not frozen as a whole. The AP-07 transmission-input slice is frozen as 1.0 under [D-119](../authoritative-plan.md#ap-07-contract-freeze-proposal), without changing the prior decision set's meaning. **Owner:** Grouping; Intake owns submitted originals. **Parties:** Gateway submits finalized Transmission reports; ingest, Assignment and Grouping consume them. **Failure:** Missing required fields or invalid declared-form data are rejected, not treated as empty/certain. A valid report of partial reception is different and must be retained.
 
 The Gateway contract carries declared Protocol, original reported Payload, zero or more targets with Function/signal attributes, context and optional quality metrics. Finalizing this report does not certify reception completeness. EAS submits supported header Payload with areas as targets; POCSAG/FLEX/SMTP may report multiple targets in one report. No decoder/frame/checksum/reassembly internals are added to the server contract.
 
@@ -46,7 +46,7 @@ Each Transmission carries the Protocol, optional Gateway Network identifier, Obs
 
 ## AP-04 FLEX Clarification
 
-**D-34, 2026-10-25; owner DOM-02 with DOM-01; version 0.2-draft.** Gateway producers and ingest/Grouping/query consumers use this backend-owned mapping. Evidence: [AP-04 direct standard review](../execution/ap-04.md#e-06-direct-flex-specification-review), ARIB RCR STD-43A sections 3.8/3.9/3.10, chapter 4/5 and Appendix A. These facts and decisions do not select a decoder.
+**D-34, 2026-10-25; owner Grouping with Intake; version 0.2-draft.** Gateway producers and ingest/Grouping/query consumers use this backend-owned mapping. Evidence: [AP-04 direct standard review](../execution/ap-04.md#e-06-direct-flex-specification-review), ARIB RCR STD-43A sections 3.8/3.9/3.10, chapter 4/5 and Appendix A. These facts and decisions do not select a decoder.
 
 - Short numeric messages from Short Message Vector type `00` at non-Network addresses map to the existing `numeric` form and canonical numeric code sequence. The normal numeric preservation/comparison rules apply. A three-digit short message and an otherwise equal numeric message are not different merely because their vector encodings differ.
 - Source-code variants `01` and `10` map to `flex-short-signal`, whose Payload value is the original integer Source code `0..7`. Canonical identity is this form plus that code. Message number and retrieval indication are preserved attributes, not identity. These reports do not match empty `tone-only`, `numeric` or `text`; different codes do not match each other. Invalid types/ranges fail validation rather than becoming empty tone-only.
@@ -60,25 +60,25 @@ Compatibility: this is a deliberate draft identity-rule amendment, not an additi
 
 ### AP-07 Transmission Input Binding
 
-**Version/status:** transmission-input 1.0, frozen for AP-07 under [D-119](../authoritative-plan.md#ap-07-contract-freeze-proposal). **Owner:** DOM-02, with DOM-01 accountable for submitted original evidence.
+**Version/status:** transmission-input 1.0, frozen for AP-07 under [D-119](../authoritative-plan.md#ap-07-contract-freeze-proposal). **Owner:** Grouping, with Intake accountable for submitted original evidence.
 
 AP-07 accepts the common version-1 C-02 Protocol/Payload/target representation only. The Gateway supplies a finalized Transmission; server validation rejects unknown Protocols, invalid declared forms and malformed required fields, but retains valid partial reception and its Incomplete marker. Store the submitted Payload and original target list without rewriting them. Comparison uses the C-02 form/value identity rules, including the approved D-34 FLEX mapping; no Gateway-supplied Message identity or target-derived Payload identity is accepted. AP-07 binds this input slice only and does not change protocol meanings or authorize decoder/reassembly work.
 
 ## Early Matcher Target Candidate
 
-**Version/status:** original-target 1.0, frozen 2026-10-27 by explicit user approval under [D-60](../authoritative-plan.md#early-master-data-and-matcher-prerequisite-proposal). **Owner:** DOM-02, with DOM-01 retaining original evidence and DOM-04 consuming validated targets. **Scope:** only the target/protocol boundary needed by AP-08's standalone matcher; no Payload, comparison, Submission or Grouping implementation approval.
+**Version/status:** original-target 1.0, frozen 2026-10-27 by explicit user approval under [D-60](../authoritative-plan.md#early-master-data-and-matcher-prerequisite-proposal). **Owner:** Grouping, with Intake retaining original evidence and Assignment consuming validated targets. **Scope:** only the target/protocol boundary needed by AP-08's standalone matcher; no Payload, comparison, Submission or Grouping implementation approval.
 
 The authoritative original-target 1.0 Protocol/Address/Target serialization, validation and FLEX class/range handling are [the shared typed definitions](../../internal/protocols/targets.go), with [boundary and JSON tests](../../internal/protocols/targets_test.go). Accepted domains and special-address distinctions retain the table and D-34 above. Unsupported attributes, fractional/overflowing numeric Addresses and cross-Protocol forms are invalid, not ignored. ZVEI/EAS leading zeros are preserved, with no geographic expansion. No address-mode flag on a submitted POCSAG target overrides the matching rule's mode.
 
 The internal typed target representation must preserve these distinctions without floating-point parsing. Validation/classification is owned by the shared Protocol definition, not duplicated in the matcher. Rule ranges must consist of supported addresses; merely validating two endpoints must not admit intervening reserved addresses or erase Protocol class distinctions. The authoritative FLEX class table is Appendix A Table A-1 of the official standard linked by the [direct source review](../execution/ap-04.md#e-06-direct-flex-specification-review), not an assumed continuous min/max interval.
 
-DOM-04 receives an ordered validated target list and does not sort, deduplicate or rewrite it. Original-target reference/ownership/empty-list rules stay exclusively in [C-05](c-05-matching-correction.md#original-target-reference). [The AP-08 handover](../execution/source-ap-08.md#handover) binds these actual typed artifacts; it does not freeze or implement the remaining original Payload, Submission or Grouping schemas.
+Assignment receives an ordered validated target list and does not sort, deduplicate or rewrite it. Original-target reference/ownership/empty-list rules stay exclusively in [C-05](c-05-matching-correction.md#original-target-reference). [The AP-08 handover](../execution/source-ap-08.md#handover) binds these actual typed artifacts; it does not freeze or implement the remaining original Payload, Submission or Grouping schemas.
 
 ## Early Processing Source Projection Candidate
 
 The [classified context builder](../../internal/processing/capture.go) supplies the approved [C-06 source-context memberships](c-06-identity-authorization.md#fixed-field-group-review-candidate) for trusted owner projections. It does not resolve Networks, authorize a source or replace the AP-06 original owner; current visibility masking precedes capture.
 
-**Version/status:** processing-source 1.0, explicitly frozen 2026-11-01 as part of the user's `approve-processing-kernel-1.0` approval; execution start remains separate. No Submission/Payload-identity freeze or implementation follows. **Owners:** DOM-02 for Protocol/form/schema interpretation, DOM-01 for immutable evidence/reference, DOM-04 for current target context. DOM-08 receives a validated bounded projection, never foreign tables or unchecked raw JSON.
+**Version/status:** processing-source 1.0, explicitly frozen 2026-11-01 as part of the user's `approve-processing-kernel-1.0` approval; execution start remains separate. No Submission/Payload-identity freeze or implementation follows. **Owners:** Grouping for Protocol/form/schema interpretation, Intake for immutable evidence/reference, Assignment for current target context. Processing receives a validated bounded projection, never foreign tables or unchecked raw JSON.
 
 The internal projection has `transmissionId`, Protocol and declared form/subtype, original Observation instant, source revision, current resolved Network, Assignment/context revision, and ordered current target contexts referencing original positions. Source revision identifies immutable owner evidence/projection schema, not editable text. Order/duplicates and assigned/unassigned distinctions use D-60 types; current Unit/collection context uses the name-free internal port. No fabricated target for an empty original target list.
 
@@ -94,7 +94,7 @@ This handover establishes projection types/validation/ports, not original intake
 
 ### Synthetic Preview Source 1.0
 
-**Status:** exact schema/context approved under [D-102](../authoritative-plan.md#synthetic-schema-freeze-responses), with [D-103 bytes](../authoritative-plan.md#shared-bytes-binding). Owners: DOM-02/DOM-08/integration. This is a transient standalone preview source, not original intake, a stored source or publication authority. No later AP-07 producer is required.
+**Status:** exact schema/context approved under [D-102](../authoritative-plan.md#synthetic-schema-freeze-responses), with [D-103 bytes](../authoritative-plan.md#shared-bytes-binding). Owners: Grouping/Processing/integration. This is a transient standalone preview source, not original intake, a stored source or publication authority. No later AP-07 producer is required.
 
 Closed request: `schemaVersion:1`, lowercase `protocol`, matching `form`, form-specific `payload`, ordered shared Protocol `targets`, existing `networkId`, optional offset-bearing RFC3339 `observedAt` and only the form-specific optional `subtype` below. Reject caller declarations, classifications, source/context revisions, Transmission/Unit IDs, positions, Network names, resolved context and unknown properties. Existing encoded Processing bounds apply.
 

@@ -1,4 +1,4 @@
-// Command is a supplied pure plugin fixture for the installed-invocation wire boundary (D-131).
+// Command is a supplied pure plugin fixture for the installed-invocation wire boundary.
 package main
 
 import (

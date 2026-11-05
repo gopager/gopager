@@ -21,17 +21,26 @@ type Assignment struct {
 	Conversion ValueKind `json:"conversion,omitempty"`
 }
 
+// CaptureMapping maps one extraction output to a named regex capture group. Name must
+// occur exactly once in the pattern. Without Conversion the output must be a string;
+// with it, Conversion must equal the output kind (string, integer, number, boolean or
+// timestamp).
 type CaptureMapping struct {
 	Name       string    `json:"name"`
 	Conversion ValueKind `json:"conversion,omitempty"`
 }
 
+// ExtractStep matches a declared string input against a Core regex pattern and maps
+// named captures, keyed by output field name, to outputs. Every required output must be
+// mapped; outputs whose group did not match are absent.
 type ExtractStep struct {
 	Input    FieldRef                  `json:"input"`
 	Pattern  string                    `json:"pattern"`
 	Captures map[string]CaptureMapping `json:"captures"`
 }
 
+// BranchStep runs Then when Condition is definitely true and Else otherwise, then
+// evaluates the matching outputs mapping. An Indeterminate condition fails the step.
 type BranchStep struct {
 	Condition   Predicate             `json:"condition"`
 	Then        []Step                `json:"then"`
@@ -678,6 +687,7 @@ func (p *WorkflowProgram) execute(ctx context.Context, steps []compiledStep, fra
 			fields, err = executeInstalled(ctx, step, frame)
 		}
 		if err != nil {
+			err = frame.budget.bound(err)
 			return fmt.Errorf("step %q: %w", step.definition.ID, platform.NewFailure(platform.FailureCode(err), err))
 		}
 		if err := frame.budget.computeContext().Err(); err != nil {
@@ -780,7 +790,8 @@ func (p *WorkflowProgram) EvaluateScoped(ctx context.Context, source *CapturedSo
 	return p.evaluateScoped(ctx, source, invocations, &scope)
 }
 
-func (p *WorkflowProgram) evaluateScoped(ctx context.Context, source *CapturedSource, invocations InstalledInvocationOwner, scope *EvaluationScope) (Evaluation, error) {
+func (p *WorkflowProgram) evaluateScoped(ctx context.Context, source *CapturedSource, invocations InstalledInvocationOwner,
+	scope *EvaluationScope) (evaluation Evaluation, resultErr error) {
 	if p == nil || source == nil || ctx == nil {
 		return Evaluation{}, invalid(errors.New("missing Workflow/source/context"))
 	}
@@ -799,8 +810,14 @@ func (p *WorkflowProgram) evaluateScoped(ctx context.Context, source *CapturedSo
 		}
 	}
 	budget := &executionBudget{used: source.encodedSize}
-	budget.startCompute(ctx, time.Second)
+	budget.startCompute(ctx, computeAllowance)
 	defer budget.closeCompute()
+	defer func() {
+		// Expiry of the run's own compute allowance is an explicit bound, not an internal error.
+		if resultErr != nil {
+			evaluation, resultErr = Evaluation{}, budget.bound(resultErr)
+		}
+	}()
 	ctx = budget.computeContext()
 	if err := ctx.Err(); err != nil {
 		return Evaluation{}, err

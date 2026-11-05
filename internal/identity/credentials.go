@@ -1,4 +1,14 @@
-// Package identity owns local credential validation and server-derived identities.
+// Package identity owns local accounts, credentials and the derivation of a
+// caller's current authority from transport proof.
+//
+// HTTPTransport.SelectProof turns a request into a Proof (bearer access key,
+// session cookie or anonymous); Resolver.Resolve validates that proof inside
+// the caller's transaction and returns the Authentication with current grants.
+// LoginService implements local password login, logout and session reads, and
+// NewHTTPHandler exposes them over HTTP. GatewayAuthenticator authenticates
+// ingest gateways separately from principals. Bootstrap initializes a fresh
+// installation. The helpers in this file validate usernames and passwords and
+// hash passwords (Argon2id) and bearer secrets (SHA-256).
 package identity
 
 import (
@@ -18,8 +28,14 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
+// Sentinel errors of the identity package.
 var (
-	ErrInvalidInput  = errors.New("invalid identity input")
+	// ErrInvalidInput reports malformed caller input (username, password,
+	// secret, or missing dependencies); HTTP maps it to INVALID_INPUT.
+	ErrInvalidInput = errors.New("invalid identity input")
+	// ErrLoginRequired reports missing, malformed, unknown, expired, revoked or
+	// otherwise unusable proof, or an inactive account. It deliberately does
+	// not say which; HTTP maps it to LOGIN_REQUIRED (401).
 	ErrLoginRequired = errors.New("sign in to continue")
 )
 

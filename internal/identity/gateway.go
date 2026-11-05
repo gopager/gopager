@@ -8,6 +8,8 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
+// GatewayAuthentication identifies an authenticated ingest gateway and the
+// credential it used.
 type GatewayAuthentication struct {
 	GatewayID    uuid.UUID
 	CredentialID uuid.UUID
@@ -18,6 +20,9 @@ type GatewayCredentialRepository interface {
 	AuthenticateGatewayCredential(context.Context, platform.TransactionContext, [32]byte) (GatewayAuthentication, error)
 }
 
+// GatewayAuthenticator authenticates ingest gateways by bearer secret. It is
+// separate from principal resolution and yields no user authority. Create it
+// with NewGatewayAuthenticator.
 type GatewayAuthenticator struct {
 	repository GatewayCredentialRepository
 }

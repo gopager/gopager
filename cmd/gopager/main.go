@@ -1,3 +1,42 @@
+// Command gopager runs the GoPager server.
+//
+// Usage:
+//
+//	gopager -profile full -roles api,worker -listen-address HOST:PORT [flags]
+//	gopager bootstrap -username NAME -actions A,B,... [flags] < password-file
+//
+// Server mode composes the requested roles on one PostgreSQL primary:
+//
+//   - api serves the HTTP listener: /health/live, /health/ready and the
+//     /api/v1 application routes (authentication, management, Gateway intake
+//     and administration, Processing).
+//   - worker runs the background Processing dispatcher and the assignment
+//     correction runner.
+//
+// Server flags: -profile (must be "full"), -roles (comma-separated, required),
+// -listen-address (required with the api role), -migration-mode (check, the
+// default, refuses to start unless the schema is exactly current; apply runs
+// pending migrations first), -public-origin (the HTTP(S) origin used for
+// cookie and Origin checks; required with the api role),
+// -processing-artifact-root (directory of operator-provisioned plugin
+// executables; falls back to $GOPAGER_PROCESSING_ARTIFACT_ROOT),
+// -login-attempts-per-account and -login-attempts-per-instance (per-minute
+// login limits, positive) and -allow-insecure-db (accept a remote database
+// without certificate-verified TLS). Positional arguments are rejected.
+//
+// The database connection string is read only from $GOPAGER_DATABASE_URL so
+// that it never appears in process listings. The process runs until SIGINT or
+// SIGTERM and then shuts down gracefully.
+//
+// The bootstrap subcommand creates the initial local account of a fresh
+// installation without starting a listener; it fails with REVISION_CONFLICT
+// when the installation is already initialized. It takes -username, -actions (explicit comma-separated actions,
+// no wildcards), -fields (readable fields), -delegable, -migration-mode and
+// -allow-insecure-db. The password is read verbatim from standard input, which
+// must be a pipe or file, not a terminal (one trailing newline is stripped).
+// On success it prints the new account's ID to standard output.
+//
+// On failure gopager logs only the platform error code and exits with status 1.
 package main
 
 import (
@@ -176,7 +215,7 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 	if artifactRootSet && *processingArtifactRoot == "" {
 		return startupConfig{}, platform.NewFailure(platform.CodeInvalidInput, errors.New("invalid Processing artifact root"))
 	}
-	// D-131: Docker deployments may name the mounted plugin directory through the environment.
+	// Container deployments may name the mounted plugin directory through the environment.
 	if !artifactRootSet {
 		*processingArtifactRoot = getenv("GOPAGER_PROCESSING_ARTIFACT_ROOT")
 	}

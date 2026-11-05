@@ -99,7 +99,7 @@ func TestFactTransportAllProducersAreAtomic(t *testing.T) {
 			})
 		},
 		"processing-completion": func(s *eventstore.Store, tx platform.TransactionContext, id uuid.UUID, now time.Time) (uuid.UUID, error) {
-			// Publication fixture references are not production AP-06 originals.
+			// Publication fixture references are not production originals.
 			return s.AppendProcessingCompletion(tx.Context(), tx, events.ProcessingCompletionFact{
 				ID: id, WorkflowID: uuid.New(), ResultID: uuid.New(), ResultRevision: 1,
 				TransmissionID: uuid.New(), MessageID: uuid.New(), DefinitionVersionID: uuid.New(),

@@ -1,4 +1,14 @@
-// Package units owns Unit identity, current collection membership and master-data ports.
+// Package units owns Unit master data: Units, their current collection
+// membership, Unit collections, Organizations with their setting defaults, and
+// standalone Unit templates.
+//
+// Service (built with NewService) is the entry point for authorized reads and
+// revision-controlled mutations; each mutation runs in one platform
+// transaction that also records an audit change and appends an
+// events.MasterDataFact. Repository, ContextReader and RuleOwner are the ports
+// implemented by persistence and the assignment rules owner. Settings,
+// Defaults, ResolveSettings and MaterializeSettings implement the Unit setting
+// inheritance from Organization defaults.
 package units
 
 import (
@@ -26,19 +36,26 @@ type Unit struct {
 	Deleted           bool              `json:"deleted"`
 }
 
+// BulkUnitItem is one Unit in a bulk operation. Settings is required for
+// "update" and must be nil for "delete"; ExpectedRevision must be positive.
 type BulkUnitItem struct {
 	ID               uuid.UUID `json:"id"`
 	ExpectedRevision int64     `json:"expectedRevision,string"`
 	Settings         *Settings `json:"settings,omitempty"`
 }
 
+// BulkUnitInput is a bulk Unit operation: Operation is "update" or "delete"
+// and Items holds 1 to 100 distinct Units.
 type BulkUnitInput struct {
 	Operation string         `json:"operation"`
 	Items     []BulkUnitItem `json:"items"`
 }
 
+// BulkUnitResult is the per-Unit outcome of BulkUnits.
 type BulkUnitResult = commands.ResultItem
 
+// BulkItemPreview is the dry-run outcome for one bulk item. When Valid is
+// false, Code is NOT_FOUND, REVISION_CONFLICT or INVALID_INPUT.
 type BulkItemPreview struct {
 	ID               uuid.UUID `json:"id"`
 	ExpectedRevision int64     `json:"expectedRevision,string"`
@@ -46,6 +63,8 @@ type BulkItemPreview struct {
 	Code             string    `json:"code,omitempty"`
 }
 
+// BulkPreview is the result of PreviewBulkUnits; Valid is true only when every
+// item is valid. Items are ordered by Unit ID.
 type BulkPreview struct {
 	Valid bool              `json:"valid"`
 	Items []BulkItemPreview `json:"items"`
@@ -59,12 +78,17 @@ type Context struct {
 	Deleted       bool
 }
 
+// Collection is a named Unit collection DTO. It carries no member list.
 type Collection struct {
 	ID       uuid.UUID `json:"id"`
 	Revision int64     `json:"revision,string"`
 	Name     string    `json:"name"`
 }
 
+// UnitInput is the requested state of a Unit for create or change. At most one
+// of OrganizationID and NewOrganization may be set; NewOrganization (create
+// only) creates the Organization in the same transaction. Call Canonical to
+// validate it.
 type UnitInput struct {
 	Name            string             `json:"name"`
 	OrganizationID  *uuid.UUID         `json:"organizationId"`
@@ -73,39 +97,52 @@ type UnitInput struct {
 	NewOrganization *OrganizationInput `json:"newOrganization,omitempty"`
 }
 
+// FieldSetting is one Unit or template setting. Mode is "inherit" (the
+// default when empty; use the Organization default), "unset", or "value";
+// Value must be set exactly when Mode is "value".
 type FieldSetting[T any] struct {
 	Mode  string `json:"mode"`
 	Value *T     `json:"value,omitempty"`
 }
 
+// DefaultSetting is one Organization default. Mode is "unset" or "value" (no
+// inheritance); Value must be set exactly when Mode is "value".
 type DefaultSetting[T any] struct {
 	Mode  string `json:"mode"`
 	Value *T     `json:"value,omitempty"`
 }
 
+// Settings are the stored per-Unit (or per-template) presentation settings.
 type Settings struct {
 	Color            FieldSetting[string]         `json:"color"`
 	Icon             FieldSetting[string]         `json:"icon"`
 	FunctionMeanings FieldSetting[map[int]string] `json:"functionMeanings"`
 }
 
+// Defaults are an Organization's setting defaults, inherited by Unit settings
+// in "inherit" mode.
 type Defaults struct {
 	Color            DefaultSetting[string]         `json:"color"`
 	Icon             DefaultSetting[string]         `json:"icon"`
 	FunctionMeanings DefaultSetting[map[int]string] `json:"functionMeanings"`
 }
 
+// EffectiveValue is a resolved setting value. Source is "unit",
+// "organization" or "unset" (Value is nil when unset).
 type EffectiveValue[T any] struct {
 	Value  *T     `json:"value"`
 	Source string `json:"source"`
 }
 
+// EffectiveSettings are the resolved settings computed by ResolveSettings.
 type EffectiveSettings struct {
 	Color            EffectiveValue[string]         `json:"color"`
 	Icon             EffectiveValue[string]         `json:"icon"`
 	FunctionMeanings EffectiveValue[map[int]string] `json:"functionMeanings"`
 }
 
+// Organization is an Organization DTO with the setting defaults its Units
+// inherit.
 type Organization struct {
 	ID       uuid.UUID `json:"id"`
 	Revision int64     `json:"revision,string"`
@@ -114,11 +151,15 @@ type Organization struct {
 	Deleted  bool      `json:"deleted"`
 }
 
+// OrganizationInput is the requested state of an Organization. Call Canonical
+// to validate it; all Defaults must have an explicit Mode.
 type OrganizationInput struct {
 	Name     string   `json:"name"`
 	Defaults Defaults `json:"defaults"`
 }
 
+// Canonical validates the name and defaults and returns a copy with canonical
+// defaults. It returns authz.ErrInvalidInput on invalid input.
 func (input OrganizationInput) Canonical() (OrganizationInput, error) {
 	if err := ValidateName(input.Name); err != nil {
 		return OrganizationInput{}, err
@@ -131,6 +172,8 @@ func (input OrganizationInput) Canonical() (OrganizationInput, error) {
 	return input, nil
 }
 
+// UnitTemplate is a standalone Unit template DTO. Units created from it copy
+// its current settings and keep no link to it.
 type UnitTemplate struct {
 	ID                uuid.UUID         `json:"id"`
 	Revision          int64             `json:"revision,string"`
@@ -141,12 +184,17 @@ type UnitTemplate struct {
 	Deleted           bool              `json:"deleted"`
 }
 
+// UnitTemplateInput is the requested state of a Unit template. Call Canonical
+// to validate it.
 type UnitTemplateInput struct {
 	Name           string     `json:"name"`
 	OrganizationID *uuid.UUID `json:"organizationId"`
 	Settings       Settings   `json:"settings"`
 }
 
+// Canonical validates the name, settings and optional Organization reference
+// (which must not be the nil UUID) and returns a canonical copy. It returns
+// authz.ErrInvalidInput on invalid input.
 func (input UnitTemplateInput) Canonical() (UnitTemplateInput, error) {
 	if err := ValidateName(input.Name); err != nil {
 		return UnitTemplateInput{}, err
@@ -166,17 +214,22 @@ func (input UnitTemplateInput) Canonical() (UnitTemplateInput, error) {
 	return input, nil
 }
 
+// PageInput is a list page request; call Validate to apply defaults and bounds.
 type PageInput struct {
 	Offset int
 	Limit  int
 }
 
+// Page is one page of authorized list results; Total counts all permitted
+// items, not only those on the page.
 type Page[T any] struct {
 	Items []T `json:"items"`
 	Total int `json:"total"`
 }
 
-// Validate accepts the shared bounded page shape; zero Limit selects the existing default.
+// Validate returns the page with a zero Limit replaced by the default of 50. It
+// returns authz.ErrInvalidInput when Offset is negative or Limit is outside
+// 1..200.
 func (p PageInput) Validate() (PageInput, error) {
 	if p.Limit == 0 {
 		p.Limit = 50
@@ -187,7 +240,8 @@ func (p PageInput) Validate() (PageInput, error) {
 	return p, nil
 }
 
-// ValidateName preserves spelling and rejects only invalid/empty/over-limit names.
+// ValidateName returns authz.ErrInvalidInput when name is not valid UTF-8, is
+// blank, or exceeds 256 runes. It does not trim or otherwise alter the name.
 func ValidateName(name string) error {
 	if !utf8.ValidString(name) || strings.TrimSpace(name) == "" || utf8.RuneCountInString(name) > 256 {
 		return authz.ErrInvalidInput
@@ -195,7 +249,10 @@ func ValidateName(name string) error {
 	return nil
 }
 
-// Canonical validates Unit input and canonicalizes its set-valued membership list.
+// Canonical validates Unit input and returns a copy with canonical settings and
+// CollectionIDs sorted (never nil). It returns authz.ErrInvalidInput for an
+// invalid name or settings, nil-UUID references, both OrganizationID and
+// NewOrganization set, duplicate IDs, or more than 1024 collections.
 func (input UnitInput) Canonical() (UnitInput, error) {
 	if err := ValidateName(input.Name); err != nil {
 		return UnitInput{}, err

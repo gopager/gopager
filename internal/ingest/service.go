@@ -15,10 +15,17 @@ import (
 	"github.com/gopager/gopager/internal/protocols"
 )
 
+// Clock supplies the authoritative transaction-scoped time used for acceptance
+// timestamps; it matches platform.Clock.
 type Clock interface {
 	Now(context.Context, platform.TransactionContext) (time.Time, error)
 }
 
+// TargetMatcher resolves Transmission targets against the configured address
+// rules at the observation time. NetworksWithMatches reports which of the
+// candidate Networks have any matching rule (used to disambiguate a Gateway
+// with several Networks for one protocol); MatchTargets produces the final
+// per-target resolutions for the chosen Network.
 type TargetMatcher interface {
 	NetworksWithMatches(context.Context, platform.TransactionContext, []uuid.UUID,
 		protocols.Protocol, time.Time, []protocols.Target) (assignments.NetworkCandidates, error)
@@ -26,6 +33,12 @@ type TargetMatcher interface {
 		time.Time, []protocols.Target) (assignments.MatchResult, error)
 }
 
+// Repository is the intake persistence port; all methods participate in the
+// caller's transaction. SubmissionReceipt looks up an earlier acceptance by
+// Gateway and Submission ID and returns its stored fingerprint.
+// AcceptTransmission stores the Transmission and its derived records and
+// returns the receipt. RecordRejectedSubmission durably logs a rejected
+// Submission with its public rejection code.
 type Repository interface {
 	identity.GatewayCredentialRepository
 	GatewayNetworks(context.Context, platform.TransactionContext, uuid.UUID) ([]GatewayNetwork, error)
@@ -54,6 +67,9 @@ func (s *Service) ReportState(ctx context.Context, bearer string, report Gateway
 	})
 }
 
+// Service is the Gateway intake service: it authenticates Gateway bearer
+// credentials and accepts Submissions and state reports, each in its own
+// transaction. It is safe for concurrent use.
 type Service struct {
 	transactions  identity.Transactions
 	clock         Clock
@@ -62,6 +78,8 @@ type Service struct {
 	authenticator *identity.GatewayAuthenticator
 }
 
+// NewService returns an intake Service, failing with CodeInvalidInput if any
+// dependency is nil.
 func NewService(transactions identity.Transactions, clock Clock, repository Repository, matcher TargetMatcher) (*Service, error) {
 	if transactions == nil || clock == nil || repository == nil || matcher == nil {
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing intake dependency"))

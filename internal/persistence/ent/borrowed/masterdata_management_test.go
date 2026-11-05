@@ -181,7 +181,7 @@ func TestOrganizationDefaultsTemplateSnapshotAndAtomicBulkUnits(t *testing.T) {
 		{ID: bulkA.ID, ExpectedRevision: 1, Settings: &bulkSettings},
 		{ID: bulkB.ID, ExpectedRevision: 99, Settings: &bulkSettings},
 	}}
-	preview, err := f.units.PreviewBulkUnits(t.Context(), f.proof, input)
+	preview, err := f.units.PreviewBulkUnits(t.Context(), f.proof, input, nil)
 	if err != nil || preview.Valid || len(preview.Items) != 2 {
 		t.Fatalf("invalid bulk preview was not caller-safe: %+v %v", preview, err)
 	}
@@ -227,7 +227,7 @@ func TestOrganizationDefaultsTemplateSnapshotAndAtomicBulkUnits(t *testing.T) {
 		bulkItems[i] = units.BulkUnitItem{ID: unit.ID, ExpectedRevision: unit.Revision, Settings: &bulkSettings}
 	}
 	hundred := units.BulkUnitInput{Operation: "update", Items: bulkItems}
-	preview, err = f.units.PreviewBulkUnits(t.Context(), f.proof, hundred)
+	preview, err = f.units.PreviewBulkUnits(t.Context(), f.proof, hundred, nil)
 	if err != nil || !preview.Valid || len(preview.Items) != 100 {
 		t.Fatalf("100-item bulk preview failed: items=%d valid=%t err=%v", len(preview.Items), preview.Valid, err)
 	}
@@ -328,7 +328,7 @@ func TestDeleteOrganizationRollsBackOnStaleAffectedUnitRevision(t *testing.T) {
 	}
 }
 
-// TestTemplateActionsAreNotInferredFromUnitOrOrganizationRights covers the F-80 explicit-action rule.
+// TestTemplateActionsAreNotInferredFromUnitOrOrganizationRights covers the rule that template actions require explicit grants.
 func TestTemplateActionsAreNotInferredFromUnitOrOrganizationRights(t *testing.T) {
 	f := newMatcherFixture(t)
 	template, err := f.units.CreateUnitTemplate(t.Context(), f.proof, uuid.New(),

@@ -10,7 +10,7 @@
 - **Owner contracts:** [C-01](../contracts/c-01-transmission-acceptance.md), [C-02](../contracts/c-02-protocol-payload.md), [C-03](../contracts/c-03-message-grouping.md), [C-05](../contracts/c-05-matching-correction.md); [shared conventions](../contracts/shared-conventions.md).
 - **Cases and handover:** [F-01..F-10e](../contracts/reference-cases.md); detail completion in [AP-02](ap-02-domain-contracts.md), technical evidence in [AP-03](ap-03-technical-validation.md), verification/freeze in [AP-04](ap-04-scope-freeze.md). These are downstream handovers, not prerequisites.
 
-**Owner:** DOM-01/DOM-02, shared integration owner. **Contracts:** C-01/C-02/C-03, Transmission side of C-05. **REQ:** REQ-020, REQ-031..032, REQ-037..038, REQ-041..046, REQ-113..114, REQ-121..122. **Write scope:** Protocol/Transmission sections and F-01..F-10 in `docs/contracts/` (C-ID files; index: `docs/domain-contracts.md`); derived plan status changes by integration only.
+**Owner:** Intake/Grouping, shared integration owner. **Contracts:** C-01/C-02/C-03, Transmission side of C-05. **REQ:** REQ-020, REQ-031..032, REQ-037..038, REQ-041..046, REQ-113..114, REQ-121..122. **Write scope:** Protocol/Transmission sections and F-01..F-10 in `docs/contracts/` (C-ID files; index: `docs/domain-contracts.md`); derived plan status changes by integration only.
 
 **Prerequisites:** Relevant documented requirements and confirmed decisions in the [plan](../authoritative-plan.md#confirmed-decisions).
 

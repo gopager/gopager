@@ -47,11 +47,14 @@ type Version struct {
 	CreatedBy  uuid.UUID  `json:"createdBy"`
 }
 
+// PageInput selects a page of a list read. Offset must be non-negative and Limit within
+// 1..MaxCollection; services reject other values as invalid input.
 type PageInput struct {
 	Offset int `json:"offset"`
 	Limit  int `json:"limit"`
 }
 
+// Page is one page of a list read; Total counts all matching items, not only Items.
 type Page[T any] struct {
 	Items []T `json:"items"`
 	Total int `json:"total"`

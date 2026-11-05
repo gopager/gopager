@@ -6,7 +6,7 @@
 
 - **Authority:** [session procedure](shared-rules.md#session-start), [processing-kernel binding](../execution/ap-04.md#processing-kernel-execution-binding).
 - **Requirements and owners:** [REQ-091..093/095/097](../requirements-catalog.md#j-processing-presentation-and-usability), [C-11](../contracts/c-11-processing-presentation.md), [C-02](../contracts/c-02-protocol-payload.md), [C-08](../contracts/c-08-events-jobs.md), [C-09](../contracts/c-09-delivery.md), [C-10](../contracts/c-10-plugin-host.md).
-- **Owner:** DOM-08 and integration for shared composition.
+- **Owner:** Processing and integration for shared composition.
 - **Prerequisites:** [AP-05 foundation](../execution/ap-05.md#handover), [identity/AuthZ handover](../execution/source-ap-07.md#handover) and [matcher handover](../execution/source-ap-08.md#handover). No feed, target, Delivery consumer or later AP is required.
 - **Write scope:** Kernel, owner schemas/adapters/tests and root surfaces in the [exact binding](../execution/ap-04.md#processing-kernel-execution-binding).
 

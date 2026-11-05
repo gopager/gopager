@@ -12,6 +12,9 @@ import (
 	"time"
 )
 
+// Default deadlines. DefaultCallTimeout bounds every store call, startup
+// check and transaction; DefaultShutdownTimeout bounds the whole Shutdown
+// sequence (a shorter caller deadline still wins).
 const (
 	DefaultCallTimeout     = 30 * time.Second
 	DefaultShutdownTimeout = 30 * time.Second
@@ -32,6 +35,10 @@ type Runner interface {
 	Run(context.Context) error
 }
 
+// Status is a point-in-time snapshot of a RunningHandle. Ready is false after a
+// failed readiness check, a failed role or the start of shutdown, with
+// FailureCode naming the cause; Live becomes false once Shutdown completes.
+// MigrationState is "current" or "incompatible".
 type Status struct {
 	Live           bool
 	Ready          bool

@@ -52,9 +52,12 @@ func TestCoreRegexSemanticsAndBoundaries(t *testing.T) {
 	if _, err := regex.Regex(ctx, strings.Repeat("a", maxRegexPatternBytes+1), nil); platform.FailureCode(err) != platform.CodeResourceLimit {
 		t.Fatalf("pattern +1 accepted: %v", err)
 	}
+	// The anchored pattern matches at once, so this checks text-size admission at the exact
+	// boundary independently of matching speed (an unanchored scan of 1 MiB under the race
+	// detector can exceed the per-call time budget).
 	text = strings.Repeat("x", maxRegexTextBytes)
-	if _, err := regex.Regex(ctx, `(?P<tail>x)$`, &text); err != nil {
-		t.Fatalf("exact text boundary failed: %v", err)
+	if result, err := regex.Regex(ctx, `^(?P<head>x)`, &text); err != nil || !result.Matched {
+		t.Fatalf("exact text boundary failed: %+v, %v", result, err)
 	}
 	text += "x"
 	if _, err := regex.Regex(ctx, `x`, &text); platform.FailureCode(err) != platform.CodeResourceLimit {
@@ -67,8 +70,8 @@ func TestCoreRegexSemanticsAndBoundaries(t *testing.T) {
 	}
 }
 
-// d61CaptureExpansion is the D-61/E-38 counterexample that OOM-killed a 512 MiB native process.
-func d61CaptureExpansion() string {
+// captureExpansionCounterexample is the capture-expansion counterexample that OOM-killed a 512 MiB native process.
+func captureExpansionCounterexample() string {
 	var pattern strings.Builder
 	for n := 0; pattern.Len() < 4070; n++ {
 		fmt.Fprintf(&pattern, "(?P<c%d>a?){1000}", n)
@@ -78,7 +81,7 @@ func d61CaptureExpansion() string {
 }
 
 func TestCoreRegexRejectsCaptureExpansionBeforeCompilation(t *testing.T) {
-	pattern := d61CaptureExpansion()
+	pattern := captureExpansionCounterexample()
 	if len(pattern) != 4085 {
 		t.Fatalf("counterexample drifted: %d bytes", len(pattern))
 	}

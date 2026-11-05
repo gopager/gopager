@@ -29,6 +29,9 @@ type PreviewSourceOwner interface {
 		processing.WorkflowConfiguration, uuid.UUID) (PreviewCapture, error)
 }
 
+// SyntheticPreviewReleaser is optionally implemented by a PreviewSourceOwner that holds
+// captured synthetic sources in memory. The preview service calls ReleaseSyntheticPreview
+// with the captured TransmissionID once the preview completes.
 type SyntheticPreviewReleaser interface {
 	ReleaseSyntheticPreview(uuid.UUID)
 }

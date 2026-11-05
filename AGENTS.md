@@ -1,3 +1,9 @@
-# GoPager Agent Entry
+# GoPager Agent Guide
 
-Start from the assigned [AP](docs/work-packages.md#revised-execution-path) and its targeted context links. Follow the mandatory [AP execution rules](docs/work-packages/shared-rules.md), including [documentation maintenance in every work step](docs/work-packages/shared-rules.md#mandatory-documentation-maintenance), [document authority/change rules](docs/README.md) and [library policy](docs/README.md#library-reuse). These sources own the rules; do not load unrelated history.
+- Architecture, package map and domain model: [docs/architecture.md](docs/architecture.md)
+- Build, test, lint, code generation, migrations: [docs/development.md](docs/development.md)
+- HTTP API: [docs/http-api.md](docs/http-api.md), schemas in [api/openapi/v1.yaml](api/openapi/v1.yaml)
+- Processing workflows and plugins: [docs/workflows.md](docs/workflows.md), [docs/plugins.md](docs/plugins.md)
+- Configuration and runtime: [docs/operations.md](docs/operations.md)
+
+Before finishing a change, run `make` and `go test ./...`. Update affected documentation, OpenAPI/proto files and Go doc comments in the same change, as described in [CONTRIBUTING.md](CONTRIBUTING.md#documentation).

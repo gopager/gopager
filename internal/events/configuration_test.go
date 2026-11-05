@@ -19,9 +19,9 @@ func TestConfigurationFactsKeepSeparateTypedProducerAndNonsecretEnvelope(t *test
 		if err != nil {
 			t.Fatal(err)
 		}
-		domain, version := "DOM-03", "master-data-core1.0"
+		domain, version := "masterdata", "master-data-core1.0"
 		if aggregate == "addressRule" {
-			domain, version = "DOM-04", "current-matcher1.0"
+			domain, version = "assignment", "current-matcher1.0"
 		}
 		if envelope.Producer.Domain != domain || envelope.Producer.Version != version ||
 			envelope.Type != ConfigurationChanged || envelope.Classification != "configuration" || envelope.ReplayMode != "normal" {

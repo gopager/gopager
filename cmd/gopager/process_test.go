@@ -22,14 +22,14 @@ import (
 
 // TestRunProcessHelper invokes the actual command entry in an isolated test process.
 func TestRunProcessHelper(t *testing.T) {
-	roles := os.Getenv("GOPAGER_AP05_PROCESS_HELPER")
+	roles := os.Getenv("GOPAGER_TEST_PROCESS_HELPER")
 	if roles == "" {
 		return
 	}
 	os.Args = []string{"gopager", "--profile=full", "--roles=" + roles,
-		"--migration-mode=apply", "--listen-address=" + os.Getenv("GOPAGER_AP05_TEST_LISTEN")}
+		"--migration-mode=apply", "--listen-address=" + os.Getenv("GOPAGER_TEST_LISTEN")}
 	if strings.Contains(roles, "api") {
-		os.Args = append(os.Args, "--public-origin=http://"+os.Getenv("GOPAGER_AP05_TEST_LISTEN"))
+		os.Args = append(os.Args, "--public-origin=http://"+os.Getenv("GOPAGER_TEST_LISTEN"))
 	}
 	main()
 	os.Exit(0)
@@ -52,7 +52,7 @@ func TestFullCommandProcessStartupAndSignalShutdown(t *testing.T) {
 			if _, err := rand.Read(random[:]); err != nil {
 				t.Fatal(err)
 			}
-			schema := fmt.Sprintf("ap05_cli_%x", random[:])
+			schema := fmt.Sprintf("test_cli_%x", random[:])
 			if _, err := db.Exec(`CREATE SCHEMA "` + schema + `"`); err != nil {
 				t.Fatal(err)
 			}
@@ -80,8 +80,8 @@ func TestFullCommandProcessStartupAndSignalShutdown(t *testing.T) {
 				}
 			}
 			command := exec.Command(os.Args[0], "-test.run=^TestRunProcessHelper$")
-			command.Env = append(os.Environ(), "GOPAGER_AP05_PROCESS_HELPER="+roles,
-				"GOPAGER_DATABASE_URL="+connectionURL.String(), "GOPAGER_AP05_TEST_LISTEN="+address)
+			command.Env = append(os.Environ(), "GOPAGER_TEST_PROCESS_HELPER="+roles,
+				"GOPAGER_DATABASE_URL="+connectionURL.String(), "GOPAGER_TEST_LISTEN="+address)
 			output := startupOutput{ready: make(chan struct{})}
 			command.Stdout, command.Stderr = &output, &output
 			if err := command.Start(); err != nil {

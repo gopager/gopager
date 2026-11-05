@@ -1,0 +1,195 @@
+# Development
+
+Contribution and documentation rules: [CONTRIBUTING.md](../CONTRIBUTING.md). Running a deployment: [Operations](operations.md).
+
+## Prerequisites
+
+| Tool | Needed for |
+| --- | --- |
+| Go, version from [go.mod](../go.mod) (`go 1.26.2`) | everything |
+| Make | `make fmt`, `make lint` |
+| Docker (running daemon, pull access to `postgres:18.0-alpine`) | integration tests, unless an external test database is supplied |
+
+All other tools (Ent code generator, Ginkgo CLI) are pinned in `go.mod` and run through `go tool` / `go run`; nothing needs a global install.
+
+## Repository Layout
+
+One Go module, `github.com/gopager/gopager`.
+
+| Path | Contents |
+| --- | --- |
+| `cmd/gopager/` | Executable: flag parsing (`main.go`), `bootstrap` subcommand, composition of stores and services, HTTP route registration per domain (`management.go`, `ingest.go`, `gateway_credentials.go`, `processing_management.go`) |
+| `api/openapi/v1.yaml` | HTTP API schema |
+| `api/plugin/v2/plugin.proto` | Plugin gRPC service definition |
+| `pluginsdk/` | Public Go SDK for plugin executables (handshake, `Serve`, gRPC client/server) |
+| `docs/` | Product and code documentation |
+| `internal/platform/` | Store-neutral foundation: `Config`/roles, `ErrorCode`/`Failure`, `Clock`, `TransactionContext`/`TxFunc`, health handlers, process lifecycle (`StartWithAPI`, readiness, shutdown) |
+| `internal/platform/postgres/` | PostgreSQL implementation of `platform.Store` and `platform.Clock`: pgx pool, TLS rule, Goose migration runner, transactions, SQLSTATE → error code mapping |
+| `internal/authz/` | Action catalog, grants, scopes, field permissions, authorization decisions |
+| `internal/identity/` | Accounts, credentials, password hashing (Argon2id), sessions, login rate limits, bootstrap, HTTP auth transport (cookie/origin/CSRF) and `/api/v1/auth/` handler |
+| `internal/Units/` (package `units`) | Units, organizations, Unit collections, Unit templates |
+| `internal/assignments/` | Address rules, Unit assignment of transmission targets, historical correction runner |
+| `internal/ingest/` | Gateway transmission intake, Gateway/Network administration and credentials |
+| `internal/protocols/` | Protocol and transmission payload validation |
+| `internal/messages/` | Grouping of transmissions into messages |
+| `internal/commands/` | Administrative command receipts |
+| `internal/events/` | Domain fact types appended to the event store |
+| `internal/processing/` | Workflow model, evaluation, budgets, CEL predicates, regex, plugin host and installed artifacts |
+| `internal/processing/management/` | Workflow and instance management commands, reads, retry, preview |
+| `internal/processing/worker/` | Dispatcher and worker service executing due processing work |
+| `internal/processing/publication/` | Publication of processing results to the source owner |
+| `internal/processing/execution/` | Identity binding for installed plugin execution |
+| `internal/processing/synthetic/` | Synthetic transmissions used as preview sources |
+| `internal/processing/testdata/` | Plugin fixture sources (`command/`, `preview/`) and instance manifests |
+| `internal/persistence/migrations/` | Embedded Goose SQL migrations (`migrations.Files`) |
+| `internal/persistence/ent/schema/` | Ent schema definitions (hand-written) |
+| `internal/persistence/ent/` (top level and one subpackage per entity, `enttest/`, `migrate/`, `predicate/`, `privacy/`, `runtime/`, `hook/`) | Ent-generated code — do not edit |
+| `internal/persistence/ent/generate.go` | `go:generate` directive for Ent |
+| `internal/persistence/ent/guard/` | Ent privacy policy: deny unless an adapter bound an access decision |
+| `internal/persistence/ent/permissions/` | Translation of authz decisions into Ent predicates |
+| `internal/persistence/ent/borrowed/` | Ent driver that runs inside an existing platform transaction; hosts most store integration tests |
+| `internal/persistence/ent/*store/` | Repository adapters per domain: `identitystore`, `unitstore`, `assignmentstore`, `ingeststore`, `processingstore`, `eventstore` (incl. Watermill fact transport), `commandstore` |
+| `internal/testutil/postgres/` | Test PostgreSQL lifecycle (`Run(m)`) |
+| `internal/testutil/pluginfixture/` | Builds plugin fixtures for tests (`Binary(t, name)`) |
+
+Architecture and data flow: [Architecture](architecture.md).
+
+## Build
+
+```sh
+go build ./...                          # all packages
+go build -o gopager ./cmd/gopager       # the executable
+```
+
+## Formatting and Linting
+
+```sh
+make            # same as make lint
+make fmt        # gofmt -w cmd internal
+make fmt-check  # fail and list files that need gofmt
+make lint       # fmt-check, then go vet ./...
+```
+
+`gofmt` covers `cmd/` and `internal/` (including generated Ent code and tests). Neither target needs Docker or a database.
+
+## Tests
+
+### Tiers
+
+| Tier | Command | Needs |
+| --- | --- | --- |
+| Quick | `go test ./...` | Go only. Database tests are skipped with `PostgreSQL integration disabled; run with GOPAGER_INTEGRATION=1`. |
+| Full, owned containers | `GOPAGER_INTEGRATION=1 go test -race -count=1 ./...` | Docker |
+| Full, external database | `GOPAGER_TEST_DATABASE_URL='postgres://…' go test -race -count=1 ./...` | A disposable PostgreSQL database with `CREATE SCHEMA` privilege |
+
+Environment variables:
+
+| Variable | Values | Effect |
+| --- | --- | --- |
+| `GOPAGER_INTEGRATION` | unset or `1`; anything else fails the run | `1` starts one PostgreSQL container per participating test package |
+| `GOPAGER_TEST_DATABASE_URL` | DSN | Use this database instead of a container; setting it alone also enables database tests. Never point it at a production database. |
+
+Use `-count=1` for integration runs so Go's test cache does not report stale results. In a requested integration run, a missing Docker daemon or unreachable database fails the run; it is not skipped.
+
+Packages with database tests (their `TestMain` calls `testpostgres.Run`): `cmd/gopager`, `internal/platform/postgres`, `internal/persistence/ent/borrowed`. Each test creates its own schema (random name) and drops it on cleanup, so tests do not interfere when sharing one database. The container keeps `fsync=on`.
+
+Run a subset:
+
+```sh
+GOPAGER_INTEGRATION=1 go test -count=1 ./internal/platform/postgres ./cmd/gopager
+go test -run TestCredentials ./internal/identity
+```
+
+### Frameworks
+
+| Framework | Use |
+| --- | --- |
+| `testing`, `net/http/httptest`, `testing/fstest` | Default for unit, table and HTTP handler tests |
+| Ginkgo v2 + Gomega | Scenario/conformance suites (`internal/platform/postgres/migrations_behavior_test.go`, `internal/identity/credentials_test.go`, `internal/events/identity_test.go`). They run under plain `go test`. Labels in use: `migrations`, `unit`, `integration`. |
+| Testcontainers-Go (postgres module) | Disposable PostgreSQL, used only from `internal/testutil/postgres` |
+
+The Ginkgo CLI is available from the module pin for label filtering and parallel processes:
+
+```sh
+go run github.com/onsi/ginkgo/v2/ginkgo --label-filter=unit --fail-on-empty ./internal/platform/postgres
+GOPAGER_INTEGRATION=1 go run github.com/onsi/ginkgo/v2/ginkgo --procs=2 --label-filter=migrations --fail-on-empty ./internal/platform/postgres
+```
+
+Suite conventions: qualified imports (`ginkgo.Describe`), no focused/pending specs, no automatic retries, per-spec cleanup, helpers take `testing.TB` and are passed `ginkgo.GinkgoTB()`. Do not add Testify.
+
+### Process tests
+
+`cmd/gopager/process_test.go` re-executes the test binary as a real `gopager` process (selected by an environment variable the test sets for the child; `TestMain` in `testmain_test.go` skips fixture setup in that child) to verify startup, health endpoints and signal shutdown.
+
+### Plugin fixtures
+
+Plugin executables for tests are built from source, never committed:
+
+- Sources: `internal/processing/testdata/<name>/main.go` (`command`, `preview`), built on the `pluginsdk`.
+- `pluginfixture.Binary(t, "<name>")` runs `go build -trimpath` (`CGO_ENABLED=0`) once per test process into a temp directory and returns the bytes. Packages using it call `pluginfixture.Cleanup()` in `TestMain` after `m.Run()`.
+- Manifests: `internal/processing/testdata/instance-*.json`. Their `artifact.digest` is a placeholder; tests copy the binary to a temp plugin directory as `plugin` (mode `0755`) and rewrite the digest with the SHA-256 of the freshly built binary (see `pluginFixtureRoot` in `cmd/gopager/processing_management_test.go`).
+
+To add a fixture, create `internal/processing/testdata/<name>/main.go` with `package main` calling `pluginsdk.Serve`, then call `pluginfixture.Binary(t, "<name>")`. Plugin authoring: [Plugins](plugins.md).
+
+## Code Generation
+
+Ent is the only code generator. After changing `internal/persistence/ent/schema/`:
+
+```sh
+go generate ./internal/persistence/ent
+```
+
+This runs `go tool ent generate --feature privacy,entql,sql/modifier,sql/lock ./schema`. Commit the generated files together with the schema change. Generated code is never edited by hand.
+
+## Database Schema and Migrations
+
+The SQL migrations are the only source of DDL. Ent's generated `migrate` package and auto-migration are not used at runtime; Ent only generates the typed query client.
+
+| Artifact | Role |
+| --- | --- |
+| `internal/persistence/migrations/NNNNN_<description>.sql` | Creates and changes tables, indexes, constraints, functions |
+| `internal/persistence/ent/schema/*.go` | Describes the same tables for the query client; `entsql.Annotation{Table: "…"}` names the SQL table |
+
+Adding a migration:
+
+1. Create `internal/persistence/migrations/<next version>_<snake_case_description>.sql`, zero-padded to 5 digits like the existing files (`00011_…`). Versions must be positive and strictly increasing; gaps are allowed.
+2. Start with `-- +goose Up`. Use `-- +goose StatementBegin` / `-- +goose StatementEnd` around statements containing semicolons (functions, `DO` blocks). A `-- +goose Down` section is optional and never executed by GoPager.
+3. Do not use `-- +goose NO TRANSACTION` or `-- +goose ENVSUB`; they are rejected. Each file runs in one transaction together with its ledger row.
+4. The directory must contain only flat `.sql` files; it is embedded via `//go:embed *.sql` in `migrations.go`, so no registration step is needed.
+5. Never change the effect of an already released migration; add a corrective migration instead. Applied migrations are identified by version only and are not re-run when their content changes.
+6. Update the Ent schema to match, run `go generate ./internal/persistence/ent`, and add a guard policy (`func (X) Policy() ent.Policy { return guard.Policy("X") }`) to every new entity.
+7. Run the integration tests: the store tests in `internal/persistence/ent/borrowed` apply the real migration collection to a fresh schema and execute the Ent queries against it, which catches schema/client drift.
+
+Runtime check/apply semantics: [Operations](operations.md#database-migrations).
+
+## Code Conventions
+
+### Errors
+
+- Platform-facing errors are `*platform.Failure` created with `platform.NewFailure(code, cause)`. Codes: `INVALID_INPUT`, `REVISION_CONFLICT`, `INCOMPATIBLE_VERSION`, `RESOURCE_LIMIT`, `STORAGE_UNAVAILABLE`, `AUTHORITY_UNAVAILABLE`, `COMMIT_UNCERTAIN`, `INTERNAL_ERROR`.
+- `Failure.Error()` returns only a fixed English fallback; the cause is reachable through `errors.Unwrap`/`errors.Is` but never printed. `LogValue` logs code and fallback only. Use `platform.FailureCode(err)` for logging; never log causes, DSNs, secrets or payloads.
+- `Retryable()` is true for `STORAGE_UNAVAILABLE`, `AUTHORITY_UNAVAILABLE`, `REVISION_CONFLICT`. `COMMIT_UNCERTAIN` must not be retried blindly; callers look up the operation's receipt.
+- Domain packages define sentinel errors (`authz.ErrInvalidInput`, `authz.ErrForbidden`, `authz.ErrNotFound`, `authz.ErrRevisionConflict`, `identity.ErrInvalidInput`, …) which HTTP adapters in `cmd/gopager` map to API error codes.
+- PostgreSQL errors are classified centrally in `internal/platform/postgres` (`40001`/`40P01`/`23505` → `REVISION_CONFLICT`, `25006` → `AUTHORITY_UNAVAILABLE`, `22003`/`53100`/`53200`/`53300`/`53400` → `RESOURCE_LIMIT`, others → `STORAGE_UNAVAILABLE`).
+
+### Transactions
+
+- Services receive a transaction runner (`WithinTransaction(ctx, func(platform.TransactionContext) error) error`), not a database handle. All repositories called inside one callback share that transaction.
+- The PostgreSQL store runs `READ COMMITTED`, verifies write authority at transaction start, re-checks the schema version, bounds every transaction to 30 s, rejects nested transactions and never retries an uncertain commit.
+- Repository adapters obtain the SQL executor with `store.Resolve(tx)` (or an Ent client via `borrowed.New(store, tx)`); a `TransactionContext` is invalid after its callback returns.
+- No plugin calls, provider I/O or long computation inside a write transaction.
+
+### Time
+
+- Do not call `time.Now()` for persisted or authorization-relevant timestamps (local monotonic measurements such as evaluation budgets are fine). Take a `platform.Clock` and call `clock.Now(ctx, tx)` inside the transaction; the PostgreSQL implementation returns the primary's `clock_timestamp()` in UTC, truncated to microseconds.
+- Tests inject a fixed clock (e.g. a `struct{ now time.Time }` implementing `Now`).
+
+### Package boundaries
+
+- Domain packages (`authz`, `identity`, `Units`, `assignments`, `ingest`, `protocols`, `messages`, `commands`, `events`, `processing/...`) depend only on `internal/platform` and other domain packages, never on `internal/persistence/...`, `internal/platform/postgres`, pgx or Ent. They declare the repository interfaces they need.
+- Persistence adapters in `internal/persistence/ent/*store` implement those interfaces. All Ent queries go through the guard privacy policy; adapters bind an access decision with `guard.Bind`. Privacy overrides (`privacy.DecisionContext`) are rejected by the borrowed driver.
+- `cmd/gopager` composes stores and services and owns HTTP route registration; it contains no domain rules.
+- Configuration is parsed only in `cmd/gopager`; library packages never read flags or environment variables.
+- `internal/testutil/...` is imported only from tests.
+- Test-only inputs live in the owning package's `testdata/`; there is no global test tree.
+- Every exported identifier has a doc comment; `go doc ./internal/<package>` is the reference for identifier-level behavior.

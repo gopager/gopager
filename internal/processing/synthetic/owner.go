@@ -1,3 +1,10 @@
+// Package synthetic supplies operator-authored synthetic Transmissions as the trusted
+// source for Workflow previews. Owner (built with NewOwner) validates a synthetic
+// Input against its Protocol form, resolves its targets against the current Network
+// and Assignment context, masks fields the caller may not read, and keeps the captured
+// context in memory so installed plugin calls made during the preview can be rechecked
+// via CheckInstalledSource. Owner implements management.PreviewSourceOwner and
+// management.SyntheticPreviewReleaser; nothing it captures is persisted.
 package synthetic
 
 import (
@@ -24,6 +31,7 @@ import (
 	"github.com/gopager/gopager/internal/protocols"
 )
 
+// Network is the current Network context a synthetic preview is captured against.
 type Network struct {
 	ID       uuid.UUID
 	Name     string
@@ -31,20 +39,34 @@ type Network struct {
 	Deleted  bool
 }
 
+// NetworkOwner reads the current Network for a synthetic preview inside the caller's
+// transaction. Networks reported as Deleted, or whose Protocol or name do not match the
+// synthetic input, are rejected as unavailable.
 type NetworkOwner interface {
 	ReadSyntheticNetwork(context.Context, platform.TransactionContext, uuid.UUID) (Network, error)
 }
 
+// Matcher resolves synthetic targets against the current Assignment context of a
+// Network at the observation time. It must return one Resolution per target and a
+// positive context revision.
 type Matcher interface {
 	MatchTargets(context.Context, platform.TransactionContext, uuid.UUID, protocols.Protocol,
 		time.Time, []protocols.Target) (assignments.MatchResult, error)
 }
 
+// ScopeAuthorizer checks that an authority may preview a Workflow against the given
+// Network and Unit (uuid.Nil for non-Unit scopes) at the given time. It returns a
+// non-nil error to deny.
 type ScopeAuthorizer interface {
 	CheckSyntheticPreviewScope(context.Context, platform.TransactionContext, authz.Authority,
 		uuid.UUID, uuid.UUID, uuid.UUID, time.Time) error
 }
 
+// Input is the JSON document describing one synthetic Transmission. SchemaVersion must
+// be 1; Form (and Subtype for FLEX binary) must be declared for Protocol; Payload is
+// required for every form except tone-only, where it must be absent; ObservedAt is an
+// optional RFC 3339 instant and defaults to the transaction clock. Targets are limited
+// to processing.MaxArguments entries (31 for EAS) and ZVEI/EAS require at least one.
 type Input struct {
 	SchemaVersion int                `json:"schemaVersion"`
 	Protocol      protocols.Protocol `json:"protocol"`
@@ -56,6 +78,9 @@ type Input struct {
 	Targets       []protocols.Target `json:"targets"`
 }
 
+// Owner captures synthetic preview sources and rechecks them for installed plugin calls.
+// It is safe for concurrent use. Captured contexts are held in memory until released
+// with ReleaseSyntheticPreview.
 type Owner struct {
 	matcher  Matcher
 	networks NetworkOwner
@@ -76,6 +101,9 @@ type captured struct {
 	eligibleUnits []uuid.UUID
 }
 
+// NewOwner returns an Owner. matcher and clock are required and an invalid-input
+// failure is returned without them. networks and scope may be nil; operations that need
+// them then fail as unavailable.
 func NewOwner(matcher Matcher, networks NetworkOwner, clock platform.Clock, scope ScopeAuthorizer) (*Owner, error) {
 	if matcher == nil || clock == nil {
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing synthetic source dependency"))
@@ -84,6 +112,11 @@ func NewOwner(matcher Matcher, networks NetworkOwner, clock platform.Clock, scop
 		active: make(map[uuid.UUID]captured)}, nil
 }
 
+// CaptureSyntheticPreview decodes and validates raw as an Input, resolves it against the
+// current Network and Assignment context in tx, hides fields the authority may not read,
+// and evaluates the workflow's scope (a "network" scope that excludes the Network yields
+// authz.ErrForbidden). The captured context is retained under the projection's
+// TransmissionID until ReleaseSyntheticPreview is called; the caller must release it.
 func (o *Owner) CaptureSyntheticPreview(ctx context.Context, tx platform.TransactionContext,
 	authority authz.Authority, workflow processing.WorkflowConfiguration, raw json.RawMessage) (management.PreviewCapture, error) {
 	if o == nil || ctx == nil || tx == nil || o.matcher == nil || o.clock == nil {
@@ -152,11 +185,15 @@ func (o *Owner) CaptureSyntheticPreview(ctx context.Context, tx platform.Transac
 	return management.PreviewCapture{Projection: projection, Scope: scope}, nil
 }
 
+// CaptureStoredPreview always fails as unavailable: previews of stored Transmissions are
+// not supported by the synthetic owner.
 func (o *Owner) CaptureStoredPreview(context.Context, platform.TransactionContext, authz.Authority,
 	processing.WorkflowConfiguration, uuid.UUID) (management.PreviewCapture, error) {
 	return management.PreviewCapture{}, unavailable(errors.New("stored Transmission owner unavailable"))
 }
 
+// ReleaseSyntheticPreview forgets the captured context for a synthetic TransmissionID.
+// It is a no-op for a nil Owner, uuid.Nil or an unknown id.
 func (o *Owner) ReleaseSyntheticPreview(id uuid.UUID) {
 	if o == nil || id == uuid.Nil {
 		return
@@ -166,6 +203,12 @@ func (o *Owner) ReleaseSyntheticPreview(id uuid.UUID) {
 	o.mu.Unlock()
 }
 
+// CheckInstalledSource verifies, for an installed plugin call during a preview, that the
+// bound synthetic source is still captured and that its Network and Assignment context
+// are unchanged (a changed context yields a revision-conflict failure). When editor is
+// true it additionally rechecks the Workflow scope for every eligible Unit through the
+// ScopeAuthorizer and requires every dependency to belong to the same source and be
+// readable by the authority.
 func (o *Owner) CheckInstalledSource(ctx context.Context, tx platform.TransactionContext,
 	binding processing.ExecutionBinding, authority authz.Authority, call processing.InvocationContext,
 	dependencies []processing.Dependency, editor bool) error {

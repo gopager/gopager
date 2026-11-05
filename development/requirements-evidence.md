@@ -70,7 +70,7 @@ Reviewed 2026-11-01 under the user's `review-native-alternative` instruction:
 - [PureGo upstream README, main](https://github.com/ebitengine/purego/blob/main/README.md): native C-function/dynamic-symbol support, per-platform/architecture constraints and beta warning. This source review is not a verified pinned-release ABI/runtime matrix.
 - [HashiCorp go-plugin upstream README, main](https://github.com/hashicorp/go-plugin/blob/main/README.md): application-launched subprocesses with local net/rpc or gRPC, protocol/handshake/lifecycle facilities and controllable stdout/stderr forwarding. Framework crash separation is not a demonstrated resource cap, field-authority engine or secret-redaction guarantee.
 
-The initial guessed HashiCorp documentation URL returned HTTP 404; the canonical upstream repository/README and module metadata were used instead. [Architecture](architecture.md#native-plugin-alternative-review) owns the comparison/rationale. No native code, SDK, artifact load, runtime probe or production adoption follows.
+The initial guessed HashiCorp documentation URL returned HTTP 404; the canonical upstream repository/README and module metadata were used instead. [Architecture](architecture.md#native-plugin-alternative-review) owns the comparison/rationale. No native code, SDK, artifact load, runtime probe or production adoption follows from this review. The later selection of `go-plugin` v1.8.0 under D-131 is owned by [TECH-08](architecture.md#technology-decisions).
 
 ## Documentation Reviews
 
@@ -93,3 +93,7 @@ Compared the documentation worktree with Git `3be71b4` after the ownership/execu
 - `git diff --check` passed.
 
 The temporary checker was not persisted. These checks establish structural consistency and reviewed ownership, not automatic prevention of future duplication, a fresh-agent session trial, rendered diagrams or implemented product behavior. No runtime tests were executed for this documentation-only change.
+
+### E-DOC-03 Process/Permanent Documentation Separation
+
+Date: 2026-11-06, under [D-132](authoritative-plan.md#documentation-and-naming-separation). The process tree moved from `docs/` to `development/`; `docs/` now holds permanent documentation. In the README, architecture, glossary, requirement/evidence, contract-directory, package-directory, shared-rule and requirement-mapping files, references to the process tree, numbered domain IDs, the Wazero-based plugin design and the package placement table were updated against the code; the C-ID, AP and execution files were maintained separately. A local Python standard-library checker resolved every relative link and heading/explicit anchor in these nine files with zero failures; one stale glossary anchor into C-10 was corrected. This is a structural check, not a rendered-diagram, fresh-agent or runtime check.

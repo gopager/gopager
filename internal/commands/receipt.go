@@ -14,12 +14,16 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
+// Result is the replayable outcome stored in a Receipt: the created or changed
+// item's ID and resulting revision, plus per-item results for batch commands.
 type Result struct {
 	ID       uuid.UUID    `json:"id"`
 	Revision int64        `json:"revision,string"`
 	Items    []ResultItem `json:"items,omitempty"`
 }
 
+// ResultItem is one item's outcome within a batch Result; Status is optional
+// and command-specific.
 type ResultItem struct {
 	ID       uuid.UUID `json:"id"`
 	Revision int64     `json:"revision,string"`
@@ -52,10 +56,17 @@ func Fingerprint(input any) ([32]byte, error) {
 	return sha256.Sum256(value), nil
 }
 
-// Check distinguishes the same operation/input from conflicting reuse by one actor.
+// ErrIdempotencyConflict reports that an actor reused a command ID for a
+// different operation or different input. It is not retryable: repeating the
+// same request cannot succeed, and the client must choose a new command ID.
+var ErrIdempotencyConflict = errors.New("command ID already used with different input")
+
+// Check distinguishes the same operation/input from conflicting reuse by one
+// actor. It returns the stored Result for an identical replay and
+// ErrIdempotencyConflict when the operation or input fingerprint differs.
 func (r Receipt) Check(operation string, fingerprint [32]byte) (Result, error) {
 	if r.Operation != operation || r.Fingerprint != fingerprint {
-		return Result{}, authz.ErrRevisionConflict
+		return Result{}, ErrIdempotencyConflict
 	}
 	return r.Result, nil
 }

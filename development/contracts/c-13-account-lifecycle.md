@@ -8,7 +8,7 @@ Referenced contracts (follow only when relevant): [C-06](c-06-identity-authoriza
 
 **Traceability:** [REQ-061..062/065..068](../requirements-catalog.md#g-accounts-and-login), [REQ-080](../requirements-catalog.md#h-recovery-and-access-keys), [REQ-109](../requirements-catalog.md#k-installed-web-app-and-security-behavior), [REQ-131](../requirements-catalog.md#m-additional-domain-capabilities). Issue references: [P-14/P-17](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
-**Version/status:** 0.1-draft. **Owner:** DOM-05; integration coordinates deletion; DOM-07 owns Delivery fields. **Parties:** confirmed account owner/authorized account manager, all personal-data owners.
+**Version/status:** 0.1-draft. **Owner:** Identity; integration coordinates deletion; Delivery owns Delivery fields. **Parties:** confirmed account owner/authorized account manager, all personal-data owners.
 
 Operations: `RequestAccountDeletion(Principal, target, expectedRevision, confirmation)` -> deletion reference/state; `ExecuteAccountDeletion(job, fencingToken)` -> progress/completion; `ReadSecurityAudit(Principal, filters, pageToken)` -> permitted redacted evidence. Own deletion requires `account.delete-own` and a fresh authenticated confirmation; management deletion requires target-specific `account.delete`. Guest is undeletable. Repeating the same command identity returns the same deletion result, never creates a new Principal.
 

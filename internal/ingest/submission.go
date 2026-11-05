@@ -15,17 +15,28 @@ import (
 	"github.com/gopager/gopager/internal/protocols"
 )
 
+// Intake limits. MaxSubmissionBytes bounds the encoded request body;
+// MaxSubmissionIDSize bounds the Submission ID and the Gateway Network
+// identifier in bytes.
 const (
 	MaxSubmissionBytes  = 1 << 20
 	MaxSubmissionIDSize = 128
 )
 
+// Submission validation outcomes. Service.Submit maps ErrInvalidSubmission to
+// CodeInvalidInput and ErrSubmissionTooLarge to CodeResourceLimit, and returns
+// ErrSubmissionConflict unwrapped when a Submission ID is reused with a
+// different fingerprint.
 var (
 	ErrInvalidSubmission  = errors.New("invalid Submission")
 	ErrSubmissionConflict = errors.New("Submission ID conflicts with existing operation")
 	ErrSubmissionTooLarge = errors.New("Submission exceeds configured size limit")
 )
 
+// Submission is the wire form of one Gateway-observed Transmission (schema
+// version 1). It is stored as received; normalization happens only in the
+// fingerprint computed by Validate. Incomplete is nil when the member was
+// absent.
 type Submission struct {
 	SchemaVersion            int                `json:"schemaVersion"`
 	SubmissionID             string             `json:"submissionId"`
@@ -71,6 +82,11 @@ func (s *Submission) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// ValidatedSubmission is a Submission that passed Validate, enriched with the
+// parsed observation time (truncated to whole seconds), the payload identity,
+// the retry fingerprint and, once Service.Submit resolved them, the Network
+// and per-target resolutions. Resolution is one of "declared",
+// "inferred-single", "inferred-address" or "default".
 type ValidatedSubmission struct {
 	Submission
 	ObservedAt        time.Time
@@ -82,6 +98,8 @@ type ValidatedSubmission struct {
 	AmbiguousNetwork  bool
 }
 
+// GatewayNetwork is one Network assigned to a Gateway under the Gateway-local
+// Identifier. Each protocol a Gateway serves has at most one Default Network.
 type GatewayNetwork struct {
 	Identifier string
 	NetworkID  uuid.UUID
@@ -89,6 +107,8 @@ type GatewayNetwork struct {
 	Default    bool
 }
 
+// Receipt is the acceptance result returned to the Gateway. Retrying a
+// Submission with the same ID and fingerprint returns the original Receipt.
 type Receipt struct {
 	SubmissionID     string    `json:"submissionId"`
 	TransmissionID   uuid.UUID `json:"transmissionId"`
@@ -97,7 +117,12 @@ type Receipt struct {
 	MessageID        uuid.UUID `json:"messageId"`
 }
 
-// Validate checks the closed C-01/C-02 input and computes a retry fingerprint without rewriting originals.
+// Validate checks the Submission envelope and its protocol-specific payload
+// and targets, and computes the retry fingerprint over a canonical encoding
+// (observation time normalized to whole seconds, absent incomplete as false)
+// without rewriting the original fields. encodedSize is the request body size;
+// above MaxSubmissionBytes it fails with ErrSubmissionTooLarge. Every other
+// violation, including a zero acceptedAt, yields ErrInvalidSubmission.
 func (s Submission) Validate(encodedSize int, acceptedAt time.Time) (ValidatedSubmission, error) {
 	if encodedSize > MaxSubmissionBytes {
 		return ValidatedSubmission{}, ErrSubmissionTooLarge
@@ -159,6 +184,7 @@ func (s Submission) Validate(encodedSize int, acceptedAt time.Time) (ValidatedSu
 	return result, nil
 }
 
+// IncompleteValue reports the incomplete flag, treating an absent value as false.
 func (s Submission) IncompleteValue() bool { return s.Incomplete != nil && *s.Incomplete }
 
 // ResolveNetwork applies only the assigned, protocol-compatible Gateway Network set.

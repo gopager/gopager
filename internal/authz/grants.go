@@ -9,6 +9,11 @@ import (
 	"github.com/google/uuid"
 )
 
+// Sentinel authorization outcomes, compared with errors.Is. ErrInvalidInput
+// marks malformed requests or persisted grants, ErrForbidden a denied
+// decision, ErrNotFound a target that does not exist or must not be revealed,
+// and ErrRevisionConflict a stale expected revision or otherwise conflicting
+// current state. Their messages are safe to show to end users.
 var (
 	ErrInvalidInput     = errors.New("invalid authorization input")
 	ErrForbidden        = errors.New("this action is not permitted")
@@ -16,11 +21,21 @@ var (
 	ErrRevisionConflict = errors.New("this item changed; reload before saving")
 )
 
+// Scope restricts a grant or key to a data area. Kind is one of "all",
+// "network", "unit", "unitCollection" or "account"; "all" must carry no
+// References, every other kind needs 1..1024 non-nil UUID references (see
+// ValidScope). A reference matches a Target by UUID value.
 type Scope struct {
 	Kind       string   `json:"kind"`
 	References []string `json:"references,omitempty"`
 }
 
+// Grant gives a subject (a "principal" or a "userGroup", identified by a
+// non-nil UUID SubjectID) the listed catalog Actions within Scope. A non-nil
+// MaxAgeSeconds limits it to targets whose age anchor lies within that many
+// seconds of the decision time. Delegable is carried for grant management;
+// Authorize does not evaluate it. Grants are validated by ValidateGrant on
+// every decision, so one malformed grant fails the whole decision.
 type Grant struct {
 	ID            string   `json:"id"`
 	SubjectID     string   `json:"subjectId"`
@@ -31,6 +46,10 @@ type Grant struct {
 	Delegable     bool     `json:"delegable"`
 }
 
+// Restrictions narrow what an API key may do on top of its owner's grants:
+// only the listed Actions, within at least one of Scopes, only the listed
+// Fields, and optionally only within MaxAgeSeconds. They never add rights the
+// owner lacks. ValidateRestrictions rejects a nil or empty restriction.
 type Restrictions struct {
 	Actions       []string `json:"actions"`
 	Scopes        []Scope  `json:"scopes"`

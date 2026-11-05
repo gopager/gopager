@@ -60,9 +60,8 @@ type workflowRetryMutation struct {
 }
 
 type workflowRetryResponse struct {
-	SchemaVersion int       `json:"schemaVersion"`
-	CandidateID   uuid.UUID `json:"candidateId"`
-	Revision      int64     `json:"revision,string"`
+	CandidateID uuid.UUID `json:"candidateId"`
+	Revision    int64     `json:"revision,string"`
 }
 
 type instanceMutation struct {
@@ -346,7 +345,7 @@ func (api processingWorkflowAPI) registerRetry(mux *http.ServeMux) {
 		if err != nil {
 			return nil, err
 		}
-		return workflowRetryResponse{SchemaVersion: 1, CandidateID: retried.ID, Revision: retried.Revision}, nil
+		return workflowRetryResponse{CandidateID: retried.ID, Revision: retried.Revision}, nil
 	}, http.StatusOK))
 }
 
@@ -374,7 +373,8 @@ type processingAPIRuntime struct {
 	routes          processingAPIRoutes
 	workerSource    worker.WorkSourceOwner
 	workerPublisher worker.Publisher
-	// correctionPublication is the same source owner, re-entering corrected Transmissions into C-11.
+	// correctionPublication is the same source owner; it re-enters corrected
+	// Transmissions into Processing and presentation.
 	correctionPublication assignments.CorrectionPublication
 }
 
@@ -385,7 +385,7 @@ func composeProcessingAPIRuntime(ctx context.Context, store *postgres.Store,
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("multiple Processing preview Network owners"))
 	}
 	var networks synthetic.NetworkOwner
-	if len(previewNetworks) == 1 {
+	if len(previewNetworks) == 1 && previewNetworks[0] != nil {
 		networks = previewNetworks[0]
 	}
 	ctx, cancel := context.WithTimeout(ctx, platform.DefaultCallTimeout)
@@ -441,6 +441,9 @@ func composeProcessingAPIRuntime(ctx context.Context, store *postgres.Store,
 	if networkScopes == nil {
 		networkScopes = intakeRepository
 	}
+	if networks == nil {
+		networks = intakeRepository
+	}
 	repository, err := processingstore.New(store)
 	if err != nil {
 		return nil, err
@@ -470,10 +473,6 @@ func composeProcessingAPIRuntime(ctx context.Context, store *postgres.Store,
 	if err != nil {
 		return nil, err
 	}
-	retries, err := processingmanagement.NewRetry(workflows, repository, missingProcessingRetrySource{})
-	if err != nil {
-		return nil, err
-	}
 	reads, err := processingmanagement.NewProcessingReads(workflows, repository)
 	if err != nil {
 		return nil, err
@@ -490,6 +489,10 @@ func composeProcessingAPIRuntime(ctx context.Context, store *postgres.Store,
 	}
 	workerSource, err := ingeststore.NewProcessingSourceOwner(intakeRepository, sourceMatcher,
 		repository, facts, store, artifacts, executions, resolver)
+	if err != nil {
+		return nil, err
+	}
+	retries, err := processingmanagement.NewRetry(workflows, repository, workerSource)
 	if err != nil {
 		return nil, err
 	}
@@ -561,9 +564,3 @@ func (unavailableInstanceInspector) InspectInstance(context.Context, processing.
 type unavailableInstanceLifecycle struct{}
 
 func (unavailableInstanceLifecycle) InstanceChanged(uuid.UUID, int64) {}
-
-type missingProcessingRetrySource struct{}
-
-func (missingProcessingRetrySource) CheckRetrySource(context.Context, platform.TransactionContext, processing.Candidate) error {
-	return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Processing source owner unavailable"))
-}

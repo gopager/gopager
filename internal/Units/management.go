@@ -558,14 +558,19 @@ func (s *Service) prepareBulk(ctx context.Context, tx platform.TransactionContex
 	return values, nil
 }
 
-// PreviewBulkUnits validates a complete bounded operation without durable writes.
-func (s *Service) PreviewBulkUnits(ctx context.Context, proof identity.Proof, input BulkUnitInput) (BulkPreview, error) {
+// PreviewBulkUnits validates a complete bounded operation without durable
+// writes. A non-nil check is applied to the resolved caller before any read, so
+// transports can enforce request-bound protections such as Origin and CSRF for
+// Cookie Sessions.
+func (s *Service) PreviewBulkUnits(ctx context.Context, proof identity.Proof, input BulkUnitInput,
+	check func(identity.Authentication) error,
+) (BulkPreview, error) {
 	input, err := canonicalBulkInput(input)
 	if err != nil {
 		return BulkPreview{}, err
 	}
 	result := BulkPreview{Valid: true, Items: make([]BulkItemPreview, len(input.Items))}
-	err = s.within(ctx, proof, false, nil, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
+	err = s.within(ctx, proof, false, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
 		action := "unit.update"
 		if input.Operation == "delete" {
 			action = "unit.delete"

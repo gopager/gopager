@@ -13,7 +13,7 @@
 
 ## Session Start
 
-1. Read the assigned AP, [delivery scope](../authoritative-plan.md#delivery-scope), relevant [approval](../authoritative-plan.md#workflow-and-approval-gates), [document rules](../README.md#change-rules) and [library policy](../README.md#library-reuse).
+1. Read the assigned AP, [delivery scope](../authoritative-plan.md#delivery-scope), relevant [approval](../authoritative-plan.md#workflow-and-approval-gates), [document rules](../README.md#change-rules), [permanent documentation](../README.md#permanent-documentation), [naming](../README.md#naming), [tooling](../README.md#skills-agents-and-mcp-servers) and [library policy](../README.md#library-reuse).
 2. Follow only relevant REQ/C/F/TECH/decision links and glossary terms. Use targeted sections; do not load source assignments, decision history or unrelated contracts as startup context.
 3. Inspect the worktree and actual artifacts. Preserve others' changes. Verify required producer outputs against their handovers and focused evidence; a draft needed slice belongs to the current AP only when explicitly assigned.
 4. Create/continue only this AP's execution record. Record the actual baseline revision/delta, start authority, assignee, task IDs and scope references. Plan, code and verify within that scope.
@@ -42,6 +42,8 @@ Identify affected consumer input/task, evidence, owner and missing output. The p
 Every executing agent must update all documentation affected by its in-scope change in the same work step, before dependent work or handover. Domain ownership assigns accountability, not an external documentation chore or permission gate.
 
 Use the [authority matrix](../README.md#document-authority): update the owning contract and generated artifact paths/versions, affected F-cases, terminology, technology/product decisions when assigned, and execution evidence. Update incoming references and current producer/consumer handover links together. An unchanged source needs no edit; never copy definitions merely to show maintenance.
+
+When a change alters implemented behavior, also update the permanent [docs/](../../docs/README.md) section, OpenAPI/proto artifact and Go doc comments it affects, following the [documentation rules](../../CONTRIBUTING.md#documentation). [Permanent documentation](../README.md#permanent-documentation) and [naming](../README.md#naming) rules apply.
 
 APs contain their exact planning questions, boundaries and cases, or direct section/artifact links to them. Use links to the required handover or E-ID, not a whole historical record or instructions to search. Keep prerequisite material distinct from later compatibility context. Delete obsolete duplicate/redirect documents only after moving every still-required unique input to its owner and updating references; preserve actual evidence.
 

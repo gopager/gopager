@@ -1,4 +1,15 @@
-// Package assignments owns current temporal Address rules and target resolution.
+// Package assignments owns current temporal Address rules, the resolution of
+// transmission targets to Units, and historical assignment correction.
+//
+// Rule, Selector, ValidateChange and Resolve are the pure rule model. Service
+// (built with NewService) provides authorized rule management (CreateRule,
+// UpdateRule, DeleteRule, Preview, ReadRule, ListRules), suppression and
+// correction management (CreateSuppression, LiftSuppression, RetryCorrection,
+// and reads), and the transaction-participating matcher used by ingest
+// (MatchTargets, NetworksWithMatches). Every rule or suppression change bumps
+// the global assignment revision and queues a pending correction scope;
+// CorrectionRunner drains those scopes in the background, rewrites stored
+// target resolutions and appends assignment.changed facts.
 package assignments
 
 import (
@@ -12,8 +23,13 @@ import (
 	"github.com/gopager/gopager/internal/protocols"
 )
 
+// Sentinel errors returned by rule validation and resolution.
 var (
-	ErrInvalidRule  = errors.New("invalid Address rule")
+	// ErrInvalidRule reports a malformed rule, selector or target input.
+	ErrInvalidRule = errors.New("invalid Address rule")
+	// ErrRuleConflict reports overlapping enabled rules whose winner cannot be
+	// decided by strict selector containment, or overlapping POCSAG rules with
+	// different modes.
 	ErrRuleConflict = errors.New("Address rule conflicts with current configuration")
 )
 
@@ -203,6 +219,8 @@ func ValidateChange(ctx context.Context, candidate Rule, current []Rule) error {
 	return nil
 }
 
+// Resolution is the outcome for one target position: Status "assigned" with
+// UnitID and AddressRuleID of the winning rule, or "unassigned" with both nil.
 type Resolution struct {
 	TargetPosition int        `json:"targetPosition"`
 	Status         string     `json:"status"`

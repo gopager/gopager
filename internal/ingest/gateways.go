@@ -16,12 +16,18 @@ import (
 	"github.com/gopager/gopager/internal/protocols"
 )
 
+// GatewayNetworkInput is one requested Gateway-to-Network assignment: the
+// Gateway's local Identifier (1..128 bytes of non-blank UTF-8) for the Network,
+// and whether it is the default Network for that Network's protocol.
 type GatewayNetworkInput struct {
 	Identifier string    `json:"gatewayNetworkIdentifier"`
 	NetworkID  uuid.UUID `json:"networkId"`
 	Default    bool      `json:"default"`
 }
 
+// GatewayCredentialView is the non-secret status of one Gateway credential.
+// Status is "current", "pending" or "revoked"; timestamps are preformatted
+// strings and the optional ones are nil when the event has not happened.
 type GatewayCredentialView struct {
 	ID         uuid.UUID `json:"credentialId"`
 	Status     string    `json:"status"`
@@ -30,6 +36,10 @@ type GatewayCredentialView struct {
 	RevokedAt  *string   `json:"revokedAt,omitempty"`
 }
 
+// GatewayCredentialIssueResult is the outcome of IssueCredential. Secret is
+// returned only on first issue and is never stored or replayed; Replayed is
+// true (and Secret empty) when the result came from an existing command
+// receipt. Status is "current" or "pending".
 type GatewayCredentialIssueResult struct {
 	CredentialID uuid.UUID `json:"credentialId"`
 	Secret       string    `json:"secret,omitempty"`
@@ -38,12 +48,18 @@ type GatewayCredentialIssueResult struct {
 	Replayed     bool      `json:"-"`
 }
 
+// GatewayAdministrationRepository persists Gateway Network assignments and
+// credentials. All methods participate in the caller's transaction.
+// Mutating methods take the expected revision and must fail with
+// authz.ErrRevisionConflict when it is stale; missing Gateways, Networks or
+// credentials are reported as authz.ErrNotFound. IssueGatewayCredential stores
+// only the secret hash and reports whether the new credential is pending.
 type GatewayAdministrationRepository interface {
 	GatewayNetworks(context.Context, platform.TransactionContext, uuid.UUID) ([]GatewayNetwork, error)
 	GatewayNetworksForAuthorization(context.Context, platform.TransactionContext, uuid.UUID) ([]GatewayNetwork, error)
 	ReadNetworkProtocol(context.Context, platform.TransactionContext, uuid.UUID) (protocols.Protocol, error)
 	ReplaceGatewayNetworks(context.Context, platform.TransactionContext, uuid.UUID, int64,
-		[]GatewayNetwork, time.Time) (int64, error)
+		[]GatewayNetwork) (int64, error)
 	GatewayCredentialStatus(context.Context, platform.TransactionContext, uuid.UUID) ([]GatewayCredentialView, error)
 	IssueGatewayCredential(context.Context, platform.TransactionContext, uuid.UUID, int64, uuid.UUID,
 		[32]byte, time.Time) (bool, int64, error)
@@ -51,6 +67,12 @@ type GatewayAdministrationRepository interface {
 		int64, time.Time) (int64, error)
 }
 
+// GatewayAdministration implements authorized administrative operations on
+// Gateways: Network assignments and credential issue/revocation. Each
+// operation runs in one transaction that resolves the caller's authority,
+// reads the database clock, authorizes against every Network the Gateway is
+// (or will be) assigned to and applies the change. It is safe for concurrent
+// use.
 type GatewayAdministration struct {
 	transactions identity.Transactions
 	resolver     *identity.Resolver
@@ -60,6 +82,8 @@ type GatewayAdministration struct {
 	facts        events.Appender
 }
 
+// NewGatewayAdministration returns a GatewayAdministration, failing with
+// CodeInvalidInput if any dependency is nil.
 func NewGatewayAdministration(transactions identity.Transactions, resolver *identity.Resolver, clock platform.Clock,
 	repository GatewayAdministrationRepository, receipts commands.Repository, facts events.Appender) (*GatewayAdministration, error) {
 	if transactions == nil || resolver == nil || clock == nil || repository == nil || receipts == nil || facts == nil {
@@ -69,6 +93,14 @@ func NewGatewayAdministration(transactions identity.Transactions, resolver *iden
 		repository: repository, receipts: receipts, facts: facts}, nil
 }
 
+// ConfigureNetworks atomically replaces the Gateway's Network assignments,
+// guarded by the expected revision, and returns the new revision. Input must
+// hold 1..1024 entries with unique identifiers and Network IDs, and every
+// protocol present must have exactly one default; a referenced Network that
+// does not exist is reported as authz.ErrInvalidInput. check is called with
+// the resolved authentication before any change (e.g. to require a fresh
+// session); its error aborts the call. The caller needs "gateway.update" on
+// every currently and newly assigned Network.
 func (s *GatewayAdministration) ConfigureNetworks(ctx context.Context, proof identity.Proof, gateway uuid.UUID,
 	expected int64, input []GatewayNetworkInput, check func(identity.Authentication) error) (int64, error) {
 	if gateway == uuid.Nil || expected <= 0 || len(input) == 0 || len(input) > 1024 || check == nil {
@@ -136,12 +168,16 @@ func (s *GatewayAdministration) ConfigureNetworks(ctx context.Context, proof ide
 		if err := authorizeGatewayNetworks(authentication.Authority, "gateway.update", scope, now); err != nil {
 			return err
 		}
-		revision, err = s.repository.ReplaceGatewayNetworks(tx.Context(), tx, gateway, expected, assignments, now)
+		revision, err = s.repository.ReplaceGatewayNetworks(tx.Context(), tx, gateway, expected, assignments)
 		return err
 	})
 	return revision, err
 }
 
+// ReadCredentialStatus lists the Gateway's credentials without secrets. The
+// caller needs "gateway.read" on every Network the Gateway is assigned to, or
+// an installation-wide ("all" scope) grant when it has none. A repository row with an unknown status
+// fails with CodeAuthorityUnavailable.
 func (s *GatewayAdministration) ReadCredentialStatus(ctx context.Context, proof identity.Proof,
 	gateway uuid.UUID) ([]GatewayCredentialView, error) {
 	if gateway == uuid.Nil {
@@ -177,6 +213,13 @@ func (s *GatewayAdministration) ReadCredentialStatus(ctx context.Context, proof 
 	return result, err
 }
 
+// IssueCredential creates a new Gateway credential and returns its one-time
+// secret. command is the caller-chosen idempotency key: repeating it with the
+// same Gateway and expected revision replays the recorded result without the
+// secret (Replayed=true), while reusing it with different input fails with
+// commands.ErrIdempotencyConflict. The credential, an identity fact and the command
+// receipt are written in one transaction. check and authorization behave as
+// in ConfigureNetworks.
 func (s *GatewayAdministration) IssueCredential(ctx context.Context, proof identity.Proof, gateway, command uuid.UUID,
 	expected int64, check func(identity.Authentication) error) (GatewayCredentialIssueResult, error) {
 	if gateway == uuid.Nil || command == uuid.Nil || expected <= 0 || check == nil {
@@ -254,7 +297,7 @@ func (s *GatewayAdministration) IssueCredential(ctx context.Context, proof ident
 		}
 		if _, err := s.facts.AppendIdentityFact(tx.Context(), tx, events.IdentityFact{
 			ID: uuid.New(), Type: events.ConfigurationChanged,
-			Aggregate: events.EntityRef{Type: "credential", ID: credentialID}, Revision: 1,
+			Aggregate: events.EntityRef{Type: "credential", ID: credentialID}, Revision: credentialIssuedRevision,
 			OccurredAt: now, ChangeKind: events.CredentialIssued,
 		}); err != nil {
 			return err
@@ -276,6 +319,10 @@ func (s *GatewayAdministration) IssueCredential(ctx context.Context, proof ident
 	return result, err
 }
 
+// RevokeCredential revokes one credential of the Gateway, guarded by the
+// expected revision, and returns the resulting revision. command is an
+// idempotency key with the same replay/conflict semantics as in
+// IssueCredential. check and authorization behave as in ConfigureNetworks.
 func (s *GatewayAdministration) RevokeCredential(ctx context.Context, proof identity.Proof, gateway, credential,
 	command uuid.UUID, expected int64, check func(identity.Authentication) error) (int64, error) {
 	if gateway == uuid.Nil || credential == uuid.Nil || command == uuid.Nil || expected <= 0 || check == nil {
@@ -335,7 +382,7 @@ func (s *GatewayAdministration) RevokeCredential(ctx context.Context, proof iden
 		}
 		if _, err := s.facts.AppendIdentityFact(tx.Context(), tx, events.IdentityFact{
 			ID: uuid.New(), Type: events.ConfigurationChanged,
-			Aggregate: events.EntityRef{Type: "credential", ID: credential}, Revision: 1,
+			Aggregate: events.EntityRef{Type: "credential", ID: credential}, Revision: credentialRevokedRevision,
 			OccurredAt: now, ChangeKind: events.CredentialRevoked,
 		}); err != nil {
 			return err
@@ -347,6 +394,14 @@ func (s *GatewayAdministration) RevokeCredential(ctx context.Context, proof iden
 	})
 	return revision, err
 }
+
+// A Gateway credential's identity facts form a two-step lifecycle on the
+// credential aggregate: issuance is revision 1 and the single, final revocation
+// (explicit or by rotation cutover) is revision 2.
+const (
+	credentialIssuedRevision  int64 = 1
+	credentialRevokedRevision int64 = 2
+)
 
 func validGatewayCredentialViews(views []GatewayCredentialView) bool {
 	for _, view := range views {

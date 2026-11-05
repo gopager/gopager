@@ -11,11 +11,16 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
+// ProofKind is the kind of transport proof a request carried.
 type ProofKind string
 
+// Proof kinds. A credential's Kind must match the proof kind it is presented as.
 const (
+	// AnonymousProof carries no secret and resolves to the guest account.
 	AnonymousProof ProofKind = "anonymous"
-	SessionProof   ProofKind = "session"
+	// SessionProof is a browser session cookie secret for a human account.
+	SessionProof ProofKind = "session"
+	// AccessKeyProof is a bearer access-key secret, optionally restricted.
 	AccessKeyProof ProofKind = "accessKey"
 )
 
@@ -25,16 +30,23 @@ type Proof struct {
 	Secret string
 }
 
+// LogValue implements slog.LogValuer and logs only the proof kind, never the
+// secret.
 func (p Proof) LogValue() slog.Value {
 	return slog.GroupValue(slog.String("kind", string(p.Kind)))
 }
 
+// AccountRecord is the stored account state used for authority resolution.
+// Kind is human, technical or guest; only State "active" can authenticate.
 type AccountRecord struct {
 	ID    uuid.UUID
 	Kind  string
 	State string
 }
 
+// CredentialRecord is the stored state of a session or access-key credential,
+// looked up by secret hash. Restrictions is set only for restricted access
+// keys; CSRFToken only for sessions.
 type CredentialRecord struct {
 	ID           uuid.UUID
 	AccountID    uuid.UUID
@@ -48,6 +60,7 @@ type CredentialRecord struct {
 	Restrictions *authz.Restrictions
 }
 
+// LogValue implements slog.LogValuer and logs only the credential ID and kind.
 func (c CredentialRecord) LogValue() slog.Value {
 	return slog.GroupValue(slog.String("id", c.ID.String()), slog.String("kind", string(c.Kind)))
 }
@@ -68,12 +81,17 @@ type ScopeReferences interface {
 	ScopeExists(context.Context, platform.TransactionContext, authz.Scope) (bool, error)
 }
 
+// Resolver derives a caller's current authority from proof or from a trusted
+// principal ID. Create it with NewResolver; it is safe for concurrent use.
 type Resolver struct {
 	repository AuthorityRepository
 	clock      platform.Clock
 	references ScopeReferences
 }
 
+// Authentication is the result of Resolve: the caller's current authority
+// (with Authority.Key set to any access-key restrictions) plus the credential
+// used. CredentialID is nil and CSRFToken empty for anonymous proof.
 type Authentication struct {
 	Authority    authz.Authority
 	CredentialID uuid.UUID
@@ -82,11 +100,15 @@ type Authentication struct {
 	ExpiresAt    *time.Time
 }
 
+// LogValue implements slog.LogValuer and logs only principal, credential and
+// proof kind, never the CSRF token.
 func (a Authentication) LogValue() slog.Value {
 	return slog.GroupValue(slog.String("principalId", a.Authority.PrincipalID),
 		slog.String("credentialId", a.CredentialID.String()), slog.String("kind", string(a.Kind)))
 }
 
+// NewResolver returns a Resolver. It returns a CodeInvalidInput failure if any
+// dependency is nil.
 func NewResolver(repository AuthorityRepository, clock platform.Clock, references ScopeReferences) (*Resolver, error) {
 	if repository == nil || clock == nil || references == nil {
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing identity authority dependency"))
@@ -94,8 +116,14 @@ func NewResolver(repository AuthorityRepository, clock platform.Clock, reference
 	return &Resolver{repository: repository, clock: clock, references: references}, nil
 }
 
-// Resolve derives current authority inside the caller's transaction.
-// The revocation lock is held until that transaction completes its protected operation.
+// Resolve derives current authority inside the caller's transaction. It takes
+// the shared access (revocation) lock, which is held until the transaction
+// ends, so the authority cannot be revoked during the protected operation.
+// It returns ErrLoginRequired for an unknown, wrong-kind, revoked, consumed or
+// expired credential (sessions also expire 30 days after creation or 7 days
+// after last use), an inactive account, or an access key restricted to a
+// scope that no longer exists. Grants on scopes that no longer exist are
+// dropped. On success it updates the credential's last-used time.
 func (r *Resolver) Resolve(ctx context.Context, tx platform.TransactionContext, proof Proof) (Authentication, error) {
 	if proof.Kind != AnonymousProof && proof.Kind != SessionProof && proof.Kind != AccessKeyProof ||
 		(proof.Kind == AnonymousProof && proof.Secret != "") {

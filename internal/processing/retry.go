@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+// MaxAutomaticAttempts is the number of attempts after which automatic retry stops and
+// NextAutomaticRetry reports exhaustion.
 const MaxAutomaticAttempts = 5
 
 // NextAutomaticRetry returns a primary-clock due time or explicit terminal exhaustion.

@@ -5,7 +5,7 @@
 ## Session Context
 
 - **Authority:** [session procedure](shared-rules.md#session-start), [delivery scope](../authoritative-plan.md#delivery-scope) and [approval](../authoritative-plan.md#workflow-and-approval-gates).
-- **Requirements and owners:** [REQ-001..030/045/047..050/057..064/069..079/082/084..087/089/091..100/109..110](../requirements-catalog.md), [owner contracts](../domain-contracts.md#contract-register), [F-26](../contracts/reference-cases.md#f-26-localized-display-case).
+- **Requirements and owners:** [REQ-001..030/045/047..050/057..064/069..079/082/084..087/089/091..100/109..110](../requirements-catalog.md), [owner contracts](../domain-contracts.md#contract-register), [F-26](../contracts/reference-cases.md).
 - **Owner:** Frontend with integration participating in this AP for build/asset registration; backend API versions come from their completed producers.
 - **Architecture:** [language and internationalization](../architecture.md#language-and-internationalization), [domain ownership](../architecture.md#domains-and-data-ownership), [allowed dependencies](../architecture.md#allowed-dependencies).
 - **Prerequisites:** Verify [AP-08](ap-08-master-data-correction-after-intake.md) master-data/default APIs, [AP-09](ap-09-gateway-network.md) Gateway/Network APIs, [AP-10](ap-10-query-live.md) Query/SSE/approved saved views, [AP-11](ap-11-events-delivery.md) Subscription/Delivery, [AP-12](ap-12-plugin-host.md) configuration, [AP-13](ap-13-processing-presentation-integration.md) rules/presentation/preferences/notices and [AP-14](ap-14-identity-lifecycle.md) identity/recovery/deletion. Consume actual OpenAPI/error/action versions and HTTP evidence. Assets are this AP's output; no operations/sign-off input is required.

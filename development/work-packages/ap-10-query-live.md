@@ -6,7 +6,7 @@
 
 - **Authority:** [session procedure](shared-rules.md#session-start), [delivery scope](../authoritative-plan.md#delivery-scope) and [approval](../authoritative-plan.md#workflow-and-approval-gates).
 - **Requirements and owners:** [REQ-001..020/027/029/055..060/070/097..100/108/110](../requirements-catalog.md#a-live-message-view), [C-06](../contracts/c-06-identity-authorization.md), [C-07](../contracts/c-07-query-live.md), [C-08](../contracts/c-08-events-jobs.md).
-- **Owner:** DOM-06 and integration.
+- **Owner:** Query and integration.
 - **Architecture:** [domain ownership](../architecture.md#domains-and-data-ownership), [shared use cases](../architecture.md#shared-use-cases), [allowed dependencies](../architecture.md#allowed-dependencies).
 - **Prerequisites:** [AP-06](../execution/ap-06.md)/[AP-07](../execution/ap-07.md) accepted originals/Processing-ready state, [AP-08](ap-08-master-data-correction-after-intake.md) correction/suppression/default reads/facts and [AP-09](ap-09-gateway-network.md) inventory/diagnostics. Verify their actual handovers and the [identity/fields handover](../execution/source-ap-07.md#handover). Fixed C-07 page/SSE semantics remain inputs. Remaining C-06/C-07/C-08 query/live/saved-view planning belongs here.
 - **Write scope:** `internal/readmodel/`, `internal/httpapi/`, `internal/authz/` and `internal/identity/` for query fields/saved-view actions only, `internal/events/` and owner eventstore/readmodel/continuation/resume/saved-view Ent stores/schemas/generated output/next migrations; `cmd/gopager/` HTTP/SSE/subscriber/root/lifecycle registration and versioned REST/OpenAPI artifacts/tests. C-06/C-07/C-08 supporting slices and canonical cases are authorized.

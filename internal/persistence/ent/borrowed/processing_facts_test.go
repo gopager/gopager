@@ -43,7 +43,7 @@ func TestProcessingFactParticipantUsesCallerTransactionAndRejectsExpiredCapabili
 		}); err != nil {
 			return err
 		}
-		// These are explicit standalone publication-fixture references, not ready AP-06 originals.
+		// These are explicit standalone publication-fixture references, not ready production originals.
 		completion := events.ProcessingCompletionFact{ID: resultFactID, WorkflowID: workflowID,
 			ResultID: resultID, ResultRevision: 1, TransmissionID: uuid.New(), MessageID: uuid.New(),
 			DefinitionVersionID: uuid.New(), SourceRevision: 1, ContextRevision: 1, OccurredAt: now,
@@ -91,7 +91,7 @@ func TestProcessingFactParticipantUsesCallerTransactionAndRejectsExpiredCapabili
 			Scan(&producer, &aggregate, &replay, &status); err != nil {
 			return err
 		}
-		if producer != "DOM-08" || aggregate != resultID.String() || replay != "normal" || status != "completed" {
+		if producer != "processing" || aggregate != resultID.String() || replay != "normal" || status != "completed" {
 			return errors.New("persisted Processing completion lost producer/result identity")
 		}
 		return nil

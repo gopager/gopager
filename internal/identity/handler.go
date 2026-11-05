@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
+	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/platform"
 )
 
@@ -59,12 +60,19 @@ func NewHTTPHandler(transport *HTTPTransport, login *LoginService) (http.Handler
 		reader := http.MaxBytesReader(w, r.Body, 16*1024)
 		decoder := json.NewDecoder(reader)
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&input); err != nil || input.SchemaVersion != 1 {
+		var tooLarge *http.MaxBytesError
+		if err := decoder.Decode(&input); errors.As(err, &tooLarge) {
+			writeIdentityError(w, platform.NewFailure(platform.CodeResourceLimit, err))
+			return
+		} else if err != nil || input.SchemaVersion != 1 {
 			writeIdentityError(w, ErrInvalidInput)
 			return
 		}
 		var extra any
-		if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err := decoder.Decode(&extra); errors.As(err, &tooLarge) {
+			writeIdentityError(w, platform.NewFailure(platform.CodeResourceLimit, err))
+			return
+		} else if !errors.Is(err, io.EOF) {
 			writeIdentityError(w, ErrInvalidInput)
 			return
 		}
@@ -114,7 +122,8 @@ func writeIdentityJSON(w http.ResponseWriter, status int, body any) {
 	}
 }
 
-// writeIdentityError maps domain outcomes to C-07 without exposing wrapped infrastructure causes.
+// writeIdentityError maps domain outcomes to the API error response (code, message,
+// retry information) without exposing wrapped infrastructure causes.
 func writeIdentityError(w http.ResponseWriter, err error) {
 	code, fallback, status := "INTERNAL_ERROR", "The operation could not be completed.", http.StatusInternalServerError
 	retryable := false
@@ -124,6 +133,8 @@ func writeIdentityError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrInvalidInput), errors.Is(err, authz.ErrInvalidInput):
 		code, fallback, status = "INVALID_INPUT", "Check the supplied values.", http.StatusBadRequest
+	case errors.Is(err, commands.ErrIdempotencyConflict):
+		code, fallback, status = "IDEMPOTENCY_CONFLICT", "This operation identifier was already used differently.", http.StatusConflict
 	case errors.Is(err, ErrLoginRequired):
 		code, fallback, status = "LOGIN_REQUIRED", "Sign in to continue.", http.StatusUnauthorized
 	case errors.Is(err, authz.ErrForbidden):

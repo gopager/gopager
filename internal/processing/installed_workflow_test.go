@@ -244,7 +244,7 @@ func TestInstalledWorkflowActuallyWaitsBeyondBuiltinBudgetWithoutDetachingCaller
 	callerFailure := ctx.Err()
 	cancel()
 	if !errors.Is(err, context.DeadlineExceeded) || !errors.Is(callerFailure, context.DeadlineExceeded) ||
-		result.Selected || time.Since(started) < time.Second {
+		platform.FailureCode(err) == platform.CodeResourceLimit || result.Selected || time.Since(started) < time.Second {
 		t.Fatalf("real installed loop used builtin deadline rather than caller deadline: %+v, %v", result, err)
 	}
 	definition = installedDefinition(owner, "ok", FieldRef{Namespace: "source", Path: []string{"text"}})
@@ -259,6 +259,23 @@ func TestInstalledWorkflowActuallyWaitsBeyondBuiltinBudgetWithoutDetachingCaller
 	}
 	if len(result.Fields["text"].Dependencies) != 1 || result.Fields["text"].Dependencies[0].Groups[0] != "payload" {
 		t.Fatalf("installed output lost input/selector classification: %+v", result)
+	}
+}
+
+func TestInstalledWorkflowPluginOwnDeadlineIsResourceLimit(t *testing.T) {
+	owner := newInstalledOwnerFixture(t)
+	_, source := sourceFixture(t)
+	definition := installedDefinition(owner, "loop", FieldRef{Namespace: "source", Path: []string{"text"}})
+	program, err := CompileWorkflowInstalled(context.Background(), definition, source, nil, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := installedInvocationTimeout
+	installedInvocationTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { installedInvocationTimeout = original })
+	result, err := program.EvaluateInstalled(context.Background(), source, owner)
+	if platform.FailureCode(err) != platform.CodeResourceLimit || result.Selected {
+		t.Fatalf("installed step exceeding its own deadline was not RESOURCE_LIMIT: %+v, %v", result, err)
 	}
 }
 

@@ -14,7 +14,7 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
-// markerScript records that it was started; loading must never run it (D-131 inspection rule).
+// markerScript records that it was started; loading must inspect artifacts without executing them.
 var markerScript = []byte("#!/bin/sh\necho started > started.marker\nexit 1\n")
 
 func artifactFixture(t *testing.T, data []byte) (string, *os.Root, InstalledManifest, ArtifactPin) {

@@ -19,8 +19,13 @@ import (
 	"github.com/gopager/gopager/internal/platform/postgres"
 )
 
+// Store implements the identity persistence ports (accounts, credentials and sessions,
+// grants and field permissions, login rate limiting, bootstrap and the access lock) over Ent. It holds no transaction of its own: every
+// method runs in the caller's active primary transaction, with row access restricted by
+// the guard predicates of that method.
 type Store struct{ primary *postgres.Store }
 
+// New returns a Store bound to the primary database. primary must not be nil.
 func New(primary *postgres.Store) (*Store, error) {
 	if primary == nil {
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("nil identity primary"))

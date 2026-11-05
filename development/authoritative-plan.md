@@ -53,14 +53,14 @@ The stable D-IDs below record decision topics and supersession. The **owner link
 | D-37 | <a id="d-37"></a>Approved central Goose migration sequence and foundation 1.1 replacement binding | [Migration revision decision](#ap-05-migration-revision-decision) |
 | D-38 | <a id="d-38"></a>Approved Ent native Privacy/Filter for required domain consumers; no Atlas/checksum authoring workflow | [Data-access decision](#ap-05-data-access-decision), [selected stack](architecture.md#domain-data-access-selection) |
 | D-42 | <a id="d-42"></a>Approved whole-second Observation precision by truncation; supersedes finer-precision preservation for the AP-06 boundary | [Observation precision decision](#ap-06-observation-precision-decision), [C-01](contracts/c-01-transmission-acceptance.md) |
-| D-43 | <a id="d-43"></a>Approved synchronous relational Transmission/Message derivation for the AP-06 boundary only | [AP-06 architecture decision](#ap-06-transmission-message-architecture-decision), [architecture owner](architecture.md#ap-06-transmission-message-boundary-selection) |
+| D-43 | <a id="d-43"></a>Approved synchronous relational Transmission/Message derivation for the AP-06 boundary only | [AP-06 architecture decision](#ap-06-transmissionmessage-architecture-decision), [architecture owner](architecture.md#ap-06-transmissionmessage-boundary-selection) |
 | D-44 | <a id="d-44"></a>Approved NFC normalization for text Payload identity before exact comparison | [AP-06 Unicode identity decision](#ap-06-unicode-payload-identity-decision), [C-02](contracts/c-02-protocol-payload.md) |
 | D-45 | <a id="d-45"></a>Approved direct HTTP support for Gateway requests; its application-wide scope is extended by D-52 | [AP-06 Gateway transport decision](#ap-06-gateway-transport-security-decision), [D-52](#application-wide-http-support-decision), [C-01](contracts/c-01-transmission-acceptance.md), [C-06](contracts/c-06-identity-authorization.md) |
 | D-46 | <a id="d-46"></a>Approved no additional product cap for the configurable AP-06 Grouping window; superseded by D-51 | [AP-06 Grouping window decision](#ap-06-grouping-window-decision), [D-51](#ap-06-grouping-window-json-integer-limit-decision), [C-03](contracts/c-03-message-grouping.md) |
 | D-47 | <a id="d-47"></a>Approved reusable per-Gateway Bearer credential, including over direct HTTP | [AP-06 Gateway credential decision](#ap-06-gateway-credential-decision), [C-06](contracts/c-06-identity-authorization.md) |
 | D-48 | <a id="d-48"></a>Approved non-expiring Gateway credentials with first-use rotation cutover | [AP-06 Gateway credential lifecycle decision](#ap-06-gateway-credential-lifecycle-decision), [C-06](contracts/c-06-identity-authorization.md) |
 | D-49 | <a id="d-49"></a>Approved whole-second precision for the configurable AP-06 Grouping window | [AP-06 Grouping window precision decision](#ap-06-grouping-window-precision-decision), [C-03](contracts/c-03-message-grouping.md) |
-| D-50 | <a id="d-50"></a>Approved deferring product-specific Grouping duration/concurrency validation to AP-06 T024 | [AP-06 Grouping validation timing](#ap-06-grouping-validation-timing-decision), [P-08](#open-issues-and-risks) |
+| D-50 | <a id="d-50"></a>Approved deferring product-specific Grouping duration/concurrency validation to AP-06 T024 | [AP-06 Grouping validation timing](#ap-06-grouping-validation-timing), [P-08](#open-issues-and-risks) |
 | D-51 | <a id="d-51"></a>Approved JSON integer Grouping window capped at 2^53−1 seconds; supersedes D-46 | [AP-06 Grouping window JSON integer limit](#ap-06-grouping-window-json-integer-limit-decision), [C-03](contracts/c-03-message-grouping.md), [F-50](contracts/reference-cases.md#ap-06-grouping-window-range-case) |
 | D-52 | <a id="d-52"></a>Approved HTTP support for the entire application, including human authentication and sessions; extends D-45 | [Application-wide HTTP support](#application-wide-http-support-decision), [C-12](contracts/c-12-persistence-operations.md#application-http-transport), [C-06](contracts/c-06-identity-authorization.md#http-transport-and-human-authentication) |
 | D-53 | <a id="d-53"></a>Approved Transmission ID plus immutable zero-based target position instead of a separate target UUID | [Target reference decision](#ap-06-transmission-target-reference-decision), [C-05](contracts/c-05-matching-correction.md#original-target-reference) |
@@ -79,7 +79,7 @@ The stable D-IDs below record decision topics and supersession. The **owner link
 | D-100 | <a id="d-100"></a>Approved global plugin.configure for redacted Processing-instance reads/listing | [Instance read authorization](#processing-instance-read-authorization) |
 | D-101 | <a id="d-101"></a>Approved explicit optional local Processing artifact-root startup option | [Artifact-root configuration](#processing-artifact-root-configuration) |
 | D-102 | <a id="d-102"></a>Approved synthetic schema/context and null-or-name ZVEI; subsequent general bytes approval is D-103 | [Synthetic schema freeze responses](#synthetic-schema-freeze-responses) |
-| D-103 | <a id="d-103"></a>Approved bounded shared bytes values and SDK 1.1 bytes compatibility | [Shared bytes binding](#shared-bytes-binding) |
+| D-103 | <a id="d-103"></a>Approved bounded shared bytes values and SDK 1.1 bytes compatibility; SDK-version mapping superseded by D-131 | [Shared bytes binding](#shared-bytes-binding) |
 | D-104 | <a id="d-104"></a>Approved Gateway-authenticated HTTP Submission as the intended AP-07 product boundary; no baseline or implementation approval | [AP-07 Gateway HTTP Submission boundary](#ap-07-gateway-http-submission-boundary-decision) |
 | D-105 | <a id="d-105"></a>Approved Gateway-authenticated HTTP Gateway-state reporting in AP-07; no baseline or implementation approval | [AP-07 Gateway-state HTTP boundary](#ap-07-gateway-state-http-boundary-decision) |
 | D-106 | <a id="d-106"></a>Approved administrator-authenticated HTTP Gateway Network configuration in AP-07; no baseline or implementation approval | [AP-07 Gateway Network configuration HTTP boundary](#ap-07-gateway-network-configuration-http-boundary-decision) |
@@ -107,6 +107,9 @@ The stable D-IDs below record decision topics and supersession. The **owner link
 | D-129 | <a id="d-129"></a>Core regex runs in-process with deterministic admission bounds; supersedes D-62 for Core regex | [In-process Core regex](#in-process-core-regex) |
 | D-130 | <a id="d-130"></a>Plugins are fully trusted and may access host, devices and network directly; D-67 is only a first subset | [Plugin trust clarification](#plugin-trust-clarification) |
 | D-131 | <a id="d-131"></a>Plugins run as Operator-provisioned executables managed through `go-plugin`/gRPC, one process per configured instance; WASI/Wazero removed | [Managed plugin process runtime](#managed-plugin-process-runtime) |
+| D-132 | <a id="d-132"></a>Process documentation separated from permanent documentation; planning IDs only in `development/`; fixed domain names; project tooling; OpenAPI authoritative for implemented HTTP schemas | [Documentation and naming separation](#documentation-and-naming-separation) |
+| D-133 | <a id="d-133"></a>Command-ID reuse with different content is `IDEMPOTENCY_CONFLICT` (409, not retryable), replacing `REVISION_CONFLICT` in frozen slices | [Command-ID reuse conflict code](#command-id-reuse-conflict-code) |
+| D-134 | <a id="d-134"></a>Review-finding planning revision of open AP-11..AP-16 tasks and resolved contract statements (2026-11-06) | [Review-finding AP planning revision](#review-finding-ap-planning-revision) |
 
 ## Operating Assumptions
 
@@ -160,17 +163,17 @@ Resolve IDs in the [catalog](requirements-catalog.md), not in a parallel feature
 
 **D-33 question and options:** Retain the previously proposed Webhook scope, or explicitly include configurable formats, HTTP methods and authentication. The user selected expansion; the capability requirements are maintained in [REQ-090](requirements-catalog.md#i-domain-events-extensions-and-deliveries) and the draft boundary in [C-09](contracts/c-09-delivery.md#initial-target-capabilities). After an initially masked authentication selection, the user explicitly clarified Bearer-token support. Asked whether to deliver two or four initial targets, the user selected Pushover and Webhook now, Telegram and email later. This qualifies D-06's delivery timing. The user approved the necessary owner-document and not-yet-started downstream AP consistency amendments. These are approved capability intentions, not frozen signing/encoding or authorization rules; C-09/C-10 review remains required.
 
-**D-33 GET resolution, 2026-10-25, AP-04 T017:** A trigger-only GET was offered and rejected: GET must be able to carry configured Message input. Body-only, nonconfidential-query-only and removal of GET were then offered. The user instead expressly selected configurable transport for legacy systems, with the Operator responsible for consciously choosing insecure methods. DOM-07/plugin host own the resulting draft in [C-09](contracts/c-09-delivery.md#initial-target-capabilities). This expands the draft beyond the earlier nonconfidential-query recommendation, not a claim that query transport is safe. Explicit Operator policy, current authorized projections and GoPager's own Secret/log protections remain required; external logging cannot be guaranteed. No silent TLS downgrade or implicit authorization expansion is granted. Exact configuration/signature schemas and fixtures still require review before freeze.
+**D-33 GET resolution, 2026-10-25, AP-04 T017:** A trigger-only GET was offered and rejected: GET must be able to carry configured Message input. Body-only, nonconfidential-query-only and removal of GET were then offered. The user instead expressly selected configurable transport for legacy systems, with the Operator responsible for consciously choosing insecure methods. Delivery/plugin host own the resulting draft in [C-09](contracts/c-09-delivery.md#initial-target-capabilities). This expands the draft beyond the earlier nonconfidential-query recommendation, not a claim that query transport is safe. Explicit Operator policy, current authorized projections and GoPager's own Secret/log protections remain required; external logging cannot be guaranteed. No silent TLS downgrade or implicit authorization expansion is granted. Exact configuration/signature schemas and fixtures still require review before freeze.
 
 **Consequences and boundaries:** The original full proposal remains approved subject to D-32/D-33 and the existing later/removed classifications. D-32 affects AP-05/AP-06/AP-09/AP-15; D-33 affects AP-11; owner and coverage references are aligned with the approved delivery timing. The user additionally required conformance to the existing AP-01..AP-03 logical Message model and confirmed that the backend defines Gateway API formats. Gateway implementations are outside AP-04: source observations do not define or constrain its API. C-02 remains the owner of Gateway reassembly and submitted target semantics. Historical execution evidence and glossary meanings remain unchanged. Current owner drafts carry explicit AP-04 amendments, not retroactive claims about earlier evidence.
 
-**D-33 configuration-authority clarification, 2026-10-26, AP-04 T017:** The user explicitly requires administrative configuration for every integration, rather than independent User-created integrations. Where the provider supports individually addressable recipients, Users may configure their own recipient credentials and Subscriptions on that administratively configured integration. The Pushover example establishes the intended split. Product/integration (user) approves this clarification of D-06/D-33; DOM-07 owns the boundary in [C-09](contracts/c-09-delivery.md#configuration-authority), with plugin host/integration responsible for its manifest/configuration exposure through [C-10](contracts/c-10-plugin-host.md). Operator responsibility for integration security does not remove current data authorization or GoPager's own Secret protections. This refines the current drafts, not earlier execution evidence or a frozen contract. AP-10/AP-11 consume the linked owner contracts; existing tasks already cover configuration and authorization, so no additional downstream task or implementation approval is needed.
+**D-33 configuration-authority clarification, 2026-10-26, AP-04 T017:** The user explicitly requires administrative configuration for every integration, rather than independent User-created integrations. Where the provider supports individually addressable recipients, Users may configure their own recipient credentials and Subscriptions on that administratively configured integration. The Pushover example establishes the intended split. Product/integration (user) approves this clarification of D-06/D-33; Delivery owns the boundary in [C-09](contracts/c-09-delivery.md#configuration-authority), with plugin host/integration responsible for its manifest/configuration exposure through [C-10](contracts/c-10-plugin-host.md). Operator responsibility for integration security does not remove current data authorization or GoPager's own Secret protections. This refines the current drafts, not earlier execution evidence or a frozen contract. AP-10/AP-11 consume the linked owner contracts; existing tasks already cover configuration and authorization, so no additional downstream task or implementation approval is needed.
 
 **D-33 manifest follow-up, 2026-10-26, AP-04 T017:** The user explicitly requires plugins to declare which properties Users and administrators may configure in their manifests. Product/integration (user) approves this requirement rather than relying on UI conventions alone; plugin host/integration owns the [C-10 draft field contract](contracts/c-10-plugin-host.md#manifest-configuration-fields). It operationalizes the preceding authority clarification without relaxing C-06/C-09, changing earlier execution evidence, or approving generated SDK artifacts/implementation. Planned cases belong to [F-45](contracts/reference-cases.md#ap-04-plugin-configuration-cases); AP-11 T037/T042 already consume the manifest/SDK contract.
 
 ### AP-04 FLEX Decision
 
-**D-34; date/origin:** 2026-10-25, AP-04 T016/T017. **Status:** approved draft amendment, not contract freeze. **Accountable owner/approver:** Product/integration, user; DOM-02 owns C-02 with DOM-01 for submitted originals. **Question/context:** the [direct specification review](execution/ap-04.md#e-06-direct-flex-specification-review) found omitted Short Message cases and ambiguous CAPCODE notation in the earlier C-02 draft.
+**D-34; date/origin:** 2026-10-25, AP-04 T016/T017. **Status:** approved draft amendment, not contract freeze. **Accountable owner/approver:** Product/integration, user; Grouping owns C-02 with Intake for submitted originals. **Question/context:** the [direct specification review](execution/ap-04.md#e-06-direct-flex-specification-review) found omitted Short Message cases and ambiguous CAPCODE notation in the earlier C-02 draft.
 
 **Options/resolution:** The user selected `short_numeric=numeric` rather than deferral; `source_code_identity=distinct_signal` rather than tone-only coalescing or deferral; and explicitly approved decimal-address CAPCODE clarification. These decisions preserve distinguishable signal information and avoid treating routing notation as an integer address. Behavior and exact mappings belong solely to [C-02](contracts/c-02-protocol-payload.md#ap-04-flex-clarification), terminology to the [glossary](glossary.md), and examples to [F-42..F-44](contracts/reference-cases.md#ap-04-protocol-cases).
 
@@ -186,15 +189,15 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 | P-02 | Policy resolved by D-13; separate new experiments retain their approval gate | [D-13](#d-13), [approval gates](#workflow-and-approval-gates) | Current experimenting owner, only if assigned |
 | P-03 | Foundation evidence recorded; actual retention/operational evidence remains | [C-12](contracts/c-12-persistence-operations.md) | AP-16 |
 | P-04 | Full topology/failover evidence remains; Delivery-specific fencing is AP-11 work | [C-08](contracts/c-08-events-jobs.md), [C-12](contracts/c-12-persistence-operations.md) | AP-11 / AP-16 |
-| P-05 | Pure installed-processing slice fixed; general production SDK/ABI selection and proof owned by host planning | [C-10](contracts/c-10-plugin-host.md) | AP-12 |
+| P-05 | Plugin runtime and protocol selected and implemented for installed processing under [D-131](#managed-plugin-process-runtime); process lifecycle/pooling, Delivery/reaction capabilities and non-Go plugin proof remain host planning | [C-10](contracts/c-10-plugin-host.md) | AP-12 |
 | P-06 | General host lifecycle/configuration enforcement evidence remains | [C-10](contracts/c-10-plugin-host.md) | AP-12 |
 | P-07 | Current target/host capability, I/O/cancellation evidence remains | [C-09](contracts/c-09-delivery.md), [C-10](contracts/c-10-plugin-host.md) | AP-12 |
 | P-08 | Observation/Grouping decisions remain fixed; current intake concurrency/publication evidence is recorded, not an old AP-06 T024 prerequisite | [D-42](#ap-06-observation-precision-decision), [D-49](#ap-06-grouping-window-precision-decision), [AP-07 evidence](execution/ap-07.md) | AP-07 evidence; AP-17 coverage verification |
 | P-09 | Logical-model question resolved by D-29/D-30; physical design at owner gates, not a diagram freeze | [D-29](#d-29), [C-05](contracts/c-05-matching-correction.md) | AP-03 / AP-04 / affected implementation owner |
 | P-10 | Query/live projection/revocation enforcement remains current consumer work | [C-06](contracts/c-06-identity-authorization.md), [C-07](contracts/c-07-query-live.md) | AP-10 |
 | P-11 | Claims/materialization/attempts and real host/provider evidence remain | [C-08](contracts/c-08-events-jobs.md), [C-09](contracts/c-09-delivery.md), [C-10](contracts/c-10-plugin-host.md) | AP-11 / AP-12 |
-| P-12 | Historical correction supporting planning and concurrency/publication evidence remain | [C-05](contracts/c-05-matching-correction.md) | AP-08 |
-| P-13 | Remaining master-data/default/template planning and implementation remain | [C-04](contracts/c-04-master-data.md) | AP-08 |
+| P-12 | Historical correction planning and PostgreSQL concurrency/publication evidence recorded in [AP-08](execution/ap-08.md); owner acceptance pending | [C-05](contracts/c-05-matching-correction.md) | AP-08 |
+| P-13 | Master-data/default/template planning and implementation recorded in [AP-08](execution/ap-08.md); owner acceptance pending; template actions consumed by AP-14 | [C-04](contracts/c-04-master-data.md) | AP-08 |
 | P-14 | Full account cleanup planning/participants and lifecycle evidence remain | [C-13](contracts/c-13-account-lifecycle.md) | AP-14 |
 | P-15 | Query Unicode/index evidence remains; deferred backend runtime parity is not required now | [C-07](contracts/c-07-query-live.md) | AP-10 |
 | P-16 | Shared renderer selection belongs to Delivery; GUI/historical work to presentation; frontend editor to browser AP | [C-11](contracts/c-11-processing-presentation.md) | AP-11 / AP-13 / AP-15 |
@@ -265,7 +268,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### C-03 Reassessment Decision
 
-**D-39; date/origin:** 2026-10-26, user follow-up during AP-05 T020/T021 library assessment. **Status:** proposed; review authorized, no replacement contract approved. **Accountable owner/approver:** user / Product and integration; DOM-02 owns C-03, affected consumers own their contracts.
+**D-39; date/origin:** 2026-10-26, user follow-up during AP-05 T020/T021 library assessment. **Status:** proposed; review authorized, no replacement contract approved. **Accountable owner/approver:** user / Product and integration; Grouping owns C-03, affected consumers own their contracts.
 
 **Question/evidence/options:** Keep C-03's current initial behavior and constrain integrations to it; document controlled regrouping as a future capability; or include executable historical regrouping in initial delivery. The [architecture reassessment](architecture.md#c-03-reassessment-proposal) owns technical feasibility, recommendation and affected consumers. The user's clarification makes old-link preservation a convenience rather than a reason to exclude suitable frameworks, but does not yet select split-link resolution, retention interactions or delivery timing.
 
@@ -275,7 +278,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### Transmission and Message Architecture Reassessment
 
-**D-40; date/origin:** 2026-10-26, explicit user clarification during AP-05 T020/T021 library/architecture assessment. **Accountable owner/approver:** user / Product and integration; architecture, DOM-01/02 and affected contract owners own technical consequences. **Status:** identity-constraint removal and neutral assessment approved; architecture/framework selection remains open.
+**D-40; date/origin:** 2026-10-26, explicit user clarification during AP-05 T020/T021 library/architecture assessment. **Accountable owner/approver:** user / Product and integration; architecture, Intake/Grouping and affected contract owners own technical consequences. **Status:** identity-constraint removal and neutral assessment approved; architecture/framework selection remains open.
 
 **Question and approval:** Compare genuine Event Sourcing confined to Transmissions/Messages, event-driven state-plus-read-model processing without authoritative event streams, and the previous synchronous relational design without preferring existing decisions. The user explicitly removes enduring IDs and ID mappings in this area; enduring identity remains necessary for authorization-relevant objects. Reasoned small application/contract adjustments to suitable libraries are permitted, not automatically inferior to integration glue.
 
@@ -303,7 +306,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### AP-06 Observation Precision Decision
 
-**D-42; date/origin:** 2026-10-26, AP-04 T017 follow-up for AP-06 T022/T023/T024. **Status:** approved by the user for the AP-06 Observation-time boundary. **Accountable owner/approver:** Product/integration; user. **Technical owner:** DOM-01/C-01.
+**D-42; date/origin:** 2026-10-26, AP-04 T017 follow-up for AP-06 T022/T023/T024. **Status:** approved by the user for the AP-06 Observation-time boundary. **Accountable owner/approver:** Product/integration; user. **Technical owner:** Intake/C-01.
 
 **Question and evidence:** C-01's draft allowed finer fractional Observation times and comparison at supplied precision, while AP-03 E-05 observed PostgreSQL `timestamptz` rounding the test value `123456789 ns` to `123457000 ns`; SQLite integer nanoseconds preserved it exactly. AP-03 did not select a production representation. F-01a also requires a `.000` representation to denote the same instant as the corresponding whole second. The exact AP-03 observation and contract are in [AP-03 E-05](execution/ap-03.md#e-05-database-driver-and-temporal-probes) and [C-01](contracts/c-01-transmission-acceptance.md).
 
@@ -315,7 +318,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### AP-06 Transmission/Message Architecture Decision
 
-**D-43; date/origin:** 2026-10-26, AP-06 T022/T023/T024 after the user-requested workload assessment. **Status:** approved for the Transmission/Message boundary only. **Accountable owner/approver:** Product/integration; user. **Technical owner:** architecture/integration. Resolution details are maintained in the [architecture](architecture.md#ap-06-transmission-message-boundary-selection).
+**D-43; date/origin:** 2026-10-26, AP-06 T022/T023/T024 after the user-requested workload assessment. **Status:** approved for the Transmission/Message boundary only. **Accountable owner/approver:** Product/integration; user. **Technical owner:** architecture/integration. Resolution details are maintained in the [architecture](architecture.md#ap-06-transmissionmessage-boundary-selection).
 
 **Question, options and evidence:** [D-40](#transmission-and-message-architecture-reassessment) compared A, authoritative event history; B, authoritative original records plus event-driven read models; and C, synchronous relational derivation. The user emphasized that the common path is accepting new Transmissions and producing resulting Deliveries, while Grouping/Address-filter edits are rare. The existing planning profile implies roughly 0.006-0.017 Transmissions/s/Network on a daily average, but is neither a peak load nor a capacity guarantee. The architecture comparison and bounded Watermill/goes probes are documented in [architecture](architecture.md#transmission-message-architecture-options) and [AP-05 E-13](execution/ap-05.md#e-13-event-infrastructure-required-behavior-probes); they are not production performance validation.
 
@@ -327,7 +330,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### AP-06 Unicode Payload Identity Decision
 
-**D-44; date/origin:** 2026-10-26, AP-04 T017 follow-up for AP-06 T023/T024. **Status:** approved by the user for text Payload comparison. **Accountable owner/approver:** Product/integration; user. **Technical owner:** DOM-02/C-02.
+**D-44; date/origin:** 2026-10-26, AP-04 T017 follow-up for AP-06 T023/T024. **Status:** approved by the user for text Payload comparison. **Accountable owner/approver:** Product/integration; user. **Technical owner:** Grouping/C-02.
 
 **Question and context:** C-02 defines Unicode text Payloads and exact canonical comparison, but did not specify a Unicode normalization form. Canonically equivalent composed and decomposed text could otherwise compare differently. Search normalization is separately owned by C-07 and must not be reused for Payload identity.
 
@@ -339,7 +342,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### AP-06 Gateway Transport Security Decision
 
-**D-45; date/origin:** 2026-10-26, AP-04 T017 follow-up for AP-06 T022. **Status:** approved by the user, explicitly superseding the draft TLS-only rule for public Gateway credential transport. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01 and DOM-05/C-06.
+**D-45; date/origin:** 2026-10-26, AP-04 T017 follow-up for AP-06 T022. **Status:** approved by the user, explicitly superseding the draft TLS-only rule for public Gateway credential transport. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Intake/C-01 and Identity/C-06.
 
 **Question and conflict:** C-06's draft requires TLS for public credential transport, while the user requires Gateway requests to function over HTTP without a separate GoPager setting and assigns HTTPS enforcement to Operators who choose to place a TLS-terminating reverse proxy in front. Direct public HTTP therefore remains possible and does not carry a GoPager TLS guarantee.
 
@@ -351,7 +354,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### AP-06 Grouping Window Decision
 
-**D-46; date/origin:** 2026-10-26, AP-04 T017 follow-up for AP-06 T023. **Status:** approved by the user, later superseded by [D-51](#ap-06-grouping-window-json-integer-limit-decision). **Accountable owner/approver:** Product/integration; user. **Technical owner:** DOM-02/C-03.
+**D-46; date/origin:** 2026-10-26, AP-04 T017 follow-up for AP-06 T023. **Status:** approved by the user, later superseded by [D-51](#ap-06-grouping-window-json-integer-limit-decision). **Accountable owner/approver:** Product/integration; user. **Technical owner:** Grouping/C-03.
 
 **Question:** C-03 sets `W = 0` to disable Grouping and defaults to 30 seconds, but had no product maximum; the implementation's duration representation was not selected.
 
@@ -363,7 +366,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### AP-06 Gateway Credential Decision
 
-**D-47; date/origin:** 2026-10-26, AP-04 T017 follow-up for AP-06 T022. **Status:** explicitly approved by the user after disclosure of the HTTP exposure. **Accountable owner/approver:** Product/integration; user. **Technical owner:** DOM-05/C-06.
+**D-47; date/origin:** 2026-10-26, AP-04 T017 follow-up for AP-06 T022. **Status:** explicitly approved by the user after disclosure of the HTTP exposure. **Accountable owner/approver:** Product/integration; user. **Technical owner:** Identity/C-06.
 
 **Question:** Which Gateway-specific authentication mechanism must work over direct HTTP, given that HTTP is not confidential and the user did not require replay protection?
 
@@ -375,7 +378,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### AP-06 Gateway Credential Lifecycle Decision
 
-**D-48; date/origin:** 2026-10-26, AP-04 T017 follow-up for AP-06 T022. **Status:** explicitly approved by the user. **Accountable owner/approver:** Product/integration; user. **Technical owner:** DOM-05/C-06.
+**D-48; date/origin:** 2026-10-26, AP-04 T017 follow-up for AP-06 T022. **Status:** explicitly approved by the user. **Accountable owner/approver:** Product/integration; user. **Technical owner:** Identity/C-06.
 
 **Question:** What expiry and rotation overlap apply to reusable per-Gateway Bearer credentials?
 
@@ -387,7 +390,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### AP-06 Grouping Window Precision Decision
 
-**D-49; date/origin:** 2026-10-26, AP-04 T017 follow-up for AP-06 T023. **Status:** explicitly approved by the user. **Accountable owner/approver:** Product/integration; user. **Technical owner:** DOM-02/C-03.
+**D-49; date/origin:** 2026-10-26, AP-04 T017 follow-up for AP-06 T023. **Status:** explicitly approved by the user. **Accountable owner/approver:** Product/integration; user. **Technical owner:** Grouping/C-03.
 
 **Question:** Should the configurable Grouping window use whole seconds or support subsecond values, given that D-42 truncates all Observation instants to whole seconds?
 
@@ -399,7 +402,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### AP-06 Grouping Validation Timing
 
-**D-50; date/origin:** 2026-10-26, AP-04 T017/T018 follow-up for AP-06 T024. **Status:** explicitly approved by the user. **Accountable owner/approver:** Product/integration; user. **Technical owner:** DOM-02/C-03 with integration.
+**D-50; date/origin:** 2026-10-26, AP-04 T017/T018 follow-up for AP-06 T024. **Status:** explicitly approved by the user. **Accountable owner/approver:** Product/integration; user. **Technical owner:** Grouping/C-03 with integration.
 
 **Question:** Does product-specific duration/concurrency validation have to block the AP-04 contract freeze, or may it be performed against the actual AP-06 implementation under T024?
 
@@ -411,7 +414,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### AP-06 Grouping Window JSON Integer Limit Decision
 
-**D-51; date/origin:** 2026-10-26, AP-04 T017 follow-up for AP-06 T023. **Status:** explicitly approved by the user, superseding D-46's no-additional-cap resolution. **Accountable owner/approver:** Product/integration; user. **Technical owner:** DOM-02/C-03.
+**D-51; date/origin:** 2026-10-26, AP-04 T017 follow-up for AP-06 T023. **Status:** explicitly approved by the user, superseding D-46's no-additional-cap resolution. **Accountable owner/approver:** Product/integration; user. **Technical owner:** Grouping/C-03.
 
 **Question:** Which JSON representation and maximum value should C-03 use for the whole-second Grouping window `W`?
 
@@ -423,7 +426,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### Application-wide HTTP Support Decision
 
-**D-52; date/origin:** 2026-10-26, user clarification following AP-04 T017/T018 documentary work for AP-06 T022. **Status:** approved by the user; extends D-45 from Gateway requests to the entire GoPager application. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Operations/persistence in C-12 for application transport; DOM-05/C-06 for human authentication and session behavior; DOM-01/C-01 for Gateway submissions.
+**D-52; date/origin:** 2026-10-26, user clarification following AP-04 T017/T018 documentary work for AP-06 T022. **Status:** approved by the user; extends D-45 from Gateway requests to the entire GoPager application. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Operations/persistence in C-12 for application transport; Identity/C-06 for human authentication and session behavior; Intake/C-01 for Gateway submissions.
 
 **Question and conflict:** D-45 approved Gateway HTTP, while C-06 still restricted HTTP for human passwords, Recovery proofs and reusable User credentials. The user clarified that HTTP support must apply to the whole application so a TLS-terminating reverse proxy can forward application traffic to GoPager over HTTP.
 
@@ -437,7 +440,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### AP-06 Transmission Target Reference Decision
 
-**D-53; date/origin:** 2026-10-26, AP-04 T017/T018 follow-up for AP-06 T023/T024 and AP-08 T029. **Status:** approved by the user (`target_reference=immutable-zero-based-position`). **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-04/C-05 with DOM-01/C-01 for original evidence.
+**D-53; date/origin:** 2026-10-26, AP-04 T017/T018 follow-up for AP-06 T023/T024 and AP-08 T029. **Status:** approved by the user (`target_reference=immutable-zero-based-position`). **Accountable owner/approver:** Product/integration; user. **Technical owners:** Assignment/C-05 with Intake/C-01 for original evidence.
 
 **Question, evidence and alternatives:** C-05 requires unambiguous original-target references for resolutions and Contribution supports. Shared conventions already permit either UUID target IDs or immutable positions within a Transmission. The original target list is immutable and bounded to 1024 entries; a separate target UUID would add an identity without a required independent lifecycle.
 
@@ -447,7 +450,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### Local Username Equality Decision
 
-**D-54; date/origin:** 2026-10-26, AP-04 T017/T018 preparation for the AP-07 prerequisite of AP-06. **Status:** approved by the user (`username_equality=unicode-casefold`). **Accountable owner/approver:** Product/integration; user. **Technical owner:** DOM-05/C-06.
+**D-54; date/origin:** 2026-10-26, AP-04 T017/T018 preparation for the AP-07 prerequisite of AP-06. **Status:** approved by the user (`username_equality=unicode-casefold`). **Accountable owner/approver:** Product/integration; user. **Technical owner:** Identity/C-06.
 
 **Question and evidence:** C-06 and REQ-074 require a username for local login/Recovery but did not specify equality or case-sensitive uniqueness. The alternatives presented were Unicode NFC/casefold matching or exact case-sensitive matching.
 
@@ -457,7 +460,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### Detail Field Authorization Decision
 
-**D-55; date/origin:** 2026-10-26, AP-07 T026 prerequisite execution for AP-06. **Status:** explicitly approved by the user (`detail_field_permissions=read-fields-plus-detail-action`). **Accountable owner/approver:** Product/integration; user. **Technical owner:** DOM-05/C-06.
+**D-55; date/origin:** 2026-10-26, AP-07 T026 prerequisite execution for AP-06. **Status:** explicitly approved by the user (`detail_field_permissions=read-fields-plus-detail-action`). **Accountable owner/approver:** Product/integration; user. **Technical owner:** Identity/C-06.
 
 **Question and evidence:** The frozen identity-core 1.0 requires `message.detail` in addition to `message.read`, but does not unambiguously assign field rights between the two actions. The initial predicate implementation required field grants on both; it had not been handed over or accepted.
 
@@ -467,7 +470,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### Identity Fact Append Decision
 
-**D-56; date/origin:** 2026-10-26, AP-07 T025/T026/T027 prerequisite execution for AP-06. **Status:** explicitly approved by the user (`identity_facts_freeze=approve`, `identity_facts_execution=approve-and-start`). **Accountable owners/approver:** Product/integration and DOM-07 for mechanics; DOM-05 for identity meaning; user.
+**D-56; date/origin:** 2026-10-26, AP-07 T025/T026/T027 prerequisite execution for AP-06. **Status:** explicitly approved by the user (`identity_facts_freeze=approve`, `identity_facts_execution=approve-and-start`). **Accountable owners/approver:** Product/integration and Delivery for mechanics; Identity for identity meaning; user.
 
 **Question and evidence:** C-06/C-13 require atomic state, revision, audit and invalidation/deletion facts, but the existing C-08 transaction-participation 1.0 explicitly excludes the exact event schema. A state-only implementation would be incomplete.
 
@@ -477,7 +480,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### HTTP Credential Selection Decision
 
-**D-57; date/origin:** 2026-10-26, AP-07 T025/T026 prerequisite execution for AP-06. **Status:** explicitly approved by the user (`http_credential_selection=explicit-bearer-no-fallback`). **Accountable owner/approver:** Product/integration; user. **Technical owner:** DOM-05/C-06.
+**D-57; date/origin:** 2026-10-26, AP-07 T025/T026 prerequisite execution for AP-06. **Status:** explicitly approved by the user (`http_credential_selection=explicit-bearer-no-fallback`). **Accountable owner/approver:** Product/integration; user. **Technical owner:** Identity/C-06.
 
 **Question and evidence:** The frozen identity-core requires separate Session and Authorization proof paths but does not choose between them when a browser automatically supplies its Session cookie alongside an explicitly supplied API-key bearer.
 
@@ -487,7 +490,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### Ordinary Login Decision
 
-**D-58; date/origin:** 2026-10-27, AP-07 T025 prerequisite execution for AP-06. **Status:** explicitly approved by the user (`ordinary_login=approve-ordinary-login`). **Accountable owner/approver:** Product/integration; user. **Technical owner:** DOM-05/C-06.
+**D-58; date/origin:** 2026-10-27, AP-07 T025 prerequisite execution for AP-06. **Status:** explicitly approved by the user (`ordinary_login=approve-ordinary-login`). **Accountable owner/approver:** Product/integration; user. **Technical owner:** Identity/C-06.
 
 **Question and evidence:** Identity-core 1.0 specifies login without a Command ID but also applies actor-bound command identity to credential creation generally. Applying the latter to Session creation would add login receipts and special lost-response recovery that are unnecessary for ordinary login.
 
@@ -497,7 +500,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### Identity Prerequisite Scope Decision
 
-**D-59; date/origin:** 2026-10-27, AP-07 T025/T026 prerequisite execution for AP-06 T022. **Status:** explicitly approved by the user: implement only what AP-06 needs, with architecture already aligned to AP-07 so later work extends rather than replaces it. **Accountable owner/approver:** Product/integration; user. **Technical owner:** DOM-05 and integration.
+**D-59; date/origin:** 2026-10-27, AP-07 T025/T026 prerequisite execution for AP-06 T022. **Status:** explicitly approved by the user: implement only what AP-06 needs, with architecture already aligned to AP-07 so later work extends rather than replaces it. **Accountable owner/approver:** Product/integration; user. **Technical owner:** Identity and integration.
 
 **Question and evidence:** AP-06 explicitly consumes prerequisite slices, not all of AP-07. The earlier identity prerequisite binding included application services for Recovery, general account administration and key issuance that AP-06 intake/Gateway management does not itself require. Ordinary login no longer needs special command-receipt infrastructure under D-58.
 
@@ -509,7 +512,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### Early Master-data and Matcher Prerequisite Proposal
 
-**D-60; date/origin:** 2026-10-27, AP-04 T017/T018 preparation for AP-06 T022/T023. **Status:** contract freeze explicitly approved by the user (`minimal_matcher_contract_freeze=approve`), followed by separate execution approval (`minimal_matcher_execution=approve-and-start`). **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-03/DOM-04, with DOM-02 for original targets and DOM-07 for append participation.
+**D-60; date/origin:** 2026-10-27, AP-04 T017/T018 preparation for AP-06 T022/T023. **Status:** contract freeze explicitly approved by the user (`minimal_matcher_contract_freeze=approve`), followed by separate execution approval (`minimal_matcher_execution=approve-and-start`). **Accountable owner/approver:** Product/integration; user. **Technical owners:** Master data/Assignment, with Grouping for original targets and Delivery for append participation.
 
 **Question and evidence:** AP-06 consumes early master-data/current matching, not whole AP-08. The [AP-04 review and binding proposal](execution/ap-04.md#e-34-early-master-data-and-matcher-review) define the exact owner candidates, typed boundaries, write scope and validation. The D-59 identity core is available; actual Network owner wiring and ingest/contribution persistence still belong to AP-06. No AP-08 product artifact exists yet.
 
@@ -521,7 +524,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### Processing Budget Feasibility Proposal
 
-**D-61; date/origin:** 2026-10-28, AP-04 T017/T018 prerequisite preparation for AP-12 T043 and AP-06 T023/T024. **Status:** experiment explicitly approved by the user (`processing_budget_probe=approve-bounded-probe`). **Accountable owner/approver:** Product/integration; user. **Technical owner:** DOM-08 with architecture/integration.
+**D-61; date/origin:** 2026-10-28, AP-04 T017/T018 prerequisite preparation for AP-12 T043 and AP-06 T023/T024. **Status:** experiment explicitly approved by the user (`processing_budget_probe=approve-bounded-probe`). **Accountable owner/approver:** Product/integration; user. **Technical owner:** Processing with architecture/integration.
 
 **Question and evidence:** Authorize a narrowly bounded disposable follow-up to verify enforcement of C-11's existing built-in budget before selecting the evaluator. [The architecture assessment](architecture.md#t043-evaluator-library-and-budget-assessment) distinguishes the standard-library Reader cancellation seam from ordinary context-free regex methods and from an embedded guest. AP-03 E-07 proved only synthetic Wasm behavior; its prior results must not be broadened into a Go regex/guest guarantee.
 
@@ -537,7 +540,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### Core Regex Runtime Selection Proposal
 
-**D-62; date/origin:** 2026-10-28, AP-04 T017/T018 preparation for AP-12 T043 and AP-06 T023/T024. **Status:** explicitly approved 2026-11-01 after D-63/D-64 comparison (`core_regex_runtime_after_comparison=approve-embedded-wasm-regex`). **Superseded for Core regex on 2026-11-05 by [D-129](#in-process-core-regex)**; its evidence remains historical. **Accountable owner/approver:** Product/integration; user. **Technical owners:** architecture/integration, DOM-08 and runtime/operations.
+**D-62; date/origin:** 2026-10-28, AP-04 T017/T018 preparation for AP-12 T043 and AP-06 T023/T024. **Status:** explicitly approved 2026-11-01 after D-63/D-64 comparison (`core_regex_runtime_after_comparison=approve-embedded-wasm-regex`). **Superseded for Core regex on 2026-11-05 by [D-129](#in-process-core-regex)**; its evidence remains historical. **Accountable owner/approver:** Product/integration; user. **Technical owners:** architecture/integration, Processing and runtime/operations.
 
 **Question and evidence:** Select how the bounded built-in regex capability executes, now that [D-61's actual probe](execution/ap-04.md#e-38-budget-and-memory-probe-results) shows a valid small-input capture case OOM-killing a 512 MiB native process despite Reader cancellation, while the embedded guest fails controllably without losing its host. The [architecture assessment](architecture.md#t043-evaluator-library-and-budget-assessment) owns exact alternatives, tuple and limitations.
 
@@ -571,7 +574,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### Bundled Child Feasibility Proposal
 
-**D-64; date/origin:** 2026-11-01, AP-04 T017/T018 follow-up for AP-06/AP-12 T043 under D-63. **Status:** bounded experiment explicitly approved by the user (`bundled_child_probe=approve-bounded-child-probe`). **Accountable owner/approver:** Product/integration; user. **Technical owners:** operations/runtime, DOM-08 and integration.
+**D-64; date/origin:** 2026-11-01, AP-04 T017/T018 follow-up for AP-06/AP-12 T043 under D-63. **Status:** bounded experiment explicitly approved by the user (`bundled_child_probe=approve-bounded-child-probe`). **Accountable owner/approver:** Product/integration; user. **Technical owners:** operations/runtime, Processing and integration.
 
 **Question/evidence:** Verify the now-admissible bundled Go-child alternative before deciding D-62. [The source review](requirements-evidence.md#managed-child-resource-sources) establishes possible standard-library lifecycle controls and Linux resource-limit APIs, not working memory protection or cross-platform support. The native OOM counterexample and existing Wasm proof remain valid.
 
@@ -595,7 +598,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### T043 Shared Predicate Binding Proposal
 
-**D-66; date/origin:** 2026-11-01, AP-04 T017/T018 concrete T043 preparation for AP-06 T023/T024. **Status:** restricted CEL-Go technical selection approved after the bounded comparison; kernel contract freeze/execution remain separate. **Accountable owner/approver:** Product/integration; user. **Technical owners:** architecture/integration, DOM-07 and DOM-08.
+**D-66; date/origin:** 2026-11-01, AP-04 T017/T018 concrete T043 preparation for AP-06 T023/T024. **Status:** restricted CEL-Go technical selection approved after the bounded comparison; kernel contract freeze/execution remain separate. **Accountable owner/approver:** Product/integration; user. **Technical owners:** architecture/integration, Delivery and Processing.
 
 **Question/evidence:** Choose the implementation binding for the already-required closed shared typed selector/condition representation, including readable absence, hidden indeterminacy and correlated classified dependencies. [C-09's candidate](contracts/c-09-delivery.md#early-shared-typed-predicate-candidate) owns the proposed shape/semantics; [architecture](architecture.md#t043-predicate-and-coordination-library-binding) owns the D-36 mature-library comparison and justified subset exception. Current pkgsite discovery confirms CEL-Go/Expr packages; no executable comparison or dependency installation is implied.
 
@@ -619,19 +622,19 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### Internal Execution-principal Authority Adapter
 
-**D-71; date/origin:** 2026-11-01, AP-12 T043, actual source inspection after the approved kernel start. **Status:** exact additive producer extension approved (`execution_authority_adapter=approve-narrow-authority-adapter`). **Accountable owner/approver:** Product/integration; user. **Technical owner:** DOM-05 for current authority, DOM-08/integration for the trusted consumer.
+**D-71; date/origin:** 2026-11-01, AP-12 T043, actual source inspection after the approved kernel start. **Status:** exact additive producer extension approved (`execution_authority_adapter=approve-narrow-authority-adapter`). **Accountable owner/approver:** Product/integration; user. **Technical owner:** Identity for current authority, Processing/integration for the trusted consumer.
 
 **Question/evidence:** C-10 installed-processing 1.0 requires a current explicit execution Principal, not the editor's implicitly substituted identity. The existing [Resolver](../internal/identity/authority.go) exposes transport-proof resolution only; its checked current-Principal grant/group/scope/field assembly is private. The public repository ports expose raw records, not an equivalent validated effective authority. [AP-12 E-02](execution/source-ap-12.md#e-02-codec-validation-and-execution-authority-port-finding) records the finding. Do not duplicate that assembly, impersonate a Principal via invented proof, issue speculative keys or reuse cached/editor authority.
 
-**Options/recommendation:** A: add a narrow trusted-internal `ResolvePrincipalAuthority(context, transaction, principalId) -> authz.Authority` adapter to DOM-05's Resolver, reusing the existing shared access lock and current private assembly. It reads only active current Principal/group/grant/global-field/scope state, carries no Session/credential/CSRF identity, has no HTTP route and creates no grants. C-10's already-frozen authority participant consumes it only for a separately authorized, pinned execution-Principal binding. B: pull forward credential/key issuance or duplicate effective-authority assembly in Processing; both introduce unrelated work or divergent security semantics. Recommend A.
+**Options/recommendation:** A: add a narrow trusted-internal `ResolvePrincipalAuthority(context, transaction, principalId) -> authz.Authority` adapter to Identity's Resolver, reusing the existing shared access lock and current private assembly. It reads only active current Principal/group/grant/global-field/scope state, carries no Session/credential/CSRF identity, has no HTTP route and creates no grants. C-10's already-frozen authority participant consumes it only for a separately authorized, pinned execution-Principal binding. B: pull forward credential/key issuance or duplicate effective-authority assembly in Processing; both introduce unrelated work or divergent security semantics. Recommend A.
 
 **Approval/impact:** This is an additive earlier AP-07 producer/API write outside the prior instruction to reuse unchanged identity interfaces. Explicit approval must extend the active T043 execution binding to that exact adapter, C-06 artifact link and its focused active/suspended/revoked-group/global-field/invalid-scope/transaction tests. Existing proof precedence, key restrictions, login/logout, HTTP, account management and AP baselines remain unchanged; no caller-facing impersonation authority or full AP-07 reopening follows. Until approved, block only real installed execution-authority/root wiring; continue the independently approved codec/evaluator/persistence work.
 
-**Approved resolution:** The user selected A's exact narrow adapter and focused tests after its impact on the prior producer was explained. Extend the active T043 binding only to this additive DOM-05 method, related artifact link and validation. Existing authentication operations and C-10's separate configuration/Principal authorization remain unchanged. Record implementation/evidence in the current AP-12 producer-consumer integration, with the prior AP-07 evidence preserved.
+**Approved resolution:** The user selected A's exact narrow adapter and focused tests after its impact on the prior producer was explained. Extend the active T043 binding only to this additive Identity method, related artifact link and validation. Existing authentication operations and C-10's separate configuration/Principal authorization remain unchanged. Record implementation/evidence in the current AP-12 producer-consumer integration, with the prior AP-07 evidence preserved.
 
 ### Multi-target Workflow Context Binding
 
-**D-72; date/origin:** 2026-11-01, AP-12 T043 implementation under the approved AP-06 prerequisite binding. **Status:** workflow-target-results 1.1 replacement binding explicitly approved (`approve-target-results-1.1-and-implement`), including implementation in the already started T043 kernel. A/B are not adopted. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-08/integration, with DOM-02/DOM-04 source contexts and C-09 predicates.
+**D-72; date/origin:** 2026-11-01, AP-12 T043 implementation under the approved AP-06 prerequisite binding. **Status:** workflow-target-results 1.1 replacement binding explicitly approved (`approve-target-results-1.1-and-implement`), including implementation in the already started T043 kernel. A/B are not adopted. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Processing/integration, with Grouping/Assignment source contexts and C-09 predicates.
 
 **Question/evidence:** Ordered multi-target input and one transmission-level run coexist with later `target` field references, but no post-selection context rule is defined. [AP-12 E-05](execution/source-ap-12.md#e-05-multi-target-context-binding-finding) records the inspected owner sources. The existing predicate's single correlated context and dependency union do not choose a Workflow's target when several contexts match.
 
@@ -649,7 +652,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 **Question/evidence:** C-10's frozen narrow invocation limits bound JSON/guest memory, not local artifact bytes before Wazero compilation. The supplied Go/WASI guest alone exceeds 1 MiB; [AP-12 E-09](execution/source-ap-12.md#e-09-target-result-kernel-implementation-and-bounds) records the actual size/source/API inspection. Do not silently apply an invocation limit to code artifacts or read arbitrary binary size into memory.
 
-**Options/recommendation:** Approve the [C-10 fixed 32 MiB artifact-load proposal](contracts/c-10-plugin-host.md#installed-artifact-load-bound-review), or specify another fixed byte bound with the same explicit rejection/rooted-path/digest semantics. An unbounded load is not recommended. The fixed product limit avoids adding operational configurability solely for this first adapter, but can reject larger otherwise-compatible modules.
+**Options/recommendation:** Approve the [C-10 fixed 32 MiB artifact-load proposal](contracts/c-10-plugin-host.md#installed-artifact-load-bound), or specify another fixed byte bound with the same explicit rejection/rooted-path/digest semantics. An unbounded load is not recommended. The fixed product limit avoids adding operational configurability solely for this first adapter, but can reject larger otherwise-compatible modules.
 
 **Approval/impact:** Approval narrowly extends the frozen installed-processing subset with this artifact bound and permits its loader implementation/tests in the already started T043 scope. No broader plugin SDK, host capability, module upload/marketplace, new AP execution or AP-baseline amendment follows. Keep the prior 1.0 evidence/history; until resolved, block arbitrary installed-artifact loading, not independent Workflow/configuration work.
 
@@ -657,7 +660,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### Processing Internal Retry Jitter Bound
 
-**D-74; date/origin:** 2026-11-01, AP-12 T043 durable-run preparation/T045 boundary validation. **Status:** exact symmetric +/-20% internal jitter and implementation explicitly approved (`approve-symmetric-20-percent-and-implement`). **Accountable owner/approver:** Product/integration; user. **Technical owner:** DOM-07/integration for retry mechanics, DOM-08 for Processing work.
+**D-74; date/origin:** 2026-11-01, AP-12 T043 durable-run preparation/T045 boundary validation. **Status:** exact symmetric +/-20% internal jitter and implementation explicitly approved (`approve-symmetric-20-percent-and-implement`). **Accountable owner/approver:** Product/integration; user. **Technical owner:** Delivery/integration for retry mechanics, Processing for Processing work.
 
 **Question/evidence:** The frozen Processing participation inherits C-08's bounded internal retry behavior, but the retained internal policy does not specify the jitter interval. C-09 specifies a concrete interval only for separate Delivery work. [AP-12 E-14](execution/source-ap-12.md#e-14-fact-owner-location-and-retry-bound-finding) records the owner/source search. An implementation must not silently choose a new numeric default or inherit provider expiry/uncertainty semantics.
 
@@ -669,7 +672,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### Processing Durable Selection Placement
 
-**D-75; date/origin:** 2026-11-01, AP-12 T043 durable-work implementation preparation/T045 transaction/budget validation, consuming AP-06 T023/T024. **Status:** scoped candidate-work binding and implementation explicitly approved (`approve-candidate-work-and-implement`). **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-08/DOM-07 and source-publication integration.
+**D-75; date/origin:** 2026-11-01, AP-12 T043 durable-work implementation preparation/T045 transaction/budget validation, consuming AP-06 T023/T024. **Status:** scoped candidate-work binding and implementation explicitly approved (`approve-candidate-work-and-implement`). **Accountable owner/approver:** Product/integration; user. **Technical owners:** Processing/Delivery and source-publication integration.
 
 **Question/evidence:** [AP-12 E-16](execution/source-ap-12.md#e-16-durable-selection-placement-review) records the unresolved placement of selector evaluation relative to durable work admission. C-08's frozen Processing subset calls for selected runs/transactional work creation; C-11 requires compute outside primary transactions and one selector/body allowance. The existing evaluator already evaluates both in one bounded call; admission cannot silently execute CEL in SQL or leave only volatile post-commit work.
 
@@ -683,7 +686,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### Dedicated Installed Preview Artifact Binding
 
-**D-76; date/origin:** 2026-11-02, AP-12 T043 installed-instance/preview preparation and T045 compatibility validation, prerequisite for AP-06 T023/T024. **Status:** **Runtime part superseded on 2026-11-05 by [D-131](#managed-plugin-process-runtime); the optional separate preview artifact remains.** optional separate preview artifact binding and implementation explicitly approved (`approve-separate-preview-artifact-and-implement`). **Accountable owner/approver:** Product/integration; user. **Technical owners:** plugin host/DOM-08/integration.
+**D-76; date/origin:** 2026-11-02, AP-12 T043 installed-instance/preview preparation and T045 compatibility validation, prerequisite for AP-06 T023/T024. **Status:** **Runtime part superseded on 2026-11-05 by [D-131](#managed-plugin-process-runtime); the optional separate preview artifact remains.** optional separate preview artifact binding and implementation explicitly approved (`approve-separate-preview-artifact-and-implement`). **Accountable owner/approver:** Product/integration; user. **Technical owners:** plugin host/Processing/integration.
 
 **Question/evidence:** [AP-12 E-21](execution/source-ap-12.md#e-21-dedicated-preview-binding-gap) records the gap between the frozen requirement for a separately declared pure-preview implementation and the current single-artifact port plus boolean declaration. The existing command wire does not select a separate preview implementation. Do not reinterpret a passing pure-command fixture as proof of that missing boundary.
 
@@ -695,7 +698,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### Processing Reselection Identity and Terminal Work
 
-**D-77; date/origin:** 2026-11-02, AP-12 T043 durable candidate/result lifecycle preparation and T045 supersession validation, prerequisite for AP-06 T023/T024. **Status:** approved, option A only. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-08/DOM-07/source integration. **Resolution:** the user selected `approve-revisioned-same-candidate`; document and implement revisioned same-key reselection, without widening the identity or resetting attempts.
+**D-77; date/origin:** 2026-11-02, AP-12 T043 durable candidate/result lifecycle preparation and T045 supersession validation, prerequisite for AP-06 T023/T024. **Status:** approved, option A only. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Processing/Delivery/source integration. **Resolution:** the user selected `approve-revisioned-same-candidate`; document and implement revisioned same-key reselection, without widening the identity or resetting attempts.
 
 **Question/evidence:** [AP-12 E-23](execution/source-ap-12.md#e-23-reselection-identity-and-terminal-work-review) records the same-input reselection boundary: C-08/D-75 retain a stable source/Workflow/definition/source-context key, but relevant Workflow scope/enable changes can require reevaluating an unpublished original without changing that key. The current schema combines candidate identity and one work item's lifecycle. A second row violates uniqueness. Existing sources require supersession, retained evidence and fencing but do not explicitly settle whether same-key superseded work can be reselected with a new candidate revision; permanently terminal supersession must not be claimed as an already approved requirement. Do not erase attempts/fences, fabricate a source revision change or automatically sweep published history.
 
@@ -709,7 +712,7 @@ The approved option A binding is owned by [C-08](contracts/c-08-events-jobs.md#p
 
 ### Processing Failed-work Retry Action Binding
 
-**D-78; date/origin:** 2026-11-02, AP-12 T043 protected failed-work retry and T045 authorization tests; prerequisite for AP-06 pending-source recovery. **Status:** approved, option A. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-05/DOM-08/integration. **Resolution:** the user selected `approve-existing-rule-reprocess-for-failed-retry`; bind retry to existing scoped `rule.reprocess`, not a new catalog action.
+**D-78; date/origin:** 2026-11-02, AP-12 T043 protected failed-work retry and T045 authorization tests; prerequisite for AP-06 pending-source recovery. **Status:** approved, option A. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Identity/Processing/integration. **Resolution:** the user selected `approve-existing-rule-reprocess-for-failed-retry`; bind retry to existing scoped `rule.reprocess`, not a new catalog action.
 
 **Question/evidence:** C-11 requires explicit authorized failed-run retry, but its HTTP/action paragraph does not explicitly map that operation to an action. The existing [action catalog](../internal/authz/grants.go) has `rule.reprocess` and no `rule.retry`. C-11 expressly assigns `rule.reprocess` to historical Reprocess. Do not assume `rule.update`, `rule.read` or global administration authorizes retry, and do not add an undeclared action silently.
 
@@ -721,7 +724,7 @@ The approved C-11 failed-work retry binding uses option A only; no AP-07 catalog
 
 ### Superseded Work Terminality Interpretation Confirmation
 
-**D-79; date/origin:** 2026-11-02, AP-12 T043/T045, follow-up to D-77 same-key reselection. **Status:** approved. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-07/DOM-08/integration. **Resolution:** the user selected `approve-terminal-old-revision-with-new-logical-candidate-revision`, explicitly approving the existing C-08 terminal-rule interpretation/addendum for D-77 A.
+**D-79; date/origin:** 2026-11-02, AP-12 T043/T045, follow-up to D-77 same-key reselection. **Status:** approved. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Delivery/Processing/integration. **Resolution:** the user selected `approve-terminal-old-revision-with-new-logical-candidate-revision`, explicitly approving the existing C-08 terminal-rule interpretation/addendum for D-77 A.
 
 **Existing rule/finding:** C-08's final Retry/recovery paragraph explicitly makes superseded work terminal. D-77's initial consultation did not cite that existing sentence. Option A was approved operationally, but the existing terminal rule must not be reinterpreted implicitly on incomplete context.
 
@@ -735,7 +738,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Processing Source Context Field-group Membership
 
-**D-80; date/origin:** 2026-11-02, AP-12 T043 current source/invocation adapters, AP-06 source projection; concrete pending D-68 membership slice. **Status:** approved for the two selected memberships. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-05/DOM-02/DOM-01/integration. **Resolution:** user selected `protocol_form_visibility=payload, resolved_network_visibility=gateway`. No new group/catalog change.
+**D-80; date/origin:** 2026-11-02, AP-12 T043 current source/invocation adapters, AP-06 source projection; concrete pending D-68 membership slice. **Status:** approved for the two selected memberships. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Identity/Grouping/Intake/integration. **Resolution:** user selected `protocol_form_visibility=payload, resolved_network_visibility=gateway`. No new group/catalog change.
 
 **Existing boundary/evidence:** C-06's fixed-group-review candidate explicitly leaves Network/Protocol/context membership unresolved. C-02 processing-source 1.0 requires closed classified owner declarations and says Protocol/form context is not automatically public. The corrected AP-07 runtime supplies global `payload`, `unit`, `address`, `gateway`, `quality`, `derived` groups, not an approved default for these unresolved members. Do not invent their classification while implementing the real source adapter.
 
@@ -745,7 +748,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Installed Result Requirement Interpretation
 
-**D-81; date/origin:** 2026-11-02, AP-12 T043 current installed-instance/invocation preparation for AP-06. **Status:** approved; user selected `schema-only-preserve-inherited-visibility` (option B). No manifest extension selected. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-08/plugin host/integration.
+**D-81; date/origin:** 2026-11-02, AP-12 T043 current installed-instance/invocation preparation for AP-06. **Status:** approved; user selected `schema-only-preserve-inherited-visibility` (option B). No manifest extension selected. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Processing/plugin host/integration.
 
 **Question/evidence:** [C-11's classification paragraph](contracts/c-11-processing-presentation.md#early-workflow-kernel-candidate) requires installed outputs to inherit input/configuration sensitivity “plus manifest-declared result requirements”. The authoritative [installed manifest](../internal/processing/artifacts.go) declares result types/requiredness through `ResultSchema`, but has no separate result field-group declaration. The [invocation boundary](../internal/processing/installed_workflow.go) checks result schema and carries inherited dependencies. Clarify whether the phrase refers to those existing schema requirements or additionally requires a concrete per-output global-field-group declaration before composing real current-instance authorization.
 
@@ -755,7 +758,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Exhausted Candidate Reselection State
 
-**D-82; date/origin:** 2026-11-02, AP-12 T043/T045 worker/due-selection integration for AP-06. **Status:** approved; user selected `approve-immediate-failed-with-preserved-attempts`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-07/DOM-08/integration.
+**D-82; date/origin:** 2026-11-02, AP-12 T043/T045 worker/due-selection integration for AP-06. **Status:** approved; user selected `approve-immediate-failed-with-preserved-attempts`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Delivery/Processing/integration.
 
 **Finding/evidence:** [AP-12 E-32](execution/source-ap-12.md#e-32-exhausted-reselection-state-finding) traces current `Reselect` → pending, `Claim` → refusal after five automatic attempts, and `RetryFailed` → failed-only. A changed relevant configuration can therefore leave an exhausted logical candidate permanently pending and unavailable to the already approved protected retry. Existing model/native fixtures record this pending state. C-08/D-77/D-79 require preserved cumulative attempts and no reset; C-08 also requires visible failed exhausted work. Resolve the specific state representation without reopening those settled requirements.
 
@@ -767,7 +770,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Processing Dispatcher Concurrency Bound
 
-**D-83; date/origin:** 2026-11-02, AP-12 T043/T045 actual dispatcher/root composition for AP-06. **Status:** approved; user selected `processing_concurrency=2`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-07/DOM-08/integration.
+**D-83; date/origin:** 2026-11-02, AP-12 T043/T045 actual dispatcher/root composition for AP-06. **Status:** approved; user selected `processing_concurrency=2`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Delivery/Processing/integration.
 
 **Question/evidence:** C-08 bounds individual compute leases/renewal/attempts and C-10 bounds individual guest calls, but neither the existing platform configuration nor the approved kernel binding sets a simultaneous-candidate limit per Worker process. [AP-12 E-37](execution/source-ap-12.md#e-37-dispatcher-operational-bounds-review) records the inspected sources. An artifact/call bound is not a process-wide memory or concurrency bound. Do not select an unapproved operational default while composing actual dispatch.
 
@@ -777,7 +780,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Processing Dispatcher Idle Wake-up Bound
 
-**D-84; date/origin:** 2026-11-02, AP-12 T043/T045 actual dispatcher/root composition for AP-06. **Status:** approved; user selected `processing_fallback_poll=5s`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-07/DOM-08/integration.
+**D-84; date/origin:** 2026-11-02, AP-12 T043/T045 actual dispatcher/root composition for AP-06. **Status:** approved; user selected `processing_fallback_poll=5s`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Delivery/Processing/integration.
 
 **Question/evidence:** Durable due/expired selection exists, but no current contract/configuration chooses the idle fallback-poll interval for Processing. API and Worker roles may run separately; an in-process wake-up alone does not discover work committed by another process or recover a lost notification. This is separate from D-83's concurrent work bound.
 
@@ -787,7 +790,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Processing Scheduling Configuration Preparation
 
-**D-85; date/origin:** 2026-11-02, AP-12 T043/T045 dispatcher implementation for AP-06. **Status:** approved by explicit user instruction to prepare values such as these as configurable, leaving later central fixation versus Operator exposure open. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-07/DOM-08/integration.
+**D-85; date/origin:** 2026-11-02, AP-12 T043/T045 dispatcher implementation for AP-06. **Status:** approved by explicit user instruction to prepare values such as these as configurable, leaving later central fixation versus Operator exposure open. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Delivery/Processing/integration.
 
 **Resolution/options:** Prepare validated injected scheduling configuration, retaining D-83/D-84's selected initial defaults. Do not scatter fixed scheduling literals through runner mechanics. Operator flags/environment/UI and a final centrally fixed policy remain later choices, not implied by this instruction. [C-08](contracts/c-08-events-jobs.md#processing-dispatcher-bounds) owns this scheduling boundary; executable configuration lives in [the dispatcher](../internal/processing/worker/dispatcher.go).
 
@@ -795,7 +798,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Processing Cold-start Test Observation
 
-**D-86; date/origin:** 2026-11-02, historical AP-12 T043/T045 root runner composition, now current AP-06 T055/T056. **Status:** approved on 2026-11-03 by explicit user response `approve-test-window`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** integration/DOM-08.
+**D-86; date/origin:** 2026-11-02, historical AP-12 T043/T045 root runner composition, now current AP-06 T055/T056. **Status:** approved on 2026-11-03 by explicit user response `approve-test-window`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** integration/Processing.
 
 **Finding/evidence:** [AP-12 E-38](execution/source-ap-12.md#e-38-configurable-dispatcher-native-recovery-and-root-registration) records actual failure of the historical command test's five-second startup observation after adding required cold Core-WASM compilation. A trial using the existing platform call deadline plus one second for startup observation passed both actual command modes; shutdown still had its original five-second assertion. The trial test edit was withdrawn pending explicit consultation; historical AP-05 results are preserved.
 
@@ -805,7 +808,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### AP-12 River Queue Evaluation
 
-**D-87; date/origin:** 2026-11-02, user request to reassess hand-built worker/dispatch/job mechanics during AP-12 T043. **Status:** approved for isolated evaluation only (`isolated-river-prototype`); no production library selection. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-07/DOM-08 and integration.
+**D-87; date/origin:** 2026-11-02, user request to reassess hand-built worker/dispatch/job mechanics during AP-12 T043. **Status:** approved for isolated evaluation only (`isolated-river-prototype`); no production library selection. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Delivery/Processing and integration.
 
 **Question/evidence:** The current dispatcher and private worker are documented in [AP-12 E-38](execution/source-ap-12.md#e-38-configurable-dispatcher-native-recovery-and-root-registration). [D-75](#processing-durable-selection-placement) explicitly selected one durable candidate lifecycle and no general/second queue. River `v0.51.0` documents PostgreSQL-backed durable jobs, caller-transaction enqueueing, worker concurrency, retries and shutdown; its SQLite support is documented as experimental. [Architecture](architecture.md#ap-12-durable-worker-and-job-queue-assessment) owns the technical fit and prototype outcome.
 
@@ -815,7 +818,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### AP-12 Cross-Profile Worker and Pub/Sub Comparison
 
-**D-88; date/origin:** 2026-11-02, user clarification that pre-release architecture remains negotiable and request to consider Watermill's SQLite support and River Pro's commercial model. **Status:** approved for comparative evaluation only (`run-comparison`); no production library or architecture selected. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-07/DOM-08 and integration.
+**D-88; date/origin:** 2026-11-02, user clarification that pre-release architecture remains negotiable and request to consider Watermill's SQLite support and River Pro's commercial model. **Status:** approved for comparative evaluation only (`run-comparison`); no production library or architecture selected. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Delivery/Processing and integration.
 
 **Question/evidence:** Prior [AP-05 E-13](execution/ap-05.md#e-13-event-infrastructure-required-behavior-probes) tested Watermill with PostgreSQL, not its SQLite adapter. [D-87](#ap-12-river-queue-evaluation) records an isolated River core prototype; [AP-12 E-38](execution/source-ap-12.md#e-38-configurable-dispatcher-native-recovery-and-root-registration) records the current worker. Official Watermill documentation now lists a persistent SQLite Pub/Sub and notes its production-experience caveat; River publishes a free MPL-2.0 core and paid private River Pro modules. The current findings and exact comparison results belong to [architecture](architecture.md#ap-12-cross-profile-worker-and-pubsub-comparison).
 
@@ -825,9 +828,9 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Core-Domain Event-Driven Architecture Reassessment
 
-**D-89; date/origin:** 2026-11-02, user's request to fully reassess whether GoPager's event-oriented core should use an event-driven architecture rather than a job queue. **Status:** approved for a comprehensive technical reassessment and recommendation only; no product architecture, library or implementation selected. **Accountable owner/approver:** Product/integration; user. **Technical owners:** architecture, DOM-01..DOM-08 and integration.
+**D-89; date/origin:** 2026-11-02, user's request to fully reassess whether GoPager's event-oriented core should use an event-driven architecture rather than a job queue. **Status:** approved for a comprehensive technical reassessment and recommendation only; no product architecture, library or implementation selected. **Accountable owner/approver:** Product/integration; user. **Technical owners:** architecture, all eight domain owners and integration.
 
-**Question/evidence:** Reassess the core-domain processing model against [D-40](#transmission-and-message-architecture-reassessment), the approved AP-06 intake boundary in [D-43](#ap-06-transmission-message-architecture-decision), and the approved single Processing candidate lifecycle in [D-75](#processing-durable-selection-placement). Include event sourcing, relational authoritative state with event-driven projections, synchronous relational derivation with transactional events, and durable jobs for scheduled/retried work. Existing [AP-05 E-13](execution/ap-05.md#e-13-event-infrastructure-required-behavior-probes), [AP-12 E-39](execution/source-ap-12.md#e-39-isolated-river-queue-evaluation), [AP-12 E-40](execution/source-ap-12.md#e-40-isolated-watermill-sqlite-comparison), architecture assessments and current source are evidence; none is a production performance or end-to-end conformance result.
+**Question/evidence:** Reassess the core-domain processing model against [D-40](#transmission-and-message-architecture-reassessment), the approved AP-06 intake boundary in [D-43](#ap-06-transmissionmessage-architecture-decision), and the approved single Processing candidate lifecycle in [D-75](#processing-durable-selection-placement). Include event sourcing, relational authoritative state with event-driven projections, synchronous relational derivation with transactional events, and durable jobs for scheduled/retried work. Existing [AP-05 E-13](execution/ap-05.md#e-13-event-infrastructure-required-behavior-probes), [AP-12 E-39](execution/source-ap-12.md#e-39-isolated-river-queue-evaluation), [AP-12 E-40](execution/source-ap-12.md#e-40-isolated-watermill-sqlite-comparison), architecture assessments and current source are evidence; none is a production performance or end-to-end conformance result.
 
 **Approved scope:** Produce a source- and contract-grounded architecture recommendation; explain the distinction between domain facts, event delivery/projection, and durable scheduled/retryable work; assess library fit and transaction, ordering, idempotency, recovery, authorization, Lite/Full and read-model publication boundaries. Do not change product source, dependency manifests, migrations, contracts, D-43/D-75, AP definitions or prior execution evidence; do not adopt Event Sourcing, Watermill, River or another runtime architecture. A recommendation to reopen or amend any of those owners requires a separate explicit decision and the required downstream approvals.
 
@@ -835,7 +838,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Core-Domain Event-Driven Architecture Direction and Watermill Prototype
 
-**D-90; date/origin:** 2026-11-02, user selected `approve_hybrid` and `prototype` after the D-89 reassessment. **Status:** hybrid event-driven architecture direction approved; Watermill approved for an isolated source-to-read-model prototype only. No product dependency or implementation selected. **Accountable owner/approver:** Product/integration; user. **Technical owners:** architecture, DOM-01..DOM-08 and integration.
+**D-90; date/origin:** 2026-11-02, user selected `approve_hybrid` and `prototype` after the D-89 reassessment. **Status:** hybrid event-driven architecture direction approved; Watermill approved for an isolated source-to-read-model prototype only. No product dependency or implementation selected. **Accountable owner/approver:** Product/integration; user. **Technical owners:** architecture, all eight domain owners and integration.
 
 **Resolution:** Keep relational authoritative domain state; record required Domain facts in the same primary transaction as their state change; use event consumers selectively for independent reactions and projections where the owning consistency contract permits it; retain C-08 durable jobs for work requiring due scheduling, single-claim ownership, bounded attempts, leases/fencing, visible failure and recovery. Event transport is not the job lifecycle and neither replaces domain authorization or publication barriers. This direction explicitly retains D-43's synchronous initial Transmission/Grouping boundary and D-75's one Processing candidate lifecycle; it does not introduce Event Sourcing or supersede those decisions.
 
@@ -845,7 +848,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Watermill Failure and Concurrency Validation Extension
 
-**D-91; date/origin:** 2026-11-02, user request "Gut, dann bitte weiter testen" following the Watermill recommendation and proposed remaining integration checks; AP-12 T043/T045 isolated infrastructure assessment. **Status:** approved for additional isolated tests only. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-07/DOM-08 and integration.
+**D-91; date/origin:** 2026-11-02, user request "Gut, dann bitte weiter testen" following the Watermill recommendation and proposed remaining integration checks; AP-12 T043/T045 isolated infrastructure assessment. **Status:** approved for additional isolated tests only. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Delivery/Processing and integration.
 
 **Question/evidence:** [E-41](execution/source-ap-12.md#e-41-isolated-watermill-evented-core-prototype) established bounded synthetic consumer behavior but not abrupt process termination or realistic independent SQLite writer contention. Continue the pinned D-90 Watermill prototype rather than reopen the River comparison or infer production adoption.
 
@@ -855,7 +858,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Isolated SQLite Adapter Renewal Fix Assessment
 
-**D-92; date/origin:** 2026-11-02, user request "Gut, bitte weiterprüfen" following the E-42 blocker and proposed targeted fix/version check; AP-12 T043/T045 isolated infrastructure assessment. **Status:** approved for isolated upstream/version research and a narrow experimental fix only. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-07/DOM-08 and integration.
+**D-92; date/origin:** 2026-11-02, user request "Gut, bitte weiterprüfen" following the E-42 blocker and proposed targeted fix/version check; AP-12 T043/T045 isolated infrastructure assessment. **Status:** approved for isolated upstream/version research and a narrow experimental fix only. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Delivery/Processing and integration.
 
 **Question/evidence:** [E-42](execution/source-ap-12.md#e-42-watermill-crash-atomicity-and-concurrency-extension) reproduces the pinned SQLite adapter's slow-handler renewal/Ack failure and isolates an unconsumed RETURNING row. Check authoritative upstream releases/source first; if no corrected version is available, test consuming and validating the renewal result in a session-local licensed source copy against the same regression and prior crash/atomicity/contention tests.
 
@@ -863,7 +866,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Watermill PostgreSQL-first Gate Clarification
 
-**D-93; date/origin:** 2026-11-02, user clarification that SQLite is architectural preparation only and is not a blocker while PostgreSQL works; AP-12 T043/T045 infrastructure assessment. **Status:** approved gate clarification under existing D-32 delivery timing, not production dependency or implementation approval. **Accountable owner/approver:** Product/integration; user. **Technical owners:** architecture, DOM-07/DOM-08 and integration.
+**D-93; date/origin:** 2026-11-02, user clarification that SQLite is architectural preparation only and is not a blocker while PostgreSQL works; AP-12 T043/T045 infrastructure assessment. **Status:** approved gate clarification under existing D-32 delivery timing, not production dependency or implementation approval. **Accountable owner/approver:** Product/integration; user. **Technical owners:** architecture, Delivery/Processing and integration.
 
 **Finding and resolution:** [D-32](#ap-04-scope-decision) already starts implementation with Full/PostgreSQL and defers runnable Lite. The SQLite issue in [E-42](execution/source-ap-12.md#e-42-watermill-crash-atomicity-and-concurrency-extension), with its isolated correction in [E-43](execution/source-ap-12.md#e-43-isolated-sqlite-renewal-correction-and-upstream-check), gates later acceptance of that SQLite adapter, not current PostgreSQL Watermill integration. Do not require an upstream SQLite release or maintained patch before PostgreSQL work. Preserve store-neutral domain/application boundaries so Lite remains achievable through alternate infrastructure adapters.
 
@@ -871,7 +874,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Watermill PostgreSQL Publication Integration Proposal
 
-**D-94; date/origin:** 2026-11-02, user request to proceed after D-93; AP-12 T043/T045 infrastructure assessment. **Status:** option A explicitly approved by user response `approve-publication-slice` on 2026-11-02, including the described earlier append-adapter extension, additive C-08 binding and tests. Implementation/validation permitted, not inferred completed. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-07/integration, affected producer owners DOM-03/DOM-04/DOM-05/DOM-08.
+**D-94; date/origin:** 2026-11-02, user request to proceed after D-93; AP-12 T043/T045 infrastructure assessment. **Status:** option A explicitly approved by user response `approve-publication-slice` on 2026-11-02, including the described earlier append-adapter extension, additive C-08 binding and tests. Implementation/validation permitted, not inferred completed. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Delivery/integration, affected producer owners Master data/Assignment/Identity/Processing.
 
 **Question/evidence:** [E-41..E-43](execution/source-ap-12.md#e-41-isolated-watermill-evented-core-prototype) support PostgreSQL Watermill mechanics; [D-93](#watermill-postgresql-first-gate-clarification) removes SQLite as a current gate. Current source inspection finds append-only canonical fact storage, not a custom event subscriber to replace. [The concrete architecture slice](architecture.md#proposed-postgresql-integration-slice) owns the proposed implementation and validation boundary.
 
@@ -917,9 +920,9 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Narrow Installed Processing ABI Proposal
 
-**D-67; date/origin:** 2026-11-01, AP-04 T017/T018 concrete T043 installed-step preparation. **Status:** **Runtime part superseded on 2026-11-05 by [D-131](#managed-plugin-process-runtime); the pure Processing-step subset remains as a trusted declaration.** technical direction/supported subset explicitly approved 2026-11-01 (`installed_processing_boundary=approve-pure-wasi-command-boundary`); contract freeze/execution remain pending. **Accountable owner/approver:** Product/integration; user. **Technical owners:** plugin host/integration and DOM-08.
+**D-67; date/origin:** 2026-11-01, AP-04 T017/T018 concrete T043 installed-step preparation. **Status:** **Runtime part superseded on 2026-11-05 by [D-131](#managed-plugin-process-runtime); the pure Processing-step subset remains as a trusted declaration.** technical direction/supported subset explicitly approved 2026-11-01 (`installed_processing_boundary=approve-pure-wasi-command-boundary`); contract freeze/execution remain pending. **Accountable owner/approver:** Product/integration; user. **Technical owners:** plugin host/integration and Processing.
 
-**Question/evidence:** Bind a real independently provisioned processing-module call without silently treating the Core regex proof as a full operator SDK or pulling forward all AP-11. [C-10's candidate](contracts/c-10-plugin-host.md#early-installed-processing-invocation-candidate) owns the exact proposed boundary. The existing general SDK draft instead proposes guest-memory allocation/transfer plus host callbacks; that draft is retained, not overwritten or falsely claimed implemented.
+**Question/evidence:** Bind a real independently provisioned processing-module call without silently treating the Core regex proof as a full operator SDK or pulling forward all AP-11. [C-10's candidate](contracts/c-10-plugin-host.md#installed-processing-invocation) owns the exact proposed boundary. The existing general SDK draft instead proposes guest-memory allocation/transfer plus host callbacks; that draft is retained, not overwritten or falsely claimed implemented.
 
 **Options/recommendation:** A: initial versioned JSON stdin/stdout WASI-command processing capability, separately supplied artifact/manifest, current execution Principal/configuration/digest, typed input/result and existing memory/time/I/O bounds. This command-only adapter implements pure data-in/data-out processing with no external/OS host capabilities or additional Core reads. Modules needing later capabilities are explicitly unavailable; broader trusted capabilities/native alternatives remain admissible for later separate implementation. B: first prepare/approve the general guest-memory/host-callback processing SDK subset and its additional actual ownership/resource/authority tests; this is more implementation/preparation scope, not an automatic full installer/provider handover. Recommend A to deliver real T043 installed processing now, keeping AP-11's broader host capability contract open. No arbitrary-language/toolchain guarantee follows; only the actually tested supplied command artifacts count as compatible.
 
@@ -929,7 +932,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Field Visibility Grouping Direction
 
-**D-68; date/origin:** 2026-11-01, AP-06 prerequisite contract discussion following D-66. **Status:** grouping direction explicitly approved (`field_group_definition=fixed-configurable-groups`); exact groups/membership and affected contract freeze remain pending. **Accountable owner/approver:** Product/integration; user. **Owners:** DOM-05 for field permissions, DOM-06 for query eligibility.
+**D-68; date/origin:** 2026-11-01, AP-06 prerequisite contract discussion following D-66. **Status:** grouping direction explicitly approved (`field_group_definition=fixed-configurable-groups`); exact groups/membership and affected contract freeze remain pending. **Accountable owner/approver:** Product/integration; user. **Owners:** Identity for field permissions, Query for query eligibility.
 
 **Question/context:** The user proposes understandable field sets such as address details and source details, with user search on technical fields excluded when those fields are not readable. Internal delegated rights may depend on criteria that are not themselves exposed to the beneficiary. Existing C-06 already has fixed field sets, but its current grant scopes do not include arbitrary address predicates.
 
@@ -939,7 +942,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Unscoped Field Visibility Clarification
 
-**D-69; date/origin:** 2026-11-01, AP-06 C-06/C-07 review following D-68. **Status:** product direction explicitly instructed by the user; concrete replacement contract/version/migration and execution approval remain pending. **Accountable owner/approver:** Product/integration; user. **Owners:** DOM-05 field authorization, DOM-06 projection/search, integration for affected consumers.
+**D-69; date/origin:** 2026-11-01, AP-06 C-06/C-07 review following D-68. **Status:** product direction explicitly instructed by the user; concrete replacement contract/version/migration and execution approval remain pending. **Accountable owner/approver:** Product/integration; user. **Owners:** Identity field authorization, Query projection/search, integration for affected consumers.
 
 **Question/finding:** The user explicitly rejects field visibility scoped to a Unit or other data scope: a user either may see address details or may not, without additional scopes. The previous C-06 model attaches read fields to matching scoped grants; the D-68 candidate retained that interpretation. It does not match the clarified requirement.
 
@@ -949,7 +952,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Unscoped Identity Replacement Binding Proposal
 
-**D-70; date/origin:** 2026-11-01, AP-04 T017/T018 and AP-06 prerequisite correction under D-69. **Status:** identity-fields 1.0 replacement freeze explicitly approved (`unscoped_field_contract_freeze=approve-identity-fields-1.0`); separate execution start pending. **Accountable owner/approver:** Product/integration; user. **Owners:** DOM-05, integration and affected source/query consumers.
+**D-70; date/origin:** 2026-11-01, AP-04 T017/T018 and AP-06 prerequisite correction under D-69. **Status:** identity-fields 1.0 replacement freeze explicitly approved (`unscoped_field_contract_freeze=approve-identity-fields-1.0`); separate execution start pending. **Accountable owner/approver:** Product/integration; user. **Owners:** Identity, integration and affected source/query consumers.
 
 **Finding/evidence:** Actual [point authorization](../internal/authz/decision.go) combines fields only from matching scoped grants; [Ent permission planning](../internal/persistence/ent/permissions/filter.go) adds per-field scoped row predicates. [Identity schema](../internal/persistence/ent/schema/identity.go), [authority loader](../internal/persistence/ent/identitystore/authority.go) and [bootstrap](../internal/identity/bootstrap.go) store/load fields on action grants. D-69 therefore requires a real model/adapter/persistence/test change, not renaming a field or changing one boolean check.
 
@@ -975,7 +978,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Synthetic Preview Schema Completion
 
-**D-99; date/origin:** 2026-11-03, current AP-06 T055/T056. **Status:** approved for concrete schema preparation, not yet exact schema/context freeze. **Accountable owner/approver:** Product/integration; user selected `synthetic_form_scope=complete-form-catalog`. **Technical owners:** DOM-02/DOM-08/integration.
+**D-99; date/origin:** 2026-11-03, current AP-06 T055/T056. **Status:** approved for concrete schema preparation, not yet exact schema/context freeze. **Accountable owner/approver:** Product/integration; user selected `synthetic_form_scope=complete-form-catalog`. **Technical owners:** Grouping/Processing/integration.
 
 **Question/options/resolution:** C-02 processing-source 1.0 provides the trusted typed projection, but does not bind public synthetic input field paths/form schemas/context identity. Choose a deliberately restricted POCSAG/FLEX first version or prepare the complete form catalog. The user selected the complete catalog. Prepare the versioned closed DTO, field/type/form mappings, synthetic identity/context and authorization rules and obtain their separate specific approval before implementing that schema. No caller-authoritative declarations or implicit field/classification choices are allowed.
 
@@ -983,7 +986,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Processing Instance Read Authorization
 
-**D-100; date/origin:** 2026-11-03, current AP-06 T055/T056. **Status:** explicitly approved by user response `instance_read_authorization=global-plugin-configure`, including the bounded contract/implementation/test additions. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-05/DOM-08/integration.
+**D-100; date/origin:** 2026-11-03, current AP-06 T055/T056. **Status:** explicitly approved by user response `instance_read_authorization=global-plugin-configure`, including the bounded contract/implementation/test additions. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Identity/Processing/integration.
 
 **Question/options/resolution:** Instance changes already require global `plugin.configure`, while instance read/list authorization is not concretely bound. Use the same existing global action for redacted configuration reads/listing, or separately design delegated instance rights. The user selected global `plugin.configure`; no new action or instance scope. C-06/C-10 own this narrow read binding. Preserve sensitive-field redaction and do not expose credentials or adopt a general plugin-management surface.
 
@@ -999,7 +1002,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Synthetic Schema Freeze Responses
 
-**D-102; date/origin:** 2026-11-03, current AP-06 T055/T056 following D-99. **Status:** schema/context and the subsequent null-or-name ZVEI clarification explicitly approved; the separately requested general binary value binding was subsequently approved under [D-103](#shared-bytes-binding). The independent responses below preserve the approval sequence. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-02/DOM-08/integration.
+**D-102; date/origin:** 2026-11-03, current AP-06 T055/T056 following D-99. **Status:** schema/context and the subsequent null-or-name ZVEI clarification explicitly approved; the separately requested general binary value binding was subsequently approved under [D-103](#shared-bytes-binding). The independent responses below preserve the approval sequence. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Grouping/Processing/integration.
 
 **Resolution/evidence:** User selected `schema_context_freeze=approve-schema-context`: closed versioned full-form synthetic input, existing Network selection/current matcher for Unit eligibility, owner-generated synthetic identity excluded from work/publication, separate current action/scope/global field checks, existing whole-second Observation handling without a new age cap, no live writes and separate pure installed preview. Schema details are being transferred to C-02/C-11 with actual artifact links when implemented; the session proposal is not a second canonical contract.
 
@@ -1009,7 +1012,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Shared Bytes Binding
 
-**D-103; date/origin:** 2026-11-03, current AP-06 T055/T056 following D-99/D-102. **Status:** **SDK-version mapping superseded on 2026-11-05 by [D-131](#managed-plugin-process-runtime): bytes are part of SDK 2.0.** explicitly approved by user response `bytes_binding_freeze=approve-bytes-binding`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-08, DOM-02, shared C-09 predicate owner and plugin host/integration.
+**D-103; date/origin:** 2026-11-03, current AP-06 T055/T056 following D-99/D-102. **Status:** **SDK-version mapping superseded on 2026-11-05 by [D-131](#managed-plugin-process-runtime): bytes are part of SDK 2.0.** explicitly approved by user response `bytes_binding_freeze=approve-bytes-binding`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Processing, Grouping, shared C-09 predicate owner and plugin host/integration.
 
 **Question/options/resolution:** Approve the narrowly specified general bytes value or revise its behavior. The user approves a distinct canonical padded standard-Base64 typed bytes value, exact equality/bounded membership/presence with existing three-valued boolean composition, identity copying and explicitly declared pure installed processing. No implicit text/number conversion, regex, byte indexing/ordering/concatenation or new predicate operator. Preserve absent/null/hidden/empty distinctions, all inherited source classifications and `derived` for output visibility. Bytes results have no automatic rendering, logging or search indexing. Bytes are not added to configuration/Secret schemas.
 
@@ -1019,7 +1022,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### AP-07 Gateway HTTP Submission boundary decision
 
-**D-104; date/origin:** 2026-11-03, AP-07 T057..T059 readiness clarification. **Status:** approved by user response `submission_boundary=http_endpoint`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01, DOM-05/C-06 and integration/API composition.
+**D-104; date/origin:** 2026-11-03, AP-07 T057..T059 readiness clarification. **Status:** approved by user response `submission_boundary=http_endpoint`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Intake/C-01, Identity/C-06 and integration/API composition.
 
 **Question/options/resolution:** Determine whether AP-07 is intended to deliver an externally reachable, Gateway-authenticated HTTP Submission endpoint or only an internal Submission service with the HTTP route deferred to another package. The user selected the externally reachable Gateway HTTP endpoint as the intended AP-07 product boundary.
 
@@ -1029,7 +1032,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### AP-07 Gateway-state HTTP boundary decision
 
-**D-105; date/origin:** 2026-11-03, AP-07 T057 readiness clarification. **Status:** approved by user response `gateway_state_http=include_report_state`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01, DOM-05/C-06 and integration/API composition.
+**D-105; date/origin:** 2026-11-03, AP-07 T057 readiness clarification. **Status:** approved by user response `gateway_state_http=include_report_state`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Intake/C-01, Identity/C-06 and integration/API composition.
 
 **Question/options/resolution:** Determine whether the AP-07 Gateway HTTP boundary also includes the C-01 `ReportGatewayState` operation, or whether Gateway-state HTTP reporting is deferred. The user selected a Gateway-authenticated HTTP endpoint for heartbeat and explicit termination reporting in AP-07.
 
@@ -1039,7 +1042,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### AP-07 Gateway Network configuration HTTP boundary decision
 
-**D-106; date/origin:** 2026-11-03, AP-07 T057 readiness clarification. **Status:** approved by user response `configure_gateway_networks_http=include_admin_route`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01, DOM-05/C-06 and integration/API composition.
+**D-106; date/origin:** 2026-11-03, AP-07 T057 readiness clarification. **Status:** approved by user response `configure_gateway_networks_http=include_admin_route`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Intake/C-01, Identity/C-06 and integration/API composition.
 
 **Question/options/resolution:** Determine whether C-01 `ConfigureGatewayNetworks`, an Administrative-Principal operation, is exposed through an HTTP management endpoint in AP-07 or remains an internal service/deferred route. The user selected an administrator-authenticated HTTP endpoint in the AP-07 intended boundary.
 
@@ -1049,7 +1052,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### AP-07 Submission route decision
 
-**D-107; date/origin:** 2026-11-03, AP-07 T057 HTTP interface clarification. **Status:** approved by user response `submit_transmission_route=approve_post_transmissions`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01, DOM-05/C-06 and integration/API composition.
+**D-107; date/origin:** 2026-11-03, AP-07 T057 HTTP interface clarification. **Status:** approved by user response `submit_transmission_route=approve_post_transmissions`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Intake/C-01, Identity/C-06 and integration/API composition.
 
 **Question/options/resolution:** Select the HTTP method/path for the approved Gateway-authenticated `SubmitTransmission` operation. The user selected `POST /api/v1/transmissions`; the Gateway is identified through authentication rather than a caller-supplied Gateway ID in the path.
 
@@ -1057,7 +1060,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### AP-07 Gateway-state route decision
 
-**D-108; date/origin:** 2026-11-03, AP-07 T057 HTTP interface clarification. **Status:** approved by user response `report_gateway_state_route=approve_post_gateway_state`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01, DOM-05/C-06 and integration/API composition.
+**D-108; date/origin:** 2026-11-03, AP-07 T057 HTTP interface clarification. **Status:** approved by user response `report_gateway_state_route=approve_post_gateway_state`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Intake/C-01, Identity/C-06 and integration/API composition.
 
 **Question/options/resolution:** Select the HTTP method/path for the approved Gateway-authenticated `ReportGatewayState` operation. The user selected `POST /api/v1/gateway/state`; the Gateway is identified through authentication rather than a caller-supplied Gateway ID in the path.
 
@@ -1065,7 +1068,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### AP-07 Gateway Network configuration route decision
 
-**D-109; date/origin:** 2026-11-03, AP-07 T057 HTTP interface clarification. **Status:** approved by user response `configure_gateway_networks_route=approve_put_gateway_networks`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01, DOM-05/C-06 and integration/API composition.
+**D-109; date/origin:** 2026-11-03, AP-07 T057 HTTP interface clarification. **Status:** approved by user response `configure_gateway_networks_route=approve_put_gateway_networks`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Intake/C-01, Identity/C-06 and integration/API composition.
 
 **Question/options/resolution:** Select the HTTP method/path for the approved Administrative-Principal `ConfigureGatewayNetworks` operation. The user selected `PUT /api/v1/gateways/{id}/networks`, targeting the Gateway with its ID and using administrative authentication.
 
@@ -1073,23 +1076,23 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### AP-07 Gateway Network replacement semantics decision
 
-**D-110; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `configure_gateway_networks_semantics=approve_full_replacement`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01, DOM-05/C-06 and integration/API composition.
+**D-110; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `configure_gateway_networks_semantics=approve_full_replacement`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Intake/C-01, Identity/C-06 and integration/API composition.
 
 **Question/options/resolution:** Determine whether `PUT /api/v1/gateways/{id}/networks` replaces the complete allowed-Network set or partially mutates it. The user approved complete-set replacement under `expectedRevision`; do not add PATCH. Reject an empty or invalid set without mutation and report stale revisions as a revision conflict.
 
 **Evidence/rationale:** C-01 treats allowed Network contexts as a set, requires at least one assigned Network and exactly one default per Protocol when multiple same-Protocol Networks are assigned. Existing `PUT /api/v1/units/{id}` uses complete replacement, and the repository has no PATCH route convention. Full replacement avoids introducing separate add/remove/default-transition semantics.
 
-**Approval boundary and impacts:** D-110 resolves the product semantics question left open by [D-109](#ap-07-gateway-network-configuration-route-decision); it does not freeze C-01/C-06 or specify the concrete JSON body, status/error codes, validation order or authorization implementation. DOM-01 must incorporate the approved behavior into the C-01 freeze, with C-06 authorization details owned by DOM-05. No AP-07 addendum, out-of-scope write path, implementation binding or implementation is approved; no downstream AP is amended.
+**Approval boundary and impacts:** D-110 resolves the product semantics question left open by [D-109](#ap-07-gateway-network-configuration-route-decision); it does not freeze C-01/C-06 or specify the concrete JSON body, status/error codes, validation order or authorization implementation. Intake must incorporate the approved behavior into the C-01 freeze, with C-06 authorization details owned by Identity. No AP-07 addendum, out-of-scope write path, implementation binding or implementation is approved; no downstream AP is amended.
 
 ### AP-07 Gateway Network replacement authorization decision
 
-**D-111; date/origin:** 2026-11-03, AP-07 T057 authorization clarification. **Status:** approved by user response `configure_gateway_networks_authorization=union_of_current_and_proposed`. **Accountable owner/approver:** Product/integration; user. **Technical owner:** DOM-05/C-06, with DOM-01 owning Gateway Network assignment meaning.
+**D-111; date/origin:** 2026-11-03, AP-07 T057 authorization clarification. **Status:** approved by user response `configure_gateway_networks_authorization=union_of_current_and_proposed`. **Accountable owner/approver:** Product/integration; user. **Technical owner:** Identity/C-06, with Intake owning Gateway Network assignment meaning.
 
 **Question/options/resolution:** Determine the Network scope required for an Administrative Principal to replace a Gateway's complete Network assignment set. The user approved requiring `gateway.update` coverage for every Network in the union of the current and proposed assignments; an `all`-scope grant also covers the operation. Current-only coverage is insufficient to add an unauthorized Network, and no partial mutation is allowed.
 
 **Evidence/rationale:** C-06 currently permits `gateway.update` at Network or all scope but does not define the affected Network set for full replacement. D-110 makes the operation a complete set replacement, so authorization must cover both removals and additions.
 
-**Approval boundary and impacts:** D-111 supplies the product rule for the [C-06 AP-07 Gateway HTTP Authorization draft](contracts/c-06-identity-authorization.md#ap-07-gateway-http-authorization). DOM-05 must incorporate it and define its concrete evaluation against current authoritative state and expected revision. This does not freeze C-06, add a new action, approve an AP-07 addendum or implementation, or amend downstream APs.
+**Approval boundary and impacts:** D-111 supplies the product rule for the [C-06 AP-07 Gateway HTTP Authorization draft](contracts/c-06-identity-authorization.md#ap-07-gateway-http-authorization). Identity must incorporate it and define its concrete evaluation against current authoritative state and expected revision. This does not freeze C-06, add a new action, approve an AP-07 addendum or implementation, or amend downstream APs.
 
 ### AP planning and contract decision ownership
 
@@ -1101,7 +1104,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### AP-07 Gateway degraded-report decision
 
-**D-113; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `gateway_degraded_report=opaque_reason_and_detail`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01 for operation/state meaning; DOM-07/C-08 for fact recording.
+**D-113; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `gateway_degraded_report=opaque_reason_and_detail`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Intake/C-01 for operation/state meaning; Delivery/C-08 for fact recording.
 
 **Question/options/resolution:** Determine how `ReportGatewayState` represents a Gateway-reported failure/processing problem. The approved draft allows a `degraded` report with a required opaque ASCII `reasonCode` bounded to 64 bytes and optional UTF-8 `detail` bounded to 512 bytes. These values are Gateway-reported diagnostics only; they do not authorize actions or independently drive automated behavior. The report records contact time and the degraded state fact. Ordinary heartbeat does not silently clear degraded state.
 
@@ -1109,7 +1112,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### AP-07 Gateway recovery decision
 
-**D-114; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `gateway_degraded_recovery=explicit_recovered_operation`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01 for operation/state meaning; DOM-07/C-08 for fact recording.
+**D-114; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `gateway_degraded_recovery=explicit_recovered_operation`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Intake/C-01 for operation/state meaning; Delivery/C-08 for fact recording.
 
 **Question/options/resolution:** Determine how an authenticated Gateway reports recovery after a degraded report. The user approved a distinct `recovered` operation. It explicitly records contact and transitions `degraded` to `active`; heartbeat remains contact-only and does not clear degraded status.
 
@@ -1117,7 +1120,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### AP-07 Gateway Network replacement request decision
 
-**D-115; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `gateway_networks_request=approve_networks_array`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01 for Gateway configuration; DOM-05/C-06 for authorization.
+**D-115; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `gateway_networks_request=approve_networks_array`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Intake/C-01 for Gateway configuration; Identity/C-06 for authorization.
 
 **Question/options/resolution:** Determine the request representation for complete-set replacement. The user approved a closed request with `schemaVersion`, `expectedRevision` and a complete `networks` array. Each entry contains `gatewayNetworkIdentifier`, `networkId` and a `default` boolean. Local identifiers and Network IDs are unique. For every Protocol, exactly one entry is marked default; this includes a Protocol with a single assigned Network, clarified by the user's response, "I don't care - It's default anyways." Empty, duplicate, foreign or otherwise invalid sets are rejected without mutation under D-110; stale revisions conflict.
 
@@ -1125,7 +1128,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### AP-07 Gateway state-fact boundary
 
-**D-116; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `state_fact_rule=transitions_only`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01 for Gateway state; DOM-07/C-08 for fact recording.
+**D-116; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `state_fact_rule=transitions_only`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Intake/C-01 for Gateway state; Delivery/C-08 for fact recording.
 
 **Question/options/resolution:** Determine whether `gateway.state-changed` is emitted for every authenticated report or only for a state transition. The user approved transitions only. Heartbeat and repeated reports of the current state may update authenticated contact/report data but do not append `gateway.state-changed` unless the effective state changes.
 
@@ -1133,7 +1136,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### AP-07 Gateway state HTTP response
 
-**D-117; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `gateway_state_success=204_no_content`. **Accountable owner/approver:** Product/integration; user. **Technical owner:** DOM-01/C-01.
+**D-117; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `gateway_state_success=204_no_content`. **Accountable owner/approver:** Product/integration; user. **Technical owner:** Intake/C-01.
 
 **Question/options/resolution:** Select the successful HTTP response for `ReportGatewayState`. The user approved `204 No Content` after the authenticated report and required state/fact changes commit. Failures use the common C-07 error envelope/status semantics.
 
@@ -1141,7 +1144,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### AP-07 Gateway Network HTTP response
 
-**D-118; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `network_replacement_success=200_revision`. **Accountable owner/approver:** Product/integration; user. **Technical owner:** DOM-01/C-01.
+**D-118; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `network_replacement_success=200_revision`. **Accountable owner/approver:** Product/integration; user. **Technical owner:** Intake/C-01.
 
 **Question/options/resolution:** Select the successful HTTP response for `ConfigureGatewayNetworks`. The user approved `200 OK` with `{schemaVersion:1, revision:string}` containing the newly committed Gateway revision, allowing the caller to use it as the next `expectedRevision`. Failures use the common C-07 error envelope/status semantics.
 
@@ -1149,7 +1152,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### AP-07 contract freeze proposal
 
-**D-119; date/origin:** 2026-11-03, AP-07 T057..T059 planning. **Status:** approved by user response `contract_freeze=approve_exact_set`. **Accountable cross-domain approver:** product/integration; user. **Contract owners:** DOM-01 (C-01), DOM-02 (C-02/C-03), DOM-04 (C-05), DOM-05 (C-06), DOM-07/integration (C-08), DOM-08/integration (C-11).
+**D-119; date/origin:** 2026-11-03, AP-07 T057..T059 planning. **Status:** approved by user response `contract_freeze=approve_exact_set`. **Accountable cross-domain approver:** product/integration; user. **Contract owners:** Intake (C-01), Grouping (C-02/C-03), Assignment (C-05), Identity (C-06), Delivery/integration (C-08), Processing/integration (C-11).
 
 **Question/context/resolution:** Which exact owner-contract inputs govern AP-07 implementation? T057..T059 require Gateway HTTP acceptance and state operations, complete Network replacement, original-preserving Protocol comparison, initial target admission/Grouping, required facts, and the Processing publication barrier. D-104..D-118 and D-120 record the user-approved product decisions; [D-112](#ap-planning-and-contract-decision-ownership) places remaining necessary planning in AP-07. The user approved the exact owner-slice set below for 1.0 freeze. No whole contract file is frozen.
 
@@ -1171,7 +1174,7 @@ Use the existing C-07 redacted error envelope/status table, C-12 transaction cap
 
 ### AP-07 recovered report idempotency
 
-**D-120; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `recovered_when_not_degraded=set_active_idempotently`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-01/C-01 for state behavior; DOM-07/C-08 for transition facts.
+**D-120; date/origin:** 2026-11-03, AP-07 T057 clarification. **Status:** approved by user response `recovered_when_not_degraded=set_active_idempotently`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Intake/C-01 for state behavior; Delivery/C-08 for transition facts.
 
 **Question/options/resolution:** Determine how an authenticated `recovered` report behaves if the Gateway is no longer degraded. The user approved it as an idempotent request to set state `active`. It records contact; if the effective state already is active, it emits no `gateway.state-changed` fact under D-116. Any different state transitions to active and emits the transition fact.
 
@@ -1179,7 +1182,7 @@ Use the existing C-07 redacted error envelope/status table, C-12 transaction cap
 
 ### AP-07 Gateway credential-management HTTP addendum
 
-**D-121; date/origin:** 2026-11-03, AP-07 T057 contract clarification. **Status:** approved by user response `credential_http_contract_amendment=approve_exact_set`. **Accountable approver:** product/integration; user. **Contract owners:** DOM-01/C-01 for HTTP operations and DOM-05/C-06 for credential and authorization semantics.
+**D-121; date/origin:** 2026-11-03, AP-07 T057 contract clarification. **Status:** approved by user response `credential_http_contract_amendment=approve_exact_set`. **Accountable approver:** product/integration; user. **Contract owners:** Intake/C-01 for HTTP operations and Identity/C-06 for credential and authorization semantics.
 
 **Question/context:** The D-119 freeze defined three AP-07 routes, but C-06 also requires authorized administrators to issue, inspect, rotate, and revoke Gateway credentials. Repository inspection found no Gateway credential implementation or approved out-of-band provisioner. The user first selected the out-of-band direction, then selected an HTTP API after that assumption was verified false. C-01 and C-06 1.0 were already frozen, so no change to them could be inferred from that direction alone.
 
@@ -1233,7 +1236,7 @@ Use the existing C-07 redacted error envelope/status table, C-12 transaction cap
 
 ### AP-08 Unit-template ownership
 
-**D-125; date/origin:** 2026-11-04, AP-08 T060 clarification. **Status:** approved direction. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-03/C-04 for behavior; DOM-05/C-06 for authorization within AP-08.
+**D-125; date/origin:** 2026-11-04, AP-08 T060 clarification. **Status:** approved direction. **Accountable owner/approver:** Product/integration; user. **Technical owners:** Master data/C-04 for behavior; Identity/C-06 for authorization within AP-08.
 
 **Question/context and evidence:** AP-08 T060 includes template operations. REQ-025 asks managers to create Units from templates; C-04 defines a template as a copied creation snapshot that may supply an Organization, color, icon and Protocol-specific defaults, but does not define whether templates are Organization-owned or standalone. C-06 has an explicit `unit.*` and `organization.*` action catalog but no template actions. The user was asked to choose among Organization-owned templates, standalone templates with explicit C-06 actions, and predefined read-only templates.
 
@@ -1251,9 +1254,9 @@ Use the existing C-07 redacted error envelope/status table, C-12 transaction cap
 
 ### AP-08 suppression direction
 
-**D-127; date/origin:** 2026-11-04, AP-08 T061 contract planning under D-126. **Status:** selected for the assigned AP-08 slice. **Accountable owner:** Product/integration; **contract owner:** DOM-04/C-05.
+**D-127; date/origin:** 2026-11-04, AP-08 T061 contract planning under D-126. **Status:** selected for the assigned AP-08 slice. **Accountable owner:** Product/integration; **contract owner:** Assignment/C-05.
 
-**Question/context and evidence:** REQ-123 excludes unwanted Transmission targets from normal operation; [F-82](contracts/ap-02-boundary-cases.md#f-82-c-05) requires suppressing one target independently when it shares a Message contribution with another target. The pre-AP-08 C-05 0.1 draft also sketched Network/Protocol/selector/time-range suppression filters, but no such broad filter contract was frozen.
+**Question/context and evidence:** REQ-123 excludes unwanted Transmission targets from normal operation; [F-82](contracts/ap-02-boundary-cases.md) requires suppressing one target independently when it shares a Message contribution with another target. The pre-AP-08 C-05 0.1 draft also sketched Network/Protocol/selector/time-range suppression filters, but no such broad filter contract was frozen.
 
 **Resolution and rationale:** AP-08 persists one Suppression per immutable `(transmissionId, targetPosition)`. This makes each exclusion, authorization context, audit record, and lift apply only to the manager-selected original target. Broad selectors that silently suppress future or multiple targets are not part of this slice.
 
@@ -1261,7 +1264,7 @@ Use the existing C-07 redacted error envelope/status table, C-12 transaction cap
 
 ### Owning-migration consolidation
 
-**D-128; date/origin:** 2026-11-05, user instruction during AP-08 execution. **Status:** authorized and applied. **Accountable owner:** Integration; DOM-03/DOM-04/DOM-05 for their tables.
+**D-128; date/origin:** 2026-11-05, user instruction during AP-08 execution. **Status:** authorized and applied. **Accountable owner:** Integration; Master data/Assignment/Identity for their tables.
 
 **Question/context and evidence:** No Goose migration has been released or run outside test fixtures. Several files changed tables that an earlier file created: `00005` altered `identity_grants`, the former `00010_master_data.sql` altered `units` and `command_receipts`, and the former `00011_historical_correction.sql` altered and backfilled `assignment_pending_scopes` and indexed `transmissions`. The user instructed that no migration may edit a table created or edited by another migration, and that such changes be squashed into the owning migration.
 
@@ -1271,7 +1274,7 @@ Use the existing C-07 redacted error envelope/status table, C-12 transaction cap
 
 ### In-process Core regex
 
-**D-129; date/origin:** 2026-11-05, user decision during AP-08 execution after a review of the WASM use (`Umstellen, mit Nachweis`). **Status:** selected and implemented; supersedes D-62 for Core regex only. **Accountable owner:** Product/integration; **technical owners:** architecture/integration, DOM-08.
+**D-129; date/origin:** 2026-11-05, user decision during AP-08 execution after a review of the WASM use (`Umstellen, mit Nachweis`). **Status:** selected and implemented; supersedes D-62 for Core regex only. **`WASMHost` and Wazero were removed later on 2026-11-05 by [D-131](#managed-plugin-process-runtime).** **Accountable owner:** Product/integration; **technical owners:** architecture/integration, Processing.
 
 **Question/context and evidence:** D-62 ran Core regex as a Go/WASI guest under Wazero because D-61 showed a valid 4085-byte/233-capture pattern OOM-killing a 512 MiB native process. Measured on 2026-11-05: each guest call cost 4.7 ms and 12.9 MB of allocations (standard library including compilation: 1.7 µs, 3 KB). Host preparation took 0.94 s, or 14.3 s under the race detector, and dominated test runtime. The guest added a 3.8 MB embedded artifact and limited Processing to Wazero's compiler targets (amd64/arm64). The D-61 memory growth comes from Go's NFA keeping one capture slice per program instruction (the counterexample: 932,003 instructions x 468 slots, about 6.6 GB). Both quantities are known before matching. That is D-62's option (B), which was not chosen at the time for lack of proof.
 
@@ -1281,7 +1284,7 @@ Use the existing C-07 redacted error envelope/status table, C-12 transaction cap
 
 ### Plugin trust clarification
 
-**D-130; date/origin:** 2026-11-05, user statement during AP-08 execution. **Status:** product clarification; runtime selection open. **Accountable owner:** Product (user).
+**D-130; date/origin:** 2026-11-05, user statement during AP-08 execution. **Status:** product clarification; runtime selection open at the time. **Runtime selected on 2026-11-05 by [D-131](#managed-plugin-process-runtime).** **Accountable owner:** Product (user).
 
 **Statement:** Plugins are fully trusted. It must be possible to integrate, for example, GPIO control, display output, printers, building automation, MQTT or KNX through plugins. The Operator provides plugins before start by mounting them (in Docker) and naming them in configuration or the environment; runtime installation is not required.
 
@@ -1289,7 +1292,7 @@ Use the existing C-07 redacted error envelope/status table, C-12 transaction cap
 
 ### Managed plugin process runtime
 
-**D-131; date/origin:** 2026-11-05, user instruction during AP-08 execution ("alle relevanten Planungsdokumente, APs, Contracts ... aktualisieren; bestehenden Code anpassen") after the plugin re-evaluation. **Status:** selected and implemented for the existing installed-processing capability. **Accountable owner:** Product (user); **technical owners:** plugin host/integration, DOM-08 for typed Workflow use.
+**D-131; date/origin:** 2026-11-05, user instruction during AP-08 execution ("alle relevanten Planungsdokumente, APs, Contracts ... aktualisieren; bestehenden Code anpassen") after the plugin re-evaluation. **Status:** selected and implemented for the existing installed-processing capability. **Accountable owner:** Product (user); **technical owners:** plugin host/integration, Processing for typed Workflow use.
 
 **Question and evidence:** [D-130](#plugin-trust-clarification) requires fully trusted plugins with direct host, device and network access, provisioned before start by mount plus configuration or environment. WASI cannot provide device or general network access; the [architecture re-evaluation and user-story check](architecture.md#native-plugin-alternative-review) recommends managed executables. Several languages are a welcome advantage, not a requirement. Several configured instances of one plugin (REQ-084, for example two Pushover keys, several printers or SMTP servers) are mandatory.
 
@@ -1305,6 +1308,44 @@ Use the existing C-07 redacted error envelope/status table, C-12 transaction cap
 - Supersedes the runtime parts of D-67, D-73, D-76 and the SDK-version mapping of D-103, and resolves D-65. D-67's pure/pure-preview Processing-step semantics stay as trusted manifest declarations.
 - Reaction and Delivery capabilities (REQ-139, REQ-090) and Core reads through the versioned HTTP API under a technical Principal remain AP-11/AP-12 planning. A process pool across Workflow runs is also left to AP-12; processes currently live for one run.
 - C-10, C-11, shared conventions, architecture TECH-08 and AP-11/AP-12 were updated accordingly. Implementation and evidence: [AP-08 E-15](execution/ap-08.md#e-15-managed-plugin-process-runtime).
+
+### Documentation and naming separation
+
+**D-132; date/origin:** 2026-11-05/06, user instructions after AP-08 completion. **Status:** selected and applied. **Accountable owner:** Product (user); **owners:** integration and documentation.
+
+**Decisions:**
+- **Process and permanent documentation.** This process tree moved from `docs/` to `development/`. Permanent documentation lives in `docs/`, `api/`, Go doc comments and the conventional `README.md`, `CONTRIBUTING.md`, `AGENTS.md` and `CLAUDE.md`. The trees are strictly separate: this tree is temporary and will be deleted at the end, and neither code nor permanent documentation references it. Owners: [Permanent Documentation](README.md#permanent-documentation) and the [contribution rules](../CONTRIBUTING.md#documentation).
+- **Planning IDs.** REQ, D, P, C, AP, T, F, E, TECH and similar IDs are used only inside `development/`. Owner: [Naming](README.md#naming).
+- **Domain names.** Fixed domain names replace the numbered domain IDs. Code uses their lowercase identifiers where a domain must be named; the stored Domain event value `producer.domain` changed from the numbered form to these identifiers. Owners: [Naming](README.md#naming), [Domains and Data Ownership](architecture.md#domains-and-data-ownership).
+- **Tooling.** Skills, subagents, MCP servers and hooks are used and created where useful. Project setup: `gopls-lsp` and `claude-security` plugins, a gofmt hook and the `go-pkgs` MCP server. Owner: [Skills, Agents and MCP Servers](README.md#skills-agents-and-mcp-servers).
+- **OpenAPI.** [`api/openapi/v1.yaml`](../api/openapi/v1.yaml) covers every registered route and is authoritative for implemented HTTP schemas under [change rule 9](README.md#change-rules). Owners: [Permanent Documentation](README.md#permanent-documentation) and the respective C-ID files.
+
+**Consequences:** Execution records written before 2026-11-06 refer to the former `docs/` path and to former test identifiers; see the [execution README](execution/README.md#record-location). Earlier decisions and evidence are not rewritten. Checks: [AP-08 E-16](execution/ap-08.md#e-16-follow-up-documentation-naming-and-tooling-separation).
+
+### Command-ID reuse conflict code
+
+**D-133; date/origin:** 2026-11-06, review of the AP-01..AP-08 implementation (finding B10). **Status:** approved by the user on 2026-11-06; changes frozen contract slices. **Accountable owner/approver:** Product/integration; user. **Contract owners:** Query/C-07 for the error catalog; Master data/C-04, Intake/C-01 and Identity/C-06 for their commands.
+
+**Question/context:** The C-07 catalog defines `IDEMPOTENCY_CONFLICT` (409) for an operation identifier already used differently, and Submission ID conflicts already use it. The frozen master-data-core 1.0 slice ([D-60](#early-master-data-and-matcher-prerequisite-proposal)) instead mapped a reused actor-bound `commandId` with changed content to `REVISION_CONFLICT`, which reports `retryable: true` and invites a re-read/resend that can never succeed. The Gateway credential HTTP 1.1 slice ([D-121](#ap-07-gateway-credential-management-http-addendum)) said only "conflicts".
+
+**Resolution:** Every actor-bound command whose `commandId` is reused with different content returns `IDEMPOTENCY_CONFLICT` (HTTP 409, `retryable: false`). An identical repeat still returns the recorded result. `REVISION_CONFLICT` remains the code for a stale expected revision.
+
+**Affected contracts and consumers:** [C-04 master-data-core](contracts/c-04-master-data.md#data-and-operation-forms) (amended) and master-data management commands, [C-01 Gateway credential HTTP](contracts/c-01-transmission-acceptance.md) (amended), C-05 Suppression creation and C-06 command-bearing operations through the shared command receipt, and the [C-07 implemented subset](contracts/c-07-query-live.md#ap-05-platform-error-binding). OpenAPI v1 and the shared command-receipt code follow in the implementing change. Consumers: API clients and the later frontend ([AP-15](work-packages/ap-15-frontend.md)); F-68's "changed-input command reuse conflicts" expectation is unchanged in substance. Completed AP-07/AP-08 results are corrected by the review fix, recorded in their execution evidence; no other frozen behavior changes.
+
+### Review-finding AP planning revision
+
+**D-134; date/origin:** 2026-11-06, triage of the AP-01..AP-08 implementation review. **Status:** authorized planning revision by the user on 2026-11-06 under change rule 5; documentary only. **Accountable owner:** Product (user); **owner:** planning/integration.
+
+**Scope:** Findings that need later-AP work were added to the open assignments, in their existing task paragraphs:
+- [AP-11 T066](work-packages/ap-11-events-delivery.md#exact-materialization-management-and-verification): the attempt invocation carries the triggering fact's C-08 `correlationId`/`causationId`.
+- [AP-12 T069](work-packages/ap-12-plugin-host.md#exact-configuration-integration-and-evidence): manifest Extension field definitions, storage and C-06 exposure, or an explicit deferral.
+- [AP-13 T072/T074](work-packages/ap-13-processing-presentation-integration.md#exact-planning-apis-and-evidence): production stored-Transmission preview capture and step-level safe failure explanations (candidate `failure_step`), with their cases.
+- [AP-14 T075](work-packages/ap-14-identity-lifecycle.md#exact-participant-api-and-verification-binding): Operator-configurable shorter Session lifetimes.
+- [AP-16 T081](work-packages/ap-16-operations.md#exact-retention-and-full-evidence-scope): readiness-gated production transactions and bounded, authorization-before-pagination management listings.
+
+The same triage resolved contract statements without behavior change (C-01, C-07, C-10, C-11, C-12, architecture allowed dependency 2); defects fixed in code are recorded in the owning contracts and their execution evidence.
+
+**Boundary:** No task ID, acceptance criterion or write scope beyond the listed additions changes; this authorizes no execution and claims no implementation.
 
 ## Workflow and Approval Gates
 
@@ -1326,6 +1367,7 @@ Delivery classification is only in [Delivery Scope](#delivery-scope). Results ar
 | --- | --- | --- |
 | Documentation | User authorization for specification maintenance | Authorized documentary work; not product implementation |
 | Open-AP repair | User authorization for direct assignment and current dependency repair | Approved 2026-11-04 under [D-126](#open-ap-self-containment-repair), including the explicit no-sidecar instruction. AP-08 supporting planning/write scope is inline; AP-09..AP-17 are the current path. Ordering is not evidence of completion. An order to execute a current AP authorizes all its assigned planning and contract decisions, including supporting slices, without a second freeze-permission gate. |
+| Review-finding AP revision | User authorization of the 2026-11-06 triage | Approved 2026-11-06 under [D-133](#command-id-reuse-conflict-code) (frozen-contract error-code change) and [D-134](#review-finding-ap-planning-revision) (open-AP task additions); documentary only. |
 | PostgreSQL fact publication | Explicit additive C-08 binding, pinned library and earlier-producer implementation approval | Approved 2026-11-02 as `approve-publication-slice` under [D-94](#watermill-postgresql-publication-integration-proposal). Exact write/test scope and exclusions are owned there; [C-08 postgresql-fact-publication 1.0](contracts/c-08-events-jobs.md#postgresql-fact-publication) is the frozen subset. Product evidence remains [AP-12 E-46](execution/source-ap-12.md#e-46-approved-postgresql-watermill-publication-slice), an infrastructure input to AP-06, not its intake/Grouping validation or a production-consumer start. |
 | AP-06 session repercussions | Explicit follow-up approval after AP-01..AP-06 impact review | Approved 2026-11-02 under [D-95](#ap-06-session-repercussion-consolidation), reopening only the named documentary handovers/status navigation. [AP-04 E-53](execution/ap-04.md#e-53-ap-06-publication-and-follow-up-binding) binds this follow-up; no AP baseline or new product execution approval follows. |
 | AP-06+ reslicing and execution order | Explicit user authorization to reslice active/future assignments and reconcile partial execution state | D-96/D-97 establish the historical reslicing and sequential order; [D-126](#open-ap-self-containment-repair) supplies the current AP-06..AP-17 mapping. Completed baselines and source evidence remain preserved. Product execution requires the actual AP start order; own planning is not an additional approval gate. |
@@ -1350,7 +1392,7 @@ Delivery classification is only in [Delivery Scope](#delivery-scope). Results ar
 | AP-07 Gateway-state route | Separate method/path selection, not a C-01 contract freeze | Approved 2026-11-03 under [D-108](#ap-07-gateway-state-route-decision): `POST /api/v1/gateway/state`; request/response and execution remain gated. |
 | AP-07 Gateway Network configuration route | Separate method/path selection, not a C-01 contract freeze | Approved 2026-11-03 under [D-109](#ap-07-gateway-network-configuration-route-decision): `PUT /api/v1/gateways/{id}/networks`; replacement/partial-update semantics and execution remain gated. |
 | AP-07 active-AP addendum procedure | Explicit approval of a compatible additive-scope process for an active AP, preserving its original assignment | Approved by the user on 2026-11-03 (`addendum_procedure=approve_procedure`) for the minimal [documentation-authority](README.md#document-authority) and [shared-rule](work-packages/shared-rules.md#approved-active-ap-addenda) updates. This approves the procedure only; the AP-07-specific addendum, contract freeze and implementation binding remain unapproved. The proposal and evidence are in [AP-04 E-55](execution/ap-04.md#e-55-active-ap-07-addendum-procedure-and-scope-proposal). |
-| AP-07 owner-contract draft preparation | Explicit authorization to prepare draft contract changes for owner review, separate from contract freeze or implementation | Approved by the user on 2026-11-03 (`next_step=authorize_draft_contracts`) for the directly required AP-07 owner surfaces in C-01/C-02/C-03/C-05/C-06/C-08/C-11. Changes must remain marked draft and preserve separately frozen subsets and earlier evidence. DOM owners must review/approve exact contract versions; this does not approve an AP-07 addendum, implementation binding, or product-code changes. Evidence: [AP-04 E-57](execution/ap-04.md#e-57-ap-07-owner-contract-draft-preparation). |
+| AP-07 owner-contract draft preparation | Explicit authorization to prepare draft contract changes for owner review, separate from contract freeze or implementation | Approved by the user on 2026-11-03 (`next_step=authorize_draft_contracts`) for the directly required AP-07 owner surfaces in C-01/C-02/C-03/C-05/C-06/C-08/C-11. Changes must remain marked draft and preserve separately frozen subsets and earlier evidence. Domain owners must review/approve exact contract versions; this does not approve an AP-07 addendum, implementation binding, or product-code changes. Evidence: [AP-04 E-57](execution/ap-04.md#e-57-ap-07-owner-contract-draft-preparation). |
 | Parallel execution | Explicitly disjoint approved scopes and shared-boundary integration coordination | None recorded |
 | AP-06 prerequisite documentary preparation | Explicit authorization to prepare the contracts and execution bindings of the necessary prerequisite slices, without starting them | Approved by the user on 2026-10-26 (`prerequisite_contract_preparation=approve-required-preparation`) for AP-07 central identity/authorization, AP-08 T028 and standalone T029 current-rule/matcher handover, and AP-12 T043 evaluator/revision/result kernel. AP-04 T017/T018 may review and prepare their necessary C-04/C-06/C-13/C-11 dependencies and relevant C-08/C-09/C-10/C-12 interfaces. This extends the previous C-04 minimum review boundary only as required for these handovers. Concrete version freezes and implementation bindings must still be presented for explicit approval; no prerequisite AP is started, no AP baseline amended, and no UI, external Delivery/provider or unrelated future task is authorized. |
 | AP-07 prerequisite identity-core | Separate explicit contract and execution approval | Approved by the user on 2026-10-26 as `identity_core_freeze=approve` and `identity_core_execution=approve-and-start`. C-06 identity-core 1.0 and the required C-13 immediate invalidation/deletion boundary are frozen for the exact [AP-07 prerequisite consumer binding](execution/ap-04.md#ap-07-prerequisite-consumer-binding-proposal), and sequential implementation starts now. Named assignee, write scope, library tuple, tests and excluded later work are in that binding. This is not whole-AP-07 acceptance, an AP-06 implementation start or an amendment of any AP baseline. |
@@ -1361,13 +1403,13 @@ Delivery classification is only in [Delivery Scope](#delivery-scope). Results ar
 | AP-07 prerequisite narrowing | Explicit approval of the AP-06-required handover without whole-AP-07 completion | Approved by the user on 2026-10-27 under [D-59](#identity-prerequisite-scope-decision). The earlier binding is narrowed to the required identity core while retaining AP-07-compatible typed ports/model. General management, Recovery and key-issuance surfaces remain deferred, not complete. |
 | AP-08 required master-data/matcher | Separate explicit approval of exact owner contract versions and implementation binding | Contract freeze approved by the user on 2026-10-27 (`minimal_matcher_contract_freeze=approve`) under [D-60](#early-master-data-and-matcher-prerequisite-proposal), followed by `minimal_matcher_execution=approve-and-start` for the exact sequential [AP-04 binding](execution/ap-04.md#ap-08-prerequisite-consumer-binding-proposal). No full AP-08 or AP-06 implementation approval follows. |
 | T043 budget feasibility follow-up | Separate explicit approval for the exact disposable application-stage probe | Approved by the user on 2026-10-28 (`processing_budget_probe=approve-bounded-probe`) for the exact disposable scope, versions, resource limits and evidence requirements in [D-61](#processing-budget-feasibility-proposal). No production dependency, contract freeze or implementation start follows. |
-| T043 Core regex runtime | Explicit production technical selection after bounded evidence | Approved 2026-11-01 by the user (`core_regex_runtime_after_comparison=approve-embedded-wasm-regex`) under D-62 after D-63/D-64 comparison. Narrow technical tuple/ownership only; no blanket child prohibition, general native-plugin rejection, kernel freeze or execution start. |
+| T043 Core regex runtime | Explicit production technical selection after bounded evidence | Approved 2026-11-01 by the user (`core_regex_runtime_after_comparison=approve-embedded-wasm-regex`) under D-62 after D-63/D-64 comparison. Narrow technical tuple/ownership only; no blanket child prohibition, general native-plugin rejection, kernel freeze or execution start. Superseded for Core regex on 2026-11-05 by [D-129](#in-process-core-regex). |
 | Operator-start/dependency correction | Explicit correction of the earlier process-count premise and dependent documentary decisions | Approved by the user on 2026-11-01 under [D-63](#operator-start-and-bundled-dependency-clarification): managed children allowed, required application dependencies supplied, affected earlier reasoning reviewed/corrected with history preserved. No specific runtime/experiment/implementation approval follows. |
 | Bundled-child feasibility | Explicit bounded experiment approval for the corrected D-62 comparison | Approved 2026-11-01 by the user (`bundled_child_probe=approve-bounded-child-probe`) for D-64's exact isolated standard-library tuple/scope. No production runtime selection follows. |
 | AP-15 topology wording amendment | Explicit approval to amend the affected not-yet-started downstream baseline | Approved 2026-11-01 by the user (`ap15_topology_amendment=approve-narrow-ap15-amendment`) under D-63/D-64 for AP-15 T052 only; unchanged task ID/remaining acceptance and D-32 Lite deferral. No AP-15 execution start. |
-| Native plugin alternatives review | Explicit documentary comparison rather than implicit format adoption | Approved by the user on 2026-11-01 (`plugin_delivery_intent=review-native-alternative`) under D-65; research only, no native runtime/library/ABI or implementation selection. |
+| Native plugin alternatives review | Explicit documentary comparison rather than implicit format adoption | Approved by the user on 2026-11-01 (`plugin_delivery_intent=review-native-alternative`) under D-65; research only, no native runtime/library/ABI or implementation selection. Resolved on 2026-11-05 by [D-131](#managed-plugin-process-runtime). |
 | T043 shared predicate binding | Specific restricted standard-library or established-engine technical selection | Restricted CEL-Go selected under [D-66](#t043-shared-predicate-binding-proposal) after E-50; its owner subset joins the separately approved kernel 1.0 freeze. Product dependency integration/execution remain pending. |
-| T043 installed processing boundary | Specific capability ABI/supported-subset selection distinct from Core regex | Narrow pure WASI-command direction/subset approved under [D-67](#narrow-installed-processing-abi-proposal); its owner subset joins the kernel 1.0 freeze. General callback SDK and actual execution remain separate. |
+| T043 installed processing boundary | Specific capability ABI/supported-subset selection distinct from Core regex | Narrow pure WASI-command direction/subset approved under [D-67](#narrow-installed-processing-abi-proposal); its owner subset joins the kernel 1.0 freeze. General callback SDK and actual execution remain separate. Runtime part superseded on 2026-11-05 by [D-131](#managed-plugin-process-runtime). |
 | T043 coordinated owner freeze | Exact five-part standalone kernel contract boundary | Approved 2026-11-01 (`processing_kernel_contract_freeze=approve-processing-kernel-1.0`); [D-66 freeze resolution](#t043-shared-predicate-binding-proposal) and [E-52](execution/ap-04.md#e-52-coordinated-processing-kernel-freeze) identify exact scope. No actual execution follows automatically. |
 | T043 sequential execution | Separate actual start after the coupled owner freeze | Approved 2026-11-01 (`processing_kernel_execution=approve-and-start`) for the exact [Processing kernel execution binding](execution/ap-04.md#processing-kernel-execution-binding). Actual execution evidence belongs to AP-12, not inferred from this gate. |
 | Field visibility grouping direction | Explicit choice of fixed product groups versus arbitrary administrator-defined groups | Fixed product-defined groups with configurable permission release approved 2026-11-01 under [D-68](#field-visibility-grouping-direction). Exact field membership, frozen-contract amendments and address-dependent grants are not approved by this choice. |

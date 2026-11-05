@@ -10,6 +10,8 @@ import (
 	"github.com/gopager/gopager/internal/protocols"
 )
 
+// TargetContext is the stored state of one target position of a transmission:
+// its message, Network, current Resolution and observation/acceptance times.
 type TargetContext struct {
 	TransmissionID uuid.UUID
 	MessageID      uuid.UUID
@@ -20,6 +22,8 @@ type TargetContext struct {
 	AcceptedAt     time.Time
 }
 
+// Suppression excludes one target position of a transmission from assignment.
+// Active is false once lifted, and LiftedAt is then set.
 type Suppression struct {
 	ID             uuid.UUID  `json:"id"`
 	TransmissionID uuid.UUID  `json:"transmissionId"`
@@ -30,6 +34,10 @@ type Suppression struct {
 	LiftedAt       *time.Time `json:"liftedAt"`
 }
 
+// CorrectionStatus is a pending correction scope queued for one assignment
+// revision. State is queued, running, completed, failed or superseded;
+// FailureCode is set for failures. Fields tagged json:"-" are internal scope
+// and cursor data that are not exposed to API clients.
 type CorrectionStatus struct {
 	ID            uuid.UUID   `json:"id"`
 	AssignmentRev int64       `json:"assignmentRevision,string"`
@@ -49,6 +57,11 @@ type CorrectionStatus struct {
 	Attempts      int         `json:"-"`
 }
 
+// CorrectionRepository is the persistence port for suppressions and
+// correction status used by Service. Reads return authz.ErrNotFound for
+// unknown IDs. RetryCorrection returns authz.ErrRevisionConflict unless the
+// scope is failed, and otherwise supersedes it with a new queued scope at the
+// current assignment revision.
 type CorrectionRepository interface {
 	ReadTargetContext(context.Context, platform.TransactionContext, uuid.UUID, int) (TargetContext, error)
 	ReadSuppression(context.Context, platform.TransactionContext, uuid.UUID) (Suppression, error)
@@ -61,6 +74,9 @@ type CorrectionRepository interface {
 	RetryCorrection(context.Context, platform.TransactionContext, uuid.UUID) (CorrectionStatus, error)
 }
 
+// CorrectionLease is a claimed correction scope. FencingToken guards every
+// write made under the lease, which expires at LeaseUntil; AssignmentRev and
+// AccessRevision are the revisions the correction must still match.
 type CorrectionLease struct {
 	ID             uuid.UUID
 	AssignmentRev  int64
@@ -77,6 +93,8 @@ type CorrectionLease struct {
 	Attempts       int
 }
 
+// CorrectionBatchItem is one stored transmission within a correction scope,
+// with the original targets and observation time needed to re-match it.
 type CorrectionBatchItem struct {
 	TransmissionID uuid.UUID
 	MessageID      uuid.UUID
@@ -89,11 +107,14 @@ type CorrectionBatchItem struct {
 	Dirty          bool
 }
 
+// CorrectionUpdate pairs a batch item with its fresh match result.
 type CorrectionUpdate struct {
 	Item  CorrectionBatchItem
 	Match MatchResult
 }
 
+// CorrectionChange is one target whose stored resolution was changed by
+// ApplyCorrectionBatch; MessageRev is the message revision after the change.
 type CorrectionChange struct {
 	TransmissionID uuid.UUID
 	MessageID      uuid.UUID
@@ -104,6 +125,15 @@ type CorrectionChange struct {
 	After          events.IntakeResolution
 }
 
+// CorrectionWorkRepository is the persistence port used by CorrectionRunner.
+// ClaimCorrection leases the oldest queued (or expired running) scope recorded
+// for the current assignment revision; it reports false when there is none.
+// ApplyCorrectionBatch and CompleteCorrection must be called with a still-valid
+// lease and fail with a revision conflict when the assignment or access
+// revision moved. CompleteCorrection returns false while transmissions in the
+// scope still need correction. FailCorrection reschedules the scope with a
+// delay, marks it failed after repeated attempts, or supersedes it when the
+// assignment revision moved; it is a no-op for a lost lease.
 type CorrectionWorkRepository interface {
 	ClaimCorrection(context.Context, platform.TransactionContext, time.Time, time.Duration) (CorrectionLease, bool, error)
 	ReadCorrectionBatch(context.Context, platform.TransactionContext, CorrectionLease, int) ([]CorrectionBatchItem, error)
@@ -112,14 +142,19 @@ type CorrectionWorkRepository interface {
 	FailCorrection(context.Context, platform.TransactionContext, CorrectionLease, string, time.Duration) error
 }
 
-// CorrectionPublication re-enters unpublished Transmissions into the C-11 publication barrier
-// after correction (C-05 post-correction publication re-entry). Eligibility is derived from durable rows.
+// CorrectionPublication hands transmissions whose publication was held back
+// while a correction was pending back to the publication pipeline once
+// correction has finished. PublicationReentries selects up to n eligible
+// transmissions; eligibility is derived from durable rows, so a failed
+// re-entry is retried on a later pass.
 type CorrectionPublication interface {
 	PublicationReentries(context.Context, platform.TransactionContext, int) ([]uuid.UUID, error)
 	// ReenterPublication reports whether it admitted current Processing work or published the Transmission.
 	ReenterPublication(context.Context, platform.TransactionContext, uuid.UUID) (bool, error)
 }
 
+// SuppressionResult is a suppression together with the correction scope its
+// change queued. Correction is zero for ReadSuppression.
 type SuppressionResult struct {
 	Suppression Suppression      `json:"suppression"`
 	Correction  CorrectionStatus `json:"correction"`

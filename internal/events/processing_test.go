@@ -41,14 +41,14 @@ func TestProcessingFactFactoriesClosedVocabularyAndDetachedEnvelope(t *testing.T
 	}
 	before := *envelope.CausationID
 	causation = uuid.New()
-	if *envelope.CausationID != before || envelope.Producer.Domain != "DOM-08" ||
+	if *envelope.CausationID != before || envelope.Producer.Domain != "processing" ||
 		envelope.Type != "configuration.changed" || string(envelope.Data) != `{"changeKind":"version-saved"}` {
 		t.Fatalf("configuration escaped producer boundary: %+v", envelope)
 	}
 	for _, kind := range []string{"password-changed", "", "membership-changed"} {
 		fact.ChangeKind = kind
 		if _, err := fact.Envelope(now); platform.FailureCode(err) != platform.CodeInvalidInput {
-			t.Fatalf("older/unknown change entered DOM-08: %q, %v", kind, err)
+			t.Fatalf("older/unknown change entered Processing: %q, %v", kind, err)
 		}
 	}
 	completion := completionFixture(t)

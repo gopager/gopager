@@ -25,7 +25,7 @@ import (
 	"github.com/gopager/gopager/internal/testutil/pluginfixture"
 )
 
-// installedSourceFixture provides explicit synthetic source scope, not production AP-06 originals.
+// installedSourceFixture provides explicit synthetic source scope, not production originals.
 type installedSourceFixture struct {
 	f         matcherFixture
 	source    processing.SourceIdentity

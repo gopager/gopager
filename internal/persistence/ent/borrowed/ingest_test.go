@@ -202,13 +202,10 @@ func TestGatewayCredentialCutoverStateAndNetworkReplacement(t *testing.T) {
 	}
 	var revision int64
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		now, err := store.Now(tx.Context(), tx)
-		if err != nil {
-			return err
-		}
+		var err error
 		revision, err = repository.ReplaceGatewayNetworks(tx.Context(), tx, gateway, 3,
 			[]ingest.GatewayNetwork{{Identifier: "replacement", NetworkID: network,
-				Protocol: protocols.POCSAG, Default: true}}, now)
+				Protocol: protocols.POCSAG, Default: true}})
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -489,18 +486,18 @@ func TestTransmissionAcceptanceRollsBackAtEachParticipant(t *testing.T) {
 						return err
 					}
 				}
-				_, err = executor.ExecContext(tx.Context(), `CREATE FUNCTION ap07_intake_failpoint()
+				_, err = executor.ExecContext(tx.Context(), `CREATE FUNCTION test_intake_failpoint()
 					RETURNS trigger LANGUAGE plpgsql AS $$
 					BEGIN
-						RAISE EXCEPTION 'injected AP-07 participant failure' USING ERRCODE='P0001';
+						RAISE EXCEPTION 'injected intake participant failure' USING ERRCODE='P0001';
 					END;
 					$$`)
 				if err != nil {
 					return err
 				}
-				_, err = executor.ExecContext(tx.Context(), `CREATE TRIGGER ap07_intake_failpoint
+				_, err = executor.ExecContext(tx.Context(), `CREATE TRIGGER test_intake_failpoint
 					`+test.timing+` INSERT ON `+test.table+`
-					FOR EACH ROW EXECUTE FUNCTION ap07_intake_failpoint()`)
+					FOR EACH ROW EXECUTE FUNCTION test_intake_failpoint()`)
 				return err
 			}); err != nil {
 				t.Fatal(err)

@@ -66,7 +66,7 @@ No historical rematching/suppression/publication, original intake, Message/contr
 
 ## Historical Handover
 
-The **verified D-60 prerequisite only** is available to AP-06 T022/T023 through the four owner artifact bindings in E-02, with actual evidence in E-03. No whole T028/T029/AP-08 acceptance is claimed. DOM-01/AP-06 must supply the actual Network existence/Protocol/scope owner, use server-derived candidate context and retain the transaction/lock boundary; it must not expose internal matching as caller-supplied authority. AP-06 still needs the T043 evaluator kernel and its own contract/execution binding.
+The **verified D-60 prerequisite only** is available to AP-06 T022/T023 through the four owner artifact bindings in E-02, with actual evidence in E-03. No whole T028/T029/AP-08 acceptance is claimed. Intake/AP-06 must supply the actual Network existence/Protocol/scope owner, use server-derived candidate context and retain the transaction/lock boundary; it must not expose internal matching as caller-supplied authority. AP-06 still needs the T043 evaluator kernel and its own contract/execution binding.
 
 No downstream AP amendment was needed: the staged producer/consumer boundaries remain those of the unchanged baselines. Later AP-08 work retains its original definitions and required historical integration.
 

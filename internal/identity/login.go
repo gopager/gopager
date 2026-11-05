@@ -56,6 +56,7 @@ type LoginRepository interface {
 // RateLimited exposes only a safe retry interval, not account existence.
 type RateLimited struct{ RetryAfter time.Duration }
 
+// Error returns a generic user-facing message without account details.
 func (e *RateLimited) Error() string { return "Too many attempts. Try again later." }
 
 // SessionResult is returned once after a successful ordinary login.
@@ -84,6 +85,9 @@ func (s SessionResult) LogValue() slog.Value {
 	return slog.GroupValue(slog.String("sessionId", s.SessionID.String()))
 }
 
+// LoginService implements local password login (AuthenticateLocal), Logout and
+// ReadSession with persistent per-account and per-instance throttling. Create
+// it with NewLoginService.
 type LoginService struct {
 	transactions Transactions
 	resolver     *Resolver
@@ -99,7 +103,8 @@ type LoginRateLimits struct {
 	InstanceAttempts int
 }
 
-// DefaultLoginRateLimits returns the C-06 defaults without shared mutable configuration.
+// DefaultLoginRateLimits returns the default limits: 10 attempts per minute per
+// account and 300 per minute per instance. Each call returns a fresh value.
 func DefaultLoginRateLimits() LoginRateLimits {
 	return LoginRateLimits{AccountAttempts: 10, InstanceAttempts: 300}
 }

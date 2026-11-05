@@ -129,7 +129,12 @@ type CandidateRepository interface {
 	RenewCandidate(context.Context, platform.TransactionContext, CandidateLease) (Candidate, error)
 }
 
+// CandidateLeaseDuration is how long a claimed or renewed candidate lease stays valid,
+// measured from the primary clock.
 const CandidateLeaseDuration = 60 * time.Second
+
+// CandidateRenewInterval is how often a worker renews a held candidate lease; it leaves
+// room for two missed renewals before CandidateLeaseDuration expires.
 const CandidateRenewInterval = 20 * time.Second
 
 // CandidateLease binds a worker write to one candidate revision and ownership fence.
@@ -244,6 +249,7 @@ func (c Candidate) RetryFailed(expected int64, primaryNow time.Time) (Candidate,
 	c.Revision, c.State, c.ManualRetryPending = revision, "pending", true
 	c.DueAt, c.UpdatedAt = primaryNow.UTC(), primaryNow.UTC()
 	c.Selected, c.WorkerID, c.LeaseUntil = nil, nil, nil
+	c.FailureCode, c.FailureStep = nil, nil
 	return c, nil
 }
 

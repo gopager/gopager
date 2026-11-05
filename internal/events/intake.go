@@ -10,25 +10,50 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
+// IntakeType is the envelope event type of an IntakeFact.
 type IntakeType string
 
+// Intake event types accepted by IntakeFact.Envelope.
 const (
-	SubmissionRejected         IntakeType = "operation.submission-rejected"
+	// SubmissionRejected records that a gateway submission was rejected
+	// (requires GatewayID, SubmissionID, ReasonCode).
+	SubmissionRejected IntakeType = "operation.submission-rejected"
+	// ObservationTimeImplausible records that a transmission's reported
+	// observation time was implausible (requires TransmissionID, GatewayID).
 	ObservationTimeImplausible IntakeType = "operation.observation-time-implausible"
-	NetworkAmbiguous           IntakeType = "operation.network-ambiguous"
-	GatewayStateChanged        IntakeType = "gateway.state-changed"
-	MessageCreated             IntakeType = "message.created"
-	MessageTransmissionJoined  IntakeType = "message.transmission-joined"
-	MessageMerged              IntakeType = "message.merged"
-	AssignmentChanged          IntakeType = "assignment.changed"
+	// NetworkAmbiguous records that a transmission's network could not be
+	// determined unambiguously and how it was resolved (also requires
+	// NetworkID and Resolution).
+	NetworkAmbiguous IntakeType = "operation.network-ambiguous"
+	// GatewayStateChanged records a gateway connectivity state transition
+	// (requires distinct OldState/NewState and ContactTime).
+	GatewayStateChanged IntakeType = "gateway.state-changed"
+	// MessageCreated records that a transmission started a new message.
+	MessageCreated IntakeType = "message.created"
+	// MessageTransmissionJoined records that a transmission joined an existing
+	// message; LateJoin marks a transmission observed earlier than the
+	// message's latest observation (it arrived out of order).
+	MessageTransmissionJoined IntakeType = "message.transmission-joined"
+	// MessageMerged records that a message absorbed the messages in Absorbed
+	// (non-empty, distinct, not containing MessageID).
+	MessageMerged IntakeType = "message.merged"
+	// AssignmentChanged records a change of a message target's unit resolution
+	// at admission time (requires TargetPosition, After, and a Reason of
+	// created, corrected, removed or first-time-changed).
+	AssignmentChanged IntakeType = "assignment.changed"
 )
 
+// IntakeResolution is the assignment state of one message target. Status is
+// unresolved, unassigned, assigned, pending or failed; UnitID and
+// AddressRuleID must be set exactly when Status is assigned.
 type IntakeResolution struct {
 	Status        string     `json:"status"`
 	UnitID        *uuid.UUID `json:"unitId,omitempty"`
 	AddressRuleID *uuid.UUID `json:"matchedRuleId,omitempty"`
 }
 
+// IntakeData is the data payload of an intake envelope; only the fields
+// relevant to the envelope type are set.
 type IntakeData struct {
 	GatewayID      uuid.UUID         `json:"gatewayId,omitempty"`
 	TransmissionID uuid.UUID         `json:"transmissionId,omitempty"`
@@ -49,6 +74,9 @@ type IntakeData struct {
 	After          *IntakeResolution `json:"after,omitempty"`
 }
 
+// IntakeFact is the producer input for an operational fact from transmission
+// intake, message grouping or target admission. Type selects which fields are
+// required; see the IntakeType constants.
 type IntakeFact struct {
 	ID             uuid.UUID
 	Type           IntakeType
@@ -73,10 +101,15 @@ type IntakeFact struct {
 	After          *IntakeResolution
 }
 
+// IntakeAppender records intake facts through the caller's active platform
+// transaction. AppendIntakeFact returns the fact ID, or ErrInvalidFact when
+// the fact fails Envelope validation.
 type IntakeAppender interface {
 	AppendIntakeFact(context.Context, platform.TransactionContext, IntakeFact) (uuid.UUID, error)
 }
 
+// IntakeEnvelope is the persisted serialization of an IntakeFact, classified
+// "operational".
 type IntakeEnvelope struct {
 	SchemaVersion     int        `json:"schemaVersion"`
 	DomainEventID     uuid.UUID  `json:"domainEventId"`
@@ -91,7 +124,11 @@ type IntakeEnvelope struct {
 	ReplayMode        string     `json:"replayMode"`
 }
 
-// Envelope validates the AP-07 fact vocabulary and excludes original Payload and credential data.
+// Envelope validates the fact for its Type and returns the envelope stamped
+// with recorded, deriving the aggregate and producer from the Type. The
+// envelope never carries the original transmission payload or credential
+// data. Absorbed IDs are sorted. It returns ErrInvalidFact for missing or
+// inconsistent fields or an unknown Type.
 func (f IntakeFact) Envelope(recorded time.Time) (IntakeEnvelope, error) {
 	if f.ID == uuid.Nil || f.Revision <= 0 || f.OccurredAt.IsZero() || recorded.IsZero() ||
 		f.OccurredAt.Nanosecond()%1000 != 0 || recorded.Nanosecond()%1000 != 0 {
@@ -104,7 +141,7 @@ func (f IntakeFact) Envelope(recorded time.Time) (IntakeEnvelope, error) {
 		if f.GatewayID == uuid.Nil || f.SubmissionID == "" || f.ReasonCode == "" {
 			return IntakeEnvelope{}, ErrInvalidFact
 		}
-		envelope.Producer = Producer{Domain: "DOM-01", Version: "transmission-intake1.0"}
+		envelope.Producer = Producer{Domain: "intake", Version: "transmission-intake1.0"}
 		envelope.AggregateRef = EntityRef{Type: "gateway", ID: f.GatewayID}
 		envelope.Data = IntakeData{GatewayID: f.GatewayID, SubmissionID: f.SubmissionID, ReasonCode: f.ReasonCode}
 	case ObservationTimeImplausible, NetworkAmbiguous:
@@ -112,7 +149,7 @@ func (f IntakeFact) Envelope(recorded time.Time) (IntakeEnvelope, error) {
 			f.Type == NetworkAmbiguous && (f.NetworkID == uuid.Nil || f.Resolution == "") {
 			return IntakeEnvelope{}, ErrInvalidFact
 		}
-		envelope.Producer = Producer{Domain: "DOM-01", Version: "transmission-intake1.0"}
+		envelope.Producer = Producer{Domain: "intake", Version: "transmission-intake1.0"}
 		envelope.AggregateRef = EntityRef{Type: "transmission", ID: f.TransmissionID}
 		envelope.Data = IntakeData{GatewayID: f.GatewayID, TransmissionID: f.TransmissionID,
 			NetworkID: f.NetworkID, Resolution: f.Resolution}
@@ -121,7 +158,7 @@ func (f IntakeFact) Envelope(recorded time.Time) (IntakeEnvelope, error) {
 			f.OldState == f.NewState || f.ContactTime == nil || f.ContactTime.IsZero() {
 			return IntakeEnvelope{}, ErrInvalidFact
 		}
-		envelope.Producer = Producer{Domain: "DOM-01", Version: "transmission-intake1.0"}
+		envelope.Producer = Producer{Domain: "intake", Version: "transmission-intake1.0"}
 		envelope.AggregateRef = EntityRef{Type: "gateway", ID: f.GatewayID}
 		envelope.Data = IntakeData{ContactTime: f.ContactTime, OldState: f.OldState, NewState: f.NewState,
 			ReasonCode: f.ReasonCode, Detail: f.Detail}
@@ -129,7 +166,7 @@ func (f IntakeFact) Envelope(recorded time.Time) (IntakeEnvelope, error) {
 		if f.MessageID == uuid.Nil || f.TransmissionID == uuid.Nil {
 			return IntakeEnvelope{}, ErrInvalidFact
 		}
-		envelope.Producer = Producer{Domain: "DOM-02", Version: "message-grouping1.0"}
+		envelope.Producer = Producer{Domain: "grouping", Version: "message-grouping1.0"}
 		envelope.AggregateRef = EntityRef{Type: "message", ID: f.MessageID}
 		envelope.Data = IntakeData{MessageID: f.MessageID, TransmissionID: f.TransmissionID,
 			LateJoin: f.Type == MessageTransmissionJoined && f.LateJoin}
@@ -144,7 +181,7 @@ func (f IntakeFact) Envelope(recorded time.Time) (IntakeEnvelope, error) {
 		if len(slices.Compact(absorbed)) != len(absorbed) || slices.Contains(absorbed, f.MessageID) {
 			return IntakeEnvelope{}, ErrInvalidFact
 		}
-		envelope.Producer = Producer{Domain: "DOM-02", Version: "message-grouping1.0"}
+		envelope.Producer = Producer{Domain: "grouping", Version: "message-grouping1.0"}
 		envelope.AggregateRef = EntityRef{Type: "message", ID: f.MessageID}
 		envelope.Data = IntakeData{MessageID: f.MessageID, TransmissionID: f.TransmissionID, Absorbed: absorbed}
 	case AssignmentChanged:
@@ -154,7 +191,7 @@ func (f IntakeFact) Envelope(recorded time.Time) (IntakeEnvelope, error) {
 			!slices.Contains([]string{"created", "corrected", "removed", "first-time-changed"}, f.Reason) {
 			return IntakeEnvelope{}, ErrInvalidFact
 		}
-		envelope.Producer = Producer{Domain: "DOM-04", Version: "target-admission1.0"}
+		envelope.Producer = Producer{Domain: "assignment", Version: "target-admission1.0"}
 		envelope.AggregateRef = EntityRef{Type: "message", ID: f.MessageID}
 		envelope.Data = IntakeData{MessageID: f.MessageID, TransmissionID: f.TransmissionID,
 			Reason: f.Reason, TargetPosition: f.TargetPosition, Before: f.Before, After: f.After}

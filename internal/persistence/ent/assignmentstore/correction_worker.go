@@ -17,6 +17,12 @@ import (
 	"github.com/gopager/gopager/internal/protocols"
 )
 
+// ClaimCorrection leases the oldest queued or lease-expired running correction scope of
+// the current Assignment revision for lease (at most one minute) from now. Claiming
+// increments the attempt count and fencing token and pins the current access revision.
+// The bool is false when no scope is claimable, including when the chosen scope is locked
+// by another worker or has used its five attempts (it is then marked failed with
+// RETRY_LIMIT).
 func (s *Store) ClaimCorrection(ctx context.Context, tx platform.TransactionContext, now time.Time,
 	lease time.Duration,
 ) (assignments.CorrectionLease, bool, error) {
@@ -124,6 +130,12 @@ func readCorrectionLease(ctx context.Context, executor postgres.Executor, id uui
 	return value, nil
 }
 
+// ReadCorrectionBatch returns up to limit (1..100) Transmissions to re-resolve under a
+// held lease: explicitly dirtied Transmissions first, and only when none remain, the next
+// in-scope Transmissions after the cursor and up to the high-water mark that still carry
+// targets resolved at an older Assignment revision. An empty result means the scan is
+// exhausted. A stale fencing token, expired lease or changed revision yields
+// authz.ErrRevisionConflict.
 func (s *Store) ReadCorrectionBatch(ctx context.Context, tx platform.TransactionContext,
 	lease assignments.CorrectionLease, limit int,
 ) ([]assignments.CorrectionBatchItem, error) {
@@ -202,6 +214,14 @@ func scanCorrectionItems(rows *sql.Rows) ([]assignments.CorrectionBatchItem, err
 	return items, rows.Err()
 }
 
+// ApplyCorrectionBatch writes re-resolved targets (1..100 updates) under a held lease and
+// returns the target resolutions that actually changed, each with the Message revision
+// after the change. It takes the Assignment and access locks and fails with
+// authz.ErrRevisionConflict when either revision, the fence, or a Transmission's source
+// identity changed. Side effects: dirty entries are cleared or the scan cursor advances,
+// every touched Message has its contributions rebuilt and is reset to unpublished
+// (pending), Messages with changed targets get a new revision, and the lease is extended
+// by 30 seconds.
 func (s *Store) ApplyCorrectionBatch(ctx context.Context, tx platform.TransactionContext,
 	lease assignments.CorrectionLease, updates []assignments.CorrectionUpdate,
 ) ([]assignments.CorrectionChange, error) {
@@ -318,7 +338,8 @@ func (s *Store) ApplyCorrectionBatch(ctx context.Context, tx platform.Transactio
 		if err := rebuildMessageContributions(ctx, executor, message); err != nil {
 			return nil, err
 		}
-		// Rebuilt contributions are unready; keep the whole Message unpublished until C-11 re-entry.
+		// Rebuilt contributions are unready; keep the whole Message unpublished until the
+		// post-correction publication re-entry sweep processes and publishes it again.
 		if _, err := executor.ExecContext(ctx, `UPDATE transmissions SET processing_status='pending',
 			publication_status='pending' WHERE message_id=$1`, message); err != nil {
 			return nil, err
@@ -536,6 +557,10 @@ func rebuildMessageContributions(ctx context.Context, executor postgres.Executor
 	return err
 }
 
+// CompleteCorrection marks the leased scope completed if nothing remains: no dirty
+// Transmissions and no in-scope Transmission up to the high-water mark with targets at an
+// older Assignment revision. It returns false, without error, while work remains. A stale
+// fence or changed Assignment/access revision yields authz.ErrRevisionConflict.
 func (s *Store) CompleteCorrection(ctx context.Context, tx platform.TransactionContext,
 	lease assignments.CorrectionLease,
 ) (bool, error) {
@@ -596,6 +621,10 @@ func (s *Store) CompleteCorrection(ctx context.Context, tx platform.TransactionC
 	return err == nil, err
 }
 
+// FailCorrection records a failed attempt with failureCode. A lease that is no longer held
+// is ignored (nil). If the Assignment revision moved on, the scope is superseded;
+// otherwise it is requeued after delay (at most one minute), or marked failed once it has
+// used five attempts. It returns authz.ErrNotFound for an unknown scope.
 func (s *Store) FailCorrection(ctx context.Context, tx platform.TransactionContext, lease assignments.CorrectionLease,
 	failureCode string, delay time.Duration,
 ) error {

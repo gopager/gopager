@@ -14,6 +14,9 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
+// ReadTargetContext returns the stored resolution of one target of a Transmission together
+// with its Message, Network and timestamps. It returns authz.ErrInvalidInput for a nil ID
+// or negative position and authz.ErrNotFound when the target does not exist.
 func (s *Store) ReadTargetContext(ctx context.Context, tx platform.TransactionContext,
 	transmission uuid.UUID, position int,
 ) (assignments.TargetContext, error) {
@@ -51,6 +54,8 @@ func (s *Store) ReadTargetContext(ctx context.Context, tx platform.TransactionCo
 	return result, nil
 }
 
+// ReadSuppression returns a target suppression, active or lifted. It returns
+// authz.ErrNotFound for an unknown ID.
 func (s *Store) ReadSuppression(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (assignments.Suppression, error) {
 	if id == uuid.Nil {
 		return assignments.Suppression{}, authz.ErrInvalidInput
@@ -77,6 +82,8 @@ func (s *Store) ReadSuppression(ctx context.Context, tx platform.TransactionCont
 	return value, nil
 }
 
+// FindActiveSuppression returns the unlifted suppression of one Transmission target, if
+// any; the bool is false when none exists.
 func (s *Store) FindActiveSuppression(ctx context.Context, tx platform.TransactionContext,
 	transmission uuid.UUID, position int,
 ) (assignments.Suppression, bool, error) {
@@ -99,6 +106,8 @@ func (s *Store) FindActiveSuppression(ctx context.Context, tx platform.Transacti
 	return value, true, nil
 }
 
+// ListSuppressions returns every target suppression, active and lifted, ordered by ID.
+// The result is unpaginated.
 func (s *Store) ListSuppressions(ctx context.Context, tx platform.TransactionContext) ([]assignments.Suppression, error) {
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {
@@ -127,6 +136,9 @@ func (s *Store) ListSuppressions(ctx context.Context, tx platform.TransactionCon
 	return values, rows.Err()
 }
 
+// CreateSuppression inserts a new active suppression. value must have non-nil IDs, a
+// non-negative target position, Revision 1 and a CreatedAt; actor must be non-nil. A
+// second active suppression for the same target is rejected by the database.
 func (s *Store) CreateSuppression(ctx context.Context, tx platform.TransactionContext,
 	value assignments.Suppression, actor uuid.UUID,
 ) error {
@@ -144,6 +156,9 @@ func (s *Store) CreateSuppression(ctx context.Context, tx platform.TransactionCo
 	return err
 }
 
+// LiftSuppression marks an active suppression as lifted at now by actor and increments its
+// revision. It returns authz.ErrNotFound for an unknown ID and authz.ErrRevisionConflict
+// when expected is stale or the suppression is already lifted.
 func (s *Store) LiftSuppression(ctx context.Context, tx platform.TransactionContext, id uuid.UUID,
 	expected int64, actor uuid.UUID, now time.Time,
 ) (assignments.Suppression, error) {
@@ -181,6 +196,8 @@ func (s *Store) LiftSuppression(ctx context.Context, tx platform.TransactionCont
 	return value, nil
 }
 
+// ReadCorrection returns the status and progress counts of a correction scope. Internal
+// state "queued" is reported as "pending". It returns authz.ErrNotFound for an unknown ID.
 func (s *Store) ReadCorrection(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (assignments.CorrectionStatus, error) {
 	if id == uuid.Nil {
 		return assignments.CorrectionStatus{}, authz.ErrInvalidInput
@@ -192,6 +209,8 @@ func (s *Store) ReadCorrection(ctx context.Context, tx platform.TransactionConte
 	return readCorrection(ctx, executor, `id=$1`, id)
 }
 
+// CorrectionForRevision returns the most recently recorded correction scope for an
+// Assignment revision, or authz.ErrNotFound when that revision recorded none.
 func (s *Store) CorrectionForRevision(ctx context.Context, tx platform.TransactionContext,
 	revision int64,
 ) (assignments.CorrectionStatus, error) {
@@ -205,6 +224,11 @@ func (s *Store) CorrectionForRevision(ctx context.Context, tx platform.Transacti
 	return readCorrection(ctx, executor, `assignment_revision=$1 ORDER BY recorded_at DESC LIMIT 1`, revision)
 }
 
+// RetryCorrection supersedes a failed correction scope with a new queued scope covering
+// the same Networks/Unit at the current Assignment revision, access revision and
+// Transmission high-water mark, and returns the new scope. It takes the Assignment and
+// access locks. It returns authz.ErrNotFound for an unknown ID and
+// authz.ErrRevisionConflict when the scope is not in state "failed".
 func (s *Store) RetryCorrection(ctx context.Context, tx platform.TransactionContext,
 	id uuid.UUID,
 ) (assignments.CorrectionStatus, error) {
@@ -344,14 +368,8 @@ func correctionCounts(ctx context.Context, executor interface {
 	if value.CursorAt != nil && value.CursorID != nil {
 		cursorAt, cursorID = value.CursorAt, value.CursorID
 	}
-	if cursorAt == nil {
-		err := executor.QueryRowContext(ctx, `SELECT count(*) FROM transmissions t WHERE (`+scope+`)
-			AND `+targetScope+` AND `+upper+` AND false`,
-			networkValues, value.UnitID, value.HighWaterAt, value.HighWaterID).Scan(&processed)
-		if err != nil {
-			return 0, 0, err
-		}
-	} else {
+	// Without a cursor nothing has been processed yet, so processed stays 0.
+	if cursorAt != nil {
 		err := executor.QueryRowContext(ctx, `SELECT count(*) FROM transmissions t WHERE (`+scope+`)
 			AND `+targetScope+` AND `+upper+` AND (t.accepted_at,t.id) <= ($5,$6)`,
 			networkValues, value.UnitID, value.HighWaterAt, value.HighWaterID, cursorAt, cursorID).Scan(&processed)

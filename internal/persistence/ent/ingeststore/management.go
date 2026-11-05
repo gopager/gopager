@@ -14,8 +14,13 @@ import (
 	"github.com/gopager/gopager/internal/protocols"
 )
 
+// ReplaceGatewayNetworks replaces the gateway's complete Network mapping and bumps its
+// revision. expected must equal the current revision (otherwise a revision conflict);
+// every referenced Network must exist, be undeleted and match the declared Protocol
+// (otherwise authz.ErrInvalidInput). It returns the new revision, or authz.ErrNotFound for
+// an unknown gateway.
 func (s *Store) ReplaceGatewayNetworks(ctx context.Context, tx platform.TransactionContext, gateway uuid.UUID,
-	expected int64, networks []ingest.GatewayNetwork, now time.Time) (int64, error) {
+	expected int64, networks []ingest.GatewayNetwork) (int64, error) {
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {
 		return 0, err
@@ -63,6 +68,10 @@ func (s *Store) ReplaceGatewayNetworks(ctx context.Context, tx platform.Transact
 	return next, nil
 }
 
+// GatewayNetworksForAuthorization returns the gateway's Network mapping ordered by gateway
+// network identifier, locking the gateway row FOR UPDATE for the rest of the transaction.
+// It returns authz.ErrNotFound for an unknown gateway and nil for a gateway with no
+// mappings.
 func (s *Store) GatewayNetworksForAuthorization(ctx context.Context, tx platform.TransactionContext,
 	gateway uuid.UUID) ([]ingest.GatewayNetwork, error) {
 	executor, err := s.primary.Resolve(tx)
@@ -96,6 +105,9 @@ func (s *Store) GatewayNetworksForAuthorization(ctx context.Context, tx platform
 	return result, rows.Err()
 }
 
+// GatewayCredentialStatus lists every credential of the gateway, oldest first, with status
+// "current", "pending" or "revoked" and RFC 3339 UTC timestamps; secret hashes are never
+// returned. It returns authz.ErrNotFound for an unknown gateway.
 func (s *Store) GatewayCredentialStatus(ctx context.Context, tx platform.TransactionContext,
 	gateway uuid.UUID) ([]ingest.GatewayCredentialView, error) {
 	executor, err := s.primary.Resolve(tx)
@@ -143,6 +155,11 @@ func (s *Store) GatewayCredentialStatus(ctx context.Context, tx platform.Transac
 	return result, rows.Err()
 }
 
+// IssueGatewayCredential stores a new credential hash for the gateway and bumps its
+// revision; expected must equal the current revision. If the gateway already has a
+// current credential the new one is stored as pending (a replacement that takes over on
+// first use) and the returned bool is true. An existing unrevoked pending credential
+// yields authz.ErrRevisionConflict. It returns the new revision.
 func (s *Store) IssueGatewayCredential(ctx context.Context, tx platform.TransactionContext, gateway uuid.UUID,
 	expected int64, credential uuid.UUID, hash [32]byte, now time.Time) (bool, int64, error) {
 	executor, err := s.primary.Resolve(tx)
@@ -184,6 +201,10 @@ func (s *Store) IssueGatewayCredential(ctx context.Context, tx platform.Transact
 	return pending, next, nil
 }
 
+// RevokeGatewayCredential marks an unrevoked credential of the gateway as revoked at now
+// and bumps the gateway revision; expected must equal the current revision. It returns
+// authz.ErrNotFound if the gateway or an unrevoked credential with that ID does not
+// exist, and otherwise the new revision.
 func (s *Store) RevokeGatewayCredential(ctx context.Context, tx platform.TransactionContext, gateway,
 	credential uuid.UUID, expected int64, now time.Time) (int64, error) {
 	executor, err := s.primary.Resolve(tx)

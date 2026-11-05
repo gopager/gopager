@@ -8,7 +8,7 @@ Referenced contracts (follow only when relevant): [C-06](c-06-identity-authoriza
 
 **Traceability:** [REQ-081..087](../requirements-catalog.md#i-domain-events-extensions-and-deliveries), [REQ-105..106](../requirements-catalog.md#k-installed-web-app-and-security-behavior), [REQ-129..130](../requirements-catalog.md#m-additional-domain-capabilities). Issue references: [P-07/P-10/P-11](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
-**Version/status:** 0.1-draft. **Owner:** DOM-07; C-10 host executes under control. **Parties:** authorized subscription owner/target manager, Domain event worker, host capability, provider.
+**Version/status:** 0.1-draft. **Owner:** Delivery; C-10 host executes under control. **Parties:** authorized subscription owner/target manager, Domain event worker, host capability, provider.
 
 | Draft interface | Input -> result |
 | --- | --- |
@@ -39,7 +39,7 @@ Hidden/unreadable operands produce an indeterminate value, propagated through ne
 
 ### Early Shared Typed Predicate Candidate
 
-**Version/status:** typed-predicate 1.0, explicitly frozen 2026-11-01 with restricted CEL-Go under D-66 as part of the user's `approve-processing-kernel-1.0` approval; execution start remains separate. **Owner:** DOM-07/integration for this shared representation; DOM-08 consumes it for Workflow selectors/conditions. No Delivery/subscription engine or general expression-language API is introduced.
+**Version/status:** typed-predicate 1.0, explicitly frozen 2026-11-01 with restricted CEL-Go under D-66 as part of the user's `approve-processing-kernel-1.0` approval; execution start remains separate. **Owner:** Delivery/integration for this shared representation; Processing consumes it for Workflow selectors/conditions. No Delivery/subscription engine or general expression-language API is introduced.
 
 The approved subset's authoritative implemented wire types/validation are [typed values and closed schemas](../../internal/processing/values.go), [structured predicates/classified lookup](../../internal/processing/predicates.go) and [classification union](../../internal/processing/dependencies.go). [AP-12](../execution/source-ap-12.md#e-04-product-predicate-classification-and-supplied-core-guest) owns their actual partial verification; these primitives do not certify the complete Workflow, Subscription, native-search or publication consumer.
 
@@ -92,7 +92,7 @@ This matrix is binding even if AP-03 later requires a different SDK mechanism. D
 
 ## Configuration Authority
 
-**AP-04 D-33 clarification, 2026-10-26; DOM-07 with plugin-host/integration ownership; draft, not frozen.** Every integration requires configuration by an authorized administrator or Operator before Users can use it. Administrative authority is checked through C-06 (`plugin.configure` for all or a delegated instance); personal subscription rights do not grant it. Installing/updating plugin code remains Operator-only under C-10.
+**AP-04 D-33 clarification, 2026-10-26; Delivery with plugin-host/integration ownership; draft, not frozen.** Every integration requires configuration by an authorized administrator or Operator before Users can use it. Administrative authority is checked through C-06 (`plugin.configure` for all or a delegated instance); personal subscription rights do not grant it. Installing/updating plugin code remains Operator-only under C-10.
 
 Administrative configuration owns provider/application credentials, enabled capabilities, message format/templates, transport/authentication settings and security policy. The administrator/Operator is responsible for selecting appropriate settings and consciously accepting configured external-transport risks. This responsibility does not grant access to other Principals' data or disable Core authorization, Secret redaction or the existing transport rules.
 
@@ -106,7 +106,7 @@ Missing/inactive administrative configuration prevents use with a visible config
 
 ## Initial Target Capabilities
 
-**AP-04 D-33 amendment; DOM-07 with plugin-host/integration ownership; draft, not frozen.** Pushover and Webhook are the initial target plugins. The capability set belongs to [REQ-090](../requirements-catalog.md#i-domain-events-extensions-and-deliveries), delivery timing to the [plan](../authoritative-plan.md#ap-04-scope-decision). Neither installed Gateway behavior nor existing provider fixtures define this API.
+**AP-04 D-33 amendment; Delivery with plugin-host/integration ownership; draft, not frozen.** Pushover and Webhook are the initial target plugins. The capability set belongs to [REQ-090](../requirements-catalog.md#i-domain-events-extensions-and-deliveries), delivery timing to the [plan](../authoritative-plan.md#ap-04-scope-decision). Neither installed Gateway behavior nor existing provider fixtures define this API.
 
 Webhook target configuration must distinguish the destination, selected method, input encoding, authentication mode and versioned Secret references. All invocations use this contract's current authorized Delivery input and attempt/uncertainty rules plus [C-10 transport protections](c-10-plugin-host.md#ap-02-secrets-and-external-transport); none of the new options relaxes them.
 

@@ -289,7 +289,11 @@ func TestGatewayCredentialManagementHTTPSecretLifecycleAndAuthorization(t *testi
 	secondPending := `{"schemaVersion":1,"commandId":"` + uuid.NewString() + `","expectedRevision":"3"}`
 	fixture.request(t, http.MethodPost, path, secondPending, fixture.csrf, "", http.StatusConflict)
 	changedReplay := `{"schemaVersion":1,"commandId":"` + replacementCommand.String() + `","expectedRevision":"3"}`
-	fixture.request(t, http.MethodPost, path, changedReplay, fixture.csrf, "", http.StatusConflict)
+	changedConflict := fixture.request(t, http.MethodPost, path, changedReplay, fixture.csrf, "", http.StatusConflict)
+	if !strings.Contains(string(changedConflict), `"code":"IDEMPOTENCY_CONFLICT"`) ||
+		!strings.Contains(string(changedConflict), `"retryable":false`) {
+		t.Fatalf("changed command reuse was not a non-retryable idempotency conflict: %s", changedConflict)
+	}
 	fixture.setGrant(t, []uuid.UUID{fixture.current}, "gateway.update")
 	partialRevoke := `{"schemaVersion":1,"commandId":"` + uuid.NewString() + `","expectedRevision":"3"}`
 	fixture.request(t, http.MethodDelete, path+"/"+replacement.CredentialID, partialRevoke,
@@ -327,5 +331,38 @@ func TestGatewayCredentialManagementHTTPSecretLifecycleAndAuthorization(t *testi
 	status = fixture.request(t, http.MethodGet, statusPath, "", "", "", http.StatusOK)
 	if strings.Contains(string(status), replacement.Secret) || !strings.Contains(string(status), `"revoked"`) {
 		t.Fatalf("revoked credential status disclosed secret or omitted revoked state: %s", status)
+	}
+	// Each credential aggregate is issued at revision 1 and revoked at revision 2,
+	// whether by rotation cutover (first) or explicit revocation (replacement).
+	for _, credential := range []string{first.CredentialID, replacement.CredentialID} {
+		var kinds []string
+		if err := fixture.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+			executor, err := fixture.store.Resolve(tx)
+			if err != nil {
+				return err
+			}
+			rows, err := executor.QueryContext(tx.Context(), `SELECT envelope->'data'->>'changeKind',
+				(envelope->>'aggregateRevision')::bigint FROM domain_events
+				WHERE envelope->'aggregateRef'->>'type'='credential' AND envelope->'aggregateRef'->>'id'=$1
+				ORDER BY (envelope->>'aggregateRevision')::bigint`, credential)
+			if err != nil {
+				return err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var kind string
+				var revision int64
+				if err := rows.Scan(&kind, &revision); err != nil {
+					return err
+				}
+				kinds = append(kinds, kind+"@"+strconv.FormatInt(revision, 10))
+			}
+			return rows.Err()
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Join(kinds, ",") != "credential-issued@1,credential-revoked@2" {
+			t.Fatalf("credential %s facts are not strictly ordered issue@1, revoke@2: %v", credential, kinds)
+		}
 	}
 }

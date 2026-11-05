@@ -14,9 +14,13 @@ import (
 	"golang.org/x/net/idna"
 )
 
+// HTTP names used by the browser session transport.
 const (
+	// SessionCookieName is the cookie carrying the session secret.
 	SessionCookieName = "gopager_session"
-	CSRFHeaderName    = "X-CSRF-Token"
+	// CSRFHeaderName is the request header that must carry the session's CSRF
+	// token on state-changing session requests.
+	CSRFHeaderName = "X-CSRF-Token"
 )
 
 // HTTPTransport binds Cookie and Origin policy to the configured public origin.

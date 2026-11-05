@@ -64,7 +64,7 @@ func TestProcessingCandidateNativeReselectionRetainsResultsAndAttempts(t *testin
 	}); err != nil {
 		t.Fatal(err)
 	}
-	// The synthetic source reference is not a production AP-06 eligibility/readiness proof.
+	// The synthetic source reference is not a production eligibility/readiness proof.
 	resultID := uuid.New()
 	if err := primary.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		driver, err := borrowed.New(primary, tx)

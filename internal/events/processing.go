@@ -12,7 +12,10 @@ import (
 	"github.com/gopager/gopager/internal/processing"
 )
 
-// ProcessingConfigurationFact is DOM-08's separate vocabulary, not an identity/master-data fact.
+// ProcessingConfigurationFact is the processing domain's input for a
+// configuration.changed fact about a workflow (created, version-saved,
+// activated, updated, deleted). It is separate from identity and master-data
+// facts.
 type ProcessingConfigurationFact struct {
 	ID            uuid.UUID
 	WorkflowID    uuid.UUID
@@ -74,7 +77,8 @@ type ProcessingCompletionFact struct {
 	Result              processing.Evaluation
 }
 
-// ProcessingEnvelope uses the C-08 envelope while keeping typed DOM-08 factories separate.
+// ProcessingEnvelope is the common versioned event envelope used for processing
+// facts; it is built only by the typed processing fact Envelope methods.
 // Data is generated only by the fact factories, not accepted as arbitrary caller JSON.
 type ProcessingEnvelope struct {
 	SchemaVersion     int             `json:"schemaVersion"`
@@ -117,7 +121,7 @@ func processingFactEnvelope(id, aggregate uuid.UUID, revision int64, occurred, r
 		correlation = &id
 	}
 	return ProcessingEnvelope{SchemaVersion: 1, DomainEventID: id,
-		Producer:     Producer{Domain: "DOM-08", Version: "processing-kernel1.0"},
+		Producer:     Producer{Domain: "processing", Version: "processing-kernel1.0"},
 		AggregateRef: EntityRef{Type: "workflow", ID: aggregate}, AggregateRevision: revision,
 		OccurredAt: occurred.UTC(), RecordedAt: recorded.UTC(), CausationID: causation, CorrelationID: correlation,
 		Classification: "configuration", ReplayMode: "normal"}, nil

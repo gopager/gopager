@@ -13,8 +13,11 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
+// MaxTransmissionTargets is the maximum number of targets per Transmission.
 const MaxTransmissionTargets = 1024
 
+// ErrInvalidTransmission is returned for any malformed or unsupported
+// Transmission payload or target set.
 var ErrInvalidTransmission = errors.New("invalid Transmission")
 
 // TransmissionPayload is the closed, finalized Payload representation accepted by intake.

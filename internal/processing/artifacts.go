@@ -19,7 +19,7 @@ import (
 	"github.com/gopager/gopager/pluginsdk"
 )
 
-// MaxArtifactBytes bounds the streamed SHA-256 verification of a plugin executable (D-131).
+// MaxArtifactBytes bounds the streamed SHA-256 verification of a plugin executable.
 const MaxArtifactBytes = 256 << 20
 
 // ConfigurationPolicy mirrors every declared container, property and list element.

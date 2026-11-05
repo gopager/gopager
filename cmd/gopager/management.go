@@ -15,6 +15,7 @@ import (
 	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/assignments"
 	"github.com/gopager/gopager/internal/authz"
+	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/ingest"
 	"github.com/gopager/gopager/internal/platform"
@@ -418,7 +419,7 @@ func (api managementAPI) registerUnits(mux *http.ServeMux) {
 		return api.units.CreateUnitFromTemplate(r.Context(), proof, input.CommandID, input.TemplateID,
 			units.UnitInput{Name: input.Name, CollectionIDs: *input.CollectionIDs}, check)
 	}, http.StatusCreated))
-	mux.HandleFunc("POST /api/v1/units/bulk/preview", api.route(func(r *http.Request, proof identity.Proof, _ func(identity.Authentication) error) (any, error) {
+	mux.HandleFunc("POST /api/v1/units/bulk/preview", api.route(func(r *http.Request, proof identity.Proof, check func(identity.Authentication) error) (any, error) {
 		var input bulkUnitMutation
 		if err := decodeManagementJSON(r, &input); err != nil {
 			return nil, err
@@ -428,7 +429,7 @@ func (api managementAPI) registerUnits(mux *http.ServeMux) {
 		}
 		return api.units.PreviewBulkUnits(r.Context(), proof, units.BulkUnitInput{
 			Operation: input.Operation, Items: input.Items,
-		})
+		}, check)
 	}, http.StatusOK))
 	mux.HandleFunc("POST /api/v1/units/bulk", api.route(func(r *http.Request, proof identity.Proof, check func(identity.Authentication) error) (any, error) {
 		var input bulkUnitMutation
@@ -574,7 +575,7 @@ func (api managementAPI) registerRules(mux *http.ServeMux) {
 		}
 		return api.rules.ReadRule(r.Context(), proof, id)
 	}, http.StatusOK))
-	mux.HandleFunc("POST /api/v1/address-rules/preview", api.route(func(r *http.Request, proof identity.Proof, _ func(identity.Authentication) error) (any, error) {
+	mux.HandleFunc("POST /api/v1/address-rules/preview", api.route(func(r *http.Request, proof identity.Proof, check func(identity.Authentication) error) (any, error) {
 		var input ruleMutation
 		if err := decodeManagementJSON(r, &input); err != nil {
 			return nil, err
@@ -586,7 +587,7 @@ func (api managementAPI) registerRules(mux *http.ServeMux) {
 		if err != nil {
 			return nil, err
 		}
-		if err := api.rules.Preview(r.Context(), proof, input.ID, input.ExpectedRevision, values); err != nil {
+		if err := api.rules.Preview(r.Context(), proof, input.ID, input.ExpectedRevision, values, check); err != nil {
 			return nil, err
 		}
 		return struct {
@@ -743,14 +744,14 @@ func writeManagementError(w http.ResponseWriter, err error) {
 		code, fallback, status = "INVALID_INPUT", "Check the supplied values.", http.StatusBadRequest
 	case errors.Is(err, ingest.ErrSubmissionTooLarge):
 		code, fallback, status = "RESOURCE_LIMIT", "The operation exceeds a configured limit.", http.StatusRequestEntityTooLarge
-	case errors.Is(err, ingest.ErrSubmissionConflict):
-		code, fallback, status = "IDEMPOTENCY_CONFLICT", "This Submission ID was already used with different content.", http.StatusConflict
+	case errors.Is(err, ingest.ErrSubmissionConflict), errors.Is(err, commands.ErrIdempotencyConflict):
+		code, fallback, status = "IDEMPOTENCY_CONFLICT", "This operation identifier was already used differently.", http.StatusConflict
 	case errors.Is(err, identity.ErrLoginRequired):
 		code, fallback, status = "LOGIN_REQUIRED", "Sign in to continue.", http.StatusUnauthorized
 	case errors.Is(err, authz.ErrForbidden):
 		code, fallback, status = "FORBIDDEN", "This action is not permitted.", http.StatusForbidden
 	case errors.Is(err, authz.ErrNotFound):
-		code, fallback, status = "NOT_FOUND", "This item is not available.", http.StatusNotFound
+		code, fallback, status = "NOT_FOUND", "The requested item is not available.", http.StatusNotFound
 	case errors.Is(err, authz.ErrRevisionConflict), errors.Is(err, assignments.ErrRuleConflict):
 		code, fallback, status, retryable = "REVISION_CONFLICT", "This item changed. Reload before saving.", http.StatusConflict, true
 	case errors.As(err, &failure):
