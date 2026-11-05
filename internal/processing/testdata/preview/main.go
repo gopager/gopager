@@ -1,10 +1,11 @@
-// Preview is an independently supplied pure WASI command fixture, not the processing entrypoint.
+// Preview is an independently supplied pure plugin fixture, not the processing entrypoint (D-131).
 package main
 
 import (
+	"context"
 	"encoding/json"
-	"io"
-	"os"
+
+	"github.com/gopager/gopager/pluginsdk"
 )
 
 type field struct {
@@ -12,28 +13,30 @@ type field struct {
 	Value json.RawMessage `json:"value"`
 }
 
-func main() {
+func handle(_ context.Context, data []byte) ([]byte, error) {
 	var request struct {
 		Input map[string]field `json:"input"`
 	}
-	if err := json.NewDecoder(io.LimitReader(os.Stdin, (1<<20)+1)).Decode(&request); err != nil {
-		os.Exit(2)
+	if err := json.Unmarshal(data, &request); err != nil {
+		return nil, err
 	}
 	if text, present := request.Input["text"]; present {
 		var value string
 		if err := json.Unmarshal(text.Value, &value); err != nil {
-			os.Exit(2)
+			return nil, err
 		}
 		encoded, err := json.Marshal("PREVIEW:" + value)
 		if err != nil {
-			os.Exit(2)
+			return nil, err
 		}
 		request.Input["text"] = field{Kind: "string", Value: encoded}
 	}
-	if err := json.NewEncoder(os.Stdout).Encode(struct {
+	return json.Marshal(struct {
 		SchemaVersion int              `json:"schemaVersion"`
 		Fields        map[string]field `json:"fields"`
-	}{SchemaVersion: 1, Fields: request.Input}); err != nil {
-		os.Exit(2)
-	}
+	}{SchemaVersion: 2, Fields: request.Input})
+}
+
+func main() {
+	pluginsdk.Serve(pluginsdk.HandlerFunc(handle))
 }

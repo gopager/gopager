@@ -34,6 +34,7 @@ import (
 	processingmanagement "github.com/gopager/gopager/internal/processing/management"
 	"github.com/gopager/gopager/internal/processing/synthetic"
 	"github.com/gopager/gopager/internal/protocols"
+	"github.com/gopager/gopager/internal/testutil/pluginfixture"
 )
 
 type previewFixtureNetworks struct {
@@ -100,8 +101,43 @@ func TestWorkflowRetryResponseIsBounded(t *testing.T) {
 	}
 }
 
+// fixtureDigest is the SHA-256 of the command plugin fixture built for this test process.
+func fixtureDigest(t *testing.T) string {
+	t.Helper()
+	sum := sha256.Sum256(pluginfixture.Binary(t, "command"))
+	return hex.EncodeToString(sum[:])
+}
+
+// pluginFixtureRoot provisions the built command plugin and the testdata manifests, pinned to it.
+func pluginFixtureRoot(t *testing.T) string {
+	t.Helper()
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "plugin"), pluginfixture.Binary(t, "command"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"instance-manifest.json", "instance-redaction-manifest.json", "instance-preview-manifest.json"} {
+		raw, err := os.ReadFile("../../internal/processing/testdata/" + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var manifest processing.InstalledManifest
+		if err := json.Unmarshal(raw, &manifest); err != nil {
+			t.Fatal(err)
+		}
+		manifest.Artifact.Digest = fixtureDigest(t)
+		encoded, err := json.Marshal(manifest)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(directory, path), encoded, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return directory
+}
+
 func TestProcessingInstanceArtifactFixturesLoadFromConfiguredRoot(t *testing.T) {
-	root, err := os.OpenRoot("../../internal/processing/testdata")
+	root, err := os.OpenRoot(pluginFixtureRoot(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,20 +146,14 @@ func TestProcessingInstanceArtifactFixturesLoadFromConfiguredRoot(t *testing.T) 
 			t.Error(err)
 		}
 	}()
-	host, err := processing.NewWASMHost(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := processing.NewPluginHost()
 	defer func() {
 		if err := host.Close(t.Context()); err != nil {
 			t.Error(err)
 		}
 	}()
-	pin := processing.ArtifactPin{PluginID: "test-command", Version: "1",
-		CapabilityID: "test", Digest: "4f69af662a1c0009e8220304c26f548058f0b60815835a95ca0e3c6872361b12"}
-	for _, path := range []string{
-		"instance-manifest.json", "instance-redaction-manifest.json", "instance-preview-manifest.json",
-	} {
+	pin := processing.ArtifactPin{PluginID: "test-command", Version: "1", CapabilityID: "test", Digest: fixtureDigest(t)}
+	for _, path := range []string{"instance-manifest.json", "instance-redaction-manifest.json", "instance-preview-manifest.json"} {
 		artifact, err := host.LoadInstalled(t.Context(), root, path, pin)
 		if err != nil {
 			t.Fatalf("load fixture %q: %v", path, err)
@@ -198,7 +228,7 @@ func TestProcessingWorkflowHTTPRequiresCurrentCSRFAndUsesSyntheticDeclarations(t
 					Main: processing.ProvisionedArtifact{
 						ManifestPath: "instance-manifest.json",
 						Pin: processing.ArtifactPin{PluginID: "test-command", Version: "1",
-							CapabilityID: "test", Digest: "4f69af662a1c0009e8220304c26f548058f0b60815835a95ca0e3c6872361b12"},
+							CapabilityID: "test", Digest: fixtureDigest(t)},
 					},
 					Configuration: emptyConfiguration,
 				},
@@ -466,7 +496,7 @@ func TestProcessingSyntheticPreviewHonorsCurrentUnitScope(t *testing.T) {
 		units:    unitRepository,
 	}
 	runtime, err := composeProcessingAPIRuntime(t.Context(), store, networks,
-		"../../internal/processing/testdata", networks)
+		pluginFixtureRoot(t), networks)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -569,7 +599,7 @@ func TestProcessingSyntheticPreviewHonorsCurrentUnitScope(t *testing.T) {
 func TestProcessingSyntheticPreviewFailsUnavailableWithoutNetworkOwner(t *testing.T) {
 	store := newManagementStoreWithFields(t,
 		[]string{"unit", "address", "payload", "gateway", "derived"})
-	runtime, err := composeProcessingAPIRuntime(t.Context(), store, nil, "../../internal/processing/testdata")
+	runtime, err := composeProcessingAPIRuntime(t.Context(), store, nil, pluginFixtureRoot(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -808,7 +838,7 @@ func TestProcessingSyntheticPreviewUsesOnlyDedicatedInstalledPreview(t *testing.
 	}
 }
 
-// installedPreviewArtifacts supplies distinct main/preview guests with matching echo schemas.
+// installedPreviewArtifacts supplies distinct main/preview plugins with matching echo schemas.
 func installedPreviewArtifacts(t *testing.T) (string, processing.ProvisionedArtifact, processing.ProvisionedArtifact) {
 	t.Helper()
 	root := t.TempDir()
@@ -823,17 +853,14 @@ func installedPreviewArtifacts(t *testing.T) (string, processing.ProvisionedArti
 	manifest.ResultSchema = map[string]processing.FieldSchema{"text": {Kind: processing.StringValue}}
 	artifacts := make([]processing.ProvisionedArtifact, 2)
 	for index, name := range []string{"command", "preview"} {
-		wasm, err := os.ReadFile("../../internal/processing/testdata/" + name + ".wasm")
-		if err != nil {
-			t.Fatal(err)
-		}
-		digest := sha256.Sum256(wasm)
-		manifest.Artifact = processing.ArtifactReference{Path: name + ".wasm", Digest: hex.EncodeToString(digest[:])}
+		binary := pluginfixture.Binary(t, name)
+		digest := sha256.Sum256(binary)
+		manifest.Artifact = processing.ArtifactReference{Path: name, Digest: hex.EncodeToString(digest[:])}
 		encoded, err := json.Marshal(manifest)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(root, name+".wasm"), wasm, 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(root, name), binary, 0o755); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(filepath.Join(root, name+".json"), encoded, 0600); err != nil {
@@ -1047,7 +1074,7 @@ func seedCurrentInstance(t *testing.T, store *postgres.Store, value processing.I
 
 func TestProcessingInstanceHTTPUsesRootAndRedactsCurrentConfiguration(t *testing.T) {
 	store := newManagementStore(t)
-	runtime, err := composeProcessingAPIRuntime(t.Context(), store, nil, "../../internal/processing/testdata")
+	runtime, err := composeProcessingAPIRuntime(t.Context(), store, nil, pluginFixtureRoot(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1099,7 +1126,7 @@ func TestProcessingInstanceHTTPUsesRootAndRedactsCurrentConfiguration(t *testing
 				Main: processing.ProvisionedArtifact{
 					ManifestPath: path,
 					Pin: processing.ArtifactPin{PluginID: "test-command", Version: "1",
-						CapabilityID: "test", Digest: "4f69af662a1c0009e8220304c26f548058f0b60815835a95ca0e3c6872361b12"},
+						CapabilityID: "test", Digest: fixtureDigest(t)},
 				},
 				Configuration: value,
 			},
@@ -1173,7 +1200,7 @@ func TestProcessingInstanceHTTPUsesRootAndRedactsCurrentConfiguration(t *testing
 		Main: processing.ProvisionedArtifact{
 			ManifestPath: "instance-redaction-manifest.json",
 			Pin: processing.ArtifactPin{PluginID: "test-command", Version: "1",
-				CapabilityID: "test", Digest: "4f69af662a1c0009e8220304c26f548058f0b60815835a95ca0e3c6872361b12"},
+				CapabilityID: "test", Digest: fixtureDigest(t)},
 		},
 		Configuration: secretValue, CreatedAt: time.Now().UTC().Truncate(time.Microsecond), CreatedBy: operatorID,
 	})

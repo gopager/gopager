@@ -1,0 +1,22 @@
+// GoPager plugin-runtime 2.0 wire contract (D-131, C-10).
+//
+// The Core starts a plugin executable through HashiCorp go-plugin (gRPC protocol) and calls Invoke.
+// A plugin written in any language must:
+//   1. refuse to run unless GOPAGER_PLUGIN=gopager-plugin-runtime-2 is set in its environment;
+//   2. serve this service plus grpc.health.v1.Health (service name "plugin", status SERVING);
+//   3. print one handshake line to stdout:  1|2|unix|<socket path>|grpc
+//      (go-plugin core protocol 1, application protocol 2; "tcp" with host:port is also accepted).
+// See https://github.com/hashicorp/go-plugin/blob/main/docs/guide-plugin-write-non-go.md.
+//
+// Request and response values are UTF-8 JSON documents defined by C-10:
+// the invocation envelope (schemaVersion 2) and the response ({"schemaVersion":2,"fields":...}
+// or {"schemaVersion":2,"failure":"<reason>"}).
+syntax = "proto3";
+
+package gopager.plugin.v2;
+
+import "google/protobuf/wrappers.proto";
+
+service Plugin {
+  rpc Invoke(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
+}

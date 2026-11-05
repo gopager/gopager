@@ -1,54 +1,69 @@
-// Command is a supplied pure Go/WASI fixture for the installed-command wire boundary.
+// Command is a supplied pure plugin fixture for the installed-invocation wire boundary (D-131).
 package main
 
 import (
+	"context"
 	"encoding/json"
-	"io"
+	"errors"
 	"os"
+
+	"github.com/gopager/gopager/pluginsdk"
 )
 
-func main() {
+type field struct {
+	Kind  string          `json:"kind"`
+	Value json.RawMessage `json:"value"`
+}
+
+type response struct {
+	SchemaVersion int              `json:"schemaVersion"`
+	Fields        map[string]field `json:"fields,omitempty"`
+	Failure       string           `json:"failure,omitempty"`
+}
+
+func text(value string) field {
+	encoded, _ := json.Marshal(value)
+	return field{Kind: "string", Value: encoded}
+}
+
+func handle(ctx context.Context, data []byte) ([]byte, error) {
 	var request struct {
-		Input map[string]struct {
-			Kind  string          `json:"kind"`
-			Value json.RawMessage `json:"value"`
-		} `json:"input"`
+		InstanceID string           `json:"instanceId"`
+		Input      map[string]field `json:"input"`
 	}
-	if err := json.NewDecoder(io.LimitReader(os.Stdin, (1<<20)+1)).Decode(&request); err != nil {
-		os.Exit(2)
+	if err := json.Unmarshal(data, &request); err != nil {
+		return nil, err
 	}
 	mode := ""
-	if field, ok := request.Input["mode"]; ok {
-		if err := json.Unmarshal(field.Value, &mode); err != nil {
-			os.Exit(2)
+	if value, ok := request.Input["mode"]; ok {
+		if err := json.Unmarshal(value.Value, &mode); err != nil {
+			return nil, err
 		}
 	}
 	switch mode {
 	case "mixed":
-		if _, err := io.WriteString(os.Stdout, `{"schemaVersion":1,"fields":{},"failure":"evaluation-failed"}`); err != nil {
-			os.Exit(2)
-		}
+		return []byte(`{"schemaVersion":2,"fields":{},"failure":"evaluation-failed"}`), nil
 	case "private-failure":
-		if _, err := io.WriteString(os.Stdout, `{"schemaVersion":1,"failure":"private source text"}`); err != nil {
-			os.Exit(2)
-		}
+		return []byte(`{"schemaVersion":2,"failure":"private source text"}`), nil
 	case "fail":
-		if _, err := io.WriteString(os.Stdout, `{"schemaVersion":1,"failure":"evaluation-failed"}`); err != nil {
-			os.Exit(2)
-		}
+		return []byte(`{"schemaVersion":2,"failure":"evaluation-failed"}`), nil
+	case "crash":
+		os.Exit(3)
 	case "loop":
+		// Deliberately ignores ctx: the Core must kill the process at its deadline.
 		for {
 		}
-	default:
-		response := struct {
-			SchemaVersion int `json:"schemaVersion"`
-			Fields        map[string]struct {
-				Kind  string          `json:"kind"`
-				Value json.RawMessage `json:"value"`
-			} `json:"fields"`
-		}{SchemaVersion: 1, Fields: request.Input}
-		if err := json.NewEncoder(os.Stdout).Encode(response); err != nil {
-			os.Exit(2)
-		}
+	case "env":
+		request.Input["text"] = text(os.Getenv("GOPAGER_TEST_CORE_SECRET"))
+	case "instance":
+		request.Input["text"] = text(request.InstanceID)
 	}
+	if ctx.Err() != nil {
+		return nil, errors.New("cancelled")
+	}
+	return json.Marshal(response{SchemaVersion: 2, Fields: request.Input})
+}
+
+func main() {
+	pluginsdk.Serve(pluginsdk.HandlerFunc(handle))
 }

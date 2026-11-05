@@ -2,7 +2,6 @@ package processing
 
 import (
 	"context"
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -10,12 +9,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/platform"
+	"github.com/gopager/gopager/internal/testutil/pluginfixture"
 )
-
-//go:generate env GOOS=wasip1 GOARCH=wasm CGO_ENABLED=0 go build -trimpath -buildvcs=false -o testdata/preview.wasm ./testdata/preview
-
-//go:embed testdata/preview.wasm
-var installedPreviewCommand []byte
 
 type installedOwnerFixture struct {
 	artifact    *InstalledArtifact
@@ -82,17 +77,14 @@ func (o *installedOwnerFixture) AuthorizeInstalled(ctx context.Context, id uuid.
 func newInstalledOwnerFixture(t *testing.T) *installedOwnerFixture {
 	t.Helper()
 	ctx := context.Background()
-	host, err := NewWASMHost(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := NewPluginHost()
 
 	t.Cleanup(func() {
 		if err := host.Close(ctx); err != nil {
 			t.Error(err)
 		}
 	})
-	_, root, manifest, pin := artifactFixture(t, installedCommand)
+	_, root, manifest, pin := artifactFixture(t, pluginfixture.Binary(t, "command"))
 	manifest.InputSchema = map[string]FieldSchema{"mode": {Kind: StringValue}, "text": {Kind: StringValue, Optional: true}}
 	manifest.ResultSchema = manifest.InputSchema
 	writeManifest(t, root, manifest)
@@ -110,14 +102,14 @@ func newInstalledOwnerFixture(t *testing.T) *installedOwnerFixture {
 		t.Fatal(err)
 	}
 	return &installedOwnerFixture{artifact: artifact, instance: uuid.New(), envelope: InvocationEnvelope{
-		SchemaVersion: 1, WorkflowID: uuid.New(), DefinitionVersionID: uuid.New(), RunID: uuid.New(),
+		SchemaVersion: 2, InstanceID: uuid.New(), WorkflowID: uuid.New(), DefinitionVersionID: uuid.New(), RunID: uuid.New(),
 		ExecutionPrincipalID: uuid.New(), ConfigurationRevision: 1, ArtifactDigest: pin.Digest,
 		CapabilityID: pin.CapabilityID, Configuration: configuration}}
 }
 
 func supplyInstalledPreviewFixture(t *testing.T, owner *installedOwnerFixture) {
 	t.Helper()
-	_, root, manifest, pin := artifactFixture(t, installedPreviewCommand)
+	_, root, manifest, pin := artifactFixture(t, pluginfixture.Binary(t, "preview"))
 	primary, err := owner.artifact.Manifest()
 	if err != nil {
 		t.Fatal(err)

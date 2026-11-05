@@ -14,6 +14,7 @@ import (
 type InvocationEnvelope struct {
 	SchemaVersion         int              `json:"schemaVersion"`
 	InvocationID          uuid.UUID        `json:"invocationId"`
+	InstanceID            uuid.UUID        `json:"instanceId"`
 	ArtifactDigest        string           `json:"artifactDigest"`
 	CapabilityID          string           `json:"capabilityId"`
 	WorkflowID            uuid.UUID        `json:"workflowId"`
@@ -72,13 +73,13 @@ func (a *InstalledArtifact) invokeProjected(ctx context.Context, envelope Invoca
 }
 
 func (a *InstalledArtifact) invokeProjectedBudget(ctx context.Context, envelope InvocationEnvelope, preview bool, budget *executionBudget) (map[string]Value, error) {
-	if a == nil || a.host == nil || a.module == nil || ctx == nil {
+	if a == nil || a.host == nil || ctx == nil {
 		return nil, invalid(errors.New("missing installed invocation participant"))
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if envelope.SchemaVersion != 1 || envelope.InvocationID == uuid.Nil || envelope.WorkflowID == uuid.Nil ||
+	if envelope.SchemaVersion != 2 || envelope.InvocationID == uuid.Nil || envelope.InstanceID == uuid.Nil || envelope.WorkflowID == uuid.Nil ||
 		envelope.DefinitionVersionID == uuid.Nil || envelope.RunID == uuid.Nil || envelope.ExecutionPrincipalID == uuid.Nil ||
 		envelope.ConfigurationRevision <= 0 || envelope.ArtifactDigest != a.manifest.Artifact.Digest ||
 		envelope.CapabilityID != a.manifest.CapabilityID {
@@ -111,10 +112,10 @@ func (a *InstalledArtifact) invokeProjectedBudget(ctx context.Context, envelope 
 		return nil, invalid(err)
 	}
 	var response invocationResponse
-	if err := a.host.invokeMeasured(ctx, a.module, encoded, &response, 30*time.Second, budget); err != nil {
+	if err := a.call(ctx, encoded, &response, 30*time.Second, budget); err != nil {
 		return nil, err
 	}
-	if response.SchemaVersion != 1 || (response.Fields == nil) == (response.Failure == "") {
+	if response.SchemaVersion != 2 || (response.Fields == nil) == (response.Failure == "") {
 		return nil, invalid(errors.New("installed command response is not exactly success or failure"))
 	}
 	if response.Failure != "" {

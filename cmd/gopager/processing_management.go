@@ -368,7 +368,7 @@ func (api processingWorkflowAPI) registerPreview(mux *http.ServeMux) {
 }
 
 type processingAPIRuntime struct {
-	host            *processing.WASMHost
+	host            *processing.PluginHost
 	root            *os.Root
 	executions      *processing.InstanceExecutions
 	routes          processingAPIRoutes
@@ -390,12 +390,10 @@ func composeProcessingAPIRuntime(ctx context.Context, store *postgres.Store,
 	}
 	ctx, cancel := context.WithTimeout(ctx, platform.DefaultCallTimeout)
 	defer cancel()
-	host, err := processing.NewWASMHost(ctx)
-	if err != nil {
-		return nil, err
-	}
+	host := processing.NewPluginHost()
 	var root *os.Root
 	if artifactRoot != "" {
+		var err error
 		root, err = os.OpenRoot(artifactRoot)
 		if err != nil {
 			return nil, errors.Join(

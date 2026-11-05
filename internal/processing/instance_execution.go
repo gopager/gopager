@@ -48,7 +48,7 @@ type InvocationSourceOwner interface {
 // InstanceExecutions owns rooted preparation and cancellation of active, per-run artifact lifetimes.
 // Shared root/host lifetime belongs to application startup/shutdown, not individual runs.
 type InstanceExecutions struct {
-	host         *WASMHost
+	host         *PluginHost
 	root         *os.Root
 	transactions ExecutionTransactions
 	repository   InstanceRepository
@@ -62,7 +62,7 @@ type InstanceExecutions struct {
 
 // NewInstanceExecutions requires real instance and current-Principal participants.
 // A missing artifact root keeps built-in runs available but rejects installed preparation.
-func NewInstanceExecutions(host *WASMHost, root *os.Root, transactions ExecutionTransactions,
+func NewInstanceExecutions(host *PluginHost, root *os.Root, transactions ExecutionTransactions,
 	repository InstanceRepository, resolver ExecutionPrincipalResolver) (*InstanceExecutions, error) {
 	if host == nil || transactions == nil || repository == nil || resolver == nil {
 		return nil, invalid(errors.New("missing installed execution dependency"))
@@ -377,7 +377,7 @@ func (r *InstanceExecution) AuthorizeInstalled(ctx context.Context, id uuid.UUID
 				return err
 			}
 		}
-		envelope = InvocationEnvelope{SchemaVersion: 1, InvocationID: uuid.New(), WorkflowID: r.binding.WorkflowID,
+		envelope = InvocationEnvelope{SchemaVersion: 2, InvocationID: uuid.New(), InstanceID: configuration.ID, WorkflowID: r.binding.WorkflowID,
 			DefinitionVersionID: r.binding.DefinitionVersionID, RunID: r.binding.RunID,
 			ExecutionPrincipalID: configuration.ExecutionPrincipalID, ConfigurationRevision: revision,
 			ArtifactDigest: manifest.Artifact.Digest, CapabilityID: manifest.CapabilityID,

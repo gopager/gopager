@@ -3,7 +3,6 @@ package borrowed_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io/fs"
 	"net/url"
 	"os"
@@ -29,23 +28,14 @@ import (
 	"github.com/gopager/gopager/internal/persistence/migrations"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
-	"github.com/gopager/gopager/internal/processing"
+	"github.com/gopager/gopager/internal/testutil/pluginfixture"
 	testpostgres "github.com/gopager/gopager/internal/testutil/postgres"
-	"github.com/gopager/gopager/internal/testutil/wasmcache"
 )
 
 func TestMain(m *testing.M) {
-	useWASMTestCache()
-	os.Exit(testpostgres.Run(m))
-}
-
-// useWASMTestCache reuses compiled test guests across runs; compilation dominates otherwise.
-func useWASMTestCache() {
-	if dir := wasmcache.Dir(); dir != "" {
-		if err := processing.UseCompilationCacheDir(dir); err != nil {
-			fmt.Fprintln(os.Stderr, "WASM test cache unavailable; compiling in memory:", err)
-		}
-	}
+	code := testpostgres.Run(m)
+	pluginfixture.Cleanup()
+	os.Exit(code)
 }
 
 func newStore(t *testing.T) *postgres.Store {

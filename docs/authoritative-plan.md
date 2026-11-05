@@ -106,6 +106,7 @@ The stable D-IDs below record decision topics and supersession. The **owner link
 | D-128 | <a id="d-128"></a>Unreleased migrations change only tables they create; cross-file edits squashed into owning migrations | [Owning-migration consolidation](#owning-migration-consolidation) |
 | D-129 | <a id="d-129"></a>Core regex runs in-process with deterministic admission bounds; supersedes D-62 for Core regex | [In-process Core regex](#in-process-core-regex) |
 | D-130 | <a id="d-130"></a>Plugins are fully trusted and may access host, devices and network directly; D-67 is only a first subset | [Plugin trust clarification](#plugin-trust-clarification) |
+| D-131 | <a id="d-131"></a>Plugins run as Operator-provisioned executables managed through `go-plugin`/gRPC, one process per configured instance; WASI/Wazero removed | [Managed plugin process runtime](#managed-plugin-process-runtime) |
 
 ## Operating Assumptions
 
@@ -584,7 +585,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### Native Plugin Alternative Review
 
-**D-65; date/origin:** 2026-11-01, AP-04 T017/T018 follow-up for AP-06-required T043/C-10 invocation. **Status:** documentary alternatives review explicitly approved by the user (`plugin_delivery_intent=review-native-alternative`). **Accountable owner/approver:** Product/integration; user. **Technical owners:** architecture/integration and plugin host.
+**D-65; date/origin:** 2026-11-01, AP-04 T017/T018 follow-up for AP-06-required T043/C-10 invocation. **Status:** **Resolved on 2026-11-05 by [D-131](#managed-plugin-process-runtime).** documentary alternatives review explicitly approved by the user (`plugin_delivery_intent=review-native-alternative`). **Accountable owner/approver:** Product/integration; user. **Technical owners:** architecture/integration and plugin host.
 
 **Question/context:** The user accepts separately supplied DLL-like plugin artifacts and requests native dynamic libraries be considered as an alternative. Separate artifact delivery is already possible with Wasm; accepting native alternatives must not be silently interpreted as choosing Go plugins, a C ABI, a language or unbounded in-process loading.
 
@@ -644,7 +645,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### Installed Processing Artifact Load Bound
 
-**D-73; date/origin:** 2026-11-01, AP-12 T043 installed-loader preparation. **Status:** fixed 32 MiB artifact-load bound and its narrow implementation explicitly approved (`approve-fixed-32mib-artifact-bound`). **Accountable owner/approver:** Product/integration; user. **Technical owner:** plugin host/integration.
+**D-73; date/origin:** 2026-11-01, AP-12 T043 installed-loader preparation. **Status:** **Superseded on 2026-11-05 by [D-131](#managed-plugin-process-runtime): no `.wasm` artifacts remain.** fixed 32 MiB artifact-load bound and its narrow implementation explicitly approved (`approve-fixed-32mib-artifact-bound`). **Accountable owner/approver:** Product/integration; user. **Technical owner:** plugin host/integration.
 
 **Question/evidence:** C-10's frozen narrow invocation limits bound JSON/guest memory, not local artifact bytes before Wazero compilation. The supplied Go/WASI guest alone exceeds 1 MiB; [AP-12 E-09](execution/source-ap-12.md#e-09-target-result-kernel-implementation-and-bounds) records the actual size/source/API inspection. Do not silently apply an invocation limit to code artifacts or read arbitrary binary size into memory.
 
@@ -682,7 +683,7 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ### Dedicated Installed Preview Artifact Binding
 
-**D-76; date/origin:** 2026-11-02, AP-12 T043 installed-instance/preview preparation and T045 compatibility validation, prerequisite for AP-06 T023/T024. **Status:** optional separate preview artifact binding and implementation explicitly approved (`approve-separate-preview-artifact-and-implement`). **Accountable owner/approver:** Product/integration; user. **Technical owners:** plugin host/DOM-08/integration.
+**D-76; date/origin:** 2026-11-02, AP-12 T043 installed-instance/preview preparation and T045 compatibility validation, prerequisite for AP-06 T023/T024. **Status:** **Runtime part superseded on 2026-11-05 by [D-131](#managed-plugin-process-runtime); the optional separate preview artifact remains.** optional separate preview artifact binding and implementation explicitly approved (`approve-separate-preview-artifact-and-implement`). **Accountable owner/approver:** Product/integration; user. **Technical owners:** plugin host/DOM-08/integration.
 
 **Question/evidence:** [AP-12 E-21](execution/source-ap-12.md#e-21-dedicated-preview-binding-gap) records the gap between the frozen requirement for a separately declared pure-preview implementation and the current single-artifact port plus boolean declaration. The existing command wire does not select a separate preview implementation. Do not reinterpret a passing pure-command fixture as proof of that missing boundary.
 
@@ -916,7 +917,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Narrow Installed Processing ABI Proposal
 
-**D-67; date/origin:** 2026-11-01, AP-04 T017/T018 concrete T043 installed-step preparation. **Status:** technical direction/supported subset explicitly approved 2026-11-01 (`installed_processing_boundary=approve-pure-wasi-command-boundary`); contract freeze/execution remain pending. **Accountable owner/approver:** Product/integration; user. **Technical owners:** plugin host/integration and DOM-08.
+**D-67; date/origin:** 2026-11-01, AP-04 T017/T018 concrete T043 installed-step preparation. **Status:** **Runtime part superseded on 2026-11-05 by [D-131](#managed-plugin-process-runtime); the pure Processing-step subset remains as a trusted declaration.** technical direction/supported subset explicitly approved 2026-11-01 (`installed_processing_boundary=approve-pure-wasi-command-boundary`); contract freeze/execution remain pending. **Accountable owner/approver:** Product/integration; user. **Technical owners:** plugin host/integration and DOM-08.
 
 **Question/evidence:** Bind a real independently provisioned processing-module call without silently treating the Core regex proof as a full operator SDK or pulling forward all AP-11. [C-10's candidate](contracts/c-10-plugin-host.md#early-installed-processing-invocation-candidate) owns the exact proposed boundary. The existing general SDK draft instead proposes guest-memory allocation/transfer plus host callbacks; that draft is retained, not overwritten or falsely claimed implemented.
 
@@ -1008,7 +1009,7 @@ The required approval is now supplied. Resume only the selected revisioned same-
 
 ### Shared Bytes Binding
 
-**D-103; date/origin:** 2026-11-03, current AP-06 T055/T056 following D-99/D-102. **Status:** explicitly approved by user response `bytes_binding_freeze=approve-bytes-binding`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-08, DOM-02, shared C-09 predicate owner and plugin host/integration.
+**D-103; date/origin:** 2026-11-03, current AP-06 T055/T056 following D-99/D-102. **Status:** **SDK-version mapping superseded on 2026-11-05 by [D-131](#managed-plugin-process-runtime): bytes are part of SDK 2.0.** explicitly approved by user response `bytes_binding_freeze=approve-bytes-binding`. **Accountable owner/approver:** Product/integration; user. **Technical owners:** DOM-08, DOM-02, shared C-09 predicate owner and plugin host/integration.
 
 **Question/options/resolution:** Approve the narrowly specified general bytes value or revise its behavior. The user approves a distinct canonical padded standard-Base64 typed bytes value, exact equality/bounded membership/presence with existing three-valued boolean composition, identity copying and explicitly declared pure installed processing. No implicit text/number conversion, regex, byte indexing/ordering/concatenation or new predicate operator. Preserve absent/null/hidden/empty distinctions, all inherited source classifications and `derived` for output visibility. Bytes results have no automatic rendering, logging or search indexing. Bytes are not added to configuration/Secret schemas.
 
@@ -1285,6 +1286,25 @@ Use the existing C-07 redacted error envelope/status table, C-12 transaction cap
 **Statement:** Plugins are fully trusted. It must be possible to integrate, for example, GPIO control, display output, printers, building automation, MQTT or KNX through plugins. The Operator provides plugins before start by mounting them (in Docker) and naming them in configuration or the environment; runtime installation is not required.
 
 **Consequences:** This confirms D-24 and corrects any reading of [D-67](#narrow-installed-processing-abi-proposal)'s pure, capability-free WASI command as a general plugin restriction; D-67 remains only the first implemented Processing-step subset. The current WASI runtime cannot provide direct device or network access, so the plugin runtime (TECH-08) and the C-10 SDK need a planning revision. The [architecture re-evaluation](architecture.md#native-plugin-alternative-review) recommends managed plugin executables over a versioned local protocol. No runtime, ABI or implementation is selected by this clarification.
+
+### Managed plugin process runtime
+
+**D-131; date/origin:** 2026-11-05, user instruction during AP-08 execution ("alle relevanten Planungsdokumente, APs, Contracts ... aktualisieren; bestehenden Code anpassen") after the plugin re-evaluation. **Status:** selected and implemented for the existing installed-processing capability. **Accountable owner:** Product (user); **technical owners:** plugin host/integration, DOM-08 for typed Workflow use.
+
+**Question and evidence:** [D-130](#plugin-trust-clarification) requires fully trusted plugins with direct host, device and network access, provisioned before start by mount plus configuration or environment. WASI cannot provide device or general network access; the [architecture re-evaluation and user-story check](architecture.md#native-plugin-alternative-review) recommends managed executables. Several languages are a welcome advantage, not a requirement. Several configured instances of one plugin (REQ-084, for example two Pushover keys, several printers or SMTP servers) are mandatory.
+
+**Resolution:**
+- **Runtime.** A plugin is an Operator-provisioned executable below the configured artifact root (`--processing-artifact-root` or `GOPAGER_PROCESSING_ARTIFACT_ROOT`). The Core starts it as an application-managed child process through HashiCorp `go-plugin` v1.8.0 using its gRPC transport.
+- **Protocol.** One versioned service, `gopager.plugin.v2.Plugin/Invoke`, carries the existing JSON envelope as a `google.protobuf.BytesValue`. It is published as [`api/plugin/v2/plugin.proto`](../api/plugin/v2/plugin.proto), so plugins can be written in any gRPC-capable language. A Go SDK ([`pluginsdk`](../pluginsdk)) wraps handshake and serving.
+- **Instances.** Every configured instance runs in its own process. The envelope carries the instance ID, so plugins can keep per-instance connections or devices apart.
+- **Manifest and limits.** Manifest schema version 2 with SDK 2.0 (bytes included). The artifact is a regular executable file pinned by SHA-256 and streamed with a 256 MiB hashing bound; loading does not start it. Limits are 1 MiB input, 256 KiB output and a 30 s deadline per call. A deadline or cancellation kills the process, which restarts on the next call. The Core enforces no memory limit; Operators use container or OS limits.
+- **Environment.** The child receives a minimal environment, never the Core's own (for example the database URL). Its working directory is the artifact directory, and its output is not logged by the Core.
+- **WASI removal.** Wazero, WASI command artifacts and the `.wasm` fixtures are removed.
+
+**Consequences:**
+- Supersedes the runtime parts of D-67, D-73, D-76 and the SDK-version mapping of D-103, and resolves D-65. D-67's pure/pure-preview Processing-step semantics stay as trusted manifest declarations.
+- Reaction and Delivery capabilities (REQ-139, REQ-090) and Core reads through the versioned HTTP API under a technical Principal remain AP-11/AP-12 planning. A process pool across Workflow runs is also left to AP-12; processes currently live for one run.
+- C-10, C-11, shared conventions, architecture TECH-08 and AP-11/AP-12 were updated accordingly. Implementation and evidence: [AP-08 E-15](execution/ap-08.md#e-15-managed-plugin-process-runtime).
 
 ## Workflow and Approval Gates
 

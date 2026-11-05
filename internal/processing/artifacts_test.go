@@ -14,30 +14,22 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
-// trapCommand exports _start and also names it as the module start function.
-// Inspection may compile it, but instantiating it would execute an unreachable instruction.
-var trapCommand = []byte{
-	0, 97, 115, 109, 1, 0, 0, 0,
-	1, 4, 1, 96, 0, 0,
-	3, 2, 1, 0,
-	7, 10, 1, 6, 95, 115, 116, 97, 114, 116, 0, 0,
-	8, 1, 0,
-	10, 5, 1, 3, 0, 0, 11,
-}
+// markerScript records that it was started; loading must never run it (D-131 inspection rule).
+var markerScript = []byte("#!/bin/sh\necho started > started.marker\nexit 1\n")
 
 func artifactFixture(t *testing.T, data []byte) (string, *os.Root, InstalledManifest, ArtifactPin) {
 	t.Helper()
 	directory := t.TempDir()
 	digest := sha256.Sum256(data)
 	noSecret := false
-	manifest := InstalledManifest{SchemaVersion: 1, SDKMajor: 1, SDKMinor: 0,
+	manifest := InstalledManifest{SchemaVersion: 2, SDKMajor: 2, SDKMinor: 0,
 		PluginID: "test-command", Version: "1", CapabilityID: "test", Pure: true, PurePreview: true,
-		Artifact:    ArtifactReference{Path: "command.wasm", Digest: hex.EncodeToString(digest[:])},
+		Artifact:    ArtifactReference{Path: "plugin", Digest: hex.EncodeToString(digest[:])},
 		InputSchema: map[string]FieldSchema{"text": {Kind: StringValue}}, ResultSchema: map[string]FieldSchema{},
 		ConfigurationSchema: FieldSchema{Kind: ObjectValue, Properties: map[string]FieldSchema{}},
 		ConfigurationPolicy: ConfigurationPolicy{Scope: "admin", Secret: &noSecret},
 	}
-	if err := os.WriteFile(filepath.Join(directory, "command.wasm"), data, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(directory, "plugin"), data, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	root, err := os.OpenRoot(directory)
@@ -65,28 +57,29 @@ func writeManifest(t *testing.T, root *os.Root, manifest InstalledManifest) {
 	}
 }
 
-func TestInstalledInspectionDoesNotExecuteInitialization(t *testing.T) {
+func TestInstalledLoadDoesNotStartPlugin(t *testing.T) {
 	ctx := context.Background()
-	host, err := NewWASMHost(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := NewPluginHost()
 	t.Cleanup(func() {
 		if err := host.Close(ctx); err != nil {
 			t.Error(err)
 		}
 	})
-	_, root, manifest, pin := artifactFixture(t, trapCommand)
+	directory, root, manifest, pin := artifactFixture(t, markerScript)
 	writeManifest(t, root, manifest)
 	artifact, err := host.LoadInstalled(ctx, root, "manifest.json", pin)
 	if err != nil {
-		t.Fatalf("inspection executed initialization or rejected valid command metadata: %v", err)
+		t.Fatalf("valid plugin metadata rejected: %v", err)
 	}
 	defer func() {
 		if err := artifact.Close(ctx); err != nil {
 			t.Error(err)
 		}
 	}()
+	marker := filepath.Join(directory, "started.marker")
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("loading started the plugin: %v", err)
+	}
 	detached, err := artifact.Manifest()
 	if err != nil {
 		t.Fatal(err)
@@ -98,34 +91,43 @@ func TestInstalledInspectionDoesNotExecuteInitialization(t *testing.T) {
 		t.Fatalf("manifest view aliases inspected configuration: %+v, %v", again, err)
 	}
 	var result any
-	if err := host.invoke(ctx, artifact.module, []byte(`{}`), &result, time.Second); err == nil {
-		t.Fatal("fixture did not trap when actually instantiated")
+	if err := artifact.call(ctx, []byte(`{}`), &result, 5*time.Second, nil); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
+		t.Fatalf("plugin without handshake was not an explicit capability failure: %v", err)
 	}
-	if err := root.WriteFile("command.wasm", []byte("changed"), 0600); err != nil {
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("invocation did not start the plugin from its artifact directory: %v", err)
+	}
+	if err := root.WriteFile("plugin", []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := host.LoadInstalled(ctx, root, "manifest.json", pin); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
-		t.Fatalf("changed binary was not rejected by exact pin: %v", err)
+		t.Fatalf("changed executable was not rejected by exact pin: %v", err)
 	}
 }
 
-func TestInstalledArtifactPathsAndExactLoadBoundary(t *testing.T) {
+func TestInstalledArtifactPathsExecutableAndHashBoundary(t *testing.T) {
 	ctx := context.Background()
-	_, root, _, _ := artifactFixture(t, nil)
+	_, root, _, _ := artifactFixture(t, markerScript)
 	outside := t.TempDir()
-	outsideFile := filepath.Join(outside, "outside.wasm")
-	if err := os.WriteFile(outsideFile, trapCommand, 0600); err != nil {
+	outsideFile := filepath.Join(outside, "outside")
+	if err := os.WriteFile(outsideFile, markerScript, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := root.Symlink(outsideFile, "escape.wasm"); err != nil {
+	if err := root.Symlink(outsideFile, "escape"); err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"escape.wasm", outsideFile, "../outside.wasm", "."} {
-		if data, err := readArtifactFile(ctx, root, path, MaxArtifactBytes); err == nil || data != nil {
-			t.Fatalf("path %q escaped regular rooted-file requirements", path)
+	for _, path := range []string{"escape", outsideFile, "../outside", "."} {
+		if digest, err := hashExecutable(ctx, root, path); err == nil || digest != "" {
+			t.Fatalf("path %q escaped regular rooted executable requirements", path)
 		}
 	}
-	file, err := root.Create("large.wasm")
+	if err := root.WriteFile("data", markerScript, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := hashExecutable(ctx, root, "data"); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
+		t.Fatalf("non-executable artifact accepted: %v", err)
+	}
+	file, err := root.OpenFile("large", os.O_CREATE|os.O_WRONLY, 0o755)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,24 +139,30 @@ func TestInstalledArtifactPathsAndExactLoadBoundary(t *testing.T) {
 	if err := file.Truncate(MaxArtifactBytes); err != nil {
 		t.Fatal(err)
 	}
-	if data, err := readArtifactFile(ctx, root, "large.wasm", MaxArtifactBytes); err != nil || len(data) != MaxArtifactBytes {
-		t.Fatalf("exact artifact boundary rejected: %d, %v", len(data), err)
+	if digest, err := hashExecutable(ctx, root, "large"); err != nil || len(digest) != 64 {
+		t.Fatalf("exact artifact boundary rejected: %q, %v", digest, err)
 	}
 	if err := file.Truncate(MaxArtifactBytes + 1); err != nil {
 		t.Fatal(err)
 	}
-	if data, err := readArtifactFile(ctx, root, "large.wasm", MaxArtifactBytes); platform.FailureCode(err) != platform.CodeResourceLimit || data != nil {
-		t.Fatalf("artifact +1 accepted: %d, %v", len(data), err)
+	if digest, err := hashExecutable(ctx, root, "large"); platform.FailureCode(err) != platform.CodeResourceLimit || digest != "" {
+		t.Fatalf("artifact +1 accepted: %q, %v", digest, err)
+	}
+	if data, err := readArtifactFile(ctx, root, "escape", MaxInputBytes); err == nil || data != nil {
+		t.Fatal("manifest reader followed an escaping symlink")
 	}
 }
 
 func TestInstalledManifestRejectsUnsupportedAndUnclassifiedConfiguration(t *testing.T) {
-	_, _, manifest, pin := artifactFixture(t, trapCommand)
+	_, _, manifest, pin := artifactFixture(t, markerScript)
 	for _, mutate := range []func(*InstalledManifest){
 		func(m *InstalledManifest) { m.Pure = false },
 		func(m *InstalledManifest) { m.HostCapabilities = []string{"network"} },
 		func(m *InstalledManifest) { m.RequiredOperations = []string{"unit.read"} },
-		func(m *InstalledManifest) { m.SDKMajor = 2 },
+		func(m *InstalledManifest) { m.SDKMajor = 1 },
+		func(m *InstalledManifest) { m.SchemaVersion = 1 },
+		func(m *InstalledManifest) { m.Artifact.Path = "../outside" },
+		func(m *InstalledManifest) { m.Artifact.Path = "/bin/sh" },
 		func(m *InstalledManifest) { m.ConfigurationPolicy.Secret = nil },
 		func(m *InstalledManifest) {
 			m.ConfigurationSchema.Properties = map[string]FieldSchema{"token": {Kind: StringValue}}
@@ -183,25 +191,12 @@ func TestInstalledManifestRejectsUnsupportedAndUnclassifiedConfiguration(t *test
 
 }
 
-func TestInstalledManifestBytesRequireSDK11AndCannotBeConfiguration(t *testing.T) {
-	_, _, manifest, pin := artifactFixture(t, trapCommand)
+func TestInstalledManifestBytesAreSDK2AndCannotBeConfiguration(t *testing.T) {
+	_, _, manifest, pin := artifactFixture(t, markerScript)
 	manifest.InputSchema = map[string]FieldSchema{"binary": {Kind: BytesValue}}
-	if err := validateManifest(manifest, pin); platform.FailureCode(err) != platform.CodeIncompatibleVersion {
-		t.Fatalf("SDK 1.0 accepted bytes schema: %v", err)
-	}
-	manifest.SDKMinor = 1
-	if err := validateManifest(manifest, pin); err != nil {
-		t.Fatalf("SDK 1.1 rejected bytes input schema: %v", err)
-	}
-	manifest.InputSchema = map[string]FieldSchema{}
 	manifest.ResultSchema = map[string]FieldSchema{"items": {Kind: ListValue, Element: &FieldSchema{Kind: BytesValue}}}
-	manifest.SDKMinor = 0
-	if err := validateManifest(manifest, pin); platform.FailureCode(err) != platform.CodeIncompatibleVersion {
-		t.Fatalf("SDK 1.0 accepted nested bytes result schema: %v", err)
-	}
-	manifest.SDKMinor = 1
 	if err := validateManifest(manifest, pin); err != nil {
-		t.Fatalf("SDK 1.1 rejected nested bytes result schema: %v", err)
+		t.Fatalf("SDK 2.0 rejected bytes schemas: %v", err)
 	}
 	for _, field := range []FieldSchema{
 		{Kind: BytesValue},

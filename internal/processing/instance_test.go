@@ -3,6 +3,8 @@ package processing
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -12,16 +14,13 @@ import (
 )
 
 func TestInstanceInspectionPinsConfigurationAndDedicatedPreviewWithoutExecution(t *testing.T) {
-	host, err := NewWASMHost(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := NewPluginHost()
 	t.Cleanup(func() {
 		if err := host.Close(context.Background()); err != nil {
 			t.Error(err)
 		}
 	})
-	_, root, manifest, pin := artifactFixture(t, trapCommand)
+	directory, root, manifest, pin := artifactFixture(t, markerScript)
 	writeManifest(t, root, manifest)
 	encoded, err := json.Marshal(manifest)
 	if err != nil {
@@ -47,6 +46,9 @@ func TestInstanceInspectionPinsConfigurationAndDedicatedPreviewWithoutExecution(
 	instance.Preview = &ProvisionedArtifact{ManifestPath: "preview.json", Pin: pin}
 	if err := inspector.InspectInstance(t.Context(), instance); err != nil {
 		t.Fatalf("independently loaded bit-identical preview rejected: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(directory, "started.marker")); !os.IsNotExist(err) {
+		t.Fatalf("instance inspection started the plugin: %v", err)
 	}
 	instance.Preview.Pin.Digest = strings.Repeat("a", 64)
 	if err := inspector.InspectInstance(t.Context(), instance); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {

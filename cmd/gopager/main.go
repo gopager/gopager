@@ -159,7 +159,7 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 	mode := flags.String("migration-mode", string(platform.MigrationCheck), "Migration mode: check or apply")
 	address := flags.String("listen-address", "", "Explicit API listen address")
 	publicOrigin := flags.String("public-origin", "", "Public HTTP(S) origin for application Cookie and Origin policy")
-	processingArtifactRoot := flags.String("processing-artifact-root", "", "Optional operator-provisioned Processing artifact directory")
+	processingArtifactRoot := flags.String("processing-artifact-root", "", "Optional operator-provisioned plugin directory (or GOPAGER_PROCESSING_ARTIFACT_ROOT)")
 	defaultLimits := identity.DefaultLoginRateLimits()
 	loginAccount := flags.Int("login-attempts-per-account", defaultLimits.AccountAttempts, "Per-minute login attempt limit per normalized username")
 	loginInstance := flags.Int("login-attempts-per-instance", defaultLimits.InstanceAttempts, "Per-minute instance login attempt limit")
@@ -175,6 +175,10 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 	})
 	if artifactRootSet && *processingArtifactRoot == "" {
 		return startupConfig{}, platform.NewFailure(platform.CodeInvalidInput, errors.New("invalid Processing artifact root"))
+	}
+	// D-131: Docker deployments may name the mounted plugin directory through the environment.
+	if !artifactRootSet {
+		*processingArtifactRoot = getenv("GOPAGER_PROCESSING_ARTIFACT_ROOT")
 	}
 	roles, err := parseRoles(*rolesValue)
 	if err != nil {

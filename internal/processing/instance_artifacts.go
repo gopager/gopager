@@ -10,12 +10,12 @@ import (
 // LocalInstanceInspector validates provisioned modules/configuration outside primary transactions.
 // The caller owns the root and host lifetime; this inspector closes each inspected compilation.
 type LocalInstanceInspector struct {
-	host *WASMHost
+	host *PluginHost
 	root *os.Root
 }
 
 // NewLocalInstanceInspector binds the existing bounded runtime and Operator artifact directory.
-func NewLocalInstanceInspector(host *WASMHost, root *os.Root) (*LocalInstanceInspector, error) {
+func NewLocalInstanceInspector(host *PluginHost, root *os.Root) (*LocalInstanceInspector, error) {
 	if host == nil || root == nil {
 		return nil, invalid(errors.New("missing instance inspection dependency"))
 	}

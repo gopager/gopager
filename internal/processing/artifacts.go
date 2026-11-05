@@ -8,14 +8,19 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
+
+	"github.com/hashicorp/go-plugin"
 
 	"github.com/gopager/gopager/internal/platform"
-	"github.com/tetratelabs/wazero"
+	"github.com/gopager/gopager/pluginsdk"
 )
 
-const MaxArtifactBytes = 32 << 20
+// MaxArtifactBytes bounds the streamed SHA-256 verification of a plugin executable (D-131).
+const MaxArtifactBytes = 256 << 20
 
 // ConfigurationPolicy mirrors every declared container, property and list element.
 // Secret is a pointer so omission is never interpreted as an explicit public classification.
@@ -32,7 +37,7 @@ type ArtifactReference struct {
 	Digest string `json:"digest"`
 }
 
-// InstalledManifest describes only the approved pure WASI-command processing adapter.
+// InstalledManifest describes an Operator-provisioned plugin executable (manifest schema 2, SDK 2.0).
 type InstalledManifest struct {
 	SchemaVersion       int                    `json:"schemaVersion"`
 	SDKMajor            int                    `json:"sdkMajor"`
@@ -60,12 +65,19 @@ type ArtifactPin struct {
 	Digest       string `json:"digest"`
 }
 
-// InstalledArtifact is inspected/precompiled without running guest initialization.
+// InstalledArtifact is a verified plugin executable; loading never starts it. Its process starts on
+// first invocation and belongs to this artifact (one per configured instance and run).
 // Invocation still requires the separate current configuration/Principal/source authority participant.
 type InstalledArtifact struct {
 	manifest InstalledManifest
-	module   wazero.CompiledModule
-	host     *WASMHost
+	host     *PluginHost
+	path     string
+	dir      string
+
+	mu     sync.Mutex
+	closed bool
+	client *plugin.Client
+	stub   *pluginsdk.Client
 }
 
 func capabilityUnavailable(cause error) error {
@@ -104,9 +116,11 @@ func validateConfigurationPolicy(schema FieldSchema, policy ConfigurationPolicy,
 }
 
 func validateManifest(manifest InstalledManifest, pin ArtifactPin) error {
-	if manifest.SchemaVersion != 1 || manifest.SDKMajor != 1 ||
-		(manifest.SDKMinor != 0 && manifest.SDKMinor != 1) {
-		return platform.NewFailure(platform.CodeIncompatibleVersion, errors.New("unsupported installed-command schema/SDK"))
+	if manifest.SchemaVersion != 2 || manifest.SDKMajor != pluginsdk.ProtocolVersion || manifest.SDKMinor != 0 {
+		return platform.NewFailure(platform.CodeIncompatibleVersion, errors.New("unsupported plugin manifest schema/SDK"))
+	}
+	if !filepath.IsLocal(filepath.FromSlash(manifest.Artifact.Path)) {
+		return invalid(errors.New("plugin executable path must stay inside the artifact root"))
 	}
 	if !validLocalName(manifest.PluginID) || !validLocalName(manifest.Version) || !validLocalName(manifest.CapabilityID) ||
 		manifest.PluginID != pin.PluginID || manifest.Version != pin.Version ||
@@ -132,16 +146,6 @@ func validateManifest(manifest InstalledManifest, pin ArtifactPin) error {
 				return err
 			}
 		}
-	}
-	hasBytes := false
-	for _, schema := range []map[string]FieldSchema{manifest.InputSchema, manifest.ResultSchema} {
-		for _, field := range schema {
-			hasBytes = hasBytes || schemaContainsBytes(field)
-		}
-	}
-	if hasBytes && manifest.SDKMinor != 1 {
-		return platform.NewFailure(platform.CodeIncompatibleVersion,
-			errors.New("bytes schemas require Processing SDK 1.1"))
 	}
 	if schemaContainsBytes(manifest.ConfigurationSchema) {
 		return invalid(errors.New("bytes are unsupported in installed configuration"))
@@ -221,11 +225,46 @@ func readArtifactFile(ctx context.Context, root *os.Root, path string, limit int
 	return data, nil
 }
 
-// LoadInstalled reads only Operator-provisioned files below root and compiles exact pinned bytes.
-// It does not instantiate guest code, grant authority or cache an unbounded directory scan.
-func (h *WASMHost) LoadInstalled(ctx context.Context, root *os.Root, manifestPath string, pin ArtifactPin) (artifact *InstalledArtifact, failure error) {
-	if h == nil || h.runtime == nil || ctx == nil {
-		return nil, invalid(errors.New("missing installed runtime/context"))
+// hashExecutable verifies a regular, executable artifact inside root by streaming its SHA-256.
+func hashExecutable(ctx context.Context, root *os.Root, path string) (digest string, failure error) {
+	info, err := root.Stat(path)
+	if err != nil {
+		return "", capabilityUnavailable(err)
+	}
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
+		return "", capabilityUnavailable(errors.New("plugin artifact is not a regular executable file"))
+	}
+	if info.Size() > MaxArtifactBytes {
+		return "", resource(errors.New("plugin artifact size boundary"))
+	}
+	file, err := root.Open(path)
+	if err != nil {
+		return "", capabilityUnavailable(err)
+	}
+	defer func() {
+		if err := file.Close(); err != nil {
+			failure = errors.Join(failure, capabilityUnavailable(err))
+		}
+	}()
+	hash := sha256.New()
+	read, err := io.Copy(hash, io.LimitReader(file, MaxArtifactBytes+1))
+	if err != nil {
+		return "", capabilityUnavailable(err)
+	}
+	if read > MaxArtifactBytes {
+		return "", resource(errors.New("growing plugin artifact size boundary"))
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+// LoadInstalled reads only Operator-provisioned files below root and verifies the exact pinned
+// executable. It does not start the plugin, grant authority or cache a directory scan.
+func (h *PluginHost) LoadInstalled(ctx context.Context, root *os.Root, manifestPath string, pin ArtifactPin) (*InstalledArtifact, error) {
+	if h == nil || ctx == nil || root == nil {
+		return nil, invalid(errors.New("missing plugin host/root/context"))
 	}
 	encoded, err := readArtifactFile(ctx, root, manifestPath, MaxInputBytes)
 	if err != nil {
@@ -238,58 +277,37 @@ func (h *WASMHost) LoadInstalled(ctx context.Context, root *os.Root, manifestPat
 	if err := validateManifest(manifest, pin); err != nil {
 		return nil, err
 	}
-	data, err := readArtifactFile(ctx, root, manifest.Artifact.Path, MaxArtifactBytes)
+	executable := filepath.FromSlash(manifest.Artifact.Path)
+	digest, err := hashExecutable(ctx, root, executable)
 	if err != nil {
 		return nil, err
 	}
-	digest := sha256.Sum256(data)
-	if hex.EncodeToString(digest[:]) != pin.Digest {
+	if digest != pin.Digest {
 		return nil, capabilityUnavailable(errors.New("installed artifact digest changed"))
 	}
-	module, err := h.runtime.CompileModule(ctx, data)
+	base, err := filepath.Abs(root.Name())
 	if err != nil {
 		return nil, capabilityUnavailable(err)
 	}
-	defer func() {
-		if artifact == nil {
-			if err := module.Close(context.WithoutCancel(ctx)); err != nil {
-				failure = errors.Join(failure, capabilityUnavailable(err))
-			}
-		}
-	}()
-	wasi := h.runtime.Module("wasi_snapshot_preview1")
-	if wasi == nil || len(module.ImportedMemories()) != 0 {
-		return nil, capabilityUnavailable(errors.New("installed command imports unsupported memory/runtime"))
-	}
-	available := wasi.ExportedFunctionDefinitions()
-	for _, imported := range module.ImportedFunctions() {
-		namespace, name, ok := imported.Import()
-		if !ok || namespace != "wasi_snapshot_preview1" {
-			return nil, capabilityUnavailable(errors.New("installed command imports an unsupported host"))
-		}
-		exported, ok := available[name]
-		if !ok || !slices.Equal(imported.ParamTypes(), exported.ParamTypes()) ||
-			!slices.Equal(imported.ResultTypes(), exported.ResultTypes()) {
-			return nil, capabilityUnavailable(errors.New("installed command requires an unavailable host function"))
-		}
-	}
-	start, exists := module.ExportedFunctions()["_start"]
-	if !exists || len(start.ParamTypes()) != 0 || len(start.ResultTypes()) != 0 {
-		return nil, invalid(errors.New("installed command has no compatible _start entry point"))
-	}
-	if err := ctx.Err(); err != nil {
+	path := filepath.Join(base, executable)
+	artifact := &InstalledArtifact{manifest: manifest, host: h, path: path, dir: filepath.Dir(path)}
+	if err := h.register(artifact); err != nil {
 		return nil, err
 	}
-	return &InstalledArtifact{manifest: manifest, module: module, host: h}, nil
+	return artifact, nil
 }
 
-// Close releases this prepared binary after invocations drain; it does not close the shared host.
+// Close stops this artifact's plugin process after invocations drain; it does not close the host.
 func (a *InstalledArtifact) Close(ctx context.Context) error {
-	if a == nil || a.module == nil || ctx == nil {
+	if a == nil || ctx == nil {
 		return invalid(errors.New("missing installed artifact/context"))
 	}
-	if err := a.module.Close(ctx); err != nil {
-		return capabilityUnavailable(err)
+	a.mu.Lock()
+	a.closed = true
+	a.stopLocked()
+	a.mu.Unlock()
+	if a.host != nil {
+		a.host.forget(a)
 	}
 	return nil
 }

@@ -1027,10 +1027,7 @@ func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	host, err := processing.NewWASMHost(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := processing.NewPluginHost()
 	t.Cleanup(func() {
 		if err := host.Close(context.Background()); err != nil {
 			t.Error(err)

@@ -16,7 +16,7 @@ import (
 // processingDefinitionArtifacts loads current instance declarations without invoking code.
 // The definition preparer owns each returned compilation until validation has finished.
 type processingDefinitionArtifacts struct {
-	host       *processing.WASMHost
+	host       *processing.PluginHost
 	root       *os.Root
 	store      *postgres.Store
 	repository *processingstore.Store

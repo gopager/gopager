@@ -35,10 +35,14 @@ func TestParseConfigBindsExplicitInputs(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			config, err := parseConfig(test.args, func(key string) string {
-				if key != "GOPAGER_DATABASE_URL" {
-					t.Fatalf("unexpected environment input %q", key)
+				switch key {
+				case "GOPAGER_DATABASE_URL":
+					return test.dsn
+				case "GOPAGER_PROCESSING_ARTIFACT_ROOT":
+					return ""
 				}
-				return test.dsn
+				t.Fatalf("unexpected environment input %q", key)
+				return ""
 			})
 			if (err == nil) != test.ok {
 				t.Fatalf("parse result: %v", err)
@@ -56,5 +60,37 @@ func TestParseConfigBindsExplicitInputs(t *testing.T) {
 				t.Fatal("Processing artifact root was not bound")
 			}
 		})
+	}
+}
+
+// TestParseConfigReadsPluginRootFromEnvironment covers the D-131 Docker provisioning path.
+func TestParseConfigReadsPluginRootFromEnvironment(t *testing.T) {
+	fromEnv, fromFlag := t.TempDir(), t.TempDir()
+	environment := func(root string) func(string) string {
+		return func(key string) string {
+			switch key {
+			case "GOPAGER_DATABASE_URL":
+				return "synthetic-secret"
+			case "GOPAGER_PROCESSING_ARTIFACT_ROOT":
+				return root
+			}
+			return ""
+		}
+	}
+	args := []string{"--profile=full", "--roles=worker"}
+	config, err := parseConfig(args, environment(fromEnv))
+	if err != nil || config.ProcessingArtifactRoot != fromEnv {
+		t.Fatalf("environment plugin root not used: %q, %v", config.ProcessingArtifactRoot, err)
+	}
+	config, err = parseConfig(append(args, "--processing-artifact-root="+fromFlag), environment(fromEnv))
+	if err != nil || config.ProcessingArtifactRoot != fromFlag {
+		t.Fatalf("flag did not take precedence over environment: %q, %v", config.ProcessingArtifactRoot, err)
+	}
+	if _, err := parseConfig(args, environment("/dev/null")); err == nil {
+		t.Fatal("invalid environment plugin root accepted")
+	}
+	config, err = parseConfig(args, environment(""))
+	if err != nil || config.ProcessingArtifactRoot != "" {
+		t.Fatalf("empty environment plugin root was not treated as unset: %q, %v", config.ProcessingArtifactRoot, err)
 	}
 }

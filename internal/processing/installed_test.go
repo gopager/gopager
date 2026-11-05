@@ -2,7 +2,6 @@ package processing
 
 import (
 	"context"
-	_ "embed"
 	"errors"
 	"strings"
 	"testing"
@@ -10,133 +9,162 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/platform"
+	"github.com/gopager/gopager/internal/testutil/pluginfixture"
 )
 
-//go:generate env GOOS=wasip1 GOARCH=wasm CGO_ENABLED=0 go build -trimpath -buildvcs=false -o testdata/command.wasm ./testdata/command
-
-//go:embed testdata/command.wasm
-var installedCommand []byte
-
-func TestInstalledPureCommandWireInvocationAndIsolation(t *testing.T) {
-	ctx := context.Background()
-	host, err := NewWASMHost(ctx)
+func installedEnvelope(t *testing.T, pin ArtifactPin, input map[string]Value) InvocationEnvelope {
+	t.Helper()
+	configuration, err := Literal(ObjectValue, map[string]Value{})
 	if err != nil {
 		t.Fatal(err)
 	}
+	return InvocationEnvelope{SchemaVersion: 2, InvocationID: uuid.New(), InstanceID: uuid.New(),
+		WorkflowID: uuid.New(), DefinitionVersionID: uuid.New(), RunID: uuid.New(),
+		ExecutionPrincipalID: uuid.New(), ConfigurationRevision: 1, ArtifactDigest: pin.Digest,
+		CapabilityID: pin.CapabilityID, Configuration: configuration, Input: input}
+}
+
+func loadCommandPlugin(t *testing.T, host *PluginHost, schema map[string]FieldSchema) (*InstalledArtifact, ArtifactPin) {
+	t.Helper()
+	_, root, manifest, pin := artifactFixture(t, pluginfixture.Binary(t, "command"))
+	manifest.InputSchema, manifest.ResultSchema = schema, schema
+	writeManifest(t, root, manifest)
+	artifact, err := host.LoadInstalled(context.Background(), root, "manifest.json", pin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := artifact.Close(context.Background()); err != nil {
+			t.Error(err)
+		}
+	})
+	return artifact, pin
+}
+
+func TestInstalledPluginWireInvocationRestartAndIsolation(t *testing.T) {
+	ctx := context.Background()
+	host := NewPluginHost()
 	t.Cleanup(func() {
 		if err := host.Close(ctx); err != nil {
 			t.Error(err)
 		}
 	})
-	_, root, manifest, pin := artifactFixture(t, installedCommand)
-	manifest.InputSchema = map[string]FieldSchema{"mode": {Kind: StringValue}, "text": {Kind: StringValue}}
-	manifest.ResultSchema = manifest.InputSchema
-	writeManifest(t, root, manifest)
-	artifact, err := host.LoadInstalled(ctx, root, "manifest.json", pin)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := artifact.Close(ctx); err != nil {
-			t.Error(err)
-		}
-	})
-	configuration, err := Literal(ObjectValue, map[string]Value{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Setenv("GOPAGER_TEST_CORE_SECRET", "must-not-reach-plugins")
+	artifact, pin := loadCommandPlugin(t, host, map[string]FieldSchema{"mode": {Kind: StringValue}, "text": {Kind: StringValue}})
 	text, err := Literal(StringValue, "original text")
 	if err != nil {
 		t.Fatal(err)
 	}
-	envelope := InvocationEnvelope{SchemaVersion: 1, InvocationID: uuid.New(), WorkflowID: uuid.New(),
-		DefinitionVersionID: uuid.New(), RunID: uuid.New(), ExecutionPrincipalID: uuid.New(),
-		ConfigurationRevision: 1, ArtifactDigest: pin.Digest, CapabilityID: pin.CapabilityID, Configuration: configuration}
-	for _, mode := range []string{"ok", "mixed", "private-failure", "fail", "loop", "ok"} {
+	envelope := installedEnvelope(t, pin, nil)
+	for _, mode := range []string{"ok", "mixed", "private-failure", "fail", "loop", "ok", "crash", "ok", "env", "instance"} {
 		value, err := Literal(StringValue, mode)
 		if err != nil {
 			t.Fatal(err)
 		}
 		envelope.Input = map[string]Value{"mode": value, "text": text}
-		callContext, cancel := context.WithTimeout(ctx, time.Second)
+		timeout := 10 * time.Second
 		if mode == "loop" {
-			cancel()
-			callContext, cancel = context.WithTimeout(ctx, 20*time.Millisecond)
+			timeout = 200 * time.Millisecond
 		}
+		callContext, cancel := context.WithTimeout(ctx, timeout)
 		fields, err := artifact.invokeProjected(callContext, envelope, true)
 		cancel()
 		switch mode {
 		case "ok":
 			if err != nil || string(fields["text"].Value) != `"original text"` {
-				t.Fatalf("installed success failed: %+v, %v", fields, err)
+				t.Fatalf("installed success failed (also after restart): %+v, %v", fields, err)
 			}
 		case "loop":
 			if !errors.Is(err, context.DeadlineExceeded) || fields != nil {
-				t.Fatalf("guest loop escaped deadline: %+v, %v", fields, err)
+				t.Fatalf("plugin loop escaped deadline: %+v, %v", fields, err)
+			}
+		case "env":
+			if err != nil || string(fields["text"].Value) != `""` {
+				t.Fatalf("Core environment reached the plugin: %+v, %v", fields, err)
+			}
+		case "instance":
+			if err != nil || string(fields["text"].Value) != `"`+envelope.InstanceID.String()+`"` {
+				t.Fatalf("instance ID did not reach the plugin: %+v, %v", fields, err)
 			}
 		default:
 			if platform.FailureCode(err) != platform.CodeInvalidInput || fields != nil || strings.Contains(err.Error(), "private") {
-				t.Fatalf("malformed/failed guest became success or leaked text: %+v, %v", fields, err)
+				t.Fatalf("%s: malformed/failed plugin became success or leaked text: %+v, %v", mode, fields, err)
 			}
 		}
-
 	}
 	artifact.manifest.PurePreview = false
 	if _, err := artifact.invokeProjected(ctx, envelope, true); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
 		t.Fatalf("undeclared preview capability was invoked: %v", err)
 	}
-
 	artifact.manifest.PurePreview = true
 	secret := true
 	artifact.manifest.ConfigurationPolicy.Secret = &secret
 	if _, err := artifact.invokeProjected(ctx, envelope, false); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
 		t.Fatalf("unresolved Secret configuration was invoked: %v", err)
 	}
+	envelope.InstanceID = uuid.Nil
+	artifact.manifest.ConfigurationPolicy.Secret = new(bool)
+	if _, err := artifact.invokeProjected(ctx, envelope, false); platform.FailureCode(err) != platform.CodeInvalidInput {
+		t.Fatalf("envelope without instance ID was accepted: %v", err)
+	}
 }
 
-func TestInstalledSDK11RoundTripsTypedBytesThroughWASI(t *testing.T) {
+func TestInstalledPluginInstancesRunInSeparateProcesses(t *testing.T) {
 	ctx := context.Background()
-	host, err := NewWASMHost(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := NewPluginHost()
 	t.Cleanup(func() {
 		if err := host.Close(ctx); err != nil {
 			t.Error(err)
 		}
 	})
-	_, root, manifest, pin := artifactFixture(t, installedCommand)
-	manifest.InputSchema = map[string]FieldSchema{"binary": {Kind: BytesValue}}
-	manifest.ResultSchema = map[string]FieldSchema{"binary": {Kind: BytesValue}}
-	writeManifest(t, root, manifest)
-	if _, err := host.LoadInstalled(ctx, root, "manifest.json", pin); platform.FailureCode(err) != platform.CodeIncompatibleVersion {
-		t.Fatalf("SDK 1.0 bytes artifact was loadable: %v", err)
-	}
-	manifest.SDKMinor = 1
-	writeManifest(t, root, manifest)
-	artifact, err := host.LoadInstalled(ctx, root, "manifest.json", pin)
+	schema := map[string]FieldSchema{"mode": {Kind: StringValue}, "text": {Kind: StringValue}}
+	first, pin := loadCommandPlugin(t, host, schema)
+	second, _ := loadCommandPlugin(t, host, schema)
+	mode, err := Literal(StringValue, "instance")
 	if err != nil {
 		t.Fatal(err)
 	}
+	placeholder, err := Literal(StringValue, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, artifact := range []*InstalledArtifact{first, second} {
+		envelope := installedEnvelope(t, pin, map[string]Value{"mode": mode, "text": placeholder})
+		fields, err := artifact.invokeProjected(ctx, envelope, false)
+		if err != nil || string(fields["text"].Value) != `"`+envelope.InstanceID.String()+`"` {
+			t.Fatalf("instance invocation failed: %+v, %v", fields, err)
+		}
+	}
+	if first.client == nil || second.client == nil || first.client == second.client {
+		t.Fatal("configured instances did not get their own plugin processes")
+	}
+	if err := first.Close(ctx); err != nil {
+		t.Fatal(err)
+	}
+	envelope := installedEnvelope(t, pin, map[string]Value{"mode": mode, "text": placeholder})
+	if _, err := second.invokeProjected(ctx, envelope, false); err != nil {
+		t.Fatalf("closing one instance stopped another: %v", err)
+	}
+	if _, err := first.invokeProjected(ctx, envelope, false); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
+		t.Fatalf("closed instance still invoked its plugin: %v", err)
+	}
+}
+
+func TestInstalledSDK2RoundTripsTypedBytes(t *testing.T) {
+	ctx := context.Background()
+	host := NewPluginHost()
 	t.Cleanup(func() {
-		if err := artifact.Close(ctx); err != nil {
+		if err := host.Close(ctx); err != nil {
 			t.Error(err)
 		}
 	})
-	configuration, err := Literal(ObjectValue, map[string]Value{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	artifact, pin := loadCommandPlugin(t, host, map[string]FieldSchema{"binary": {Kind: BytesValue}})
 	binary, err := Literal(BytesValue, []byte{0, 1, 2, 255})
 	if err != nil {
 		t.Fatal(err)
 	}
-	envelope := InvocationEnvelope{SchemaVersion: 1, InvocationID: uuid.New(), WorkflowID: uuid.New(),
-		DefinitionVersionID: uuid.New(), RunID: uuid.New(), ExecutionPrincipalID: uuid.New(),
-		ConfigurationRevision: 1, ArtifactDigest: pin.Digest, CapabilityID: pin.CapabilityID,
-		Configuration: configuration, Input: map[string]Value{"binary": binary}}
-	fields, err := artifact.invokeProjected(ctx, envelope, true)
+	fields, err := artifact.invokeProjected(ctx, installedEnvelope(t, pin, map[string]Value{"binary": binary}), true)
 	if err != nil || string(fields["binary"].Value) != `"AAEC/w=="` {
-		t.Fatalf("SDK 1.1 bytes changed across WASI boundary: %+v, %v", fields, err)
+		t.Fatalf("SDK 2.0 bytes changed across the plugin boundary: %+v, %v", fields, err)
 	}
 }

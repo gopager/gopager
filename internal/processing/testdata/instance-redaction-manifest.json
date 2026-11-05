@@ -1,12 +1,12 @@
 {
-  "schemaVersion": 1,
-  "sdkMajor": 1,
+  "schemaVersion": 2,
+  "sdkMajor": 2,
   "sdkMinor": 0,
   "pluginId": "test-command",
   "version": "1",
   "capabilityId": "test",
   "artifact": {
-    "path": "command.wasm",
+    "path": "plugin",
     "digest": "4f69af662a1c0009e8220304c26f548058f0b60815835a95ca0e3c6872361b12"
   },
   "pure": true,

@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"entgo.io/ent/entql"
@@ -23,6 +22,7 @@ import (
 	"github.com/gopager/gopager/internal/processing"
 	"github.com/gopager/gopager/internal/processing/execution"
 	"github.com/gopager/gopager/internal/protocols"
+	"github.com/gopager/gopager/internal/testutil/pluginfixture"
 )
 
 // installedSourceFixture provides explicit synthetic source scope, not production AP-06 originals.
@@ -130,25 +130,22 @@ func setExecutionFields(t *testing.T, f matcherFixture, fields []string) {
 	}
 }
 
-// provisionExecutionFixture writes the already supplied command/preview binaries, never builds at runtime.
+// provisionExecutionFixture writes the supplied command/preview plugin executables built for this test process.
 func provisionExecutionFixture(t *testing.T, root *os.Root, preview bool) processing.ProvisionedArtifact {
 	t.Helper()
 	name := "command"
 	if preview {
 		name = "preview"
 	}
-	data, err := os.ReadFile(filepath.Join("..", "..", "..", "processing", "testdata", name+".wasm"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := root.WriteFile(name+".wasm", data, 0600); err != nil {
+	data := pluginfixture.Binary(t, name)
+	if err := root.WriteFile(name, data, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	digest := sha256.Sum256(data)
 	noSecret := false
-	manifest := processing.InstalledManifest{SchemaVersion: 1, SDKMajor: 1, PluginID: "test-command",
+	manifest := processing.InstalledManifest{SchemaVersion: 2, SDKMajor: 2, PluginID: "test-command",
 		Version: "1", CapabilityID: "test", Pure: true, PurePreview: true,
-		Artifact: processing.ArtifactReference{Path: name + ".wasm", Digest: hex.EncodeToString(digest[:])},
+		Artifact: processing.ArtifactReference{Path: name, Digest: hex.EncodeToString(digest[:])},
 		InputSchema: map[string]processing.FieldSchema{"mode": {Kind: processing.StringValue},
 			"text": {Kind: processing.StringValue, Optional: true}},
 		ConfigurationSchema: processing.FieldSchema{Kind: processing.ObjectValue, Properties: map[string]processing.FieldSchema{}},
@@ -171,10 +168,7 @@ func TestProcessingExecutionCurrentAuthorityAndArtifactLifetime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	host, err := processing.NewWASMHost(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := processing.NewPluginHost()
 	t.Cleanup(func() {
 		if err := host.Close(context.Background()); err != nil {
 			t.Error(err)

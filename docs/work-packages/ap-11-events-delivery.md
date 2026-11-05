@@ -5,7 +5,7 @@
 ## Session Context
 
 - **Authority:** [session procedure](shared-rules.md#session-start), [delivery scope](../authoritative-plan.md#delivery-scope) and [approval](../authoritative-plan.md#workflow-and-approval-gates).
-- **Requirements and owners:** [REQ-049/081..082/084..087/105..106/108/129..130](../requirements-catalog.md#i-domain-events-extensions-and-deliveries), [C-06](../contracts/c-06-identity-authorization.md), [C-07](../contracts/c-07-query-live.md), [C-08](../contracts/c-08-events-jobs.md), [C-09](../contracts/c-09-delivery.md), [C-10](../contracts/c-10-plugin-host.md) and [C-11 shared rendering](../contracts/c-11-processing-presentation.md#presentation-and-configuration).
+- **Requirements and owners:** [REQ-049/081..082/084..087/105..106/108/129..130](../requirements-catalog.md#i-domain-events-extensions-and-deliveries); [REQ-139](../requirements-catalog.md#i-domain-events-extensions-and-deliveries) as compatibility context (not delivered here); [C-06](../contracts/c-06-identity-authorization.md), [C-07](../contracts/c-07-query-live.md), [C-08](../contracts/c-08-events-jobs.md), [C-09](../contracts/c-09-delivery.md), [C-10](../contracts/c-10-plugin-host.md) and [C-11 shared rendering](../contracts/c-11-processing-presentation.md#presentation-and-configuration).
 - **Owner:** DOM-07 with integration and DOM-08 participating in current Core materialization/rendering work. This AP owns Delivery production claims/leases; AP-05 supplies only fixed transactions/primary clock and synthetic fencing evidence.
 - **Architecture:** [event-driven architecture](../architecture.md#core-domain-event-driven-architecture-reassessment), [worker/queue assessment](../architecture.md#ap-12-durable-worker-and-job-queue-assessment), [allowed dependencies](../architecture.md#allowed-dependencies).
 - **Prerequisites:** [AP-05](../execution/ap-05.md) transactions/clock, [AP-06](../execution/ap-06.md)/[AP-07](../execution/ap-07.md) kernel/intake publication, [AP-08](ap-08-master-data-correction-after-intake.md) correction/suppression/default facts/lookups, [AP-09](ap-09-gateway-network.md) Gateway state facts and [AP-10](ap-10-query-live.md) authorized projection/filter. Verify actual handovers and [postgresql-fact-publication 1.0](../contracts/c-08-events-jobs.md#postgresql-fact-publication). No generic lease adapter or later host/renderer is assumed.
@@ -29,10 +29,17 @@ AP-12 later produces real validated manifest/configuration descriptors and targe
 
 T066/T067 define event types/envelopes/order, selection/publication atomicity, canonical lookup/unknown-version/missing-reference handling, domain receipts/work commit before Ack, catch-up/retention/lifecycle, replay/correction suppression and unique fan-out. Define Delivery claims/token/primary-time expiry, per-attempt state, retry classification/bounds, provider uncertainty and restart behavior. Transport offsets are not domain work leases or idempotency.
 
+Keep the event model open for [REQ-139](../requirements-catalog.md#i-domain-events-extensions-and-deliveries) plugin reactions under [D-130](../authoritative-plan.md#plugin-trust-clarification):
+- The versioned event-type catalog covers all producing domains, including identity/account lifecycle, master data, Gateways, corrections and operations, not only Messages.
+- A Subscription target is a typed reference, so a later plugin reaction capability can be a target kind next to Delivery targets.
+- Global Subscriptions run under a technical Principal, and facts carry IDs and classified fields only.
+
+This is design compatibility, not reaction implementation.
+
 Define Subscription CRUD/selection/target mappings, pause/retry/redeliver/status management APIs, current data/field/age/Assignment/Suppression/configuration checks, split identity, minimal retained inputs and terminal/24h expiry. Define sending admission/rate fairness under REQ-108 and machine-readable throttling; provider-specific policy is AP-12's own later work, not a prerequisite for generic admission.
 
 T068 covers [F-02/F-15/F-17..F-19/F-23/F-25](../contracts/reference-cases.md), [F-33..F-35](../contracts/ap-02-boundary-cases.md), duplicate fact/claim/restart/commit rollback, superseded token, revocation before/after started I/O, uncertain outcomes/no blind retry, historical no-send, field indeterminacy, hidden defaults/split conflicts, input expiry and fair sending admission. Run focused event/delivery/renderer race tests, real PostgreSQL/HTTP transaction integration and controlled provider process tests; existing generation/vet/build. Hand over actual input/attempt/renderer/OpenAPI versions, claims/stores/facts and executed tests to AP-12..AP-17.
 
 **Acceptance:** Durable event and Delivery state is truthful about acceptance, uncertainty, retry, and current rights.
 
-**Non-goals:** Exactly-once or recall guarantees, arbitrary event fan-out, or real provider access without a separately approved environment.
+**Non-goals:** Exactly-once or recall guarantees, implemented plugin reactions to non-Message events (REQ-139 stays open for later planning), or real provider access without a separately approved environment.
