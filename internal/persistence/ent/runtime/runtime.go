@@ -639,14 +639,8 @@ func init() {
 	pendingassignmentscope.DefaultFencingToken = pendingassignmentscopeDescFencingToken.Default.(int64)
 	// pendingassignmentscope.FencingTokenValidator is a validator for the "fencing_token" field. It is called by the builders before save.
 	pendingassignmentscope.FencingTokenValidator = pendingassignmentscopeDescFencingToken.Validators[0].(func(int64) error)
-	// pendingassignmentscopeDescAccessRevision is the schema descriptor for access_revision field.
-	pendingassignmentscopeDescAccessRevision := pendingassignmentscopeFields[20].Descriptor()
-	// pendingassignmentscope.DefaultAccessRevision holds the default value on creation for the access_revision field.
-	pendingassignmentscope.DefaultAccessRevision = pendingassignmentscopeDescAccessRevision.Default.(int64)
-	// pendingassignmentscope.AccessRevisionValidator is a validator for the "access_revision" field. It is called by the builders before save.
-	pendingassignmentscope.AccessRevisionValidator = pendingassignmentscopeDescAccessRevision.Validators[0].(func(int64) error)
 	// pendingassignmentscopeDescFailureCode is the schema descriptor for failure_code field.
-	pendingassignmentscopeDescFailureCode := pendingassignmentscopeFields[21].Descriptor()
+	pendingassignmentscopeDescFailureCode := pendingassignmentscopeFields[20].Descriptor()
 	// pendingassignmentscope.FailureCodeValidator is a validator for the "failure_code" field. It is called by the builders before save.
 	pendingassignmentscope.FailureCodeValidator = pendingassignmentscopeDescFailureCode.Validators[0].(func(string) error)
 	// pendingassignmentscopeDescID is the schema descriptor for id field.

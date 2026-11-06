@@ -416,27 +416,6 @@ func (_u *PendingAssignmentScopeUpdate) AddFencingToken(v int64) *PendingAssignm
 	return _u
 }
 
-// SetAccessRevision sets the "access_revision" field.
-func (_u *PendingAssignmentScopeUpdate) SetAccessRevision(v int64) *PendingAssignmentScopeUpdate {
-	_u.mutation.ResetAccessRevision()
-	_u.mutation.SetAccessRevision(v)
-	return _u
-}
-
-// SetNillableAccessRevision sets the "access_revision" field if the given value is not nil.
-func (_u *PendingAssignmentScopeUpdate) SetNillableAccessRevision(v *int64) *PendingAssignmentScopeUpdate {
-	if v != nil {
-		_u.SetAccessRevision(*v)
-	}
-	return _u
-}
-
-// AddAccessRevision adds value to the "access_revision" field.
-func (_u *PendingAssignmentScopeUpdate) AddAccessRevision(v int64) *PendingAssignmentScopeUpdate {
-	_u.mutation.AddAccessRevision(v)
-	return _u
-}
-
 // SetFailureCode sets the "failure_code" field.
 func (_u *PendingAssignmentScopeUpdate) SetFailureCode(v string) *PendingAssignmentScopeUpdate {
 	_u.mutation.SetFailureCode(v)
@@ -524,11 +503,6 @@ func (_u *PendingAssignmentScopeUpdate) check() error {
 	if v, ok := _u.mutation.FencingToken(); ok {
 		if err := pendingassignmentscope.FencingTokenValidator(v); err != nil {
 			return &ValidationError{Name: "fencing_token", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.fencing_token": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.AccessRevision(); ok {
-		if err := pendingassignmentscope.AccessRevisionValidator(v); err != nil {
-			return &ValidationError{Name: "access_revision", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.access_revision": %w`, err)}
 		}
 	}
 	if v, ok := _u.mutation.FailureCode(); ok {
@@ -670,12 +644,6 @@ func (_u *PendingAssignmentScopeUpdate) sqlSave(ctx context.Context) (_node int,
 	}
 	if value, ok := _u.mutation.AddedFencingToken(); ok {
 		_spec.AddField(pendingassignmentscope.FieldFencingToken, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AccessRevision(); ok {
-		_spec.SetField(pendingassignmentscope.FieldAccessRevision, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedAccessRevision(); ok {
-		_spec.AddField(pendingassignmentscope.FieldAccessRevision, field.TypeInt64, value)
 	}
 	if value, ok := _u.mutation.FailureCode(); ok {
 		_spec.SetField(pendingassignmentscope.FieldFailureCode, field.TypeString, value)
@@ -1091,27 +1059,6 @@ func (_u *PendingAssignmentScopeUpdateOne) AddFencingToken(v int64) *PendingAssi
 	return _u
 }
 
-// SetAccessRevision sets the "access_revision" field.
-func (_u *PendingAssignmentScopeUpdateOne) SetAccessRevision(v int64) *PendingAssignmentScopeUpdateOne {
-	_u.mutation.ResetAccessRevision()
-	_u.mutation.SetAccessRevision(v)
-	return _u
-}
-
-// SetNillableAccessRevision sets the "access_revision" field if the given value is not nil.
-func (_u *PendingAssignmentScopeUpdateOne) SetNillableAccessRevision(v *int64) *PendingAssignmentScopeUpdateOne {
-	if v != nil {
-		_u.SetAccessRevision(*v)
-	}
-	return _u
-}
-
-// AddAccessRevision adds value to the "access_revision" field.
-func (_u *PendingAssignmentScopeUpdateOne) AddAccessRevision(v int64) *PendingAssignmentScopeUpdateOne {
-	_u.mutation.AddAccessRevision(v)
-	return _u
-}
-
 // SetFailureCode sets the "failure_code" field.
 func (_u *PendingAssignmentScopeUpdateOne) SetFailureCode(v string) *PendingAssignmentScopeUpdateOne {
 	_u.mutation.SetFailureCode(v)
@@ -1212,11 +1159,6 @@ func (_u *PendingAssignmentScopeUpdateOne) check() error {
 	if v, ok := _u.mutation.FencingToken(); ok {
 		if err := pendingassignmentscope.FencingTokenValidator(v); err != nil {
 			return &ValidationError{Name: "fencing_token", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.fencing_token": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.AccessRevision(); ok {
-		if err := pendingassignmentscope.AccessRevisionValidator(v); err != nil {
-			return &ValidationError{Name: "access_revision", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.access_revision": %w`, err)}
 		}
 	}
 	if v, ok := _u.mutation.FailureCode(); ok {
@@ -1375,12 +1317,6 @@ func (_u *PendingAssignmentScopeUpdateOne) sqlSave(ctx context.Context) (_node *
 	}
 	if value, ok := _u.mutation.AddedFencingToken(); ok {
 		_spec.AddField(pendingassignmentscope.FieldFencingToken, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AccessRevision(); ok {
-		_spec.SetField(pendingassignmentscope.FieldAccessRevision, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedAccessRevision(); ok {
-		_spec.AddField(pendingassignmentscope.FieldAccessRevision, field.TypeInt64, value)
 	}
 	if value, ok := _u.mutation.FailureCode(); ok {
 		_spec.SetField(pendingassignmentscope.FieldFailureCode, field.TypeString, value)

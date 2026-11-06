@@ -270,7 +270,6 @@ func (PendingAssignmentScope) Fields() []ent.Field {
 		field.Int("attempts").Default(0).NonNegative(),
 		field.Time("lease_until").Optional().Nillable(),
 		field.Int64("fencing_token").Default(0).NonNegative(),
-		field.Int64("access_revision").Default(1).Positive(),
 		field.String("failure_code").Optional().NotEmpty(),
 	}
 }

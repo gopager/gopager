@@ -18,7 +18,7 @@ import (
 
 // ClaimCorrection leases the oldest queued or lease-expired running correction scope of
 // the current Assignment revision for lease (at most one minute) from now. Claiming
-// increments the attempt count and fencing token and pins the current access revision.
+// increments the attempt count and fencing token.
 // The bool is false when no scope is claimable, including when the chosen scope is locked
 // by another worker or has used its five attempts (it is then marked failed with
 // RETRY_LIMIT).
@@ -43,10 +43,6 @@ func (s *Store) ClaimCorrection(ctx context.Context, tx platform.TransactionCont
 		return assignments.CorrectionLease{}, false, err
 	}
 	if _, err := s.LockRevision(ctx, tx); err != nil {
-		return assignments.CorrectionLease{}, false, err
-	}
-	accessRevision, err := s.accessRevision(ctx, tx)
-	if err != nil {
 		return assignments.CorrectionLease{}, false, err
 	}
 	err = executor.QueryRowContext(ctx, `SELECT id FROM assignment_pending_scopes
@@ -76,8 +72,8 @@ func (s *Store) ClaimCorrection(ctx context.Context, tx platform.TransactionCont
 	}
 	leaseUntil := now.Add(lease)
 	if _, err := executor.ExecContext(ctx, `UPDATE assignment_pending_scopes SET state='running',
-		attempts=attempts+1,fencing_token=fencing_token+1,lease_until=$2,failure_code=NULL,access_revision=$3
-		WHERE id=$1`, id, leaseUntil, accessRevision); err != nil {
+		attempts=attempts+1,fencing_token=fencing_token+1,lease_until=$2,failure_code=NULL
+		WHERE id=$1`, id, leaseUntil); err != nil {
 		return assignments.CorrectionLease{}, false, err
 	}
 	value, err := readCorrectionLease(ctx, executor, id)
@@ -90,9 +86,9 @@ func readCorrectionLease(ctx context.Context, executor postgres.Executor, id uui
 	var cursorID sql.NullString
 	var cursorAt, leaseUntil sql.NullTime
 	err := executor.QueryRowContext(ctx, `SELECT id,assignment_revision,reason,cursor_accepted_at,cursor_transmission_id::text,
-		access_revision,fencing_token,lease_until,attempts,`+scopeSelect+`
+		fencing_token,lease_until,attempts,`+scopeSelect+`
 		FROM assignment_pending_scopes WHERE id=$1 AND state='running'`, id).Scan(
-		append([]any{&value.ID, &value.AssignmentRev, &value.Reason, &cursorAt, &cursorID, &value.AccessRevision,
+		append([]any{&value.ID, &value.AssignmentRev, &value.Reason, &cursorAt, &cursorID,
 			&value.FencingToken, &leaseUntil, &value.Attempts}, columns.targets()...)...)
 	if err != nil {
 		return assignments.CorrectionLease{}, err
@@ -177,60 +173,54 @@ func scanCorrectionItems(rows *sql.Rows) ([]assignments.CorrectionBatchItem, err
 
 // ApplyCorrectionBatch writes re-resolved targets (1..100 updates) under a held lease and
 // returns the target resolutions that actually changed, each with the Message revision
-// after the change. It takes the shared Assignment and access locks and fails with
-// authz.ErrRevisionConflict when the access revision, the fence, or a Transmission's source
-// identity changed; a newer Assignment revision is expected, the targets are stamped with
-// the revision the fresh match was made at. Side effects: the scan cursor advances, every
+// after the change, and every Transmission whose stamped revision moved. It takes the shared
+// Assignment lock and fails with authz.ErrRevisionConflict when the fence or a Transmission's
+// source identity changed; a newer Assignment or access revision is expected, the targets are
+// stamped with the revision the fresh match was made at. Side effects: the scan cursor advances, every
 // touched Message has its message_units rows rebuilt, Messages with changed targets get a
 // new revision, and the lease is extended by 30 seconds.
 func (s *Store) ApplyCorrectionBatch(ctx context.Context, tx platform.TransactionContext,
 	lease assignments.CorrectionLease, updates []assignments.CorrectionUpdate,
-) ([]assignments.CorrectionChange, error) {
+) (assignments.CorrectionApplied, error) {
 	if lease.ID == uuid.Nil || lease.FencingToken <= 0 || len(updates) == 0 || len(updates) > 100 {
-		return nil, authz.ErrInvalidInput
+		return assignments.CorrectionApplied{}, authz.ErrInvalidInput
 	}
 	if _, err := s.LockRevision(ctx, tx); err != nil {
-		return nil, err
-	}
-	accessRevision, err := s.accessRevision(ctx, tx)
-	if err != nil {
-		return nil, err
+		return assignments.CorrectionApplied{}, err
 	}
 	now, err := s.primary.Now(ctx, tx)
 	if err != nil {
-		return nil, err
+		return assignments.CorrectionApplied{}, err
 	}
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {
-		return nil, err
-	}
-	if accessRevision != lease.AccessRevision {
-		return nil, authz.ErrRevisionConflict
+		return assignments.CorrectionApplied{}, err
 	}
 	if err := checkCorrectionFence(ctx, executor, lease, now); err != nil {
-		return nil, err
+		return assignments.CorrectionApplied{}, err
 	}
 	messages := make([]uuid.UUID, 0, len(updates))
 	messageSet := make(map[uuid.UUID]bool, len(updates))
 	changedMessages := make([]uuid.UUID, 0, len(updates))
 	changedMessageSet := make(map[uuid.UUID]bool, len(updates))
-	var changes []assignments.CorrectionChange
+	restamped := make(map[uuid.UUID]bool, len(updates))
+	var applied assignments.CorrectionApplied
 	for _, update := range updates {
 		if update.Item.TransmissionID == uuid.Nil || update.Item.MessageID == uuid.Nil ||
 			update.Item.NetworkID == uuid.Nil || update.Item.SourceRevision <= 0 ||
 			update.Match.Revision < lease.AssignmentRev || len(update.Match.Resolutions) != len(update.Item.Targets) {
-			return nil, authz.ErrInvalidInput
+			return assignments.CorrectionApplied{}, authz.ErrInvalidInput
 		}
 		var currentMessage, currentNetwork uuid.UUID
 		var sourceRevision int64
 		if err := executor.QueryRowContext(ctx, `SELECT message_id,network_id,source_revision
 			FROM transmissions WHERE id=$1 FOR UPDATE`, update.Item.TransmissionID).
 			Scan(&currentMessage, &currentNetwork, &sourceRevision); err != nil {
-			return nil, err
+			return assignments.CorrectionApplied{}, err
 		}
 		if currentMessage != update.Item.MessageID || currentNetwork != update.Item.NetworkID ||
 			sourceRevision != update.Item.SourceRevision {
-			return nil, authz.ErrRevisionConflict
+			return assignments.CorrectionApplied{}, authz.ErrRevisionConflict
 		}
 		if !messageSet[update.Item.MessageID] {
 			messageSet[update.Item.MessageID] = true
@@ -241,31 +231,36 @@ func (s *Store) ApplyCorrectionBatch(ctx context.Context, tx platform.Transactio
 				(resolution.Status != "assigned" && resolution.Status != "unassigned") ||
 				(resolution.Status == "assigned") != (resolution.UnitID != nil) ||
 				(resolution.Status == "assigned") != (resolution.AddressRuleID != nil) {
-				return nil, authz.ErrInvalidInput
+				return assignments.CorrectionApplied{}, authz.ErrInvalidInput
 			}
 			var before assignments.Resolution
 			var unitID, ruleID sql.NullString
-			err := executor.QueryRowContext(ctx, `SELECT resolution_status,unit_id::text,matched_rule_id::text
+			var beforeRevision int64
+			err := executor.QueryRowContext(ctx, `SELECT resolution_status,unit_id::text,matched_rule_id::text,assignment_revision
 				FROM transmission_targets WHERE transmission_id=$1 AND position=$2 FOR UPDATE`,
-				update.Item.TransmissionID, position).Scan(&before.Status, &unitID, &ruleID)
+				update.Item.TransmissionID, position).Scan(&before.Status, &unitID, &ruleID, &beforeRevision)
 			if errors.Is(err, sql.ErrNoRows) {
-				return nil, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("original target missing"))
+				return assignments.CorrectionApplied{}, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("original target missing"))
 			}
 			if err != nil {
-				return nil, err
+				return assignments.CorrectionApplied{}, err
 			}
 			before.TargetPosition = position
 			if before.UnitID, err = parseCorrectionUUID(unitID); err != nil {
-				return nil, err
+				return assignments.CorrectionApplied{}, err
 			}
 			if before.AddressRuleID, err = parseCorrectionUUID(ruleID); err != nil {
-				return nil, err
+				return assignments.CorrectionApplied{}, err
 			}
 			if _, err := executor.ExecContext(ctx, `UPDATE transmission_targets SET resolution_status=$3,
 				unit_id=$4,matched_rule_id=$5,assignment_revision=$6
 				WHERE transmission_id=$1 AND position=$2`, update.Item.TransmissionID, position,
 				resolution.Status, resolution.UnitID, resolution.AddressRuleID, update.Match.Revision); err != nil {
-				return nil, err
+				return assignments.CorrectionApplied{}, err
+			}
+			if beforeRevision != update.Match.Revision && !restamped[update.Item.TransmissionID] {
+				restamped[update.Item.TransmissionID] = true
+				applied.Restamped = append(applied.Restamped, update.Item.TransmissionID)
 			}
 			if resolutionEqual(before, resolution) {
 				continue
@@ -276,45 +271,45 @@ func (s *Store) ApplyCorrectionBatch(ctx context.Context, tx platform.Transactio
 			}
 			beforeFact := events.IntakeResolution{Status: before.Status, UnitID: before.UnitID, AddressRuleID: before.AddressRuleID}
 			afterFact := events.IntakeResolution{Status: resolution.Status, UnitID: resolution.UnitID, AddressRuleID: resolution.AddressRuleID}
-			changes = append(changes, assignments.CorrectionChange{TransmissionID: update.Item.TransmissionID,
+			applied.Changes = append(applied.Changes, assignments.CorrectionChange{TransmissionID: update.Item.TransmissionID,
 				MessageID: update.Item.MessageID, NetworkID: update.Item.NetworkID, TargetPosition: position,
 				Before: beforeFact, After: afterFact})
 		}
 		if err := updateCorrectionCursor(ctx, executor, lease.ID, update.Item.AcceptedAt, update.Item.TransmissionID); err != nil {
-			return nil, err
+			return assignments.CorrectionApplied{}, err
 		}
 	}
 	revisionByMessage := make(map[uuid.UUID]int64, len(messages))
 	for _, message := range messages {
 		if err := refreshMessageUnits(ctx, executor, message); err != nil {
-			return nil, err
+			return assignments.CorrectionApplied{}, err
 		}
 	}
 	for _, message := range changedMessages {
 		var revision int64
 		if err := executor.QueryRowContext(ctx, `UPDATE messages SET revision=revision+1
 			WHERE id=$1 RETURNING revision`, message).Scan(&revision); err != nil {
-			return nil, err
+			return assignments.CorrectionApplied{}, err
 		}
 		revisionByMessage[message] = revision
 	}
-	for i := range changes {
-		changes[i].MessageRev = revisionByMessage[changes[i].MessageID]
+	for i := range applied.Changes {
+		applied.Changes[i].MessageRev = revisionByMessage[applied.Changes[i].MessageID]
 	}
 	_, err = executor.ExecContext(ctx, `UPDATE assignment_pending_scopes SET lease_until=$3
 		WHERE id=$1 AND state='running' AND fencing_token=$2`, lease.ID, lease.FencingToken, now.Add(30*time.Second))
-	return changes, err
+	return applied, err
 }
 
 func checkCorrectionFence(ctx context.Context, executor postgres.Executor, lease assignments.CorrectionLease,
 	now time.Time,
 ) error {
 	var state string
-	var revision, token, accessRevision int64
+	var revision, token int64
 	var until sql.NullTime
-	err := executor.QueryRowContext(ctx, `SELECT state,assignment_revision,fencing_token,access_revision,lease_until
+	err := executor.QueryRowContext(ctx, `SELECT state,assignment_revision,fencing_token,lease_until
 		FROM assignment_pending_scopes WHERE id=$1 FOR UPDATE`, lease.ID).Scan(
-		&state, &revision, &token, &accessRevision, &until)
+		&state, &revision, &token, &until)
 	if errors.Is(err, sql.ErrNoRows) {
 		return authz.ErrNotFound
 	}
@@ -322,7 +317,7 @@ func checkCorrectionFence(ctx context.Context, executor postgres.Executor, lease
 		return err
 	}
 	if state != "running" || revision != lease.AssignmentRev || token != lease.FencingToken ||
-		accessRevision != lease.AccessRevision || !until.Valid || !until.Time.After(now) {
+		!until.Valid || !until.Time.After(now) {
 		return authz.ErrRevisionConflict
 	}
 	return nil
@@ -345,45 +340,13 @@ func resolutionEqual(left, right assignments.Resolution) bool {
 			left.AddressRuleID != nil && right.AddressRuleID != nil && *left.AddressRuleID == *right.AddressRuleID)
 }
 
-// refreshMessageUnits rebuilds a Message's cache rows from its current evidence: one row per Unit
-// of an unsuppressed assigned target, carrying the Unit's Agency, and one Unit-less row per
-// Network Agency of its targetless Transmissions; the rebuilt rows are current.
-func refreshMessageUnits(ctx context.Context, executor postgres.Executor, message uuid.UUID) error {
-	for _, statement := range []string{
-		`DELETE FROM message_units WHERE message_id=$1`,
-		`INSERT INTO message_units (message_id,unit_id,agency_id,first_observed_at,age_anchor)
-		SELECT t.message_id,target.unit_id,u.agency_id,MIN(t.observed_at),MIN(LEAST(t.observed_at,t.accepted_at))
-		FROM transmissions t JOIN transmission_targets target ON target.transmission_id=t.id
-		JOIN units u ON u.id=target.unit_id
-		WHERE t.message_id=$1 AND target.resolution_status='assigned'
-		AND NOT EXISTS (SELECT 1 FROM target_suppressions suppression
-			WHERE suppression.transmission_id=target.transmission_id
-			AND suppression.target_position=target.position AND suppression.removed_at IS NULL)
-		GROUP BY t.message_id,target.unit_id,u.agency_id`,
-		`INSERT INTO message_units (message_id,unit_id,agency_id,first_observed_at,age_anchor)
-		SELECT t.message_id,NULL,n.agency_id,MIN(t.observed_at),MIN(LEAST(t.observed_at,t.accepted_at))
-		FROM transmissions t JOIN networks n ON n.id=t.network_id
-		WHERE t.message_id=$1 AND NOT EXISTS (SELECT 1 FROM transmission_targets target WHERE target.transmission_id=t.id)
-		GROUP BY t.message_id,n.agency_id`,
-	} {
-		if _, err := executor.ExecContext(ctx, statement, message); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // CompleteCorrection marks the leased scope completed if no target inside its selector still
 // carries an older Assignment revision. It returns false, without error, while work remains.
-// A stale fence or changed access revision yields authz.ErrRevisionConflict.
+// A stale fence yields authz.ErrRevisionConflict.
 func (s *Store) CompleteCorrection(ctx context.Context, tx platform.TransactionContext,
 	lease assignments.CorrectionLease,
 ) (bool, error) {
 	if _, err := s.LockRevision(ctx, tx); err != nil {
-		return false, err
-	}
-	accessRevision, err := s.accessRevision(ctx, tx)
-	if err != nil {
 		return false, err
 	}
 	now, err := s.primary.Now(ctx, tx)
@@ -396,9 +359,6 @@ func (s *Store) CompleteCorrection(ctx context.Context, tx platform.TransactionC
 	}
 	if err := checkCorrectionFence(ctx, executor, lease, now); err != nil {
 		return false, err
-	}
-	if accessRevision != lease.AccessRevision {
-		return false, authz.ErrRevisionConflict
 	}
 	var stale bool
 	if err := executor.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM transmission_targets target WHERE `+inScopeSQL+`)`,

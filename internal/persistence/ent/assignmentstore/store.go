@@ -118,20 +118,6 @@ func (s *Store) lockRevision(ctx context.Context, tx platform.TransactionContext
 	return row.Revision, nil
 }
 
-// accessRevision reads the current access revision without taking the access lock; the
-// correction scope records it as context, not as a serialization point.
-func (s *Store) accessRevision(ctx context.Context, tx platform.TransactionContext) (int64, error) {
-	executor, err := s.primary.Resolve(tx)
-	if err != nil {
-		return 0, err
-	}
-	var revision int64
-	if err := executor.QueryRowContext(ctx, `SELECT access_revision FROM identity_control WHERE id=1`).Scan(&revision); err != nil {
-		return 0, err
-	}
-	return revision, nil
-}
-
 // CurrentRules reads only the server-derived candidate Network set, including disabled configuration.
 func (s *Store) CurrentRules(ctx context.Context, tx platform.TransactionContext, networks []uuid.UUID) ([]assignments.Rule, error) {
 	if len(networks) == 0 {
@@ -314,10 +300,6 @@ func (s *Store) MarkPending(ctx context.Context, tx platform.TransactionContext,
 	if err != nil {
 		return 0, err
 	}
-	accessRevision, err := s.accessRevision(ctx, tx)
-	if err != nil {
-		return 0, err
-	}
 	updated, err := executor.ExecContext(ctx, `UPDATE assignment_control SET revision=$2
 		WHERE id=1 AND revision=$1`, revision, revision+1)
 	if err != nil {
@@ -343,7 +325,7 @@ func (s *Store) MarkPending(ctx context.Context, tx platform.TransactionContext,
 			continue
 		}
 		seen[string(key)] = true
-		if err := insertCorrectionScope(ctx, executor, uuid.New(), revision+1, scope, reason, now, accessRevision); err != nil {
+		if err := insertCorrectionScope(ctx, executor, uuid.New(), revision+1, scope, reason, now); err != nil {
 			return 0, err
 		}
 	}
@@ -353,13 +335,13 @@ func (s *Store) MarkPending(ctx context.Context, tx platform.TransactionContext,
 // insertCorrectionScope records one queued scope and marks the cache rows of the Messages whose
 // targets it will re-resolve as correcting.
 func insertCorrectionScope(ctx context.Context, executor postgres.Executor, id uuid.UUID, revision int64,
-	scope assignments.CorrectionScope, reason string, now time.Time, accessRevision int64) error {
+	scope assignments.CorrectionScope, reason string, now time.Time) error {
 	args := scopeArgs(scope, revision)
 	if _, err := executor.ExecContext(ctx, `INSERT INTO assignment_pending_scopes
 		(network_id,protocol,address_from,address_to,address_text,valid_from,valid_until,unit_id,transmission_id,target_position,
-		 assignment_revision,id,reason,recorded_at,state,access_revision)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'queued',$15)`,
-		append(args, id, reason, now, accessRevision)...); err != nil {
+		 assignment_revision,id,reason,recorded_at,state)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'queued')`,
+		append(args, id, reason, now)...); err != nil {
 		return err
 	}
 	_, err := executor.ExecContext(ctx, `UPDATE message_units SET correction_status='correcting'

@@ -521,7 +521,6 @@ var (
 		{Name: "attempts", Type: field.TypeInt, Default: 0},
 		{Name: "lease_until", Type: field.TypeTime, Nullable: true},
 		{Name: "fencing_token", Type: field.TypeInt64, Default: 0},
-		{Name: "access_revision", Type: field.TypeInt64, Default: 1},
 		{Name: "failure_code", Type: field.TypeString, Nullable: true},
 	}
 	// AssignmentPendingScopesTable holds the schema information for the "assignment_pending_scopes" table.

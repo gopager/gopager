@@ -53,8 +53,6 @@ const (
 	FieldLeaseUntil = "lease_until"
 	// FieldFencingToken holds the string denoting the fencing_token field in the database.
 	FieldFencingToken = "fencing_token"
-	// FieldAccessRevision holds the string denoting the access_revision field in the database.
-	FieldAccessRevision = "access_revision"
 	// FieldFailureCode holds the string denoting the failure_code field in the database.
 	FieldFailureCode = "failure_code"
 	// Table holds the table name of the pendingassignmentscope in the database.
@@ -83,7 +81,6 @@ var Columns = []string{
 	FieldAttempts,
 	FieldLeaseUntil,
 	FieldFencingToken,
-	FieldAccessRevision,
 	FieldFailureCode,
 }
 
@@ -117,10 +114,6 @@ var (
 	DefaultFencingToken int64
 	// FencingTokenValidator is a validator for the "fencing_token" field. It is called by the builders before save.
 	FencingTokenValidator func(int64) error
-	// DefaultAccessRevision holds the default value on creation for the "access_revision" field.
-	DefaultAccessRevision int64
-	// AccessRevisionValidator is a validator for the "access_revision" field. It is called by the builders before save.
-	AccessRevisionValidator func(int64) error
 	// FailureCodeValidator is a validator for the "failure_code" field. It is called by the builders before save.
 	FailureCodeValidator func(string) error
 	// DefaultID holds the default value on creation for the "id" field.
@@ -306,11 +299,6 @@ func ByLeaseUntil(opts ...sql.OrderTermOption) OrderOption {
 // ByFencingToken orders the results by the fencing_token field.
 func ByFencingToken(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldFencingToken, opts...).ToFunc()
-}
-
-// ByAccessRevision orders the results by the access_revision field.
-func ByAccessRevision(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldAccessRevision, opts...).ToFunc()
 }
 
 // ByFailureCode orders the results by the failure_code field.

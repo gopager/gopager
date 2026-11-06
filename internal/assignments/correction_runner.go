@@ -110,8 +110,8 @@ func correctionRetryDelay(failures int) time.Duration {
 // RunOnce claims one due correction scope and processes it in batches of up to
 // 100 transmissions, each batch in its own transaction that re-matches the
 // targets, applies changed resolutions, appends one assignment.changed
-// correction fact per changed transmission and re-admits Processing for every
-// changed transmission. A batch or completion failure is recorded on the scope
+// correction fact per changed transmission and re-admits Processing once for every
+// transmission whose targets were restamped, changed resolution or not. A batch or completion failure is recorded on the scope
 // with exponential backoff and is not returned; RunOnce returns an error only
 // when it cannot claim or reschedule. A reschedule failure is joined ahead of
 // the batch failure, so FailureCode reports why the scope could not be
@@ -134,7 +134,6 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 	for {
-		var changes []CorrectionChange
 		var hasItems bool
 		err := r.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
 			items, err := r.repository.ReadCorrectionBatch(tx.Context(), tx, lease, correctionBatchSize)
@@ -157,7 +156,7 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 				}
 				updates[i] = CorrectionUpdate{Item: item, Match: matched}
 			}
-			changes, err = r.repository.ApplyCorrectionBatch(tx.Context(), tx, lease, updates)
+			applied, err := r.repository.ApplyCorrectionBatch(tx.Context(), tx, lease, updates)
 			if err != nil {
 				return err
 			}
@@ -165,18 +164,13 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 			if err != nil {
 				return err
 			}
-			for _, fact := range correctionFacts(changes, now) {
+			for _, fact := range correctionFacts(applied.Changes, now) {
 				if _, err := r.facts.AppendCorrectionFact(tx.Context(), tx, fact); err != nil {
 					return err
 				}
 			}
-			readmitted := make(map[uuid.UUID]bool, len(changes))
-			for _, change := range changes {
-				if readmitted[change.TransmissionID] {
-					continue
-				}
-				readmitted[change.TransmissionID] = true
-				if err := r.readmission.ReadmitProcessing(tx.Context(), tx, change.TransmissionID); err != nil {
+			for _, transmission := range applied.Restamped {
+				if err := r.readmission.ReadmitProcessing(tx.Context(), tx, transmission); err != nil {
 					return err
 				}
 			}

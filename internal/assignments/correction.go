@@ -170,19 +170,18 @@ type CorrectionRepository interface {
 
 // CorrectionLease is a claimed correction scope. FencingToken guards every
 // write made under the lease, which expires at LeaseUntil; AssignmentRev is the
-// revision the scope was recorded at (targets below it are stale) and
-// AccessRevision the access revision the correction must still match.
+// revision the scope was recorded at (targets below it are stale). Correction is system work,
+// so no access revision is pinned: the fence and the lease are the only guards.
 type CorrectionLease struct {
-	ID             uuid.UUID
-	AssignmentRev  int64
-	Scope          CorrectionScope
-	Reason         string
-	CursorAt       *time.Time
-	CursorID       *uuid.UUID
-	AccessRevision int64
-	FencingToken   int64
-	LeaseUntil     time.Time
-	Attempts       int
+	ID            uuid.UUID
+	AssignmentRev int64
+	Scope         CorrectionScope
+	Reason        string
+	CursorAt      *time.Time
+	CursorID      *uuid.UUID
+	FencingToken  int64
+	LeaseUntil    time.Time
+	Attempts      int
 }
 
 // CorrectionBatchItem is one stored transmission within a correction scope,
@@ -216,12 +215,21 @@ type CorrectionChange struct {
 	After          events.IntakeResolution
 }
 
+// CorrectionApplied is the outcome of ApplyCorrectionBatch: the targets whose resolution changed
+// and every Transmission whose targets were restamped at a newer assignment revision, which
+// includes those without a resolution change. The latter still need Processing readmission,
+// because a Transmission's processing context is the highest revision stamped on its targets.
+type CorrectionApplied struct {
+	Changes   []CorrectionChange
+	Restamped []uuid.UUID
+}
+
 // CorrectionWorkRepository is the persistence port used by CorrectionRunner.
 // ClaimCorrection leases the oldest queued (or expired running) scope; it
 // reports false when there is none. ApplyCorrectionBatch and
 // CompleteCorrection must be called with a still-valid lease and fail with a
-// revision conflict when the fence or the access revision moved; a newer
-// assignment revision is fine, because every scope runs against current rules.
+// revision conflict when the fence is lost; a newer assignment revision or
+// access revision is fine, because every scope runs against current rules.
 // CompleteCorrection returns false while targets in the scope still carry an
 // older assignment revision. FailCorrection reschedules the scope with a delay
 // or marks it failed after repeated attempts and reports that final failure;
@@ -229,7 +237,7 @@ type CorrectionChange struct {
 type CorrectionWorkRepository interface {
 	ClaimCorrection(context.Context, platform.TransactionContext, time.Time, time.Duration) (CorrectionLease, bool, error)
 	ReadCorrectionBatch(context.Context, platform.TransactionContext, CorrectionLease, int) ([]CorrectionBatchItem, error)
-	ApplyCorrectionBatch(context.Context, platform.TransactionContext, CorrectionLease, []CorrectionUpdate) ([]CorrectionChange, error)
+	ApplyCorrectionBatch(context.Context, platform.TransactionContext, CorrectionLease, []CorrectionUpdate) (CorrectionApplied, error)
 	CompleteCorrection(context.Context, platform.TransactionContext, CorrectionLease) (bool, error)
 	FailCorrection(context.Context, platform.TransactionContext, CorrectionLease, string, time.Duration) (bool, error)
 }

@@ -14025,8 +14025,6 @@ type PendingAssignmentScopeMutation struct {
 	lease_until            *time.Time
 	fencing_token          *int64
 	addfencing_token       *int64
-	access_revision        *int64
-	addaccess_revision     *int64
 	failure_code           *string
 	clearedFields          map[string]struct{}
 	done                   bool
@@ -15114,62 +15112,6 @@ func (m *PendingAssignmentScopeMutation) ResetFencingToken() {
 	m.addfencing_token = nil
 }
 
-// SetAccessRevision sets the "access_revision" field.
-func (m *PendingAssignmentScopeMutation) SetAccessRevision(i int64) {
-	m.access_revision = &i
-	m.addaccess_revision = nil
-}
-
-// AccessRevision returns the value of the "access_revision" field in the mutation.
-func (m *PendingAssignmentScopeMutation) AccessRevision() (r int64, exists bool) {
-	v := m.access_revision
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldAccessRevision returns the old "access_revision" field's value of the PendingAssignmentScope entity.
-// If the PendingAssignmentScope object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PendingAssignmentScopeMutation) OldAccessRevision(ctx context.Context) (v int64, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldAccessRevision is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldAccessRevision requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldAccessRevision: %w", err)
-	}
-	return oldValue.AccessRevision, nil
-}
-
-// AddAccessRevision adds i to the "access_revision" field.
-func (m *PendingAssignmentScopeMutation) AddAccessRevision(i int64) {
-	if m.addaccess_revision != nil {
-		*m.addaccess_revision += i
-	} else {
-		m.addaccess_revision = &i
-	}
-}
-
-// AddedAccessRevision returns the value that was added to the "access_revision" field in this mutation.
-func (m *PendingAssignmentScopeMutation) AddedAccessRevision() (r int64, exists bool) {
-	v := m.addaccess_revision
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ResetAccessRevision resets all changes to the "access_revision" field.
-func (m *PendingAssignmentScopeMutation) ResetAccessRevision() {
-	m.access_revision = nil
-	m.addaccess_revision = nil
-}
-
 // SetFailureCode sets the "failure_code" field.
 func (m *PendingAssignmentScopeMutation) SetFailureCode(s string) {
 	m.failure_code = &s
@@ -15253,7 +15195,7 @@ func (m *PendingAssignmentScopeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PendingAssignmentScopeMutation) Fields() []string {
-	fields := make([]string, 0, 21)
+	fields := make([]string, 0, 20)
 	if m.assignment_revision != nil {
 		fields = append(fields, pendingassignmentscope.FieldAssignmentRevision)
 	}
@@ -15311,9 +15253,6 @@ func (m *PendingAssignmentScopeMutation) Fields() []string {
 	if m.fencing_token != nil {
 		fields = append(fields, pendingassignmentscope.FieldFencingToken)
 	}
-	if m.access_revision != nil {
-		fields = append(fields, pendingassignmentscope.FieldAccessRevision)
-	}
 	if m.failure_code != nil {
 		fields = append(fields, pendingassignmentscope.FieldFailureCode)
 	}
@@ -15363,8 +15302,6 @@ func (m *PendingAssignmentScopeMutation) Field(name string) (ent.Value, bool) {
 		return m.LeaseUntil()
 	case pendingassignmentscope.FieldFencingToken:
 		return m.FencingToken()
-	case pendingassignmentscope.FieldAccessRevision:
-		return m.AccessRevision()
 	case pendingassignmentscope.FieldFailureCode:
 		return m.FailureCode()
 	}
@@ -15414,8 +15351,6 @@ func (m *PendingAssignmentScopeMutation) OldField(ctx context.Context, name stri
 		return m.OldLeaseUntil(ctx)
 	case pendingassignmentscope.FieldFencingToken:
 		return m.OldFencingToken(ctx)
-	case pendingassignmentscope.FieldAccessRevision:
-		return m.OldAccessRevision(ctx)
 	case pendingassignmentscope.FieldFailureCode:
 		return m.OldFailureCode(ctx)
 	}
@@ -15560,13 +15495,6 @@ func (m *PendingAssignmentScopeMutation) SetField(name string, value ent.Value) 
 		}
 		m.SetFencingToken(v)
 		return nil
-	case pendingassignmentscope.FieldAccessRevision:
-		v, ok := value.(int64)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetAccessRevision(v)
-		return nil
 	case pendingassignmentscope.FieldFailureCode:
 		v, ok := value.(string)
 		if !ok {
@@ -15600,9 +15528,6 @@ func (m *PendingAssignmentScopeMutation) AddedFields() []string {
 	if m.addfencing_token != nil {
 		fields = append(fields, pendingassignmentscope.FieldFencingToken)
 	}
-	if m.addaccess_revision != nil {
-		fields = append(fields, pendingassignmentscope.FieldAccessRevision)
-	}
 	return fields
 }
 
@@ -15623,8 +15548,6 @@ func (m *PendingAssignmentScopeMutation) AddedField(name string) (ent.Value, boo
 		return m.AddedAttempts()
 	case pendingassignmentscope.FieldFencingToken:
 		return m.AddedFencingToken()
-	case pendingassignmentscope.FieldAccessRevision:
-		return m.AddedAccessRevision()
 	}
 	return nil, false
 }
@@ -15675,13 +15598,6 @@ func (m *PendingAssignmentScopeMutation) AddField(name string, value ent.Value) 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddFencingToken(v)
-		return nil
-	case pendingassignmentscope.FieldAccessRevision:
-		v, ok := value.(int64)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddAccessRevision(v)
 		return nil
 	}
 	return fmt.Errorf("unknown PendingAssignmentScope numeric field %s", name)
@@ -15853,9 +15769,6 @@ func (m *PendingAssignmentScopeMutation) ResetField(name string) error {
 		return nil
 	case pendingassignmentscope.FieldFencingToken:
 		m.ResetFencingToken()
-		return nil
-	case pendingassignmentscope.FieldAccessRevision:
-		m.ResetAccessRevision()
 		return nil
 	case pendingassignmentscope.FieldFailureCode:
 		m.ResetFailureCode()

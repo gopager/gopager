@@ -263,20 +263,6 @@ func (_c *PendingAssignmentScopeCreate) SetNillableFencingToken(v *int64) *Pendi
 	return _c
 }
 
-// SetAccessRevision sets the "access_revision" field.
-func (_c *PendingAssignmentScopeCreate) SetAccessRevision(v int64) *PendingAssignmentScopeCreate {
-	_c.mutation.SetAccessRevision(v)
-	return _c
-}
-
-// SetNillableAccessRevision sets the "access_revision" field if the given value is not nil.
-func (_c *PendingAssignmentScopeCreate) SetNillableAccessRevision(v *int64) *PendingAssignmentScopeCreate {
-	if v != nil {
-		_c.SetAccessRevision(*v)
-	}
-	return _c
-}
-
 // SetFailureCode sets the "failure_code" field.
 func (_c *PendingAssignmentScopeCreate) SetFailureCode(v string) *PendingAssignmentScopeCreate {
 	_c.mutation.SetFailureCode(v)
@@ -354,10 +340,6 @@ func (_c *PendingAssignmentScopeCreate) defaults() error {
 		v := pendingassignmentscope.DefaultFencingToken
 		_c.mutation.SetFencingToken(v)
 	}
-	if _, ok := _c.mutation.AccessRevision(); !ok {
-		v := pendingassignmentscope.DefaultAccessRevision
-		_c.mutation.SetAccessRevision(v)
-	}
 	if _, ok := _c.mutation.ID(); !ok {
 		if pendingassignmentscope.DefaultID == nil {
 			return fmt.Errorf("ent: uninitialized pendingassignmentscope.DefaultID (forgotten import ent/runtime?)")
@@ -421,14 +403,6 @@ func (_c *PendingAssignmentScopeCreate) check() error {
 	if v, ok := _c.mutation.FencingToken(); ok {
 		if err := pendingassignmentscope.FencingTokenValidator(v); err != nil {
 			return &ValidationError{Name: "fencing_token", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.fencing_token": %w`, err)}
-		}
-	}
-	if _, ok := _c.mutation.AccessRevision(); !ok {
-		return &ValidationError{Name: "access_revision", err: errors.New(`ent: missing required field "PendingAssignmentScope.access_revision"`)}
-	}
-	if v, ok := _c.mutation.AccessRevision(); ok {
-		if err := pendingassignmentscope.AccessRevisionValidator(v); err != nil {
-			return &ValidationError{Name: "access_revision", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.access_revision": %w`, err)}
 		}
 	}
 	if v, ok := _c.mutation.FailureCode(); ok {
@@ -546,10 +520,6 @@ func (_c *PendingAssignmentScopeCreate) createSpec() (*PendingAssignmentScope, *
 	if value, ok := _c.mutation.FencingToken(); ok {
 		_spec.SetField(pendingassignmentscope.FieldFencingToken, field.TypeInt64, value)
 		_node.FencingToken = value
-	}
-	if value, ok := _c.mutation.AccessRevision(); ok {
-		_spec.SetField(pendingassignmentscope.FieldAccessRevision, field.TypeInt64, value)
-		_node.AccessRevision = value
 	}
 	if value, ok := _c.mutation.FailureCode(); ok {
 		_spec.SetField(pendingassignmentscope.FieldFailureCode, field.TypeString, value)
