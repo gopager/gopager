@@ -479,7 +479,6 @@ var schemaGraph = func() *sqlgraph.Schema {
 			pendingassignmentscope.FieldAttempts:             {Type: field.TypeInt, Column: pendingassignmentscope.FieldAttempts},
 			pendingassignmentscope.FieldLeaseUntil:           {Type: field.TypeTime, Column: pendingassignmentscope.FieldLeaseUntil},
 			pendingassignmentscope.FieldFencingToken:         {Type: field.TypeInt64, Column: pendingassignmentscope.FieldFencingToken},
-			pendingassignmentscope.FieldAccessRevision:       {Type: field.TypeInt64, Column: pendingassignmentscope.FieldAccessRevision},
 			pendingassignmentscope.FieldFailureCode:          {Type: field.TypeString, Column: pendingassignmentscope.FieldFailureCode},
 		},
 	}
@@ -2706,11 +2705,6 @@ func (f *PendingAssignmentScopeFilter) WhereLeaseUntil(p entql.TimeP) {
 // WhereFencingToken applies the entql int64 predicate on the fencing_token field.
 func (f *PendingAssignmentScopeFilter) WhereFencingToken(p entql.Int64P) {
 	f.Where(p.Field(pendingassignmentscope.FieldFencingToken))
-}
-
-// WhereAccessRevision applies the entql int64 predicate on the access_revision field.
-func (f *PendingAssignmentScopeFilter) WhereAccessRevision(p entql.Int64P) {
-	f.Where(p.Field(pendingassignmentscope.FieldAccessRevision))
 }
 
 // WhereFailureCode applies the entql string predicate on the failure_code field.

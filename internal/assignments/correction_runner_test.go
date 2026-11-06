@@ -69,8 +69,8 @@ func (f *runnerFixture) ReadCorrectionBatch(context.Context, platform.Transactio
 	return nil, nil
 }
 
-func (f *runnerFixture) ApplyCorrectionBatch(context.Context, platform.TransactionContext, CorrectionLease, []CorrectionUpdate) ([]CorrectionChange, error) {
-	return nil, errors.New("unexpected apply")
+func (f *runnerFixture) ApplyCorrectionBatch(context.Context, platform.TransactionContext, CorrectionLease, []CorrectionUpdate) (CorrectionApplied, error) {
+	return CorrectionApplied{}, errors.New("unexpected apply")
 }
 
 func (f *runnerFixture) CompleteCorrection(context.Context, platform.TransactionContext, CorrectionLease) (bool, error) {

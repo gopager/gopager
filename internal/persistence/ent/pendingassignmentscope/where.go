@@ -135,11 +135,6 @@ func FencingToken(v int64) predicate.PendingAssignmentScope {
 	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldFencingToken, v))
 }
 
-// AccessRevision applies equality check predicate on the "access_revision" field. It's identical to AccessRevisionEQ.
-func AccessRevision(v int64) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldAccessRevision, v))
-}
-
 // FailureCode applies equality check predicate on the "failure_code" field. It's identical to FailureCodeEQ.
 func FailureCode(v string) predicate.PendingAssignmentScope {
 	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldFailureCode, v))
@@ -998,46 +993,6 @@ func FencingTokenLT(v int64) predicate.PendingAssignmentScope {
 // FencingTokenLTE applies the LTE predicate on the "fencing_token" field.
 func FencingTokenLTE(v int64) predicate.PendingAssignmentScope {
 	return predicate.PendingAssignmentScope(sql.FieldLTE(FieldFencingToken, v))
-}
-
-// AccessRevisionEQ applies the EQ predicate on the "access_revision" field.
-func AccessRevisionEQ(v int64) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldAccessRevision, v))
-}
-
-// AccessRevisionNEQ applies the NEQ predicate on the "access_revision" field.
-func AccessRevisionNEQ(v int64) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldNEQ(FieldAccessRevision, v))
-}
-
-// AccessRevisionIn applies the In predicate on the "access_revision" field.
-func AccessRevisionIn(vs ...int64) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldIn(FieldAccessRevision, vs...))
-}
-
-// AccessRevisionNotIn applies the NotIn predicate on the "access_revision" field.
-func AccessRevisionNotIn(vs ...int64) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldNotIn(FieldAccessRevision, vs...))
-}
-
-// AccessRevisionGT applies the GT predicate on the "access_revision" field.
-func AccessRevisionGT(v int64) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldGT(FieldAccessRevision, v))
-}
-
-// AccessRevisionGTE applies the GTE predicate on the "access_revision" field.
-func AccessRevisionGTE(v int64) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldGTE(FieldAccessRevision, v))
-}
-
-// AccessRevisionLT applies the LT predicate on the "access_revision" field.
-func AccessRevisionLT(v int64) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldLT(FieldAccessRevision, v))
-}
-
-// AccessRevisionLTE applies the LTE predicate on the "access_revision" field.
-func AccessRevisionLTE(v int64) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldLTE(FieldAccessRevision, v))
 }
 
 // FailureCodeEQ applies the EQ predicate on the "failure_code" field.

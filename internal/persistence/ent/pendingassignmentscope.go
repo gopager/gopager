@@ -56,8 +56,6 @@ type PendingAssignmentScope struct {
 	LeaseUntil *time.Time `json:"lease_until,omitempty"`
 	// FencingToken holds the value of the "fencing_token" field.
 	FencingToken int64 `json:"fencing_token,omitempty"`
-	// AccessRevision holds the value of the "access_revision" field.
-	AccessRevision int64 `json:"access_revision,omitempty"`
 	// FailureCode holds the value of the "failure_code" field.
 	FailureCode  string `json:"failure_code,omitempty"`
 	selectValues sql.SelectValues
@@ -70,7 +68,7 @@ func (*PendingAssignmentScope) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case pendingassignmentscope.FieldNetworkID, pendingassignmentscope.FieldUnitID, pendingassignmentscope.FieldTransmissionID, pendingassignmentscope.FieldCursorTransmissionID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
-		case pendingassignmentscope.FieldAssignmentRevision, pendingassignmentscope.FieldAddressFrom, pendingassignmentscope.FieldAddressTo, pendingassignmentscope.FieldTargetPosition, pendingassignmentscope.FieldAttempts, pendingassignmentscope.FieldFencingToken, pendingassignmentscope.FieldAccessRevision:
+		case pendingassignmentscope.FieldAssignmentRevision, pendingassignmentscope.FieldAddressFrom, pendingassignmentscope.FieldAddressTo, pendingassignmentscope.FieldTargetPosition, pendingassignmentscope.FieldAttempts, pendingassignmentscope.FieldFencingToken:
 			values[i] = new(sql.NullInt64)
 		case pendingassignmentscope.FieldReason, pendingassignmentscope.FieldProtocol, pendingassignmentscope.FieldAddressText, pendingassignmentscope.FieldState, pendingassignmentscope.FieldFailureCode:
 			values[i] = new(sql.NullString)
@@ -226,12 +224,6 @@ func (_m *PendingAssignmentScope) assignValues(columns []string, values []any) e
 			} else if value.Valid {
 				_m.FencingToken = value.Int64
 			}
-		case pendingassignmentscope.FieldAccessRevision:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field access_revision", values[i])
-			} else if value.Valid {
-				_m.AccessRevision = value.Int64
-			}
 		case pendingassignmentscope.FieldFailureCode:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field failure_code", values[i])
@@ -356,9 +348,6 @@ func (_m *PendingAssignmentScope) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("fencing_token=")
 	builder.WriteString(fmt.Sprintf("%v", _m.FencingToken))
-	builder.WriteString(", ")
-	builder.WriteString("access_revision=")
-	builder.WriteString(fmt.Sprintf("%v", _m.AccessRevision))
 	builder.WriteString(", ")
 	builder.WriteString("failure_code=")
 	builder.WriteString(_m.FailureCode)

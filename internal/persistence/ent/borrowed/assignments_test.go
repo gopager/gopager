@@ -912,13 +912,15 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 	}); err != nil {
 		t.Fatal(err)
 	}
+	// Correction is system work: an unrelated configuration change (access revision bump) between
+	// claim and apply must not fail the batch.
 	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		_, err := f.ruleStore.ApplyCorrectionBatch(tx.Context(), tx, oldLease,
 			[]assignments.CorrectionUpdate{{Item: item, Match: staleMatch}})
 		return err
 	})
-	if !errors.Is(err, authz.ErrRevisionConflict) {
-		t.Fatalf("correction applied under a stale access revision: %v", err)
+	if err != nil {
+		t.Fatalf("correction failed after an unrelated access revision change: %v", err)
 	}
 	// Hand the fenced lease back so the runner can claim the scope again at once.
 	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {

@@ -260,16 +260,12 @@ func (s *Store) RetryCorrection(ctx context.Context, tx platform.TransactionCont
 	if err != nil {
 		return assignments.CorrectionStatus{}, err
 	}
-	accessRevision, err := s.accessRevision(ctx, tx)
-	if err != nil {
-		return assignments.CorrectionStatus{}, err
-	}
 	if _, err := executor.ExecContext(ctx, `UPDATE assignment_pending_scopes SET state='superseded'
 		WHERE id=$1 AND state='failed'`, id); err != nil {
 		return assignments.CorrectionStatus{}, err
 	}
 	newID := uuid.New()
-	if err := insertCorrectionScope(ctx, executor, newID, revision, old.Scope, old.Reason, now, accessRevision); err != nil {
+	if err := insertCorrectionScope(ctx, executor, newID, revision, old.Scope, old.Reason, now); err != nil {
 		return assignments.CorrectionStatus{}, err
 	}
 	return readCorrection(ctx, executor, `id=$1`, newID)

@@ -90,7 +90,6 @@ CREATE TABLE assignment_pending_scopes (
     attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
     lease_until timestamptz,
     fencing_token bigint NOT NULL DEFAULT 0 CHECK (fencing_token >= 0),
-    access_revision bigint NOT NULL DEFAULT 1 CHECK (access_revision > 0),
     failure_code varchar,
     CHECK (
         (network_id IS NOT NULL AND protocol IS NOT NULL AND unit_id IS NULL AND transmission_id IS NULL
