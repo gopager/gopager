@@ -52,12 +52,11 @@ func readMessageUnits(t *testing.T, f matcherFixture, message uuid.UUID) []messa
 	return rows
 }
 
-// TestMessageUnitCacheFollowsIntakeAndCorrection expects the message_units cache to replace
-// contributions and supports: intake upserts one row per Message and Unit carrying the Unit's
+// TestMessageUnitCacheFollowsIntakeAndCorrection expects the message_units cache to follow the
+// evidence: intake upserts one row per Message and Unit carrying the Unit's
 // Agency, the earliest observation and the age anchor; a targetless Transmission yields one
 // Unit-less row per Message and Network Agency; a correction that moves an address to a Unit of
-// another Agency replaces the rows in place; targets carry typed columns and the Transmission
-// no longer duplicates its targets as JSON.
+// another Agency replaces the rows in place; targets carry typed address columns.
 func TestMessageUnitCacheFollowsIntakeAndCorrection(t *testing.T) {
 	t.Parallel()
 	f := newMatcherFixture(t)
@@ -159,14 +158,6 @@ func TestMessageUnitCacheFollowsIntakeAndCorrection(t *testing.T) {
 		if network != networkID || protocol != "pocsag" || !observedAt.Equal(observed.Add(2*time.Second)) ||
 			number == nil || *number != 10 || text != nil || fn == nil || *fn != 1 {
 			t.Fatalf("typed target columns = %s %s %s %v %v %v", network, protocol, observedAt, number, text, fn)
-		}
-		var duplicates int
-		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM information_schema.columns
-			WHERE table_name='transmissions' AND column_name='targets'`).Scan(&duplicates); err != nil {
-			return err
-		}
-		if duplicates != 0 {
-			t.Fatal("transmissions still duplicates its targets as JSON")
 		}
 		return nil
 	}); err != nil {

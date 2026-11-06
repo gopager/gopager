@@ -6,7 +6,7 @@ Referenced contracts (follow only when relevant): [C-01](c-01-transmission-accep
 
 **Traceability:** [REQ-020](../requirements-catalog.md#b-search-filters-and-details), [REQ-031..032/037..038](../requirements-catalog.md#d-correct-assignment-and-history), [REQ-121..122](../requirements-catalog.md#m-additional-domain-capabilities). Issue references: [P-08/P-09](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
-**Version/status:** 1.0 (was 0.2-draft; the Protocol, Payload form, target and identity rules are implemented and now specified once in `docs/`). **Owner:** Grouping; Intake owns submitted originals. **Parties:** Gateway submits finalized Transmission reports; ingest, Assignment and Grouping consume them.
+**Status:** Protocol, Payload form, target and identity rules are implemented and specified once in `docs/`; this file keeps the planned rules. **Owner:** Grouping; Intake owns submitted originals. **Parties:** Gateway submits finalized Transmission reports; ingest, Assignment and Grouping consume them.
 
 ## Implemented behavior (specified in `docs/`)
 

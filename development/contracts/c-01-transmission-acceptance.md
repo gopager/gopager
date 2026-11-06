@@ -8,7 +8,7 @@ Referenced contracts (follow only when relevant): [C-02](c-02-protocol-payload.m
 
 **Traceability:** [REQ-041..050](../requirements-catalog.md#e-transmission-networks-and-gateways), [REQ-108](../requirements-catalog.md#k-installed-web-app-and-security-behavior), [REQ-113..114](../requirements-catalog.md#l-operations-data-volume-and-evolution). Issue references: [P-01/P-03/P-08/P-09](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
-**Version/status:** 1.2 (was 0.1-draft; 1.2 removes the implemented intake, Network resolution, Gateway state report and credential text, which now live in `docs/` and OpenAPI, and drops the D-135 historical blocks). The implemented behavior (AP-05 intake-commit boundary, AP-07 HTTP surface and credential management) is specified once in the pages linked below; this file keeps only what AP-09 still has to deliver. **Owner:** Intake; integration owns the shared commit boundary. **Parties:** authorized Gateway/Gateway manager; downstream Grouping, Assignment and Delivery domains.
+**Status:** Implemented behavior (intake, Network resolution, Gateway state reports, credentials) is specified once in `docs/` and OpenAPI, linked below; this file keeps only what AP-09 still has to deliver. **Owner:** Intake; integration owns the shared commit boundary. **Parties:** authorized Gateway/Gateway manager; downstream Grouping, Assignment and Delivery domains.
 
 ## Implemented behavior (specified in `docs/` and OpenAPI)
 

@@ -8,7 +8,7 @@ Referenced contracts (follow only when relevant): [C-06](c-06-identity-authoriza
 
 **Traceability:** [REQ-083..084/089..090](../requirements-catalog.md#i-domain-events-extensions-and-deliveries), [REQ-107](../requirements-catalog.md#k-installed-web-app-and-security-behavior), [REQ-129](../requirements-catalog.md#m-additional-domain-capabilities). Issue references: [P-05..P-07/P-11](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
-**Version/status:** 0.2-draft (was 0.1-draft; the implemented plugin-runtime 2.0 text moved to `docs/plugins.md`, and the dedicated preview artifact is deleted under D-135 in favor of the `mode` field). **Owner:** Plugin host; Delivery owns Delivery and subscription semantics, integration owns the SDK contract. **Producers/consumers:** the operator supplies artifacts; the host checks and activates them; modules handle explicit Domain events or provide allowed targets.
+**Status:** Draft for the remaining plugin-host work; the implemented plugin runtime is specified in `docs/plugins.md`. **Owner:** Plugin host; Delivery owns Delivery and subscription semantics, integration owns the SDK contract. **Producers/consumers:** the operator supplies artifacts; the host checks and activates them; modules handle explicit Domain events or provide allowed targets.
 
 ## Implemented behavior (specified in docs)
 

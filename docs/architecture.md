@@ -101,7 +101,7 @@ Workflow definitions, versions, activation and processing instances are describe
 
 ### Processing status
 
-There is no publication barrier (D-135): accepted evidence is visible on commit, and processing adds results to it. Two fields describe that state.
+There is no publication barrier: accepted evidence is visible on commit, and processing adds results to it. Two fields describe that state.
 
 | Record | Field | Meaning |
 | --- | --- | --- |

@@ -8,7 +8,7 @@ Referenced contracts (follow only when relevant): [C-01](c-01-transmission-accep
 
 **Traceability:** [REQ-111..112/114..120](../requirements-catalog.md#l-operations-data-volume-and-evolution), [REQ-127 and removed REQ-126](../requirements-catalog.md#m-additional-domain-capabilities). Issue references: [P-01/P-03/P-04/P-15/P-20/P-21](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
-**Version/status:** 1.0 for the foundation (was 0.1-draft with the frozen AP-05 foundation 1.0/1.1; the SQLite adapter, the Lite runtime and the Lite-to-Full transfer are deleted under D-135, and the foundation, migration, HTTP transport and startup text now lives in `docs/`). Retention and the remaining operational mechanics stay 0.1-draft. **Owner:** Operations and persistence with integration and the domain schema owners. **Parties:** application, operator, authoritative PostgreSQL store, roles, restart.
+**Status:** The foundation, migrations, HTTP transport and startup are implemented and specified once in `docs/`; retention and the remaining operational mechanics are a draft. **Owner:** Operations and persistence with integration and the domain schema owners. **Parties:** application, operator, authoritative PostgreSQL store, roles, restart.
 
 ## Implemented behavior (specified in `docs/`)
 

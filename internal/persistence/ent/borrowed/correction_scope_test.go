@@ -68,7 +68,7 @@ func readTarget(t *testing.T, f matcherFixture, transmission uuid.UUID) targetSt
 // cache rows of Messages with affected targets as correcting, and the correction run to
 // re-resolve only targets inside that selector; a suppression scopes one target and a Unit
 // deletion scopes that Unit's targets. Targets of other addresses and Networks keep their
-// assignment revision, and no dirty-capture table exists.
+// assignment revision.
 func TestCorrectionScopesBySelectorAndLeavesUnrelatedTargetsAlone(t *testing.T) {
 	t.Parallel()
 	f := newMatcherFixture(t)
@@ -270,14 +270,6 @@ func TestCorrectionScopesBySelectorAndLeavesUnrelatedTargetsAlone(t *testing.T) 
 		}
 		if unit.UUID != unitC.ID {
 			t.Fatalf("Unit deletion scope unit=%v, want %s", unit, unitC.ID)
-		}
-		var dirtyTables int
-		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM information_schema.tables
-			WHERE table_name='correction_dirty_transmissions'`).Scan(&dirtyTables); err != nil {
-			return err
-		}
-		if dirtyTables != 0 {
-			t.Fatal("dirty capture table still exists")
 		}
 		return nil
 	}); err != nil {

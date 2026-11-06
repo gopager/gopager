@@ -6,7 +6,7 @@ Referenced contracts (follow only when relevant): [C-01](c-01-transmission-accep
 
 **Traceability:** [REQ-021](../requirements-catalog.md#c-units-organizations-and-defaults), [REQ-031..040](../requirements-catalog.md#d-correct-assignment-and-history), [REQ-123..124](../requirements-catalog.md#m-additional-domain-capabilities). Issue references: [P-08..P-10/P-12](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
-**Version/status:** 1.0 (was 0.1-draft; matching, target resolution, suppression and selector-scoped correction are implemented and now specified once in `docs/` and OpenAPI; the contribution-support, dirty-capture, barrier re-entry and global-revision text is deleted under D-135). **Owner:** Assignment. **Producers:** temporal Address rules, Transmission targets, relevant master-data Domain events. **Consumers:** the Query and Delivery domains using central C-06 evaluation.
+**Status:** Matching, target resolution, suppression and selector-scoped correction are implemented and specified once in `docs/` and OpenAPI; this file keeps the planned rules. **Owner:** Assignment. **Producers:** temporal Address rules, Transmission targets, relevant master-data Domain events. **Consumers:** the Query and Delivery domains using central C-06 evaluation.
 
 ## Implemented behavior (specified in `docs/` and OpenAPI)
 

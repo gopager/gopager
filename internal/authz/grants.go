@@ -107,7 +107,6 @@ func buildActionScopes() map[string][]string {
 		"all", "agency", "unit")
 	add("notice.manage plugin.configure operations.manage", "all")
 	add("audit.read", "all", "agency", "account")
-	add("plugin.internal-read", "all", "agency", "unit", "unitCollection")
 	return out
 }
 

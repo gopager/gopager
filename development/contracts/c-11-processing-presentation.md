@@ -10,7 +10,7 @@ Targeted sections: [implemented behavior](#implemented-behavior-specified-in-doc
 
 **Traceability:** [REQ-091..097/099..100](../requirements-catalog.md#j-processing-presentation-and-usability). Issue reference: [P-16](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
-**Version/status:** 1.0 for Processing (was 0.1-draft with workflow-kernel 1.0, workflow bytes 1.0, target-results 1.1 and ingest-publication 1.0 subsets; the Workflow kernel, target results, activation, preview, candidates and processing status are implemented and now specified once in `docs/`; the barrier, reselection, multi-target review and D-135 historical text are deleted). Presentation, historical Reprocess and the text catalog stay 0.1-draft. **Owner:** Processing; the frontend consumes permitted configuration and results. **Producers:** authorized administrative Workflows and sample or Transmission Payload. **Consumers:** presentation and explicit Domain event reactions.
+**Status:** Processing (Workflow kernel, target results, activation, preview, candidates, processing status) is implemented and specified once in `docs/`; presentation, historical Reprocess and the text catalog are a draft. **Owner:** Processing; the frontend consumes permitted configuration and results. **Producers:** authorized administrative Workflows and sample or Transmission Payload. **Consumers:** presentation and explicit Domain event reactions.
 
 ## Implemented behavior (specified in `docs/` and OpenAPI)
 

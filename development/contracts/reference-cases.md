@@ -119,7 +119,7 @@ Approved D-34 additions; owner Grouping with Intake. These are backend contract 
 
 ## AP-07 Detail Field Authorization Case
 
-**F-53 / D-55** is a planned C-06 identity-core 1.1 fixture; execution evidence belongs to AP-07.
+**F-53 / D-55** is a planned C-06 identity-core fixture; execution evidence belongs to AP-07.
 
 | Case | Concrete input | Expected result |
 | --- | --- | --- |
@@ -150,7 +150,7 @@ D-35 approved freeze cases; owner persistence/operations/integration with Intake
 
 ### AP-05 Migration Case Addendum
 
-Approved 2026-10-26 under D-37; owner persistence/operations/integration. This addendum defines F-46a/F-46b for [C-12 foundation 1.1](../../docs/operations.md#database-migrations); No runtime pass is implied.
+Approved 2026-10-26 under D-37; owner persistence/operations/integration. This addendum defines F-46a/F-46b for the [C-12 foundation](../../docs/operations.md#database-migrations); No runtime pass is implied.
 
 | Case | Concrete input | Current expected result |
 | --- | --- | --- |
@@ -159,7 +159,7 @@ Approved 2026-10-26 under D-37; owner persistence/operations/integration. This a
 
 ### AP-07 Intake Cases
 
-F-60..F-67 are frozen as AP-07 intake cases 1.0 under [D-119](../authoritative-plan.md#ap-07-contract-freeze-proposal). They are planned and have not been executed. F-68 is an additive AP-07 intake case 1.1 under [D-121](../authoritative-plan.md#ap-07-gateway-credential-management-http-addendum); it is planned and has not been executed.
+F-60..F-67 are the AP-07 intake cases under [D-119](../authoritative-plan.md#ap-07-contract-freeze-proposal). They are planned and have not been executed. F-68 is an additive AP-07 intake case under [D-121](../authoritative-plan.md#ap-07-gateway-credential-management-http-addendum); it is planned and has not been executed.
 
 | Case | Concrete input | Expected result |
 | --- | --- | --- |

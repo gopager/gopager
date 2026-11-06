@@ -6,7 +6,7 @@ Referenced contracts (follow only when relevant): [C-05](c-05-matching-correctio
 
 **Traceability:** [REQ-019..020](../requirements-catalog.md#b-search-filters-and-details), [REQ-021..030](../requirements-catalog.md#c-units-organizations-and-defaults), [REQ-095](../requirements-catalog.md#j-processing-presentation-and-usability), [REQ-132](../requirements-catalog.md#m-additional-domain-capabilities). Documentary coverage: [AP-02](../work-packages/ap-02-domain-contracts.md#documentary-completion-and-coverage); freeze: [AP-04](../work-packages/ap-04-scope-freeze.md).
 
-**Version/status:** 1.1 (was 0.1-draft; 1.1 removes the implemented Unit, Organization, template, collection and bulk text, which now live in `docs/` and OpenAPI, and adds Agency ownership of Units under D-135). **Owner:** Master data. **Parties:** authorized management; the Assignment, Query and Delivery domains consume current master data.
+**Status:** Implemented behavior (Agencies, Units, Organizations, templates, collections, bulk operations) is specified once in `docs/` and OpenAPI; this file keeps the planned rules. **Owner:** Master data. **Parties:** authorized management; the Assignment, Query and Delivery domains consume current master data.
 
 ## Implemented behavior (specified in `docs/` and OpenAPI)
 

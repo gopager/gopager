@@ -146,7 +146,7 @@ Rolling upgrades with mixed releases are not supported. Downgrading the binary a
 
 ## Event Log Retention
 
-`domain_events` (the sequenced fact log) and `consumer_offsets` (one read position per consumer) grow without bound until a retention job prunes them; no such job is implemented yet. Both tables join the retention list owned by [C-12](../development/contracts/c-12-persistence-operations.md). The rule the job must follow: a `domain_events` row is prunable only when its `(tx_id, seq)` is at or below the lowest `(last_tx_id, last_seq)` of every registered consumer **and** it is older than the replay window, so no consumer can be left with a gap and late-registered consumers still find recent history. A `consumer_offsets` row is removed only when its consumer is decommissioned.
+`domain_events` (the sequenced fact log) and `consumer_offsets` (one read position per consumer) grow without bound until a retention job prunes them; no such job is implemented yet. Both tables belong in the planned retention configuration. The rule the job must follow: a `domain_events` row is prunable only when its `(tx_id, seq)` is at or below the lowest `(last_tx_id, last_seq)` of every registered consumer **and** it is older than the replay window, so no consumer can be left with a gap and late-registered consumers still find recent history. A `consumer_offsets` row is removed only when its consumer is decommissioned.
 
 ## First Start and Bootstrap
 
@@ -179,7 +179,7 @@ Bootstrap opens no listener, completes within 30 s, and can succeed only once pe
 | Gateways | `gateway.*`, `network.*` (each `read`, `create`, `update`, `delete`), `grouping.configure` |
 | Accounts | `account.read`, `account.create`, `account.update`, `account.delete`, `account.delete-own`, `grant.manage`, `password.local`, `recovery.request`, `recovery.issue`, `recovery.consume`, `session.manage-own`, `key.create-own`, `key.manage-own`, `key.manage-technical` |
 | Subscriptions and delivery | `subscription.manage-own`, `subscription.manage-global`, `delivery.read`, `delivery.retry`, `delivery.redeliver` |
-| Processing | `workflow.read`, `workflow.create`, `workflow.update`, `workflow.delete`, `workflow.preview`, `workflow.activate`, `workflow.reprocess`, `presentation.manage`, `plugin.configure`, `plugin.internal-read` |
+| Processing | `workflow.read`, `workflow.create`, `workflow.update`, `workflow.delete`, `workflow.preview`, `workflow.activate`, `workflow.reprocess`, `presentation.manage`, `plugin.configure` |
 | Other | `notice.manage`, `operations.manage`, `audit.read` |
 
 The `*` notation above is shorthand for this table only; `--actions` requires each action spelled out.

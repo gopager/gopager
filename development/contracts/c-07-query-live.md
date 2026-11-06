@@ -8,7 +8,7 @@ Referenced contracts (follow only when relevant): [C-03](c-03-message-grouping.m
 
 **Traceability:** [REQ-001..010](../requirements-catalog.md#a-live-message-view), [REQ-011..020](../requirements-catalog.md#b-search-filters-and-details), [REQ-027/029](../requirements-catalog.md#c-units-organizations-and-defaults), [REQ-055..060](../requirements-catalog.md#f-access-rights-and-guests), [REQ-097..100](../requirements-catalog.md#j-processing-presentation-and-usability). Issue references: [P-08..P-10/P-12/P-15](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
-**Version/status:** 0.2-draft (AP-10 has not started; 0.2 aligns the draft with D-135: Message-time ordering, stateless keyset tokens, event-sequence resume; the implemented error catalog moved to `docs/`). **Owner:** Query; integration owns OpenAPI and the Domain event boundary; C-06 exclusively owns permission semantics. **Parties:** Vue and API consumers receive authorized projections, not internal database objects.
+**Status:** Draft for AP-10, which has not started, aligned with D-135 (Message-time ordering, stateless keyset tokens, event-sequence resume); the implemented error catalog is in `docs/http-api.md`. **Owner:** Query; integration owns OpenAPI and the Domain event boundary; C-06 exclusively owns permission semantics. **Parties:** Vue and API consumers receive authorized projections, not internal database objects.
 
 ## Implemented behavior (specified in `docs/` and OpenAPI)
 

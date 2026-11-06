@@ -8,7 +8,7 @@ Referenced contracts (follow only when relevant): [C-06](c-06-identity-authoriza
 
 **Traceability:** [REQ-081..087](../requirements-catalog.md#i-domain-events-extensions-and-deliveries), [REQ-105..106](../requirements-catalog.md#k-installed-web-app-and-security-behavior), [REQ-129..130](../requirements-catalog.md#m-additional-domain-capabilities). Issue references: [P-07/P-10/P-11](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
-**Version/status:** 0.2-draft (AP-11 has not started; 0.2 moves the implemented typed-predicate and bytes value text to `docs/` and deletes the D-135 historical blocks). **Owner:** Delivery; C-10 host executes under control. **Parties:** authorized subscription owner/target manager, Domain event worker, host capability, provider.
+**Status:** Draft for AP-11, which has not started; the implemented typed predicates and byte values are specified in `docs/workflows.md`. **Owner:** Delivery; C-10 host executes under control. **Parties:** authorized subscription owner/target manager, Domain event worker, host capability, provider.
 
 | Draft interface | Input -> result |
 | --- | --- |

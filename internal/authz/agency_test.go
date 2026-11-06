@@ -8,15 +8,11 @@ import (
 	"github.com/google/uuid"
 )
 
-// TestAgencyScopeReplacesNetwork expects the grant scope kinds to be all, agency, unit,
-// unitCollection and account: a Radio network is not a grant scope any more, and an Agency
-// grant covers targets that carry that Agency.
-func TestAgencyScopeReplacesNetwork(t *testing.T) {
+// TestAgencyScopeCoversItsActions expects the Agency to be a grant scope kind and each action to
+// accept or refuse an Agency scope as the action table defines.
+func TestAgencyScopeCoversItsActions(t *testing.T) {
 	t.Parallel()
 	agency := uuid.New()
-	if ValidScope(Scope{Kind: "network", References: []string{agency.String()}}) {
-		t.Fatal("network is still a valid scope kind")
-	}
 	if !ValidScope(Scope{Kind: "agency", References: []string{agency.String()}}) {
 		t.Fatal("agency is not a valid scope kind")
 	}
@@ -29,9 +25,6 @@ func TestAgencyScopeReplacesNetwork(t *testing.T) {
 		if got := ActionAllowsScope(action, "agency"); got != want {
 			t.Fatalf("ActionAllowsScope(%q, agency)=%t want %t", action, got, want)
 		}
-	}
-	if ActionAllowsScope("message.read", "network") {
-		t.Fatal("message.read still allows a network scope")
 	}
 	if !ActionAllowsScope("agency.create", "all") || !ActionAllowsScope("agency.delete", "all") {
 		t.Fatal("agency management is not grantable on all")

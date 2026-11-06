@@ -8,7 +8,7 @@ Referenced contracts (follow only when relevant): [C-01](c-01-transmission-accep
 
 **Traceability:** [REQ-049](../requirements-catalog.md#e-transmission-networks-and-gateways), [REQ-081](../requirements-catalog.md#i-domain-events-extensions-and-deliveries), [REQ-113..114/117](../requirements-catalog.md#l-operations-data-volume-and-evolution). Issue references: [P-01/P-04/P-11/P-12](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
-**Version/status:** 1.0 for the implemented append, log and fact vocabulary (was 0.1-draft with several frozen subsets; the Watermill transport, ingest-publication barrier, candidate-reselection and per-target `assignment.changed` text is deleted under D-135); the consumer, fan-out and job parts below stay 0.1-draft. **Owner:** Delivery for mechanics, producing domain for Domain event meaning, integration for the commit boundary.
+**Status:** The append, log and fact vocabulary are implemented and specified once in `docs/`; the consumer, fan-out and job parts below are a draft for AP-10 and AP-11. **Owner:** Delivery for mechanics, producing domain for Domain event meaning, integration for the commit boundary.
 
 ## Implemented behavior (specified in `docs/`)
 

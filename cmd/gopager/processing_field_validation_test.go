@@ -16,7 +16,7 @@ import (
 	"github.com/gopager/gopager/internal/protocols"
 )
 
-// TestProcessingSaveAndDraftPreviewRejectUnreadableFieldGroups pins D-135 save-time
+// TestProcessingSaveAndDraftPreviewRejectUnreadableFieldGroups pins save-time field
 // validation over HTTP: an author who may read only the gateway group can save and preview a
 // definition that reads gateway fields, but a selector or output that references a payload
 // field is rejected with INVALID_INPUT, both on save and on the preview of an unsaved draft.

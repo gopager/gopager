@@ -217,7 +217,6 @@ Scope kinds each action accepts (`internal/authz/grants.go` is the source; a gra
 | `delivery.read`, `delivery.retry`, `delivery.redeliver` | `all`, `agency`, `unit`, `unitCollection`, `account` |
 | `workflow.*`, `presentation.manage` | `all`, `agency`, `unit` |
 | `audit.read` | `all`, `agency`, `account` |
-| `plugin.internal-read` | `all`, `agency`, `unit`, `unitCollection` |
 
 Grant semantics:
 

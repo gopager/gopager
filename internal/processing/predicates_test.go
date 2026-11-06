@@ -265,7 +265,7 @@ func TestPredicateBytesComparisonsAreChargedByLength(t *testing.T) { //nolint:pa
 	}
 }
 
-// TestPredicateLogicIsTwoValued pins D-135: AND, OR and NOT are ordinary boolean logic over
+// TestPredicateLogicIsTwoValued expects AND, OR and NOT to be ordinary boolean logic over
 // present and absent operands; an absent operand makes its comparison false, so NOT of it is
 // true, and no combination is "unknown".
 func TestPredicateLogicIsTwoValued(t *testing.T) {
@@ -314,19 +314,19 @@ func TestPredicateLogicIsTwoValued(t *testing.T) {
 	}
 }
 
-// TestPredicateRejectsHiddenFieldState keeps the removed hidden state from reappearing on
-// the wire: a reader returning an unknown state is an invalid field, not an unknown truth.
-func TestPredicateRejectsHiddenFieldState(t *testing.T) {
+// TestPredicateRejectsUnknownFieldState expects a reader that returns a state other than present
+// or absent to be an invalid field, never a truth value.
+func TestPredicateRejectsUnknownFieldState(t *testing.T) {
 	t.Parallel()
 	ref := FieldRef{Namespace: "source", Path: []string{"left"}}
 	yes := Value{BooleanValue, json.RawMessage(`true`)}
-	fixture := fixtureFor(ref, FieldSchema{Kind: BooleanValue, Optional: true}, nil, FieldState("hidden"))
+	fixture := fixtureFor(ref, FieldSchema{Kind: BooleanValue, Optional: true}, nil, FieldState("unexpected"))
 	program, err := CompilePredicate(context.Background(), Predicate{Op: "eq", Field: &ref, Value: &yes}, fixture)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := program.Evaluate(context.Background(), fixture); platform.FailureCode(err) != platform.CodeInvalidInput {
-		t.Fatalf("hidden field state accepted: %v", err)
+		t.Fatalf("unknown field state accepted: %v", err)
 	}
 }
 

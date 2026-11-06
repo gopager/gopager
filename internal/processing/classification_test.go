@@ -29,7 +29,7 @@ func classificationDefinition() Definition {
 		Outputs:      map[string]Assignment{"picked": {Field: &step}, "text": {Field: &text}}}
 }
 
-// TestEvaluationClassificationIsPerDefinitionNotPerValue pins D-135: every source field the
+// TestEvaluationClassificationIsPerDefinitionNotPerValue expects that every source field the
 // definition references (the branch arm that did not run included) contributes its own
 // classification to Dependencies(), and no derived output carries a per-value classification.
 func TestEvaluationClassificationIsPerDefinitionNotPerValue(t *testing.T) {

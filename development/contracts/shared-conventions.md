@@ -4,7 +4,7 @@
 
 Referenced contracts (follow only when relevant): [C-01](c-01-transmission-acceptance.md), [C-05](c-05-matching-correction.md), [C-06](c-06-identity-authorization.md), [C-07](c-07-query-live.md), [C-08](c-08-events-jobs.md), [C-11](c-11-processing-presentation.md).
 
-**Version/status:** 1.1 (was 1.0 frozen for AP-05 and the AP-02 value table; the limits and conventions that the code now implements are specified once in `docs/` and OpenAPI, and this file keeps the conventions that still bind planned work plus the limits of work that is not built yet).
+**Status:** Conventions and limits the code implements are specified once in `docs/` and OpenAPI; this file keeps the conventions that bind planned work and the limits of work not built yet.
 
 ## Conventions that bind every contract
 

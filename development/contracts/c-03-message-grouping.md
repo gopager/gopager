@@ -6,7 +6,7 @@ Referenced contracts (follow only when relevant): [C-01](c-01-transmission-accep
 
 **Traceability:** [REQ-001..002](../requirements-catalog.md#a-live-message-view), [REQ-113](../requirements-catalog.md#l-operations-data-volume-and-evolution), [REQ-122](../requirements-catalog.md#m-additional-domain-capabilities). Issue reference: [P-08](../authoritative-plan.md#open-issues-and-risks); status is maintained there.
 
-**Version/status:** 1.0 (was 0.3-draft; initial Grouping is implemented and now specified once in `docs/`). **Owner:** Grouping. **Producer:** stored Transmission evidence with C-02 identity. **Consumers:** Query and C-08 Domain events.
+**Status:** Initial Grouping is implemented and specified once in `docs/`; this file keeps the planned rules. **Owner:** Grouping. **Producer:** stored Transmission evidence with C-02 identity. **Consumers:** Query and C-08 Domain events.
 
 ## Implemented behavior (specified in `docs/`)
 
