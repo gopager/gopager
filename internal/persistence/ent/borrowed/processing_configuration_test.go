@@ -59,7 +59,7 @@ func processingAuthorityFixture(actor uuid.UUID, scopes ...authz.Scope) authz.Au
 	authority := authz.Authority{PrincipalID: actor.String(), Revision: 1, Active: true}
 	for _, scope := range scopes {
 		authority.Grants = append(authority.Grants, authz.Grant{SubjectID: actor.String(), SubjectKind: "principal",
-			Scope: scope, Actions: []string{"rule.read", "rule.create", "rule.update", "rule.activate", "rule.delete"}})
+			Scope: scope, Actions: []string{"workflow.read", "workflow.create", "workflow.update", "workflow.activate", "workflow.delete"}})
 	}
 	return authority
 }
@@ -103,7 +103,7 @@ func TestProcessingConfigurationNativeUnionBeforeCountPagingAndVersionLookup(t *
 		for i, scope := range scopes {
 			configs[i] = processing.WorkflowConfiguration{ID: uuid.New(), Revision: 1,
 				Name: uuid.NewString(), Scope: scope}
-			if err := store.SaveWorkflow(tx.Context(), tx, admin, "rule.create", configs[i], 0, now); err != nil {
+			if err := store.SaveWorkflow(tx.Context(), tx, admin, "workflow.create", configs[i], 0, now); err != nil {
 				return err
 			}
 			versions[i] = processing.Version{ID: uuid.New(), WorkflowID: configs[i].ID,
@@ -135,7 +135,7 @@ func TestProcessingConfigurationNativeUnionBeforeCountPagingAndVersionLookup(t *
 				for _, id := range permitted {
 					visible = visible || value.ID == id
 				}
-				_, readErr := store.ReadWorkflow(tx.Context(), tx, authority, "rule.read", value.ID, now)
+				_, readErr := store.ReadWorkflow(tx.Context(), tx, authority, "workflow.read", value.ID, now)
 				_, versionErr := store.ReadVersion(tx.Context(), tx, authority, value.ID, versions[i].ID, now)
 				if visible && (readErr != nil || versionErr != nil) {
 					t.Fatalf("permitted configuration hidden: %v %v", readErr, versionErr)
@@ -155,7 +155,7 @@ func TestProcessingConfigurationNativeUnionBeforeCountPagingAndVersionLookup(t *
 	check(agencyOnly, 1, []uuid.UUID{configs[1].ID})
 	union := processingAuthorityFixture(actor, first, second)
 	check(union, 3, []uuid.UUID{configs[1].ID, configs[2].ID, configs[3].ID})
-	union.Key = &authz.Restrictions{Actions: []string{"rule.read"}, Scopes: []authz.Scope{first}}
+	union.Key = &authz.Restrictions{Actions: []string{"workflow.read"}, Scopes: []authz.Scope{first}}
 	check(union, 1, []uuid.UUID{configs[1].ID})
 }
 
@@ -188,7 +188,7 @@ func TestProcessingConfigurationSaveActivationCASAndAllParticipantsRollback(t *t
 			return err
 		}
 		savedVersion.CreatedAt = now
-		if err := store.SaveWorkflow(tx.Context(), tx, authority, "rule.create", config, 0, now); err != nil {
+		if err := store.SaveWorkflow(tx.Context(), tx, authority, "workflow.create", config, 0, now); err != nil {
 			return err
 		}
 		return store.SaveVersion(tx.Context(), tx, savedVersion)
@@ -204,7 +204,7 @@ func TestProcessingConfigurationSaveActivationCASAndAllParticipantsRollback(t *t
 		if err != nil {
 			return err
 		}
-		current, err := store.ReadWorkflow(tx.Context(), tx, authority, "rule.activate", config.ID, now)
+		current, err := store.ReadWorkflow(tx.Context(), tx, authority, "workflow.activate", config.ID, now)
 		if err != nil {
 			return err
 		}
@@ -213,10 +213,10 @@ func TestProcessingConfigurationSaveActivationCASAndAllParticipantsRollback(t *t
 		}
 		current.Revision = 2
 		current.ActiveVersionID, current.Enabled = &savedVersion.ID, true
-		if err := store.SaveWorkflow(tx.Context(), tx, authority, "rule.activate", current, 1, now); err != nil {
+		if err := store.SaveWorkflow(tx.Context(), tx, authority, "workflow.activate", current, 1, now); err != nil {
 			return err
 		}
-		if err := store.RecordChange(tx.Context(), tx, actor, current.ID, "rule.activate", now); err != nil {
+		if err := store.RecordChange(tx.Context(), tx, actor, current.ID, "workflow.activate", now); err != nil {
 			return err
 		}
 		fingerprint, err := commands.Fingerprint(current)
@@ -249,7 +249,7 @@ func TestProcessingConfigurationSaveActivationCASAndAllParticipantsRollback(t *t
 		if err != nil {
 			return err
 		}
-		current, err := store.ReadWorkflow(tx.Context(), tx, authority, "rule.read", config.ID, now)
+		current, err := store.ReadWorkflow(tx.Context(), tx, authority, "workflow.read", config.ID, now)
 		if err != nil {
 			return err
 		}
@@ -291,7 +291,7 @@ func TestProcessingConfigurationSaveActivationCASAndAllParticipantsRollback(t *t
 		}
 		stale := config
 		stale.Revision, stale.Name = 2, "stale overwrite"
-		return store.SaveWorkflow(tx.Context(), tx, authority, "rule.update", stale, 1, now)
+		return store.SaveWorkflow(tx.Context(), tx, authority, "workflow.update", stale, 1, now)
 	})
 	if !errors.Is(err, authz.ErrRevisionConflict) {
 		t.Fatalf("stale metadata write was not rejected: %v", err)
@@ -301,7 +301,7 @@ func TestProcessingConfigurationSaveActivationCASAndAllParticipantsRollback(t *t
 		if err != nil {
 			return err
 		}
-		current, err := store.ReadWorkflow(tx.Context(), tx, authority, "rule.read", config.ID, now)
+		current, err := store.ReadWorkflow(tx.Context(), tx, authority, "workflow.read", config.ID, now)
 		if err != nil {
 			return err
 		}
@@ -356,7 +356,7 @@ func TestProcessingSchemaDeferredVersionOwnershipAndPrivacy(t *testing.T) {
 			return err
 		}
 		for _, id := range []uuid.UUID{first, second} {
-			if err := store.SaveWorkflow(tx.Context(), tx, authority, "rule.create",
+			if err := store.SaveWorkflow(tx.Context(), tx, authority, "workflow.create",
 				processing.WorkflowConfiguration{ID: id, Revision: 1, Name: id.String(), Scope: authz.Scope{Kind: "all"}}, 0, now); err != nil {
 				return err
 			}

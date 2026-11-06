@@ -227,35 +227,5 @@ func (s *Store) TouchCredential(ctx context.Context, tx platform.TransactionCont
 	return nil
 }
 
-// ScopeExists supplies the identity owner's references; other domain kinds require composition.
-// An unwired owner is an explicit authority failure, not an unrestricted or empty substitute.
-func (s *Store) ScopeExists(ctx context.Context, tx platform.TransactionContext, target authz.Scope) (bool, error) {
-	if !authz.ValidScope(target) {
-		return false, authz.ErrInvalidInput
-	}
-	if target.Kind == "all" {
-		return true, nil
-	}
-	if target.Kind != "account" {
-		return false, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("scope owner is not wired"))
-	}
-	for _, reference := range target.References {
-		id, err := uuid.Parse(reference)
-		if err != nil {
-			return false, authz.ErrInvalidInput
-		}
-		client, scope, err := s.client(ctx, tx, "Account", entql.FieldEQ("id", id))
-		if err != nil {
-			return false, err
-		}
-		exists, err := client.Account.Query().
-			Where(account.StateNotIn(account.StateDeleting, account.StateDeleted)).Exist(scope)
-		if err != nil || !exists {
-			return false, err
-		}
-	}
-	return true, nil
-}
-
 var _ identity.AuthorityRepository = (*Store)(nil)
 var _ identity.ScopeReferences = (*Store)(nil)

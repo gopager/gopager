@@ -153,11 +153,11 @@ func (s *Service) CheckSyntheticPreviewScope(ctx context.Context, tx platform.Tr
 	if s == nil || ctx == nil || tx == nil || workflowID == uuid.Nil || networkID == uuid.Nil || now.IsZero() {
 		return platform.NewFailure(platform.CodeInvalidInput, errors.New("invalid synthetic preview scope check"))
 	}
-	workflow, err := s.repository.ReadWorkflow(ctx, tx, authority, "rule.preview", workflowID, now)
+	workflow, err := s.repository.ReadWorkflow(ctx, tx, authority, "workflow.preview", workflowID, now)
 	if err != nil {
 		return err
 	}
-	if err := s.authorizeScope(ctx, tx, authority, "rule.preview", workflow.Scope, now); err != nil {
+	if err := s.authorizeScope(ctx, tx, authority, "workflow.preview", workflow.Scope, now); err != nil {
 		return err
 	}
 	target, err := s.scopeTarget(ctx, tx, "network", networkID)
@@ -182,7 +182,7 @@ func (s *Service) CheckSyntheticPreviewScope(ctx context.Context, tx platform.Tr
 	default:
 		return authz.ErrInvalidInput
 	}
-	return authz.Authorize(authority, "rule.preview", nil, target, now)
+	return authz.Authorize(authority, "workflow.preview", nil, target, now)
 }
 
 // MetadataInput excludes active-version changes, which require the independent activation action.
@@ -250,7 +250,7 @@ func (s *Service) ReadWorkflow(ctx context.Context, proof identity.Proof, id uui
 	var result processing.WorkflowConfiguration
 	err := s.within(ctx, proof, false, nil, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
 		var err error
-		result, err = s.repository.ReadWorkflow(tx.Context(), tx, authority, "rule.read", id, now)
+		result, err = s.repository.ReadWorkflow(tx.Context(), tx, authority, "workflow.read", id, now)
 		return err
 	})
 	if err != nil {
@@ -323,7 +323,7 @@ func (s *Service) CreateWorkflow(ctx context.Context, proof identity.Proof, comm
 	}
 	var result commands.Result
 	err = s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		if err := s.authorizeScope(tx.Context(), tx, authority, "rule.create", input.Scope, now); err != nil {
+		if err := s.authorizeScope(tx.Context(), tx, authority, "workflow.create", input.Scope, now); err != nil {
 			return err
 		}
 		actor, err := uuid.Parse(authority.PrincipalID)
@@ -340,10 +340,10 @@ func (s *Service) CreateWorkflow(ctx context.Context, proof identity.Proof, comm
 		}
 		value := processing.WorkflowConfiguration{ID: uuid.New(), Revision: 1,
 			Name: input.Name, Scope: input.Scope, Enabled: *input.Enabled}
-		if err := s.repository.SaveWorkflow(tx.Context(), tx, authority, "rule.create", value, 0, now); err != nil {
+		if err := s.repository.SaveWorkflow(tx.Context(), tx, authority, "workflow.create", value, 0, now); err != nil {
 			return err
 		}
-		if err := s.record(tx, authority, value, "rule.create", "created", &command, now); err != nil {
+		if err := s.record(tx, authority, value, "workflow.create", "created", &command, now); err != nil {
 			return err
 		}
 		result = commands.Result{ID: value.ID, Revision: value.Revision}
@@ -368,18 +368,18 @@ func (s *Service) UpdateWorkflow(ctx context.Context, proof identity.Proof, id u
 	}
 	var result commands.Result
 	err = s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		current, err := s.current(tx, authority, "rule.update", id, expected, now)
+		current, err := s.current(tx, authority, "workflow.update", id, expected, now)
 		if err != nil {
 			return err
 		}
-		if err := s.authorizeScope(tx.Context(), tx, authority, "rule.update", input.Scope, now); err != nil {
+		if err := s.authorizeScope(tx.Context(), tx, authority, "workflow.update", input.Scope, now); err != nil {
 			return err
 		}
 		current.Name, current.Scope, current.Enabled = input.Name, input.Scope, *input.Enabled
-		if err := s.repository.SaveWorkflow(tx.Context(), tx, authority, "rule.update", current, expected, now); err != nil {
+		if err := s.repository.SaveWorkflow(tx.Context(), tx, authority, "workflow.update", current, expected, now); err != nil {
 			return err
 		}
-		if err := s.record(tx, authority, current, "rule.update", "updated", nil, now); err != nil {
+		if err := s.record(tx, authority, current, "workflow.update", "updated", nil, now); err != nil {
 			return err
 		}
 		result = commands.Result{ID: current.ID, Revision: current.Revision}
@@ -413,15 +413,15 @@ func (s *Service) DeleteWorkflow(ctx context.Context, proof identity.Proof, id u
 	}
 	var result commands.Result
 	err := s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		current, err := s.current(tx, authority, "rule.delete", id, expected, now)
+		current, err := s.current(tx, authority, "workflow.delete", id, expected, now)
 		if err != nil {
 			return err
 		}
 		current.Deleted, current.Enabled, current.ActiveVersionID = true, false, nil
-		if err := s.repository.SaveWorkflow(tx.Context(), tx, authority, "rule.delete", current, expected, now); err != nil {
+		if err := s.repository.SaveWorkflow(tx.Context(), tx, authority, "workflow.delete", current, expected, now); err != nil {
 			return err
 		}
-		if err := s.record(tx, authority, current, "rule.delete", "deleted", nil, now); err != nil {
+		if err := s.record(tx, authority, current, "workflow.delete", "deleted", nil, now); err != nil {
 			return err
 		}
 		result = commands.Result{ID: current.ID, Revision: current.Revision}
@@ -507,11 +507,11 @@ func (s *Service) SaveVersion(ctx context.Context, proof identity.Proof, command
 	var replay bool
 	var preparationRevision int64
 	err = s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		current, err := s.repository.ReadWorkflow(tx.Context(), tx, authority, "rule.update", parent, now)
+		current, err := s.repository.ReadWorkflow(tx.Context(), tx, authority, "workflow.update", parent, now)
 		if err != nil {
 			return err
 		}
-		if err := s.authorizeScope(tx.Context(), tx, authority, "rule.update", current.Scope, now); err != nil {
+		if err := s.authorizeScope(tx.Context(), tx, authority, "workflow.update", current.Scope, now); err != nil {
 			return err
 		}
 		actor, err := uuid.Parse(authority.PrincipalID)
@@ -542,11 +542,11 @@ func (s *Service) SaveVersion(ctx context.Context, proof identity.Proof, command
 		return commands.Result{}, err
 	}
 	err = s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		current, err := s.repository.ReadWorkflow(tx.Context(), tx, authority, "rule.update", parent, now)
+		current, err := s.repository.ReadWorkflow(tx.Context(), tx, authority, "workflow.update", parent, now)
 		if err != nil {
 			return err
 		}
-		if err := s.authorizeScope(tx.Context(), tx, authority, "rule.update", current.Scope, now); err != nil {
+		if err := s.authorizeScope(tx.Context(), tx, authority, "workflow.update", current.Scope, now); err != nil {
 			return err
 		}
 		actor, err := uuid.Parse(authority.PrincipalID)
@@ -576,10 +576,10 @@ func (s *Service) SaveVersion(ctx context.Context, proof identity.Proof, command
 		if err := s.repository.SaveVersion(tx.Context(), tx, version); err != nil {
 			return err
 		}
-		if err := s.repository.SaveWorkflow(tx.Context(), tx, authority, "rule.update", current, expected, now); err != nil {
+		if err := s.repository.SaveWorkflow(tx.Context(), tx, authority, "workflow.update", current, expected, now); err != nil {
 			return err
 		}
-		if err := s.record(tx, authority, current, "rule.update", "version-saved", &command, now); err != nil {
+		if err := s.record(tx, authority, current, "workflow.update", "version-saved", &command, now); err != nil {
 			return err
 		}
 		result = commands.Result{ID: version.ID, Revision: current.Revision}
@@ -603,10 +603,10 @@ func (s *Service) ActivateVersion(ctx context.Context, proof identity.Proof, par
 	var definition processing.Definition
 	var preparationRevision int64
 	err := s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		if _, err := s.current(tx, authority, "rule.activate", parent, expected, now); err != nil {
+		if _, err := s.current(tx, authority, "workflow.activate", parent, expected, now); err != nil {
 			return err
 		}
-		selected, err := s.repository.ReadVersionForAction(tx.Context(), tx, authority, "rule.activate", parent, version, now)
+		selected, err := s.repository.ReadVersionForAction(tx.Context(), tx, authority, "workflow.activate", parent, version, now)
 		definition = selected.Definition
 		preparationRevision = authority.Revision
 		return err
@@ -620,24 +620,24 @@ func (s *Service) ActivateVersion(ctx context.Context, proof identity.Proof, par
 	}
 	var result commands.Result
 	err = s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		current, err := s.current(tx, authority, "rule.activate", parent, expected, now)
+		current, err := s.current(tx, authority, "workflow.activate", parent, expected, now)
 		if err != nil {
 			return err
 		}
 		if authority.Revision != preparationRevision {
 			return authz.ErrRevisionConflict
 		}
-		if _, err := s.repository.ReadVersionForAction(tx.Context(), tx, authority, "rule.activate", parent, version, now); err != nil {
+		if _, err := s.repository.ReadVersionForAction(tx.Context(), tx, authority, "workflow.activate", parent, version, now); err != nil {
 			return err
 		}
 		if err := authorizeReferences(authority, references); err != nil {
 			return err
 		}
 		current.ActiveVersionID = &version
-		if err := s.repository.SaveWorkflow(tx.Context(), tx, authority, "rule.activate", current, expected, now); err != nil {
+		if err := s.repository.SaveWorkflow(tx.Context(), tx, authority, "workflow.activate", current, expected, now); err != nil {
 			return err
 		}
-		if err := s.record(tx, authority, current, "rule.activate", "activated", nil, now); err != nil {
+		if err := s.record(tx, authority, current, "workflow.activate", "activated", nil, now); err != nil {
 			return err
 		}
 		result = commands.Result{ID: current.ID, Revision: current.Revision}

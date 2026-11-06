@@ -103,7 +103,7 @@ func TestProcessingInstanceManagementFreshAuthorityReceiptsAndAtomicFacts(t *tes
 		t.Fatalf("missing mutation participant accepted: %v", err)
 	}
 	inspector.before = func() {
-		replaceManagementGrants(t, f, []authz.Grant{{Actions: []string{"rule.read"}, Scope: authz.Scope{Kind: "all"}}})
+		replaceManagementGrants(t, f, []authz.Grant{{Actions: []string{"workflow.read"}, Scope: authz.Scope{Kind: "all"}}})
 	}
 	if _, err := service.SaveInstance(t.Context(), f.proof, uuid.New(), first.ID, 1, input, checkedMutation); !errors.Is(err, authz.ErrForbidden) {
 		t.Fatalf("revoked plugin configuration rights survived inspection: %v", err)

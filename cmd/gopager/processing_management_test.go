@@ -439,7 +439,7 @@ func TestProcessingSyntheticPreviewHTTPUsesCurrentFixtureNetworks(t *testing.T) 
 			if err := json.Unmarshal(draft.Data, &binaryEvaluation); err != nil || !binaryEvaluation.Selected {
 				t.Fatalf("typed bytes draft preview = %+v, decode error = %v", binaryEvaluation, err)
 			}
-			revokeManagementAction(t, store, managementOperatorID(t, store), "rule.preview")
+			revokeManagementAction(t, store, managementOperatorID(t, store), "workflow.preview")
 			revokedInput, err := json.Marshal(inputs[0])
 			if err != nil {
 				t.Fatal(err)
@@ -1346,7 +1346,7 @@ func createReadReviewer(t *testing.T, store *postgres.Store) (uuid.UUID, string,
 			return err
 		}
 		return client.Grant.Create().SetID(grantID).SetSubjectID(principalID).
-			SetSubjectKind(grant.SubjectKindPrincipal).SetActions([]string{"password.local", "rule.read"}).
+			SetSubjectKind(grant.SubjectKindPrincipal).SetActions([]string{"password.local", "workflow.read"}).
 			SetScope(authz.Scope{Kind: "all"}).Exec(scope)
 	})
 	if err != nil {

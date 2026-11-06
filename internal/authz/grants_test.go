@@ -15,7 +15,7 @@ func TestExplicitActionScopeCatalog(t *testing.T) {
 			t.Fatalf("enumerated action %q is invalid", action)
 		}
 	}
-	for _, action := range []string{"*", "account.*", "plugin.install", "unknown.read", "rule.preview/activate/reprocess"} {
+	for _, action := range []string{"*", "account.*", "plugin.install", "unknown.read", "workflow.preview/activate/reprocess"} {
 		if authz.ValidAction(action) {
 			t.Fatalf("non-grantable action %q accepted", action)
 		}

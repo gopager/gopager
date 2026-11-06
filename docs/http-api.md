@@ -183,7 +183,7 @@ The HTTP API cannot create accounts. Create the first local account with
 What callers can do depends on these concepts:
 
 - **Grants** combine an action from a fixed catalog (for example `unit.read`,
-  `address-rule.update`, `gateway.update`, `rule.preview`, `plugin.configure`) with a
+  `address-rule.update`, `gateway.update`, `workflow.preview`, `plugin.configure`) with a
   scope: `all`, or a list of `agency`, `unit`, `unitCollection` or `account` IDs. An Agency is
   the operating authority that owns Units and Networks (for example a county's fire dispatch
   centre); a grant on it covers everything of that Agency. A
@@ -521,20 +521,20 @@ The HTTP API has no routes that create, list or delete Gateways or Networks.
 
 | Method | Path | Right | Success | Purpose |
 | --- | --- | --- | --- | --- |
-| GET | `/workflows` | `rule.read` | 200 | List |
-| POST | `/workflows` | `rule.create` | 201 | Create (`commandId`, `name`, `scope`, `enabled`) |
-| GET | `/workflows/{id}` | `rule.read` | 200 | Read; includes `activeVersionId` |
-| PUT | `/workflows/{id}` | `rule.update` | 200 | Update metadata |
-| DELETE | `/workflows/{id}` | `rule.delete` | 200 | Delete |
-| GET | `/workflows/{id}/versions` | `rule.read` | 200 | List saved definitions |
-| POST | `/workflows/{id}/versions` | `rule.update` | 201 | Save an immutable definition (`commandId`, `expectedRevision` of the workflow, `definition`); does not activate it |
-| GET | `/workflows/{id}/versions/{version}` | `rule.read` | 200 | Read a definition |
-| POST | `/workflows/{id}/versions/{version}/activate` | `rule.activate` | 200 | Activate (`expectedRevision`) |
-| POST | `/workflows/{id}/preview` | `rule.preview` | 200 | Evaluate a definition without publishing |
-| GET | `/workflows/{id}/candidates` | `rule.read` | 200 | Processing candidate states |
-| GET | `/workflows/{id}/candidates/{candidate}` | `rule.read` | 200 | One candidate: `state`, `selected`, `failureCode` |
-| GET | `/workflows/{id}/candidates/{candidate}/result` | `rule.read` | 200 | Result metadata only (`id`, `revision`, `completedAt`) |
-| POST | `/workflows/{id}/candidates/{candidate}/retry` | `rule.reprocess` | 200 | Retry a failed candidate (`expectedRevision`) |
+| GET | `/workflows` | `workflow.read` | 200 | List |
+| POST | `/workflows` | `workflow.create` | 201 | Create (`commandId`, `name`, `scope`, `enabled`) |
+| GET | `/workflows/{id}` | `workflow.read` | 200 | Read; includes `activeVersionId` |
+| PUT | `/workflows/{id}` | `workflow.update` | 200 | Update metadata |
+| DELETE | `/workflows/{id}` | `workflow.delete` | 200 | Delete |
+| GET | `/workflows/{id}/versions` | `workflow.read` | 200 | List saved definitions |
+| POST | `/workflows/{id}/versions` | `workflow.update` | 201 | Save an immutable definition (`commandId`, `expectedRevision` of the workflow, `definition`); does not activate it |
+| GET | `/workflows/{id}/versions/{version}` | `workflow.read` | 200 | Read a definition |
+| POST | `/workflows/{id}/versions/{version}/activate` | `workflow.activate` | 200 | Activate (`expectedRevision`) |
+| POST | `/workflows/{id}/preview` | `workflow.preview` | 200 | Evaluate a definition without publishing |
+| GET | `/workflows/{id}/candidates` | `workflow.read` | 200 | Processing candidate states |
+| GET | `/workflows/{id}/candidates/{candidate}` | `workflow.read` | 200 | One candidate: `state`, `selected`, `failureCode` |
+| GET | `/workflows/{id}/candidates/{candidate}/result` | `workflow.read` | 200 | Result metadata only (`id`, `revision`, `completedAt`) |
+| POST | `/workflows/{id}/candidates/{candidate}/retry` | `workflow.reprocess` | 200 | Retry a failed candidate (`expectedRevision`) |
 
 Workflow `scope.kind` is `all`, `network` or `unit`. Creating, updating and deleting a
 workflow, saving a version and activating one all advance the workflow revision.

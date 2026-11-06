@@ -77,8 +77,12 @@ func (noTargetMatcher) MatchTargets(context.Context, platform.TransactionContext
 
 type ingestTestScopeReferences struct{}
 
-func (ingestTestScopeReferences) ScopeExists(context.Context, platform.TransactionContext, authz.Scope) (bool, error) {
-	return true, nil
+func (ingestTestScopeReferences) ScopesExist(_ context.Context, _ platform.TransactionContext, scopes []authz.Scope) ([]bool, error) {
+	result := make([]bool, len(scopes))
+	for i := range result {
+		result[i] = true
+	}
+	return result, nil
 }
 
 type ingestTestPrincipalResolver struct{}

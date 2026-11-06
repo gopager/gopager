@@ -58,7 +58,7 @@ func TestPreviewFinalFenceRechecksSourceAndRejectsChangedWorkflowOrAuthority(t *
 	principal := uuid.NewString()
 	authority := authz.Authority{PrincipalID: principal, Revision: 1, Active: true,
 		Grants: []authz.Grant{{ID: uuid.NewString(), SubjectID: principal, SubjectKind: "principal",
-			Actions: []string{"rule.preview"}, Scope: authz.Scope{Kind: "all"}}}}
+			Actions: []string{"workflow.preview"}, Scope: authz.Scope{Kind: "all"}}}}
 	workflow := processing.WorkflowConfiguration{ID: uuid.New(), Revision: 1, Scope: authz.Scope{Kind: "all"}}
 	repository := &previewRecheckRepository{workflow: workflow}
 	source := &previewRecheckSource{}

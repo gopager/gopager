@@ -34,7 +34,7 @@ type PrivateResultMetadata struct {
 }
 
 // ProcessingReadRepository provides only Workflow-bound management projections.
-// Implementations must enforce current rule.read permissions in the authoritative SQL query,
+// Implementations must enforce current workflow.read permissions in the authoritative SQL query,
 // including permission-filtered paging; worker dispatch queries are not suitable.
 type ProcessingReadRepository interface {
 	ListCandidateStatuses(context.Context, platform.TransactionContext, authz.Authority,
@@ -109,11 +109,11 @@ func (s *ProcessingReads) withWorkflowRead(ctx context.Context, proof identity.P
 	return s.management.within(ctx, proof, false, nil, func(tx platform.TransactionContext,
 		authority authz.Authority, now time.Time) error {
 		workflow, err := s.management.repository.ReadWorkflow(tx.Context(), tx, authority,
-			"rule.read", workflowID, now)
+			"workflow.read", workflowID, now)
 		if err != nil {
 			return err
 		}
-		if err := s.management.authorizeScope(tx.Context(), tx, authority, "rule.read", workflow.Scope, now); err != nil {
+		if err := s.management.authorizeScope(tx.Context(), tx, authority, "workflow.read", workflow.Scope, now); err != nil {
 			return err
 		}
 		return read(tx, authority, now)
