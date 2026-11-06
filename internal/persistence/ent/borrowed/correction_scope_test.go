@@ -288,7 +288,8 @@ func TestCorrectionScopesBySelectorAndLeavesUnrelatedTargetsAlone(t *testing.T) 
 	if final := readTarget(t, f, t3.TransmissionID); final.status != "unassigned" || final.unit.Valid || final.revision <= before3.revision {
 		t.Fatalf("deleted Unit's target = %+v; want unassigned at a newer revision", final)
 	}
-	if rows := readMessageUnits(t, f, t3.MessageID); len(rows) != 0 {
-		t.Fatalf("deleted Unit still cached: %+v", rows)
+	// The target of the deleted Unit is now unassigned traffic of its Network's Agency.
+	if rows := readMessageUnits(t, f, t3.MessageID); len(rows) != 1 || rows[0].unit.Valid || rows[0].agency != f.agencies[1] {
+		t.Fatalf("cache after the Unit deletion = %+v, want one unassigned row of the Network's Agency", rows)
 	}
 }

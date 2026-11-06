@@ -1115,7 +1115,9 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 	if drainCorrections(t, runner) == 0 {
 		t.Fatal("unassigned-target suppression correction did not run")
 	}
-	assertUnassigned := func() {
+	// assertUnassigned checks that the target stays unassigned; an unsuppressed unassigned target is
+	// cached as one Unit-less row of its Network's Agency, a suppressed one not at all.
+	assertUnassigned := func(wantRows int) {
 		t.Helper()
 		if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 			executor, err := f.store.Resolve(tx)
@@ -1133,16 +1135,16 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 				WHERE message_id=$1`, unassignedMessageID).Scan(&supports); err != nil {
 				return err
 			}
-			if resolution != "unassigned" || unitID.Valid || supports != 0 {
-				t.Fatalf("unassigned target acquired a Unit/cache row: resolution=%s unit=%+v rows=%d",
-					resolution, unitID, supports)
+			if resolution != "unassigned" || unitID.Valid || supports != wantRows {
+				t.Fatalf("unassigned target: resolution=%s unit=%+v cache rows=%d, want unassigned without a Unit and %d rows",
+					resolution, unitID, supports, wantRows)
 			}
 			return nil
 		}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	assertUnassigned()
+	assertUnassigned(0)
 	assertCorrected(unitA.ID, true)
 	if _, err := f.rules.LiftSuppression(t.Context(), f.proof, suppressedUnassigned.Suppression.ID,
 		suppressedUnassigned.Suppression.Revision, checkedMutation); err != nil {
@@ -1151,7 +1153,7 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 	if drainCorrections(t, runner) == 0 {
 		t.Fatal("unassigned-target suppression lift correction did not run")
 	}
-	assertUnassigned()
+	assertUnassigned(1)
 	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		executor, err := f.store.Resolve(tx)
 		if err != nil {

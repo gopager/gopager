@@ -477,6 +477,7 @@ func (s *Store) storeTargets(ctx context.Context, tx platform.TransactionContext
 	transmission, message uuid.UUID, messageRevision int64, submission ingest.ValidatedSubmission,
 	accepted time.Time, match assignments.MatchResult) error {
 	resolved := make([]events.IntakeTarget, 0, len(submission.TransmissionTargets))
+	unassigned := false
 	for position, target := range submission.TransmissionTargets {
 		original, err := json.Marshal(target)
 		if err != nil {
@@ -502,6 +503,7 @@ func (s *Store) storeTargets(ctx context.Context, tx platform.TransactionContext
 		resolved = append(resolved, events.IntakeTarget{Position: position, IntakeResolution: events.IntakeResolution{
 			Status: resolution.Status, UnitID: resolution.UnitID, AddressRuleID: resolution.AddressRuleID}})
 		if resolution.UnitID == nil {
+			unassigned = true
 			continue
 		}
 		// The cache row carries the Unit's Agency; an earlier observation moves both times back.
@@ -523,8 +525,9 @@ func (s *Store) storeTargets(ctx context.Context, tx platform.TransactionContext
 			return err
 		}
 	}
-	if len(submission.TransmissionTargets) == 0 {
-		// Targetless traffic is cached per Message and Network Agency without a Unit.
+	if unassigned || len(submission.TransmissionTargets) == 0 {
+		// Targetless traffic and targets no rule matches are cached per Message and Network Agency
+		// without a Unit, so the Network's Agency sees them as unassigned.
 		if _, err := executor.ExecContext(ctx, `INSERT INTO message_units
 			(message_id,unit_id,agency_id,first_observed_at,age_anchor)
 			SELECT $1::uuid,NULL,n.agency_id,$3::timestamptz,LEAST($3::timestamptz,$4::timestamptz) FROM networks n WHERE n.id=$2
