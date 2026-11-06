@@ -12,7 +12,7 @@ GOVULNCHECK := go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
 # schema input.
 GENERATED := internal/persistence/ent ':(exclude)internal/persistence/ent/schema'
 
-.PHONY: fmt fmt-check vet golangci lint test test-integration generate-check vuln
+.PHONY: fmt fmt-check vet golangci lint test test-integration generate-check vuln docs-check
 
 fmt:
 	gofmt -w cmd internal
@@ -57,3 +57,8 @@ generate-check:
 # It needs network access to the vulnerability database.
 vuln:
 	$(GOVULNCHECK) ./...
+
+# docs-check verifies Markdown links, heading fragments and D-/REQ-/AP-/C- IDs.
+# It is not part of the default target or CI until the documents are fixed.
+docs-check:
+	go run ./tools/doccheck
