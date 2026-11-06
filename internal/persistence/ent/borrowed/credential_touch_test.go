@@ -15,9 +15,10 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
-// TestResolveThrottlesLastUsedWrites expects two resolutions within five minutes to write
-// last_used_at once, and a later one to write it again.
-func TestResolveThrottlesLastUsedWrites(t *testing.T) {
+// TestResolveWritesLastUsedAndReadsItBack expects a stale last_used_at to be stored, and the
+// stored value to suppress a second write within five minutes. The interval boundaries are
+// tested in identity.TestResolverThrottlesLastUsedWrites.
+func TestResolveWritesLastUsedAndReadsItBack(t *testing.T) {
 	t.Parallel()
 	store := newStore(t)
 	repository, err := identitystore.New(store)
@@ -94,7 +95,6 @@ func TestResolveThrottlesLastUsedWrites(t *testing.T) {
 	}{
 		{"stale value is written", start, start},
 		{"second resolution within five minutes is not written", start.Add(4 * time.Minute), start},
-		{"resolution after five minutes is written", start.Add(5 * time.Minute), start.Add(5 * time.Minute)},
 	} {
 		resolveAt(step.at)
 		if got := lastUsed(); !got.Equal(step.want) {

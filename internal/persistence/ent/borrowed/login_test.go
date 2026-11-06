@@ -507,9 +507,11 @@ func TestLoginInstanceThrottleBoundsUnknownAccountStorage(t *testing.T) {
 	}
 }
 
-// TestLoginSourceThrottleSpansUsernames: one client source trying many usernames is stopped
-// by the 31st attempt within the minute without blocking other sources or the instance.
-func TestLoginSourceThrottleSpansUsernames(t *testing.T) {
+// TestLoginSourceThrottlePersistsExpiresAndHidesAddress covers what only the stored source
+// bucket decides: the window boundary, that a throttled source is stopped before the account
+// lookup while another source is not, and that the address is stored only as a hash. That one
+// source spans usernames is a service rule, tested in identity.TestSourceBucketSpansUsernames.
+func TestLoginSourceThrottlePersistsExpiresAndHidesAddress(t *testing.T) {
 	t.Parallel()
 	store := newStore(t)
 	seedLoginAccount(t, store, "operator", true)
@@ -526,20 +528,20 @@ func TestLoginSourceThrottleSpansUsernames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	login, err := identity.NewLoginService(store, resolver, repository, facts, identity.DefaultLoginRateLimits(), passwords.Option())
+	login, err := identity.NewLoginService(store, resolver, repository, facts, identity.LoginRateLimits{AccountAttempts: 10, SourceAttempts: 3, InstanceAttempts: 300}, passwords.Option())
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 30; i++ {
+	for i := 0; i < 3; i++ {
 		_, err := login.AuthenticateLocal(t.Context(), "203.0.113.7", fmt.Sprintf("guess-%d", i), "wrong-password")
 		if !errors.Is(err, identity.ErrLoginRequired) {
 			t.Fatalf("attempt %d: %v, want the generic rejection", i+1, err)
 		}
 	}
-	_, err = login.AuthenticateLocal(t.Context(), "203.0.113.7", "guess-30", "wrong-password")
+	_, err = login.AuthenticateLocal(t.Context(), "203.0.113.7", "guess-3", "wrong-password")
 	var limited *identity.RateLimited
 	if !errors.As(err, &limited) || limited.RetryAfter != time.Minute {
-		t.Fatalf("31st attempt from one source = %v, want RateLimited for a minute", err)
+		t.Fatalf("4th attempt from one source = %v, want RateLimited for a minute", err)
 	}
 	// The flooding source cannot lock the operator out from another address.
 	if _, err := login.AuthenticateLocal(t.Context(), "198.51.100.9", "operator", "correct-password"); err != nil {

@@ -58,13 +58,13 @@ func readStoredResolution(t *testing.T, f matcherFixture, transmission uuid.UUID
 	return result
 }
 
-// TestIntakeResolvesOverlappingNetworksByPriorityAndRecordsAmbiguity runs the real matcher against
-// two Networks of one Gateway whose rules both match the target: intake must store
-// address-priority, choose the higher-priority Network and append operation.network-ambiguous.
-// A target matched by no rule falls back to the highest-priority Network (priority) without the
-// ambiguity fact, and a target matched by only one Network's rules selects that Network
-// (inferred-address) even when the other Network has the higher priority.
-func TestIntakeResolvesOverlappingNetworksByPriorityAndRecordsAmbiguity(t *testing.T) {
+// TestIntakeStoresMatcherResolutionAndRecordsAmbiguity runs the real matcher against two
+// Networks of one Gateway and checks what only PostgreSQL decides: the rule match behind the
+// stored network and resolution, and the operation.network-ambiguous fact. Two matching
+// Networks store address-priority with the fact, one matching Network stores inferred-address
+// and no match stores priority, both without the fact. The resolution rules themselves
+// (including the declared case) are tested in ingest.TestResolveNetworkFollowsDeclarationSingleAddressAndPriority.
+func TestIntakeStoresMatcherResolutionAndRecordsAmbiguity(t *testing.T) {
 	t.Parallel()
 	f := newMatcherFixture(t)
 	gateway := uuid.New()
@@ -161,10 +161,6 @@ func TestIntakeResolvesOverlappingNetworksByPriorityAndRecordsAmbiguity(t *testi
 			none.network, none.resolution, none.ambiguity, f.networks[1])
 	}
 
-	declared := readStoredResolution(t, f, submit("declared", 15, "a").TransmissionID)
-	if declared.resolution != "declared" || declared.network != f.networks[0] || len(declared.ambiguity) != 0 {
-		t.Fatalf("declared stored network=%s resolution=%s facts=%v", declared.network, declared.resolution, declared.ambiguity)
-	}
 }
 
 // TestGatewayNetworkPriorityIsUniquePerGatewayInTheDatabase pins the schema guard behind the
