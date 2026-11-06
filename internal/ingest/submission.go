@@ -86,7 +86,7 @@ func (s *Submission) UnmarshalJSON(data []byte) error {
 // parsed observation time (truncated to whole seconds), the payload identity,
 // the retry fingerprint and, once Service.Submit resolved them, the Network
 // and per-target resolutions. Resolution is one of "declared",
-// "inferred-single", "inferred-address" or "default".
+// "inferred-single" or "default".
 type ValidatedSubmission struct {
 	Submission
 	ObservedAt        time.Time
@@ -95,7 +95,6 @@ type ValidatedSubmission struct {
 	TargetResolutions []assignments.Resolution
 	Identity          protocols.PayloadIdentity
 	Fingerprint       [32]byte
-	AmbiguousNetwork  bool
 }
 
 // GatewayNetwork is one Network assigned to a Gateway under the Gateway-local
@@ -189,9 +188,10 @@ func (s Submission) Validate(encodedSize int, acceptedAt time.Time) (ValidatedSu
 // IncompleteValue reports the incomplete flag, treating an absent value as false.
 func (s Submission) IncompleteValue() bool { return s.Incomplete != nil && *s.Incomplete }
 
-// ResolveNetwork applies only the assigned, protocol-compatible Gateway Network set.
-func ResolveNetwork(input ValidatedSubmission, assigned []GatewayNetwork,
-	addressMatches []uuid.UUID) (uuid.UUID, string, error) {
+// ResolveNetwork applies only the assigned, protocol-compatible Gateway Network set:
+// the declared identifier, the only candidate, or the default. Addresses never select
+// a Network, because rule content must not decide where a Transmission belongs.
+func ResolveNetwork(input ValidatedSubmission, assigned []GatewayNetwork) (uuid.UUID, string, error) {
 	var candidates []GatewayNetwork
 	identifiers := make(map[string]bool)
 	for _, network := range assigned {
@@ -217,19 +217,6 @@ func ResolveNetwork(input ValidatedSubmission, assigned []GatewayNetwork,
 	}
 	if len(candidates) == 0 {
 		return uuid.Nil, "", ErrInvalidSubmission
-	}
-	matches := make(map[uuid.UUID]bool)
-	for _, id := range addressMatches {
-		for _, candidate := range candidates {
-			if candidate.NetworkID == id {
-				matches[id] = true
-			}
-		}
-	}
-	if len(matches) == 1 {
-		for id := range matches {
-			return id, "inferred-address", nil
-		}
 	}
 	for _, candidate := range candidates {
 		if candidate.Default {

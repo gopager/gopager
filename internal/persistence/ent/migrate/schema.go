@@ -405,9 +405,9 @@ var (
 		PrimaryKey: []*schema.Column{MessagesColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "message_identity_form_identity_subtype_identity_value",
+				Name:    "message_identity_form_identity_subtype_identity_value_last_observed_at",
 				Unique:  false,
-				Columns: []*schema.Column{MessagesColumns[2], MessagesColumns[3], MessagesColumns[4]},
+				Columns: []*schema.Column{MessagesColumns[2], MessagesColumns[3], MessagesColumns[4], MessagesColumns[6]},
 			},
 		},
 	}

@@ -6,7 +6,7 @@
 // UpdateRule, DeleteRule, Preview, ReadRule, ListRules), suppression and
 // correction management (CreateSuppression, LiftSuppression, RetryCorrection,
 // and reads), and the transaction-participating matcher used by ingest
-// (MatchTargets, NetworksWithMatches). Every rule or suppression change bumps
+// (MatchTargets). Every rule or suppression change bumps
 // the global assignment revision and queues a pending correction scope;
 // CorrectionRunner drains those scopes in the background, rewrites stored
 // target resolutions and appends assignment.changed facts.

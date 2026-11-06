@@ -19,7 +19,7 @@ import (
 // Service implements authorized Address-rule, suppression and correction
 // management and the ingest-time matcher. Management methods resolve the
 // caller's proof in a new platform transaction and require a non-nil check
-// callback for mutations; MatchTargets and NetworksWithMatches join the
+// callback for mutations; MatchTargets joins the
 // caller's transaction instead. Create it with NewService.
 type Service struct {
 	transactions    identity.Transactions
@@ -419,45 +419,4 @@ func (s *Service) MatchTargets(ctx context.Context, tx platform.TransactionConte
 		return MatchResult{}, err
 	}
 	return s.resolve(ctx, tx, network, protocol, observed, targets, rules, revision)
-}
-
-// NetworksWithMatches evaluates only the server-derived Gateway Network set at one captured revision.
-func (s *Service) NetworksWithMatches(ctx context.Context, tx platform.TransactionContext, allowed []uuid.UUID, protocol protocols.Protocol, observed time.Time, targets []protocols.Target) (NetworkCandidates, error) {
-	if len(allowed) > 1024 {
-		return NetworkCandidates{}, authz.ErrInvalidInput
-	}
-	if err := validateTargets(ctx, protocol, observed, targets); err != nil {
-		return NetworkCandidates{}, err
-	}
-	revision, err := s.repository.LockRevision(ctx, tx)
-	if err != nil {
-		return NetworkCandidates{}, err
-	}
-	rules, err := s.repository.CurrentRules(ctx, tx, allowed)
-	if err != nil {
-		return NetworkCandidates{}, err
-	}
-	result := NetworkCandidates{Revision: revision, Networks: []uuid.UUID{}}
-	seen := make(map[uuid.UUID]bool, len(allowed))
-	for _, network := range allowed {
-		if seen[network] {
-			continue
-		}
-		seen[network] = true
-		actual, _, err := s.network(ctx, tx, network)
-		if err != nil {
-			return NetworkCandidates{}, err
-		}
-		if actual != protocol {
-			continue
-		}
-		resolved, err := s.resolve(ctx, tx, network, protocol, observed, targets, rules, revision)
-		if err != nil {
-			return NetworkCandidates{}, err
-		}
-		if len(resolved.UnitContext) > 0 {
-			result.Networks = append(result.Networks, network)
-		}
-	}
-	return result, nil
 }

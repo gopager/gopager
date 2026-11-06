@@ -18,7 +18,6 @@ import (
 	"github.com/gopager/gopager/internal/events"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/ingest"
-	"github.com/gopager/gopager/internal/messages"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
 	"github.com/gopager/gopager/internal/protocols"
@@ -321,15 +320,6 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 		submission.ObservedAt, observationOffset, accepted, incomplete, quality, messageID); err != nil {
 		return ingest.Receipt{}, err
 	}
-	if submission.AmbiguousNetwork {
-		slog.Warn("Gateway Network inference was ambiguous; default applied",
-			"transmissionId", transmissionID)
-		if err := s.appendFact(ctx, tx, events.IntakeFact{ID: uuid.New(), Type: events.NetworkAmbiguous,
-			GatewayID: gateway, TransmissionID: transmissionID, NetworkID: submission.ResolvedNetwork,
-			Resolution: submission.Resolution, Revision: 1, OccurredAt: accepted}); err != nil {
-			return ingest.Receipt{}, err
-		}
-	}
 	if submission.ObservedAt.After(accepted.Add(15 * time.Minute)) {
 		slog.Warn("Gateway Observation time exceeds the configured clock-skew tolerance",
 			"transmissionId", transmissionID)
@@ -474,94 +464,10 @@ func (s *Store) admitProcessing(ctx context.Context, executor postgres.Executor,
 	return status, nil
 }
 
-func (s *Store) groupMessage(ctx context.Context, executor postgres.Executor, revision, window int64,
-	submission ingest.ValidatedSubmission) (messages.Decision, error) {
-	ids := []uuid.UUID{}
-	if window > 0 {
-		rows, err := executor.QueryContext(ctx, `SELECT m.id FROM messages m
-			WHERE m.identity_form=$1 AND m.identity_subtype=$2 AND m.identity_value=$3
-			AND EXISTS (
-				SELECT 1 FROM transmissions t WHERE t.message_id=m.id
-				AND ABS(EXTRACT(EPOCH FROM (t.observed_at-$4::timestamptz))) <= $5::numeric
-			)
-			ORDER BY m.id FOR UPDATE OF m`,
-			submission.Identity.Form, submission.Identity.Subtype, submission.Identity.Value,
-			submission.ObservedAt, window)
-		if err != nil {
-			return messages.Decision{}, err
-		}
-		for rows.Next() {
-			var id uuid.UUID
-			if err := rows.Scan(&id); err != nil {
-				rows.Close()
-				return messages.Decision{}, err
-			}
-			ids = append(ids, id)
-		}
-		if err := rows.Close(); err != nil {
-			return messages.Decision{}, err
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return messages.Decision{}, err
-		}
-	}
-	if len(ids) == 0 {
-		id := uuid.New()
-		if _, err := executor.ExecContext(ctx, `INSERT INTO messages
-			(id,identity_form,identity_subtype,identity_value,first_observed_at,last_observed_at)
-			VALUES($1,$2,$3,$4,$5,$5)`, id, submission.Identity.Form, submission.Identity.Subtype,
-			submission.Identity.Value, submission.ObservedAt); err != nil {
-			return messages.Decision{}, err
-		}
-		return messages.Decision{Kind: "created", MessageID: id, PolicyRevision: revision,
-			MessageRevision: 1}, nil
-	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i].String() < ids[j].String() })
-	survivor := ids[0]
-	absorbed := append([]uuid.UUID(nil), ids[1:]...)
-	var first, last time.Time
-	var messageRevision int64
-	if err := executor.QueryRowContext(ctx, `SELECT first_observed_at,last_observed_at,revision
-		FROM messages WHERE id=$1`, survivor).Scan(&first, &last, &messageRevision); err != nil {
-		return messages.Decision{}, err
-	}
-	for _, id := range absorbed {
-		var candidateFirst, candidateLast time.Time
-		if err := executor.QueryRowContext(ctx, `SELECT first_observed_at,last_observed_at FROM messages WHERE id=$1`,
-			id).Scan(&candidateFirst, &candidateLast); err != nil {
-			return messages.Decision{}, err
-		}
-		if candidateFirst.Before(first) {
-			first = candidateFirst
-		}
-		if candidateLast.After(last) {
-			last = candidateLast
-		}
-	}
-	late := submission.ObservedAt.Before(last)
-	if submission.ObservedAt.Before(first) {
-		first = submission.ObservedAt
-	}
-	if submission.ObservedAt.After(last) {
-		last = submission.ObservedAt
-	}
-	if err := executor.QueryRowContext(ctx, `UPDATE messages SET revision=revision+1,
-		first_observed_at=$2,last_observed_at=$3 WHERE id=$1
-		RETURNING revision`, survivor, first, last).Scan(&messageRevision); err != nil {
-		return messages.Decision{}, err
-	}
-	kind := "joined"
-	if len(absorbed) > 0 {
-		kind = "merged"
-	}
-	return messages.Decision{Kind: kind, MessageID: survivor, AbsorbedMessage: absorbed, Joined: true,
-		PolicyRevision: revision, MessageRevision: messageRevision, LateJoin: late}, nil
-}
-
 func (s *Store) storeTargets(ctx context.Context, tx platform.TransactionContext, executor postgres.Executor,
 	transmission, message uuid.UUID, messageRevision int64, submission ingest.ValidatedSubmission,
 	accepted time.Time, match assignments.MatchResult) error {
+	resolved := make([]events.IntakeTarget, 0, len(submission.TransmissionTargets))
 	for position, target := range submission.TransmissionTargets {
 		original, err := json.Marshal(target)
 		if err != nil {
@@ -584,13 +490,8 @@ func (s *Store) storeTargets(ctx context.Context, tx platform.TransactionContext
 			addressNumber, addressText, function); err != nil {
 			return err
 		}
-		after := &events.IntakeResolution{Status: resolution.Status, UnitID: resolution.UnitID, AddressRuleID: resolution.AddressRuleID}
-		targetPosition := position
-		if err := s.appendFact(ctx, tx, events.IntakeFact{ID: uuid.New(), Type: events.AssignmentChanged,
-			TransmissionID: transmission, MessageID: message, Revision: messageRevision, OccurredAt: accepted,
-			Reason: "created", TargetPosition: &targetPosition, After: after}); err != nil {
-			return err
-		}
+		resolved = append(resolved, events.IntakeTarget{Position: position, IntakeResolution: events.IntakeResolution{
+			Status: resolution.Status, UnitID: resolution.UnitID, AddressRuleID: resolution.AddressRuleID}})
 		if resolution.UnitID == nil {
 			continue
 		}
@@ -602,6 +503,14 @@ func (s *Store) storeTargets(ctx context.Context, tx platform.TransactionContext
 				first_observed_at=LEAST(message_units.first_observed_at,EXCLUDED.first_observed_at),
 				age_anchor=LEAST(message_units.age_anchor,EXCLUDED.age_anchor)`,
 			message, *resolution.UnitID, submission.ObservedAt, accepted); err != nil {
+			return err
+		}
+	}
+	if len(resolved) > 0 {
+		// One fact per Transmission keeps the log proportional to submissions, not to targets.
+		if err := s.appendFact(ctx, tx, events.IntakeFact{ID: uuid.New(), Type: events.AssignmentChanged,
+			TransmissionID: transmission, MessageID: message, Revision: messageRevision, OccurredAt: accepted,
+			Reason: "created", Targets: resolved}); err != nil {
 			return err
 		}
 	}

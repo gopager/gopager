@@ -67,12 +67,12 @@ flowchart TD
 | Validation | Submission shape, observation time, payload form per protocol, target address/function ranges | `ingest` (`Submission.Validate`), `protocols` |
 | Submission idempotency | `(gateway, submissionId)` plus an input fingerprint. A matching retry returns the original receipt; a different input is rejected. | `ingest`, `ingeststore` |
 | Payload identity | Each payload form maps to a comparison-only identity (form, subtype, normalized value). The submitted payload is stored unchanged. | `protocols.TransmissionPayload.Identity` |
-| Network resolution | In order: declared gateway network identifier (`declared`), the gateway's only network for the protocol (`inferred-single`), the only network whose rules match the targets (`inferred-address`), the gateway default (`default`). If the address match is ambiguous, the default is used and `operation.network-ambiguous` is emitted. | `ingest.ResolveNetwork`, `assignments.Service.NetworksWithMatches` |
+| Network resolution | In order: declared gateway network identifier (`declared`), the gateway's only network for the protocol (`inferred-single`), the gateway default (`default`). Address rules never select a Network, so no ambiguity fact exists. | `ingest.ResolveNetwork` |
 | Target matching | Each target position is resolved against the current address rules at its observation time: `assigned` (Unit plus rule) or `unassigned`. Overlapping rules resolve to the most specific selector. Ambiguity is a conflict. | `assignments.Resolve`, `assignments.Service.MatchTargets` |
-| Grouping | Find Messages with equal payload identity that have a member within the grouping window (`grouping_control.window_seconds`). None found: create a Message. One found: join it. Several found: merge them into the lowest ID and move their transmissions and `message_units` rows. | `ingeststore.groupMessage` (decision type from `messages`) |
+| Grouping | Candidate Messages have equal payload identity and `last_observed_at >= observed - window AND first_observed_at <= observed + window` (index `messages_identity` on identity and `last_observed_at`); their members are those with `transmissions.observed_at` in the inclusive range `[observed - window, observed + window]` (`make_interval(secs => window)`, no arithmetic on the column). `messages.Decide` decides over these members: none, create a Message; one Message, join it; several, merge them into the lowest ID and move their transmissions and `message_units` rows. The store applies the decision (survivor, absorbed, late join, revision). Window `0` disables grouping. | `ingeststore.groupMessage` (decision from `messages.Decide`) |
 | Persistence | Transmission, ordered targets with their resolution and typed address columns (`network_id`, `protocol`, `observed_at`, `address_number` or `address_text`, `function`), `message_units` cache rows (one per Message and Unit with the Unit's Agency, or one Unit-less row per Message and Network Agency for targetless input) | `ingeststore.AcceptTransmission` |
 | Correction scope | None at intake: targets are stamped with the assignment revision read under the shared Assignment lock, so a correction recorded afterwards (always at a higher revision) selects them by selector if affected; no dirty capture exists | `assignmentstore.MarkPending` |
-| Facts | `gateway.state-changed`, `message.created` / `message.transmission-joined` / `message.merged`, `assignment.changed` (reason `created`) per target, `operation.observation-time-implausible` | `events`, `eventstore` |
+| Facts | `gateway.state-changed`, `message.created` / `message.transmission-joined` / `message.merged`, one `assignment.changed` (reason `created`) per Transmission with targets, carrying the ordered target resolutions, `operation.observation-time-implausible` | `events`, `eventstore` |
 | Processing admission | Select enabled workflows with an active version and scope `all`, the matching Network, or one of the matched Units. Insert one `processing_candidates` row per selected workflow and set `processing_status` to `pending`, or to `none` when no workflow is selected. | `ingeststore.admitProcessing` |
 
 The response is `202` when the processing status is `pending` and `200` otherwise. The accepted evidence is visible to readers either way.
@@ -109,7 +109,7 @@ Creating, updating or deleting a rule, deleting a Unit, or changing a suppressio
 
 1. It claims the oldest due scope with a lease and fencing token (`assignmentstore.ClaimCorrection`).
 2. It reads the transmissions with a target inside the scope's selector (Network, protocol and address range or text with an optional validity window; one Unit; or one target) that still carry an older assignment revision, in batches of 100 ordered by `(accepted_at, id)` after a cursor. Each batch runs `MatchTargets` again at the original observation time; the fresh match may be at a newer assignment revision than the scope.
-3. `ApplyCorrectionBatch` updates changed target resolutions and rebuilds the Message's `message_units` rows. Suppressed targets are excluded. Each change emits `assignment.changed` (reason `corrected`).
+3. `ApplyCorrectionBatch` updates changed target resolutions and rebuilds the Message's `message_units` rows. Suppressed targets are excluded. Each Transmission with changed targets emits one `assignment.changed` (reason `corrected`) listing the changed targets with before and after.
 4. In the same batch transaction, the runner re-admits processing for every transmission whose resolution changed (`ProcessingSourceOwner.ReadmitProcessing`): candidates bound to the old assignment context are superseded, a candidate is admitted for every currently selected workflow and the transmission's processing status becomes `pending`. Unchanged transmissions keep their candidates and status.
 5. On failure, the scope is rescheduled with backoff and a failure code. It can be retried through `POST /api/v1/assignment-corrections/{id}/retry`.
 
@@ -336,10 +336,10 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 | Event type | Emitted when |
 | --- | --- |
 | `message.created`, `message.transmission-joined`, `message.merged` | Grouping outcome at intake |
-| `assignment.changed` | Target resolution set at intake (`created`) or changed by correction (`corrected`) |
+| `assignment.changed` | One per Transmission: all target resolutions set at intake (`created`), or the changed targets with before and after from a correction (`corrected`) |
 | `suppression.changed` | Suppression created or lifted |
 | `gateway.state-changed` | Effective gateway state change |
-| `operation.submission-rejected`, `operation.observation-time-implausible`, `operation.network-ambiguous` | Operational problems at intake |
+| `operation.submission-rejected`, `operation.observation-time-implausible` | Operational problems at intake |
 | `configuration.changed` | Account/group/grant, Unit/collection/Organization/template, rule, workflow or processing-instance configuration changed |
 | `principal.access-changed`, `principal.deleted` | Effective access of a principal changed or the account is being deleted |
 | `processing.completed` | A processing result was published |

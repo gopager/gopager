@@ -48,23 +48,32 @@ func TestSubmissionRejectsMissingNullAndInvalidFormData(t *testing.T) {
 	}
 }
 
-func TestResolveNetworkHonorsDeclarationInferenceAndDefault(t *testing.T) {
+func TestResolveNetworkHonorsDeclarationSingleAndDefault(t *testing.T) {
 	first, second := uuid.New(), uuid.New()
 	allowed := []GatewayNetwork{
 		{Identifier: "first", NetworkID: first, Protocol: protocols.POCSAG},
 		{Identifier: "second", NetworkID: second, Protocol: protocols.POCSAG, Default: true},
 	}
 	input := ValidatedSubmission{Submission: Submission{Protocol: protocols.POCSAG}}
-	if network, mode, err := ResolveNetwork(input, allowed, []uuid.UUID{first}); err != nil ||
-		network != first || mode != "inferred-address" {
-		t.Fatalf("address inference network=%s mode=%s err=%v", network, mode, err)
-	}
-	if network, mode, err := ResolveNetwork(input, allowed, []uuid.UUID{first, second}); err != nil ||
+	if network, mode, err := ResolveNetwork(input, allowed); err != nil ||
 		network != second || mode != "default" {
-		t.Fatalf("ambiguous default network=%s mode=%s err=%v", network, mode, err)
+		t.Fatalf("several Networks must resolve to the default network=%s mode=%s err=%v", network, mode, err)
+	}
+	if network, mode, err := ResolveNetwork(input, allowed[:1]); err != nil ||
+		network != first || mode != "inferred-single" {
+		t.Fatalf("single network=%s mode=%s err=%v", network, mode, err)
+	}
+	input.GatewayNetworkIdentifier = "first"
+	if network, mode, err := ResolveNetwork(input, allowed); err != nil ||
+		network != first || mode != "declared" {
+		t.Fatalf("declared network=%s mode=%s err=%v", network, mode, err)
 	}
 	input.GatewayNetworkIdentifier = "unknown"
-	if _, _, err := ResolveNetwork(input, allowed, nil); !errors.Is(err, ErrInvalidSubmission) {
+	if _, _, err := ResolveNetwork(input, allowed); !errors.Is(err, ErrInvalidSubmission) {
 		t.Fatalf("unauthorized declaration error=%v", err)
+	}
+	input.GatewayNetworkIdentifier = ""
+	if _, _, err := ResolveNetwork(input, []GatewayNetwork{allowed[0], {Identifier: "other", NetworkID: second, Protocol: protocols.POCSAG}}); !errors.Is(err, ErrInvalidSubmission) {
+		t.Fatalf("several Networks without default error=%v", err)
 	}
 }
