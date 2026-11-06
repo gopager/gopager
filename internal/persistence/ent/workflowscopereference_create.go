@@ -10,6 +10,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/persistence/ent/network"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
 	"github.com/gopager/gopager/internal/persistence/ent/workflow"
 	"github.com/gopager/gopager/internal/persistence/ent/workflowscopereference"
@@ -78,6 +79,11 @@ func (_c *WorkflowScopeReferenceCreate) SetWorkflow(v *Workflow) *WorkflowScopeR
 // SetUnit sets the "unit" edge to the Unit entity.
 func (_c *WorkflowScopeReferenceCreate) SetUnit(v *Unit) *WorkflowScopeReferenceCreate {
 	return _c.SetUnitID(v.ID)
+}
+
+// SetNetwork sets the "network" edge to the Network entity.
+func (_c *WorkflowScopeReferenceCreate) SetNetwork(v *Network) *WorkflowScopeReferenceCreate {
+	return _c.SetNetworkID(v.ID)
 }
 
 // Mutation returns the WorkflowScopeReferenceMutation object of the builder.
@@ -170,10 +176,6 @@ func (_c *WorkflowScopeReferenceCreate) createSpec() (*WorkflowScopeReference, *
 		_node.ID = id
 		_spec.ID.Value = &id
 	}
-	if value, ok := _c.mutation.NetworkID(); ok {
-		_spec.SetField(workflowscopereference.FieldNetworkID, field.TypeUUID, value)
-		_node.NetworkID = &value
-	}
 	if nodes := _c.mutation.WorkflowIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -206,6 +208,23 @@ func (_c *WorkflowScopeReferenceCreate) createSpec() (*WorkflowScopeReference, *
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.UnitID = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.NetworkIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   workflowscopereference.NetworkTable,
+			Columns: []string{workflowscopereference.NetworkColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(network.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.NetworkID = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

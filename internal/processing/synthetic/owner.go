@@ -22,13 +22,13 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/assignments"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
 	"github.com/gopager/gopager/internal/processing/management"
 	"github.com/gopager/gopager/internal/protocols"
+	"github.com/gopager/gopager/internal/units"
 )
 
 // Network is the current Network context a synthetic preview is captured against.
@@ -36,6 +36,7 @@ type Network struct {
 	ID       uuid.UUID
 	Name     string
 	Protocol protocols.Protocol
+	AgencyID uuid.UUID
 	Deleted  bool
 }
 
@@ -113,9 +114,11 @@ func NewOwner(matcher Matcher, networks NetworkOwner, clock platform.Clock, scop
 }
 
 // CaptureSyntheticPreview decodes and validates raw as an Input, resolves it against the
-// current Network and Assignment context in tx, hides fields the authority may not read,
-// and evaluates the workflow's scope (a "network" scope that excludes the Network yields
-// authz.ErrForbidden). The captured context is retained under the projection's
+// current Network and Assignment context in tx, and evaluates the workflow's scope (a
+// "network" scope that excludes the Network yields authz.ErrForbidden). The projection holds
+// every field with its owner classification: evaluation runs as the system, and the editor's
+// field permissions are applied to the definition at save time and to the result when it is
+// rechecked, never by hiding inputs. The captured context is retained under the projection's
 // TransmissionID until ReleaseSyntheticPreview is called; the caller must release it.
 func (o *Owner) CaptureSyntheticPreview(ctx context.Context, tx platform.TransactionContext,
 	authority authz.Authority, workflow processing.WorkflowConfiguration, raw json.RawMessage) (management.PreviewCapture, error) {
@@ -160,9 +163,6 @@ func (o *Owner) CaptureSyntheticPreview(ctx context.Context, tx platform.Transac
 	}
 	projection, err := project(input, network, observed, matched)
 	if err != nil {
-		return management.PreviewCapture{}, err
-	}
-	if err := maskFields(authority, &projection); err != nil {
 		return management.PreviewCapture{}, err
 	}
 	scope, eligibleUnits, err := evaluateScope(workflow, network.ID, input.Targets, matched)
@@ -296,7 +296,7 @@ func (in Input) validate() error {
 	}
 	if in.Protocol == protocols.ZVEI || in.Protocol == protocols.EAS {
 		if len(in.Targets) == 0 {
-			return platform.NewFailure(platform.CodeInvalidInput, errors.New("Protocol form requires a target"))
+			return platform.NewFailure(platform.CodeInvalidInput, errors.New("protocol form requires a target"))
 		}
 	}
 	if in.Protocol == protocols.EAS && len(in.Targets) > 31 {
@@ -699,35 +699,6 @@ func addPayloadFields(projection *processing.SourceProjection, input Input,
 			{"purgeTime", payload.PurgeTime}, {"issueTime", payload.IssueTime},
 		} {
 			if err := addString([]string{"payload", "eas", field.name}, field.value, true); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func maskFields(authority authz.Authority, projection *processing.SourceProjection) error {
-	mask := func(field *processing.FieldValue) error {
-		if len(field.Dependencies) != 1 {
-			return platform.NewFailure(platform.CodeInvalidInput, errors.New("synthetic field dependency is invalid"))
-		}
-		if err := authz.AuthorizeFields(authority, field.Dependencies[0].Groups); err != nil {
-			if errors.Is(err, authz.ErrForbidden) {
-				field.State, field.Value = processing.FieldHidden, nil
-				return nil
-			}
-			return err
-		}
-		return nil
-	}
-	for i := range projection.Fields {
-		if err := mask(&projection.Fields[i].Field); err != nil {
-			return err
-		}
-	}
-	for i := range projection.Targets {
-		for j := range projection.Targets[i].Fields {
-			if err := mask(&projection.Targets[i].Fields[j].Field); err != nil {
 				return err
 			}
 		}

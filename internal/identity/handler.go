@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"mime"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -76,7 +77,7 @@ func NewHTTPHandler(transport *HTTPTransport, login *LoginService) (http.Handler
 			writeIdentityError(w, ErrInvalidInput)
 			return
 		}
-		session, err := login.AuthenticateLocal(r.Context(), input.Username, input.Password)
+		session, err := login.AuthenticateLocal(r.Context(), loginSource(r), input.Username, input.Password)
 		if err != nil {
 			writeIdentityError(w, err)
 			return
@@ -110,6 +111,19 @@ func NewHTTPHandler(transport *HTTPTransport, login *LoginService) (http.Handler
 		w.WriteHeader(http.StatusNoContent)
 	})
 	return mux, nil
+}
+
+// loginSource returns the host part of the connection's remote address for the
+// per-source login throttle. Forwarding headers are deliberately ignored: any client
+// can set them, which would let it pick its own bucket. A reverse proxy must therefore
+// preserve the client address at the connection level, or all clients behind it share
+// one source bucket.
+func loginSource(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
 
 // writeIdentityJSON emits only explicit DTOs and surfaces transport write failures.
@@ -152,20 +166,10 @@ func writeIdentityError(w http.ResponseWriter, err error) {
 		w.Header().Set("Retry-After", strconv.FormatInt(seconds, 10))
 	case errors.As(err, &failure):
 		code, fallback, retryable = string(failure.Code()), failure.Error(), failure.Retryable()
-		switch failure.Code() {
-		case platform.CodeInvalidInput:
-			status = http.StatusBadRequest
-		case platform.CodeRevisionConflict, platform.CodeIncompatibleVersion:
-			status = http.StatusConflict
-		case platform.CodeResourceLimit:
-			status = http.StatusRequestEntityTooLarge
-		case platform.CodeAuthorityUnavailable, platform.CodeStorageUnavailable, platform.CodeCommitUncertain:
-			status = http.StatusServiceUnavailable
-		}
+		status = platform.HTTPStatus(failure.Code())
 	}
-	if status >= 500 {
-		slog.Error("identity operation failed", "code", code)
-	}
+	requestID := uuid.NewString()
+	platform.LogErrorResponse(code, status, requestID)
 	writeIdentityJSON(w, status, struct {
 		SchemaVersion     int            `json:"schemaVersion"`
 		Code              string         `json:"code"`
@@ -175,5 +179,5 @@ func writeIdentityError(w http.ResponseWriter, err error) {
 		RequestID         string         `json:"requestId"`
 		Retryable         bool           `json:"retryable"`
 		RetryAfterSeconds *int64         `json:"retryAfterSeconds,omitempty"`
-	}{1, code, map[string]any{}, "error." + code, fallback, uuid.NewString(), retryable, retryAfter})
+	}{1, code, map[string]any{}, "error." + code, fallback, requestID, retryable, retryAfter})
 }

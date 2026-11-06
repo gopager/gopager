@@ -85,8 +85,8 @@ func (s *Submission) UnmarshalJSON(data []byte) error {
 // ValidatedSubmission is a Submission that passed Validate, enriched with the
 // parsed observation time (truncated to whole seconds), the payload identity,
 // the retry fingerprint and, once Service.Submit resolved them, the Network
-// and per-target resolutions. Resolution is one of "declared",
-// "inferred-single", "inferred-address" or "default".
+// and per-target resolutions. Resolution is one of "declared", "inferred-single",
+// "inferred-address", "address-priority" or "priority".
 type ValidatedSubmission struct {
 	Submission
 	ObservedAt        time.Time
@@ -95,16 +95,18 @@ type ValidatedSubmission struct {
 	TargetResolutions []assignments.Resolution
 	Identity          protocols.PayloadIdentity
 	Fingerprint       [32]byte
-	AmbiguousNetwork  bool
 }
 
 // GatewayNetwork is one Network assigned to a Gateway under the Gateway-local
-// Identifier. Each protocol a Gateway serves has at most one Default Network.
+// Identifier. Priority orders all of the Gateway's Networks without ties; a lower number is a
+// higher priority and decides between Networks of one protocol.
 type GatewayNetwork struct {
 	Identifier string
 	NetworkID  uuid.UUID
 	Protocol   protocols.Protocol
-	Default    bool
+	// AgencyID is the Network's Agency, filled by GatewayNetworksForAuthorization for grant checks.
+	AgencyID uuid.UUID
+	Priority int
 }
 
 // Receipt is the acceptance result returned to the Gateway. Retrying a
@@ -186,53 +188,3 @@ func (s Submission) Validate(encodedSize int, acceptedAt time.Time) (ValidatedSu
 
 // IncompleteValue reports the incomplete flag, treating an absent value as false.
 func (s Submission) IncompleteValue() bool { return s.Incomplete != nil && *s.Incomplete }
-
-// ResolveNetwork applies only the assigned, protocol-compatible Gateway Network set.
-func ResolveNetwork(input ValidatedSubmission, assigned []GatewayNetwork,
-	addressMatches []uuid.UUID) (uuid.UUID, string, error) {
-	var candidates []GatewayNetwork
-	identifiers := make(map[string]bool)
-	for _, network := range assigned {
-		if network.Identifier == "" || network.NetworkID == uuid.Nil || !network.Protocol.Valid() ||
-			identifiers[network.Identifier] {
-			return uuid.Nil, "", ErrInvalidSubmission
-		}
-		identifiers[network.Identifier] = true
-		if network.Protocol == input.Protocol {
-			candidates = append(candidates, network)
-		}
-	}
-	if input.GatewayNetworkIdentifier != "" {
-		for _, candidate := range candidates {
-			if candidate.Identifier == input.GatewayNetworkIdentifier {
-				return candidate.NetworkID, "declared", nil
-			}
-		}
-		return uuid.Nil, "", ErrInvalidSubmission
-	}
-	if len(candidates) == 1 {
-		return candidates[0].NetworkID, "inferred-single", nil
-	}
-	if len(candidates) == 0 {
-		return uuid.Nil, "", ErrInvalidSubmission
-	}
-	matches := make(map[uuid.UUID]bool)
-	for _, id := range addressMatches {
-		for _, candidate := range candidates {
-			if candidate.NetworkID == id {
-				matches[id] = true
-			}
-		}
-	}
-	if len(matches) == 1 {
-		for id := range matches {
-			return id, "inferred-address", nil
-		}
-	}
-	for _, candidate := range candidates {
-		if candidate.Default {
-			return candidate.NetworkID, "default", nil
-		}
-	}
-	return uuid.Nil, "", ErrInvalidSubmission
-}

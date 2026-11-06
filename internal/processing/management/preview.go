@@ -129,6 +129,7 @@ func (s *PreviewService) Preview(ctx context.Context, proof identity.Proof, inpu
 	var definition processing.Definition
 	var versionID uuid.UUID
 	var capture PreviewCapture
+	var editorAuthority authz.Authority
 	if mode == previewSynthetic {
 		if releaser, ok := s.sourceOwner.(SyntheticPreviewReleaser); ok {
 			defer func() { releaser.ReleaseSyntheticPreview(capture.Projection.TransmissionID) }()
@@ -136,16 +137,17 @@ func (s *PreviewService) Preview(ctx context.Context, proof identity.Proof, inpu
 	}
 	err = s.management.within(ctx, proof, false, transportCheck, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
 		var readErr error
-		workflow, readErr = s.management.repository.ReadWorkflow(tx.Context(), tx, authority, "rule.preview", input.WorkflowID, now)
+		editorAuthority = authority
+		workflow, readErr = s.management.repository.ReadWorkflow(tx.Context(), tx, authority, "workflow.preview", input.WorkflowID, now)
 		if readErr != nil {
 			return readErr
 		}
-		if readErr = s.management.authorizeScope(tx.Context(), tx, authority, "rule.preview", workflow.Scope, now); readErr != nil {
+		if readErr = s.management.authorizeScope(tx.Context(), tx, authority, "workflow.preview", workflow.Scope, now); readErr != nil {
 			return readErr
 		}
 		if input.VersionID != uuid.Nil {
 			version, versionErr := s.management.repository.ReadVersionForAction(tx.Context(), tx, authority,
-				"rule.preview", input.WorkflowID, input.VersionID, now)
+				"workflow.preview", input.WorkflowID, input.VersionID, now)
 			if versionErr != nil {
 				return versionErr
 			}
@@ -155,7 +157,7 @@ func (s *PreviewService) Preview(ctx context.Context, proof identity.Proof, inpu
 			versionID = uuid.New()
 		}
 		if s.sourceOwner == nil {
-			return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Processing preview source owner unavailable"))
+			return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("processing preview source owner unavailable"))
 		}
 		switch mode {
 		case previewSynthetic:
@@ -201,6 +203,14 @@ func (s *PreviewService) Preview(ctx context.Context, proof identity.Proof, inpu
 	if err != nil {
 		return processing.Evaluation{}, err
 	}
+	// A saved version was validated when it was saved; an unsaved draft has not been, and its
+	// result is shown to the editor, so it is judged by the editor's current field permissions
+	// exactly like a save.
+	if input.Definition != nil {
+		if err = authorizeReferences(editorAuthority, program.SourceReferences()); err != nil {
+			return processing.Evaluation{}, err
+		}
+	}
 	result, err = program.EvaluateScoped(run.Context(), source, capture.Scope, run)
 	if err != nil {
 		return processing.Evaluation{}, err
@@ -227,14 +237,14 @@ func (s *PreviewService) recheckPreview(ctx context.Context, proof identity.Proo
 func (s *PreviewService) checkPreviewContext(ctx context.Context, tx platform.TransactionContext,
 	authority authz.Authority, now time.Time, workflow processing.WorkflowConfiguration,
 	binding processing.ExecutionBinding, dependencies []processing.Dependency) error {
-	current, err := s.management.repository.ReadWorkflow(ctx, tx, authority, "rule.preview", workflow.ID, now)
+	current, err := s.management.repository.ReadWorkflow(ctx, tx, authority, "workflow.preview", workflow.ID, now)
 	if err != nil {
 		return err
 	}
 	if current.Revision != workflow.Revision {
 		return platform.NewFailure(platform.CodeRevisionConflict, errors.New("preview Workflow changed during evaluation"))
 	}
-	if err := s.management.authorizeScope(ctx, tx, authority, "rule.preview", current.Scope, now); err != nil {
+	if err := s.management.authorizeScope(ctx, tx, authority, "workflow.preview", current.Scope, now); err != nil {
 		return err
 	}
 	return s.sourceOwner.CheckInstalledSource(ctx, tx, binding, authority,

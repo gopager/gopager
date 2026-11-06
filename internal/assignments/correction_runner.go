@@ -19,6 +19,7 @@ const (
 	correctionLease     = 30 * time.Second
 	correctionPoll      = 500 * time.Millisecond
 	correctionMaxRetry  = 30 * time.Second
+	retryLimitCode      = "RETRY_LIMIT"
 )
 
 // CorrectionMatcher re-matches stored targets against current rules inside the
@@ -29,7 +30,7 @@ type CorrectionMatcher interface {
 }
 
 // CorrectionRunner is the background worker that drains pending correction
-// scopes and re-enters held-back transmissions into publication. Create it
+// scopes and re-admits Processing for changed transmissions. Create it
 // with NewCorrectionRunner. Concurrent runners are safe: scopes are claimed
 // under a lease with a fencing token.
 type CorrectionRunner struct {
@@ -38,20 +39,20 @@ type CorrectionRunner struct {
 	matcher      CorrectionMatcher
 	repository   CorrectionWorkRepository
 	facts        events.CorrectionAppender
-	publication  CorrectionPublication
+	readmission  ProcessingReadmission
 }
 
 // NewCorrectionRunner returns a runner using the given ports. It returns
 // authz.ErrInvalidInput if any dependency is nil.
 func NewCorrectionRunner(transactions identity.Transactions, clock platform.Clock, matcher CorrectionMatcher,
-	repository CorrectionWorkRepository, facts events.CorrectionAppender, publication CorrectionPublication,
+	repository CorrectionWorkRepository, facts events.CorrectionAppender, readmission ProcessingReadmission,
 ) (*CorrectionRunner, error) {
 	if transactions == nil || clock == nil || matcher == nil || repository == nil || facts == nil ||
-		publication == nil {
+		readmission == nil {
 		return nil, authz.ErrInvalidInput
 	}
 	return &CorrectionRunner{transactions: transactions, clock: clock, matcher: matcher,
-		repository: repository, facts: facts, publication: publication}, nil
+		repository: repository, facts: facts, readmission: readmission}, nil
 }
 
 // Run calls RunOnce every 500ms until ctx is cancelled, returning ctx.Err().
@@ -109,14 +110,15 @@ func correctionRetryDelay(failures int) time.Duration {
 
 // RunOnce claims one due correction scope and processes it in batches of up to
 // 100 transmissions, each batch in its own transaction that re-matches the
-// targets, applies changed resolutions and appends an assignment.changed
-// correction fact per changed target. A batch or completion failure is
-// recorded on the scope with exponential backoff and is not returned; RunOnce
-// returns an error only when it cannot claim or reschedule. A reschedule
-// failure is joined ahead of the batch failure, so FailureCode reports why
-// the scope could not be rescheduled. When no scope is
-// due it instead re-enters one batch of held-back transmissions into
-// publication. The bool reports whether any work was done.
+// targets, applies changed resolutions, appends one assignment.changed
+// correction fact per changed transmission and re-admits Processing once for every
+// transmission whose targets were restamped, changed resolution or not. A batch or completion failure is recorded on the scope
+// with exponential backoff and is not returned; RunOnce returns an error only
+// when it cannot claim or reschedule. A reschedule failure is joined ahead of
+// the batch failure, so FailureCode reports why the scope could not be
+// rescheduled. A claim that finds a scope with no attempt left (its fifth lease expired) fails it
+// and appends its correction.failed fact in the claim transaction; that counts as work. The bool
+// reports whether any work was done.
 func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 	var lease CorrectionLease
 	var claimed bool
@@ -126,16 +128,21 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 			return err
 		}
 		lease, claimed, err = r.repository.ClaimCorrection(tx.Context(), tx, now, correctionLease)
-		return err
+		if err != nil || !lease.Exhausted {
+			return err
+		}
+		return r.appendFailed(tx, lease, retryLimitCode)
 	})
 	if err != nil {
 		return false, err
 	}
+	if lease.Exhausted {
+		return true, nil
+	}
 	if !claimed {
-		return r.reenterPublication(ctx), nil
+		return false, nil
 	}
 	for {
-		var changes []CorrectionChange
 		var hasItems bool
 		err := r.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
 			items, err := r.repository.ReadCorrectionBatch(tx.Context(), tx, lease, correctionBatchSize)
@@ -153,12 +160,12 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 				if err != nil {
 					return err
 				}
-				if matched.Revision != lease.AssignmentRev || len(matched.Resolutions) != len(item.Targets) {
+				if matched.Revision < lease.AssignmentRev || len(matched.Resolutions) != len(item.Targets) {
 					return platform.NewFailure(platform.CodeRevisionConflict, errors.New("correction source revision changed"))
 				}
 				updates[i] = CorrectionUpdate{Item: item, Match: matched}
 			}
-			changes, err = r.repository.ApplyCorrectionBatch(tx.Context(), tx, lease, updates)
+			applied, err := r.repository.ApplyCorrectionBatch(tx.Context(), tx, lease, updates)
 			if err != nil {
 				return err
 			}
@@ -166,31 +173,24 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 			if err != nil {
 				return err
 			}
-			for _, change := range changes {
-				position := change.TargetPosition
-				if _, err := r.facts.AppendCorrectionFact(tx.Context(), tx, events.CorrectionFact{
-					ID: uuid.New(), Type: "assignment.changed",
-					Aggregate: events.EntityRef{Type: "message", ID: change.MessageID},
-					Revision:  change.MessageRev, OccurredAt: now,
-					TargetPosition: &position, TransmissionID: change.TransmissionID,
-					MessageID: change.MessageID, NetworkID: change.NetworkID,
-					Before: &change.Before, After: &change.After, Reason: "corrected",
-				}); err != nil {
+			for _, fact := range correctionFacts(applied.Changes, now) {
+				if _, err := r.facts.AppendCorrectionFact(tx.Context(), tx, fact); err != nil {
+					return err
+				}
+			}
+			for _, transmission := range applied.Restamped {
+				if err := r.readmission.ReadmitProcessing(tx.Context(), tx, transmission); err != nil {
 					return err
 				}
 			}
 			return nil
 		})
 		if err != nil {
-			delay := correctionBackoff(lease.Attempts)
 			code := string(platform.FailureCode(err))
 			if code == "" || code == string(platform.CodeInternalError) {
 				code = "CORRECTION_FAILED"
 			}
-			rescheduleErr := r.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-				return r.repository.FailCorrection(tx.Context(), tx, lease, code, delay)
-			})
-			if rescheduleErr != nil {
+			if rescheduleErr := r.fail(ctx, lease, code); rescheduleErr != nil {
 				return true, errors.Join(rescheduleErr, err)
 			}
 			return true, nil
@@ -205,11 +205,7 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 			return err
 		})
 		if err != nil {
-			delay := correctionBackoff(lease.Attempts)
-			rescheduleErr := r.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-				return r.repository.FailCorrection(tx.Context(), tx, lease, "CORRECTION_FAILED", delay)
-			})
-			if rescheduleErr != nil {
+			if rescheduleErr := r.fail(ctx, lease, "CORRECTION_FAILED"); rescheduleErr != nil {
 				return true, errors.Join(rescheduleErr, err)
 			}
 			return true, nil
@@ -220,42 +216,32 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 	}
 }
 
-// reenterPublication hands at most one batch of unpublished Transmissions back to publication.
-// Each Transmission uses its own short transaction; failures stay eligible for a later pass.
-func (r *CorrectionRunner) reenterPublication(ctx context.Context) bool {
-	var transmissions []uuid.UUID
-	err := r.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-		var err error
-		transmissions, err = r.publication.PublicationReentries(tx.Context(), tx, correctionBatchSize)
-		return err
-	})
-	if err != nil {
-		if ctx.Err() == nil {
-			slog.Warn("correction publication re-entry selection failed", "code", platform.FailureCode(err))
-		}
-		return false
-	}
-	progressed := false
-	for _, transmission := range transmissions {
-		if ctx.Err() != nil {
-			return progressed
-		}
-		var changed bool
-		err := r.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-			var err error
-			changed, err = r.publication.ReenterPublication(tx.Context(), tx, transmission)
+// fail reschedules the leased scope with backoff and, once the scope has used up its attempts,
+// records the final failure as an operational fact; nothing waits for a failed scope, its
+// Messages simply keep their correcting status until a later correction refreshes them.
+func (r *CorrectionRunner) fail(ctx context.Context, lease CorrectionLease, code string) error {
+	return r.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
+		final, err := r.repository.FailCorrection(tx.Context(), tx, lease, code, correctionBackoff(lease.Attempts))
+		if err != nil || !final {
 			return err
-		})
-		if err != nil {
-			if ctx.Err() == nil {
-				slog.Warn("correction publication re-entry failed", "transmission", transmission,
-					"code", platform.FailureCode(err))
-			}
-			continue
 		}
-		progressed = progressed || changed
+		return r.appendFailed(tx, lease, code)
+	})
+}
+
+// appendFailed appends the final-failure fact in the caller's transaction, so the fact commits with
+// the scope's failed state.
+func (r *CorrectionRunner) appendFailed(tx platform.TransactionContext, lease CorrectionLease, code string) error {
+	now, err := r.clock.Now(tx.Context(), tx)
+	if err != nil {
+		return err
 	}
-	return progressed
+	_, err = r.facts.AppendCorrectionFact(tx.Context(), tx, events.CorrectionFact{
+		ID: uuid.New(), Type: "correction.failed",
+		Aggregate: events.EntityRef{Type: "correction", ID: lease.ID},
+		Revision:  int64(lease.Attempts), OccurredAt: now, Reason: lease.Reason, FailureCode: code,
+	})
+	return err
 }
 
 func correctionBackoff(attempt int) time.Duration {

@@ -17,6 +17,7 @@ import (
 )
 
 func TestGlobalFieldGroupMembershipRevocationAndAtomicFacts(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	group, membership := uuid.New(), uuid.New()
 	facts, err := eventstore.New(f.store)

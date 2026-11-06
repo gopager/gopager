@@ -1,4 +1,5 @@
-// Package publication coordinates private Processing evidence with the real source owner's barrier.
+// Package publication attaches completed private Processing evidence to its Message and refreshes
+// the Transmission's processing status in the source owner's transaction.
 package publication
 
 import (
@@ -8,18 +9,20 @@ import (
 	"slices"
 
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/events"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
 )
 
-// SourceOwner captures the complete current eligible set and validates actual source-publication fencing.
+// SourceOwner captures the current selected Workflow set and validates actual source fencing.
 // CheckItem checks current Principal/scope/static result mode/target mask/Network dependencies.
-// ApplyReadiness must atomically CAS the actual Message/target/contribution barrier and source fence.
+// ApplyProcessingStatus rechecks the source fence and derives the Transmission's processing
+// status from its current candidates.
 type SourceOwner interface {
 	CapturePublication(context.Context, platform.TransactionContext, uuid.UUID) (processing.PublicationBinding, []processing.CandidateBinding, error)
 	CheckItem(context.Context, platform.TransactionContext, processing.PublicationBinding, processing.PublicationItem) error
-	ApplyReadiness(context.Context, platform.TransactionContext, processing.PublicationBinding) error
+	ApplyProcessingStatus(context.Context, platform.TransactionContext, processing.PublicationBinding) error
 }
 
 // Service participates in the source owner's live transaction; it never creates Message identities.
@@ -30,7 +33,7 @@ type Service struct {
 	clock      platform.Clock
 }
 
-// New requires all publication participants; missing originals are not a successful no-op barrier.
+// New requires all publication participants; a missing source owner is never a successful no-op.
 func New(repository processing.PublicationRepository, source SourceOwner,
 	facts events.ProcessingAppender, clock platform.Clock) (*Service, error) {
 	if repository == nil || source == nil || facts == nil || clock == nil {
@@ -39,8 +42,11 @@ func New(repository processing.PublicationRepository, source SourceOwner,
 	return &Service{repository: repository, source: source, facts: facts, clock: clock}, nil
 }
 
-// Publish applies all current evidence/facts and actual source readiness in the same caller transaction.
-// Any failure requires rollback by the transaction owner; private completion alone is never sufficient.
+// Publish attaches every completed, selected and not yet published result of the Transmission's
+// current candidates to its Message, appends their completion facts and refreshes the
+// Transmission's processing status, all in the caller's transaction. Candidates that are still
+// pending, running, failed or not selected are left alone; a candidate missing for a current
+// Workflow is not admitted here. Any failure requires rollback by the transaction owner.
 func (s *Service) Publish(ctx context.Context, tx platform.TransactionContext, transmission uuid.UUID) error {
 	if transmission == uuid.Nil {
 		return platform.NewFailure(platform.CodeInvalidInput, errors.New("missing publication source"))
@@ -72,8 +78,14 @@ func (s *Service) Publish(ctx context.Context, tx platform.TransactionContext, t
 		}
 		seen[candidate.WorkflowID] = true
 		item, err := s.repository.ReadPublicationItem(ctx, tx, candidate)
+		if errors.Is(err, authz.ErrNotFound) {
+			continue
+		}
 		if err != nil {
 			return err
+		}
+		if !item.Publishable() {
+			continue
 		}
 		encoded, err := json.Marshal(item)
 		if err != nil {
@@ -90,9 +102,6 @@ func (s *Service) Publish(ctx context.Context, tx platform.TransactionContext, t
 		if err := s.repository.ApplyPublicationItem(ctx, tx, binding, item); err != nil {
 			return err
 		}
-		if item.Result == nil {
-			continue
-		}
 		_, err = s.facts.AppendProcessingCompletion(ctx, tx, events.ProcessingCompletionFact{
 			ID: uuid.New(), TransmissionID: transmission, MessageID: binding.MessageID,
 			WorkflowID: item.Candidate.WorkflowID, DefinitionVersionID: item.Candidate.DefinitionVersionID,
@@ -104,14 +113,14 @@ func (s *Service) Publish(ctx context.Context, tx platform.TransactionContext, t
 			return err
 		}
 	}
-	return s.source.ApplyReadiness(ctx, tx, binding)
+	return s.source.ApplyProcessingStatus(ctx, tx, binding)
 }
 
 // MissingSourceOwner is a placeholder publication source owner for deployments without the real
-// ingest source/readiness-barrier participant; every operation fails as unavailable.
+// ingest source participant; every operation fails as unavailable.
 type MissingSourceOwner struct{}
 
-// CapturePublication rejects missing source ownership without inventing Message IDs or readiness.
+// CapturePublication rejects missing source ownership without inventing Message IDs or a status.
 func (MissingSourceOwner) CapturePublication(context.Context, platform.TransactionContext, uuid.UUID) (processing.PublicationBinding, []processing.CandidateBinding, error) {
 	return processing.PublicationBinding{}, nil, unavailable()
 }
@@ -121,8 +130,8 @@ func (MissingSourceOwner) CheckItem(context.Context, platform.TransactionContext
 	return unavailable()
 }
 
-// ApplyReadiness never substitutes a no-op for the actual source barrier.
-func (MissingSourceOwner) ApplyReadiness(context.Context, platform.TransactionContext, processing.PublicationBinding) error {
+// ApplyProcessingStatus never substitutes a no-op for the actual source status refresh.
+func (MissingSourceOwner) ApplyProcessingStatus(context.Context, platform.TransactionContext, processing.PublicationBinding) error {
 	return unavailable()
 }
 

@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: Static checks and quick tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Formatting
+        run: make fmt-check
+      - name: go vet
+        run: make vet
+      - name: golangci-lint
+        run: make golangci
+      - name: Documentation links and IDs
+        run: make docs-check
+      - name: Quick tests
+        run: make test
+      - name: Generated code is current
+        run: make generate-check
+
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    needs: static
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # The runner's Docker daemon starts the PostgreSQL containers the tests need.
+      - name: Integration tests with the race detector
+        run: make test-race
+      # Reports and the slowest-test list are kept even when the tests fail.
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: build/test-reports
+          if-no-files-found: warn
+      # Only when a report exists: a build failure before the first test leaves none.
+      - name: Slowest tests
+        if: always() && hashFiles('build/test-reports/test.json') != ''
+        run: |
+          {
+            echo '### Slowest tests'
+            echo '```'
+            make -s test-slowest
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # govulncheck against the Go version pinned in go.mod; a reachable vulnerability fails the build.
+  vulnerabilities:
+    name: Vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: govulncheck
+        run: make vuln

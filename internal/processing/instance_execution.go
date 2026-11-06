@@ -38,7 +38,7 @@ type ExecutionBinding struct {
 }
 
 // InvocationSourceOwner checks current source/configuration and scoped data authority under primary locks.
-// editor=true additionally requires rule.preview and all stored sample reads for the current editor.
+// editor=true additionally requires workflow.preview and all stored sample reads for the current editor.
 // Synthetic preview must be explicitly identified by this owner, not inferred from arbitrary source IDs.
 type InvocationSourceOwner interface {
 	CheckInstalledSource(context.Context, platform.TransactionContext, ExecutionBinding,
@@ -71,7 +71,10 @@ func NewInstanceExecutions(host *PluginHost, root *os.Root, transactions Executi
 		resolver: resolver, runs: make(map[*InstanceExecution]map[uuid.UUID]int64), changed: make(chan struct{})}, nil
 }
 
-// Begin allocates an isolated run; callers evaluate with Context and close after all dependent work joins.
+// Begin allocates an isolated run; callers evaluate with Context and close after all dependent
+// work joins. The run's context is independent of ctx, which only has to be live at this call:
+// a run begun inside a primary transaction outlives that transaction and ends with Close, with
+// InstanceChanged for its instance, or with the manager's Close.
 func (m *InstanceExecutions) Begin(ctx context.Context, binding ExecutionBinding, source InvocationSourceOwner) (*InstanceExecution, error) {
 	if ctx == nil || source == nil || binding.WorkflowID == uuid.Nil || binding.DefinitionVersionID == uuid.Nil ||
 		binding.RunID == uuid.Nil || binding.Source.TransmissionID == uuid.Nil || binding.Source.NetworkID == uuid.Nil ||
@@ -86,8 +89,8 @@ func (m *InstanceExecutions) Begin(ctx context.Context, binding ExecutionBinding
 	if m.closed {
 		return nil, capabilityUnavailable(errors.New("installed execution manager closed"))
 	}
-	ctx, cancel := context.WithCancel(ctx)
-	run := &InstanceExecution{manager: m, binding: binding, source: source, ctx: ctx, cancel: cancel,
+	runCtx, cancel := context.WithCancel(context.Background())
+	run := &InstanceExecution{manager: m, binding: binding, source: source, ctx: runCtx, cancel: cancel,
 		prepared: make(map[uuid.UUID]preparedInstance)}
 	m.runs[run] = make(map[uuid.UUID]int64)
 	return run, nil
@@ -95,14 +98,16 @@ func (m *InstanceExecutions) Begin(ctx context.Context, binding ExecutionBinding
 
 // InstanceChanged cancels affected old-revision runs only after a successful configuration commit.
 // Current primary checks remain mandatory; this best-effort signal is not execution authority.
+// It also stops the instance's older plugin processes so none outlives its configuration.
 func (m *InstanceExecutions) InstanceChanged(id uuid.UUID, revision int64) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	for run, instances := range m.runs {
 		if expected, exists := instances[id]; exists && expected < revision {
 			run.cancel()
 		}
 	}
+	m.mu.Unlock()
+	m.host.InstanceChanged(id, revision)
 }
 
 // Stop prevents new runs and cancels existing ones; callers join workers before closing host/root.
@@ -142,7 +147,6 @@ func (m *InstanceExecutions) Close(ctx context.Context) error {
 type preparedInstance struct {
 	revision int64
 	main     *InstalledArtifact
-	preview  *InstalledArtifact
 	failure  error
 }
 
@@ -167,19 +171,13 @@ func (r *InstanceExecution) PrepareInstalled(ctx context.Context, id uuid.UUID, 
 	return prepared.main, err
 }
 
-// PrepareInstalledPreview distinguishes absent optional preview from an invalid configured artifact.
-func (r *InstanceExecution) PrepareInstalledPreview(ctx context.Context, id uuid.UUID, revision int64) (*InstalledArtifact, bool, error) {
-	prepared, err := r.prepare(ctx, id, revision)
-	return prepared.preview, prepared.preview != nil, err
-}
-
 // prepare serializes per-run preparation and keeps every inspected compilation until the run drains.
 func (r *InstanceExecution) prepare(ctx context.Context, id uuid.UUID, revision int64) (result preparedInstance, failure error) {
 	if id == uuid.Nil || revision <= 0 || ctx == nil {
 		return preparedInstance{}, invalid(errors.New("invalid installed preparation reference"))
 	}
 	if r.manager.root == nil {
-		return preparedInstance{}, capabilityUnavailable(errors.New("Processing artifact root unavailable"))
+		return preparedInstance{}, capabilityUnavailable(errors.New("processing artifact root unavailable"))
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -222,7 +220,8 @@ func (r *InstanceExecution) prepare(ctx context.Context, id uuid.UUID, revision 
 	}); err != nil {
 		return preparedInstance{}, err
 	}
-	main, err := r.manager.host.LoadInstalled(ctx, r.manager.root, configuration.Main.ManifestPath, configuration.Main.Pin)
+	main, err := r.manager.host.LoadInstalledFor(ctx, r.manager.root, configuration.Main.ManifestPath,
+		configuration.Main.Pin, configuration.ID, configuration.Revision, r.invocationMode())
 	if err != nil {
 		return preparedInstance{}, err
 	}
@@ -246,17 +245,6 @@ func (r *InstanceExecution) prepare(ctx context.Context, id uuid.UUID, revision 
 		manifest.ConfigurationPolicy, configuration.Configuration); err != nil {
 		return preparedInstance{}, err
 	}
-	if configuration.Preview != nil {
-		preview, err := r.manager.host.LoadInstalled(ctx, r.manager.root, configuration.Preview.ManifestPath, configuration.Preview.Pin)
-		if err != nil {
-			return preparedInstance{}, err
-		}
-		prepared.preview = preview
-		r.prepared[id] = prepared
-		if err := validatePreviewArtifact(main, preview); err != nil {
-			return preparedInstance{}, err
-		}
-	}
 	if err := r.manager.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
 		_, err := r.current(tx.Context(), tx, id, revision)
 		return err
@@ -264,6 +252,15 @@ func (r *InstanceExecution) prepare(ctx context.Context, id uuid.UUID, revision 
 		return preparedInstance{}, err
 	}
 	return prepared, nil
+}
+
+// invocationMode is preview for a run bound to a preview editor and live otherwise; it selects
+// the pooled plugin process as well as the envelope mode.
+func (r *InstanceExecution) invocationMode() string {
+	if r.binding.PreviewEditor != nil {
+		return InvocationModePreview
+	}
+	return InvocationModeLive
 }
 
 // current reads only the exact current enabled revision; prior immutable snapshots are not permission.
@@ -283,6 +280,7 @@ func (r *InstanceExecution) current(ctx context.Context, tx platform.Transaction
 func (r *InstanceExecution) AuthorizeInstalled(ctx context.Context, id uuid.UUID, revision int64,
 	call InvocationContext, input map[string]FieldValue) (InvocationEnvelope, []Dependency, bool, error) {
 	preview := r.binding.PreviewEditor != nil
+	mode := r.invocationMode()
 	if call.Source != r.binding.Source ||
 		(call.TargetPosition != nil && *call.TargetPosition >= call.Source.OriginalTargetCount) {
 		return InvocationEnvelope{}, nil, preview, invalid(errors.New("installed invocation source differs from bound run"))
@@ -290,16 +288,6 @@ func (r *InstanceExecution) AuthorizeInstalled(ctx context.Context, id uuid.UUID
 	artifact, err := r.PrepareInstalled(ctx, id, revision)
 	if err != nil {
 		return InvocationEnvelope{}, nil, preview, err
-	}
-	if preview {
-		var configured bool
-		artifact, configured, err = r.PrepareInstalledPreview(ctx, id, revision)
-		if err != nil {
-			return InvocationEnvelope{}, nil, preview, err
-		}
-		if !configured {
-			return InvocationEnvelope{}, nil, preview, capabilityUnavailable(errors.New("dedicated preview unavailable"))
-		}
 	}
 	manifest, err := artifact.Manifest()
 	if err != nil {
@@ -317,8 +305,8 @@ func (r *InstanceExecution) AuthorizeInstalled(ctx context.Context, id uuid.UUID
 	var dependencies []Dependency
 	for name, field := range detached {
 		schema, declared := manifest.InputSchema[name]
-		if !declared || field.State == FieldHidden {
-			return InvocationEnvelope{}, nil, preview, invalid(errors.New("undeclared or hidden installed input"))
+		if !declared {
+			return InvocationEnvelope{}, nil, preview, invalid(errors.New("undeclared installed input"))
 		}
 		if err := validateFieldValue(schema, field, false); err != nil {
 			return InvocationEnvelope{}, nil, preview, err
@@ -381,7 +369,7 @@ func (r *InstanceExecution) AuthorizeInstalled(ctx context.Context, id uuid.UUID
 			DefinitionVersionID: r.binding.DefinitionVersionID, RunID: r.binding.RunID,
 			ExecutionPrincipalID: configuration.ExecutionPrincipalID, ConfigurationRevision: revision,
 			ArtifactDigest: manifest.Artifact.Digest, CapabilityID: manifest.CapabilityID,
-			Input: values, Configuration: configuration.Configuration}
+			Input: values, Configuration: configuration.Configuration, Mode: mode}
 		return nil
 	})
 	if err != nil {
@@ -420,9 +408,6 @@ func (r *InstanceExecution) Close(ctx context.Context) error {
 	var failure error
 	for _, prepared := range r.prepared {
 		failure = errors.Join(failure, prepared.main.Close(context.WithoutCancel(ctx)))
-		if prepared.preview != nil {
-			failure = errors.Join(failure, prepared.preview.Close(context.WithoutCancel(ctx)))
-		}
 	}
 	r.closed = true
 	r.manager.mu.Lock()

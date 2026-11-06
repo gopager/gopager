@@ -10,8 +10,8 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/persistence/ent/organization"
+	"github.com/gopager/gopager/internal/units"
 )
 
 // Organization is the model entity for the Organization schema.

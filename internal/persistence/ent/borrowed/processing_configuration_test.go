@@ -22,11 +22,21 @@ import (
 
 type processingDeclarationsFixture struct{}
 
+// FieldSchema declares the boolean source fields "flag" and "secret".
 func (processingDeclarationsFixture) FieldSchema(ref processing.FieldRef) (processing.FieldSchema, error) {
-	if ref.Namespace != "source" || len(ref.Path) != 1 || ref.Path[0] != "flag" {
+	if ref.Namespace != "source" || len(ref.Path) != 1 || (ref.Path[0] != "flag" && ref.Path[0] != "secret") {
 		return processing.FieldSchema{}, authz.ErrInvalidInput
 	}
 	return processing.FieldSchema{Kind: processing.BooleanValue}, nil
+}
+
+// FieldGroups declares "flag" in a group the bootstrap author may read and "secret" in the
+// gateway group, which the bootstrap author lacks, so field validation can be exercised both ways.
+func (processingDeclarationsFixture) FieldGroups(ref processing.FieldRef) ([]string, error) {
+	if ref.Path[0] == "secret" {
+		return []string{"gateway"}, nil
+	}
+	return []string{"unit"}, nil
 }
 
 func preparedProcessingDefinition(t *testing.T) processing.Definition {
@@ -49,19 +59,22 @@ func processingAuthorityFixture(actor uuid.UUID, scopes ...authz.Scope) authz.Au
 	authority := authz.Authority{PrincipalID: actor.String(), Revision: 1, Active: true}
 	for _, scope := range scopes {
 		authority.Grants = append(authority.Grants, authz.Grant{SubjectID: actor.String(), SubjectKind: "principal",
-			Scope: scope, Actions: []string{"rule.read", "rule.create", "rule.update", "rule.activate", "rule.delete"}})
+			Scope: scope, Actions: []string{"workflow.read", "workflow.create", "workflow.update", "workflow.activate", "workflow.delete"}})
 	}
 	return authority
 }
 
 func TestProcessingConfigurationNativeUnionBeforeCountPagingAndVersionLookup(t *testing.T) {
+	t.Parallel()
 	primary := newStore(t)
 	store, err := processingstore.New(primary)
 	if err != nil {
 		t.Fatal(err)
 	}
 	actor, network1, network2 := uuid.New(), uuid.New(), uuid.New()
+	agency1, agency2 := uuid.New(), uuid.New()
 	admin := processingAuthorityFixture(actor, authz.Scope{Kind: "all"})
+	// Workflow selection scopes name Networks; grants name the Agencies that own them.
 	scopes := []authz.Scope{{Kind: "all"}, {Kind: "network", References: []string{network1.String()}},
 		{Kind: "network", References: []string{network2.String()}},
 		{Kind: "network", References: []string{network1.String(), network2.String()}}}
@@ -69,6 +82,18 @@ func TestProcessingConfigurationNativeUnionBeforeCountPagingAndVersionLookup(t *
 	versions := make([]processing.Version, len(scopes))
 	definition := preparedProcessingDefinition(t)
 	if err := primary.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := primary.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO agencies(id,name) VALUES($1,'Agency 1'),($2,'Agency 2')`,
+			agency1, agency2); err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol,agency_id) VALUES($1,'Network 1','pocsag',$3),($2,'Network 2','pocsag',$4)`,
+			network1, network2, agency1, agency2); err != nil {
+			return err
+		}
 		if _, err := store.LockRevision(tx.Context(), tx); err != nil {
 			return err
 		}
@@ -79,7 +104,7 @@ func TestProcessingConfigurationNativeUnionBeforeCountPagingAndVersionLookup(t *
 		for i, scope := range scopes {
 			configs[i] = processing.WorkflowConfiguration{ID: uuid.New(), Revision: 1,
 				Name: uuid.NewString(), Scope: scope}
-			if err := store.SaveWorkflow(tx.Context(), tx, admin, "rule.create", configs[i], 0, now); err != nil {
+			if err := store.SaveWorkflow(tx.Context(), tx, admin, "workflow.create", configs[i], 0, now); err != nil {
 				return err
 			}
 			versions[i] = processing.Version{ID: uuid.New(), WorkflowID: configs[i].ID,
@@ -111,7 +136,7 @@ func TestProcessingConfigurationNativeUnionBeforeCountPagingAndVersionLookup(t *
 				for _, id := range permitted {
 					visible = visible || value.ID == id
 				}
-				_, readErr := store.ReadWorkflow(tx.Context(), tx, authority, "rule.read", value.ID, now)
+				_, readErr := store.ReadWorkflow(tx.Context(), tx, authority, "workflow.read", value.ID, now)
 				_, versionErr := store.ReadVersion(tx.Context(), tx, authority, value.ID, versions[i].ID, now)
 				if visible && (readErr != nil || versionErr != nil) {
 					t.Fatalf("permitted configuration hidden: %v %v", readErr, versionErr)
@@ -125,15 +150,18 @@ func TestProcessingConfigurationNativeUnionBeforeCountPagingAndVersionLookup(t *
 			t.Fatal(err)
 		}
 	}
-	networkOnly := processingAuthorityFixture(actor, scopes[1])
-	check(networkOnly, 1, []uuid.UUID{configs[1].ID})
-	union := processingAuthorityFixture(actor, scopes[1], scopes[2])
+	first := authz.Scope{Kind: "agency", References: []string{agency1.String()}}
+	second := authz.Scope{Kind: "agency", References: []string{agency2.String()}}
+	agencyOnly := processingAuthorityFixture(actor, first)
+	check(agencyOnly, 1, []uuid.UUID{configs[1].ID})
+	union := processingAuthorityFixture(actor, first, second)
 	check(union, 3, []uuid.UUID{configs[1].ID, configs[2].ID, configs[3].ID})
-	union.Key = &authz.Restrictions{Actions: []string{"rule.read"}, Scopes: []authz.Scope{scopes[1]}}
+	union.Key = &authz.Restrictions{Actions: []string{"workflow.read"}, Scopes: []authz.Scope{first}}
 	check(union, 1, []uuid.UUID{configs[1].ID})
 }
 
 func TestProcessingConfigurationSaveActivationCASAndAllParticipantsRollback(t *testing.T) {
+	t.Parallel()
 	primary := newStore(t)
 	store, err := processingstore.New(primary)
 	if err != nil {
@@ -162,7 +190,7 @@ func TestProcessingConfigurationSaveActivationCASAndAllParticipantsRollback(t *t
 			return err
 		}
 		savedVersion.CreatedAt = now
-		if err := store.SaveWorkflow(tx.Context(), tx, authority, "rule.create", config, 0, now); err != nil {
+		if err := store.SaveWorkflow(tx.Context(), tx, authority, "workflow.create", config, 0, now); err != nil {
 			return err
 		}
 		return store.SaveVersion(tx.Context(), tx, savedVersion)
@@ -178,7 +206,7 @@ func TestProcessingConfigurationSaveActivationCASAndAllParticipantsRollback(t *t
 		if err != nil {
 			return err
 		}
-		current, err := store.ReadWorkflow(tx.Context(), tx, authority, "rule.activate", config.ID, now)
+		current, err := store.ReadWorkflow(tx.Context(), tx, authority, "workflow.activate", config.ID, now)
 		if err != nil {
 			return err
 		}
@@ -187,10 +215,10 @@ func TestProcessingConfigurationSaveActivationCASAndAllParticipantsRollback(t *t
 		}
 		current.Revision = 2
 		current.ActiveVersionID, current.Enabled = &savedVersion.ID, true
-		if err := store.SaveWorkflow(tx.Context(), tx, authority, "rule.activate", current, 1, now); err != nil {
+		if err := store.SaveWorkflow(tx.Context(), tx, authority, "workflow.activate", current, 1, now); err != nil {
 			return err
 		}
-		if err := store.RecordChange(tx.Context(), tx, actor, current.ID, "rule.activate", now); err != nil {
+		if err := store.RecordChange(tx.Context(), tx, actor, current.ID, "workflow.activate", now); err != nil {
 			return err
 		}
 		fingerprint, err := commands.Fingerprint(current)
@@ -223,7 +251,7 @@ func TestProcessingConfigurationSaveActivationCASAndAllParticipantsRollback(t *t
 		if err != nil {
 			return err
 		}
-		current, err := store.ReadWorkflow(tx.Context(), tx, authority, "rule.read", config.ID, now)
+		current, err := store.ReadWorkflow(tx.Context(), tx, authority, "workflow.read", config.ID, now)
 		if err != nil {
 			return err
 		}
@@ -265,7 +293,7 @@ func TestProcessingConfigurationSaveActivationCASAndAllParticipantsRollback(t *t
 		}
 		stale := config
 		stale.Revision, stale.Name = 2, "stale overwrite"
-		return store.SaveWorkflow(tx.Context(), tx, authority, "rule.update", stale, 1, now)
+		return store.SaveWorkflow(tx.Context(), tx, authority, "workflow.update", stale, 1, now)
 	})
 	if !errors.Is(err, authz.ErrRevisionConflict) {
 		t.Fatalf("stale metadata write was not rejected: %v", err)
@@ -275,7 +303,7 @@ func TestProcessingConfigurationSaveActivationCASAndAllParticipantsRollback(t *t
 		if err != nil {
 			return err
 		}
-		current, err := store.ReadWorkflow(tx.Context(), tx, authority, "rule.read", config.ID, now)
+		current, err := store.ReadWorkflow(tx.Context(), tx, authority, "workflow.read", config.ID, now)
 		if err != nil {
 			return err
 		}
@@ -315,6 +343,7 @@ func TestProcessingConfigurationSaveActivationCASAndAllParticipantsRollback(t *t
 }
 
 func TestProcessingSchemaDeferredVersionOwnershipAndPrivacy(t *testing.T) {
+	t.Parallel()
 	primary := newStore(t)
 	store, err := processingstore.New(primary)
 	if err != nil {
@@ -330,7 +359,7 @@ func TestProcessingSchemaDeferredVersionOwnershipAndPrivacy(t *testing.T) {
 			return err
 		}
 		for _, id := range []uuid.UUID{first, second} {
-			if err := store.SaveWorkflow(tx.Context(), tx, authority, "rule.create",
+			if err := store.SaveWorkflow(tx.Context(), tx, authority, "workflow.create",
 				processing.WorkflowConfiguration{ID: id, Revision: 1, Name: id.String(), Scope: authz.Scope{Kind: "all"}}, 0, now); err != nil {
 				return err
 			}

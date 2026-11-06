@@ -305,7 +305,7 @@ func (s *CapturedSource) addFields(ctx context.Context, into map[string]Captured
 }
 
 func validateFieldValue(schema FieldSchema, field FieldValue, requireDependencies bool) error {
-	if !slices.Contains([]FieldState{FieldPresent, FieldAbsent, FieldHidden}, field.State) ||
+	if !slices.Contains([]FieldState{FieldPresent, FieldAbsent}, field.State) ||
 		(field.State == FieldPresent && field.Value == nil) || (field.State != FieldPresent && field.Value != nil) ||
 		(field.State == FieldAbsent && !schema.Optional) || (requireDependencies && len(field.Dependencies) == 0) {
 		return invalid(errors.New("invalid classified field state"))

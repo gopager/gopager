@@ -22,6 +22,7 @@ func candidateFixture() Candidate {
 }
 
 func TestCandidateReselectionPreservesIdentityHistoryAndInvalidatesOldClaim(t *testing.T) {
+	t.Parallel()
 	current := candidateFixture()
 	binding := current.CandidateBinding
 	binding.WorkflowRevision++
@@ -51,6 +52,7 @@ func TestCandidateReselectionPreservesIdentityHistoryAndInvalidatesOldClaim(t *t
 }
 
 func TestCandidateReselectionRejectsIdentitySubstitutionStalePinsAndPublishedWork(t *testing.T) {
+	t.Parallel()
 	current := candidateFixture()
 	for _, state := range []string{"failed", "superseded"} {
 		current.State = state
@@ -67,14 +69,10 @@ func TestCandidateReselectionRejectsIdentitySubstitutionStalePinsAndPublishedWor
 		"transmission":   func(_ *Candidate, b *CandidateBinding) { b.TransmissionID = uuid.New() },
 		"stale-config":   func(_ *Candidate, b *CandidateBinding) { b.ConfigurationRevision = 1 },
 		"stale-workflow": func(_ *Candidate, b *CandidateBinding) { b.WorkflowRevision = 1 },
-		"published": func(c *Candidate, b *CandidateBinding) {
-			selected := true
-			c.State, c.Selected, c.BarrierAppliedAt = "completed", &selected, &c.UpdatedAt
-			b.WorkflowRevision++
-		},
 	}
 	for name, change := range tests {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			value, binding := current, current.CandidateBinding
 			change(&value, &binding)
 			if _, changed, err := value.Reselect(binding, current.UpdatedAt); changed || !errors.Is(err, authz.ErrRevisionConflict) {
@@ -85,6 +83,7 @@ func TestCandidateReselectionRejectsIdentitySubstitutionStalePinsAndPublishedWor
 }
 
 func TestCandidateReselectionChecksCounterExhaustionAndPrimaryTime(t *testing.T) {
+	t.Parallel()
 	current := candidateFixture()
 	binding := current.CandidateBinding
 	binding.WorkflowRevision++
@@ -113,6 +112,7 @@ func TestCandidateReselectionChecksCounterExhaustionAndPrimaryTime(t *testing.T)
 }
 
 func TestCandidateClaimAndRenewUseExactLeaseAndAttemptBoundaries(t *testing.T) {
+	t.Parallel()
 	current := candidateFixture()
 	current.State, current.Attempts, current.AutomaticAttempts = "pending", 0, 0
 	worker := uuid.New()
@@ -168,6 +168,7 @@ func TestCandidateClaimAndRenewUseExactLeaseAndAttemptBoundaries(t *testing.T) {
 }
 
 func TestCandidateManualRetryRequiresFailedExpectedStateWithoutResettingHistory(t *testing.T) {
+	t.Parallel()
 	current := candidateFixture()
 	current.State = "failed"
 	failure := "INVALID_INPUT"
@@ -208,6 +209,7 @@ func TestCandidateManualRetryRequiresFailedExpectedStateWithoutResettingHistory(
 }
 
 func TestCandidateFailureSchedulesRemainingAttemptsAndKeepsExhaustionVisible(t *testing.T) {
+	t.Parallel()
 	pending := candidateFixture()
 	pending.State, pending.Attempts, pending.AutomaticAttempts = "pending", 0, 0
 	running, err := pending.Claim(pending.Revision, uuid.New(), pending.UpdatedAt)
@@ -243,6 +245,7 @@ func TestCandidateFailureSchedulesRemainingAttemptsAndKeepsExhaustionVisible(t *
 }
 
 func TestCandidateRecoveryFencesExpiredClaimsWithoutResettingAttempts(t *testing.T) {
+	t.Parallel()
 	pending := candidateFixture()
 	pending.State, pending.Attempts, pending.AutomaticAttempts = "pending", 0, 0
 	running, err := pending.Claim(pending.Revision, uuid.New(), pending.UpdatedAt)
@@ -291,6 +294,7 @@ func TestCandidateRecoveryFencesExpiredClaimsWithoutResettingAttempts(t *testing
 }
 
 func TestCandidateSupersessionPreservesHistoryAndRejectsPublishedOrStaleWork(t *testing.T) {
+	t.Parallel()
 	pending := candidateFixture()
 	pending.State, pending.Attempts, pending.AutomaticAttempts = "pending", 0, 0
 	running, err := pending.Claim(pending.Revision, uuid.New(), pending.UpdatedAt)
@@ -322,13 +326,14 @@ func TestCandidateSupersessionPreservesHistoryAndRejectsPublishedOrStaleWork(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	completed.BarrierAppliedAt = &completed.UpdatedAt
-	if _, err := completed.Supersede(completed.Revision, completed.UpdatedAt); !errors.Is(err, authz.ErrRevisionConflict) {
-		t.Fatalf("published work superseded: %v", err)
+	// Completed work with a published result stays supersedable: a newer selection replaces it.
+	if superseded, err := completed.Supersede(completed.Revision, completed.UpdatedAt); err != nil || superseded.State != "superseded" {
+		t.Fatalf("completed work was not supersedable: %+v err=%v", superseded, err)
 	}
 }
 
 func TestCandidateExhaustedReselectionRemainsManuallyRetryableWithoutAutomaticReset(t *testing.T) {
+	t.Parallel()
 	for _, attempts := range []int{4, 5} {
 		current := candidateFixture()
 		current.AutomaticAttempts = attempts

@@ -12,7 +12,7 @@ import (
 
 // Attributes names the consumer's Ent fields/edges, never caller-supplied SQL.
 type Attributes struct {
-	Network         string
+	Agency          string
 	Unit            string
 	Account         string
 	UnitCollections string
@@ -142,7 +142,7 @@ func scopePredicate(scope authz.Scope, attributes Attributes) (entql.P, error) {
 	if scope.Kind == "all" {
 		return entql.FieldNotNil("id"), nil
 	}
-	name := map[string]string{"network": attributes.Network, "unit": attributes.Unit, "account": attributes.Account}[scope.Kind]
+	name := map[string]string{"agency": attributes.Agency, "unit": attributes.Unit, "account": attributes.Account}[scope.Kind]
 	values := make([]any, len(scope.References))
 	references := make([]uuid.UUID, len(scope.References))
 	for i, ref := range scope.References {

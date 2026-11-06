@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"sort"
 	"time"
 
@@ -17,13 +18,12 @@ import (
 	"github.com/gopager/gopager/internal/events"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/ingest"
-	"github.com/gopager/gopager/internal/messages"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
 	"github.com/gopager/gopager/internal/protocols"
 )
 
-// Store persists gateway intake (Transmissions, Messages, targets and contributions),
+// Store persists gateway intake (Transmissions, Messages, typed targets and the message_units cache),
 // Networks, gateways and gateway credentials, and appends the matching intake facts. It
 // holds no transaction of its own: every method runs in the caller's active primary
 // transaction.
@@ -124,10 +124,10 @@ func (s *Store) GatewayNetworks(ctx context.Context, tx platform.TransactionCont
 		return nil, err
 	}
 	rows, err := executor.QueryContext(ctx, `SELECT gn.gateway_network_identifier, gn.network_id,
-		n.protocol, gn.is_default
+		n.protocol, gn.priority
 		FROM gateway_networks gn JOIN networks n ON n.id=gn.network_id
 		WHERE gn.gateway_id=$1 AND n.deleted=false
-		ORDER BY gn.gateway_network_identifier`, gateway)
+		ORDER BY gn.priority`, gateway)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +136,7 @@ func (s *Store) GatewayNetworks(ctx context.Context, tx platform.TransactionCont
 	for rows.Next() {
 		var network ingest.GatewayNetwork
 		var protocol string
-		if err := rows.Scan(&network.Identifier, &network.NetworkID, &protocol, &network.Default); err != nil {
+		if err := rows.Scan(&network.Identifier, &network.NetworkID, &protocol, &network.Priority); err != nil {
 			return nil, err
 		}
 		network.Protocol = protocols.Protocol(protocol)
@@ -145,20 +145,24 @@ func (s *Store) GatewayNetworks(ctx context.Context, tx platform.TransactionCont
 	return result, rows.Err()
 }
 
-// ReadNetworkProtocol implements current Network ownership for matching and identity-scope checks.
-func (s *Store) ReadNetworkProtocol(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (protocols.Protocol, error) {
+// ReadNetwork implements current Radio network ownership for matching and authorization: it
+// returns the Network's Protocol and home Agency, or authz.ErrNotFound for an unknown or
+// deleted Network.
+func (s *Store) ReadNetwork(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (protocols.Protocol, uuid.UUID, error) {
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {
-		return "", err
+		return "", uuid.Nil, err
 	}
 	var protocol string
-	if err := executor.QueryRowContext(ctx, `SELECT protocol FROM networks WHERE id=$1 AND deleted=false`, id).Scan(&protocol); err != nil {
+	var agency uuid.UUID
+	if err := executor.QueryRowContext(ctx, `SELECT protocol,agency_id FROM networks WHERE id=$1 AND deleted=false`, id).
+		Scan(&protocol, &agency); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", authz.ErrNotFound
+			return "", uuid.Nil, authz.ErrNotFound
 		}
-		return "", err
+		return "", uuid.Nil, err
 	}
-	return protocols.Protocol(protocol), nil
+	return protocols.Protocol(protocol), agency, nil
 }
 
 // ReportGatewayState retains authenticated contact/report data and emits only effective state changes.
@@ -211,32 +215,6 @@ func (s *Store) ReportGatewayState(ctx context.Context, tx platform.TransactionC
 		OldState: oldState, NewState: newState, ReasonCode: report.ReasonCode, Detail: report.Detail})
 }
 
-// ScopeExists checks all referenced current Network IDs without inventing scope support elsewhere.
-func (s *Store) ScopeExists(ctx context.Context, tx platform.TransactionContext, scope authz.Scope) (bool, error) {
-	if scope.Kind != "network" || !authz.ValidScope(scope) {
-		return false, nil
-	}
-	executor, err := s.primary.Resolve(tx)
-	if err != nil {
-		return false, err
-	}
-	for _, reference := range scope.References {
-		id, err := uuid.Parse(reference)
-		if err != nil {
-			return false, nil
-		}
-		var exists bool
-		if err := executor.QueryRowContext(ctx, `SELECT EXISTS(
-			SELECT 1 FROM networks WHERE id=$1 AND deleted=false)`, id).Scan(&exists); err != nil {
-			return false, err
-		}
-		if !exists {
-			return false, nil
-		}
-	}
-	return true, nil
-}
-
 // SubmissionReceipt serializes all retries for a Gateway while the operation's fingerprint is checked.
 func (s *Store) SubmissionReceipt(ctx context.Context, tx platform.TransactionContext,
 	gateway uuid.UUID, submissionID string) (ingest.Receipt, [32]byte, bool, error) {
@@ -272,6 +250,15 @@ func (s *Store) SubmissionReceipt(ctx context.Context, tx platform.TransactionCo
 	return receipt, result, true, nil
 }
 
+// notFoundIfNoRows maps a missing row to authz.ErrNotFound and returns every other error
+// unchanged, so a storage failure reaches the Gateway as a retryable failure instead of a 404.
+func notFoundIfNoRows(err error) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return authz.ErrNotFound
+	}
+	return err
+}
+
 // AcceptTransmission persists original evidence, current target admission, Grouping and facts atomically.
 func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionContext, gateway uuid.UUID,
 	submission ingest.ValidatedSubmission, accepted time.Time, match assignments.MatchResult) (ingest.Receipt, error) {
@@ -291,7 +278,7 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 	var gatewayRevision int64
 	if err := executor.QueryRowContext(ctx, `SELECT state, revision FROM gateways WHERE id=$1 FOR UPDATE`,
 		gateway).Scan(&oldState, &gatewayRevision); err != nil {
-		return ingest.Receipt{}, authz.ErrNotFound
+		return ingest.Receipt{}, notFoundIfNoRows(err)
 	}
 	newState := oldState
 	if oldState == "stopped" || oldState == "contact-lost" {
@@ -309,8 +296,13 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 			return ingest.Receipt{}, err
 		}
 	}
+	// Exact Grouping serializes per Payload identity; the control row is only read.
+	if _, err := executor.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1 || E'\x1f' || $2 || E'\x1f' || encode($3, 'hex'), 0))`,
+		submission.Identity.Form, submission.Identity.Subtype, submission.Identity.Value); err != nil {
+		return ingest.Receipt{}, err
+	}
 	var groupingRevision, window int64
-	if err := executor.QueryRowContext(ctx, `SELECT revision, window_seconds FROM grouping_control WHERE id=1 FOR UPDATE`).
+	if err := executor.QueryRowContext(ctx, `SELECT revision, window_seconds FROM grouping_control WHERE id=1 FOR SHARE`).
 		Scan(&groupingRevision, &window); err != nil {
 		return ingest.Receipt{}, err
 	}
@@ -321,10 +313,6 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 	messageID := decision.MessageID
 	transmissionID := uuid.New()
 	payload := submission.Payload
-	targets, err := json.Marshal(submission.TransmissionTargets)
-	if err != nil {
-		return ingest.Receipt{}, err
-	}
 	incomplete := submission.IncompleteValue()
 	var quality any
 	if len(submission.QualityMetrics) != 0 {
@@ -332,17 +320,17 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 	}
 	_, observationOffset := submission.ObservedAt.Zone()
 	if _, err := executor.ExecContext(ctx, `INSERT INTO transmissions
-		(id,gateway_id,network_id,submission_id,submission_fingerprint,network_resolution,protocol,payload,targets,
+		(id,gateway_id,network_id,submission_id,submission_fingerprint,network_resolution,protocol,payload,
 		 observed_at,observation_offset_seconds,accepted_at,source_revision,incomplete,quality_metrics,message_id,
-		 processing_status,publication_status)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,1,$13,$14,$15,'pending','pending')`,
+		 processing_status)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,1,$12,$13,$14,'pending')`,
 		transmissionID, gateway, submission.ResolvedNetwork, submission.SubmissionID, submission.Fingerprint[:],
-		submission.Resolution, string(submission.Protocol), string(payload), string(targets),
+		submission.Resolution, string(submission.Protocol), string(payload),
 		submission.ObservedAt, observationOffset, accepted, incomplete, quality, messageID); err != nil {
 		return ingest.Receipt{}, err
 	}
-	if submission.AmbiguousNetwork {
-		slog.Warn("Gateway Network inference was ambiguous; default applied",
+	if submission.Resolution == "address-priority" {
+		slog.Warn("Gateway Network inference was ambiguous; highest-priority matching Network applied",
 			"transmissionId", transmissionID)
 		if err := s.appendFact(ctx, tx, events.IntakeFact{ID: uuid.New(), Type: events.NetworkAmbiguous,
 			GatewayID: gateway, TransmissionID: transmissionID, NetworkID: submission.ResolvedNetwork,
@@ -363,7 +351,7 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 		return ingest.Receipt{}, err
 	}
 	for _, id := range decision.AbsorbedMessage {
-		if err := s.mergeContributions(ctx, executor, messageID, id); err != nil {
+		if err := s.mergeMessageUnits(ctx, executor, messageID, id); err != nil {
 			return ingest.Receipt{}, err
 		}
 	}
@@ -372,16 +360,22 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 			WHERE message_id=ANY($2::uuid[])`, messageID, decision.AbsorbedMessage); err != nil {
 			return ingest.Receipt{}, err
 		}
+		// Published results follow their Transmissions into the surviving Message.
+		if _, err := executor.ExecContext(ctx, `UPDATE processing_results SET message_id=$1
+			WHERE message_id=ANY($2::uuid[])`, messageID, decision.AbsorbedMessage); err != nil {
+			return ingest.Receipt{}, err
+		}
 		if _, err := executor.ExecContext(ctx, `DELETE FROM messages WHERE id=ANY($1::uuid[])`, decision.AbsorbedMessage); err != nil {
 			return ingest.Receipt{}, err
 		}
 	}
-	if decision.Kind == "created" {
+	switch decision.Kind {
+	case "created":
 		if err := s.appendFact(ctx, tx, events.IntakeFact{ID: uuid.New(), Type: events.MessageCreated,
 			TransmissionID: transmissionID, MessageID: messageID, Revision: decision.MessageRevision, OccurredAt: now}); err != nil {
 			return ingest.Receipt{}, err
 		}
-	} else if decision.Kind == "merged" {
+	case "merged":
 		if err := s.appendFact(ctx, tx, events.IntakeFact{ID: uuid.New(), Type: events.MessageMerged,
 			TransmissionID: transmissionID, MessageID: messageID, Absorbed: decision.AbsorbedMessage,
 			Revision: decision.MessageRevision, OccurredAt: now}); err != nil {
@@ -392,33 +386,30 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 			Revision: decision.MessageRevision, OccurredAt: now}); err != nil {
 			return ingest.Receipt{}, err
 		}
-	} else {
+	default:
 		if err := s.appendFact(ctx, tx, events.IntakeFact{ID: uuid.New(), Type: events.MessageTransmissionJoined,
 			TransmissionID: transmissionID, MessageID: messageID, LateJoin: decision.LateJoin,
 			Revision: decision.MessageRevision, OccurredAt: now}); err != nil {
 			return ingest.Receipt{}, err
 		}
 	}
-	completed, err := s.admitProcessing(ctx, executor, transmissionID, messageID, submission.ResolvedNetwork,
-		match, now)
+	status, err := s.admitProcessing(ctx, executor, transmissionID, submission.ResolvedNetwork, match, now)
 	if err != nil {
 		return ingest.Receipt{}, err
-	}
-	status := "pending"
-	if completed {
-		status = "completed"
 	}
 	receipt := ingest.Receipt{SubmissionID: submission.SubmissionID, TransmissionID: transmissionID,
 		AcceptanceTime: accepted, ProcessingStatus: status, MessageID: messageID}
 	return receipt, nil
 }
 
-func (s *Store) admitProcessing(ctx context.Context, executor postgres.Executor, transmission, message,
-	network uuid.UUID, match assignments.MatchResult, now time.Time) (bool, error) {
+// admitProcessing inserts one pending candidate per Workflow currently selected for the Transmission
+// and returns the resulting processing status: pending when work was admitted, none otherwise.
+func (s *Store) admitProcessing(ctx context.Context, executor postgres.Executor, transmission,
+	network uuid.UUID, match assignments.MatchResult, now time.Time) (string, error) {
 	var configurationRevision int64
-	if err := executor.QueryRowContext(ctx, `SELECT revision FROM processing_control WHERE id=1 FOR UPDATE`).
+	if err := executor.QueryRowContext(ctx, `SELECT revision FROM processing_control WHERE id=1 FOR SHARE`).
 		Scan(&configurationRevision); err != nil {
-		return false, err
+		return "", err
 	}
 	unitIDs := make([]uuid.UUID, 0, len(match.UnitContext))
 	for id := range match.UnitContext {
@@ -438,9 +429,9 @@ func (s *Store) admitProcessing(ctx context.Context, executor postgres.Executor,
 				WHERE r.workflow_id=w.id AND r.unit_id=ANY($2::uuid[])
 			))
 		)
-		ORDER BY w.id FOR UPDATE OF w`, network, unitIDs)
+		ORDER BY w.id FOR SHARE OF w`, network, unitIDs)
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	type selectedWorkflow struct {
 		id       uuid.UUID
@@ -452,16 +443,22 @@ func (s *Store) admitProcessing(ctx context.Context, executor postgres.Executor,
 		var workflow selectedWorkflow
 		if err := rows.Scan(&workflow.id, &workflow.version, &workflow.revision); err != nil {
 			rows.Close()
-			return false, err
+			return "", err
 		}
 		selected = append(selected, workflow)
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		return false, err
+		return "", err
 	}
 	if err := rows.Close(); err != nil {
-		return false, err
+		return "", err
+	}
+	// The processing context is the assignment revision stamped on the Transmission's own targets;
+	// a targetless Transmission has none to re-resolve and keeps the constant context 1.
+	contextRevision := match.Revision
+	if len(match.Resolutions) == 0 {
+		contextRevision = 1
 	}
 	for _, workflow := range selected {
 		if _, err := executor.ExecContext(ctx, `INSERT INTO processing_candidates
@@ -469,125 +466,28 @@ func (s *Store) admitProcessing(ctx context.Context, executor postgres.Executor,
 			 source_revision,context_revision,state,due_at,created_at,updated_at)
 			VALUES($1,$2,$3,$4,$5,$6,1,$7,'pending',$8,$8,$8)`,
 			uuid.New(), transmission, workflow.id, workflow.version, workflow.revision,
-			configurationRevision, match.Revision, now); err != nil {
-			return false, err
+			configurationRevision, contextRevision, now); err != nil {
+			return "", err
 		}
 	}
-	if len(selected) != 0 {
-		return false, nil
+	status := "pending"
+	if len(selected) == 0 {
+		status = "none"
+	} else if _, err := executor.ExecContext(ctx, `SELECT pg_notify('gopager_processing_due', '')`); err != nil {
+		return "", err
 	}
-	if _, err := executor.ExecContext(ctx, `UPDATE transmissions SET
-		processing_status='completed',publication_status='ready' WHERE id=$1`, transmission); err != nil {
-		return false, err
+	if _, err := executor.ExecContext(ctx, `UPDATE transmissions SET processing_status=$2 WHERE id=$1`,
+		transmission, status); err != nil {
+		return "", err
 	}
-	var pending bool
-	if err := executor.QueryRowContext(ctx, `SELECT EXISTS(
-		SELECT 1 FROM transmissions WHERE message_id=$1 AND publication_status <> 'ready')`, message).Scan(&pending); err != nil {
-		return false, err
-	}
-	if pending {
-		return true, nil
-	}
-	if _, err := executor.ExecContext(ctx, `UPDATE messages SET publication_status='ready' WHERE id=$1`, message); err != nil {
-		return false, err
-	}
-	if _, err := executor.ExecContext(ctx, `UPDATE message_contributions SET ready=true WHERE message_id=$1`, message); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-func (s *Store) groupMessage(ctx context.Context, executor postgres.Executor, revision, window int64,
-	submission ingest.ValidatedSubmission) (messages.Decision, error) {
-	ids := []uuid.UUID{}
-	if window > 0 {
-		rows, err := executor.QueryContext(ctx, `SELECT m.id FROM messages m
-			WHERE m.identity_form=$1 AND m.identity_subtype=$2 AND m.identity_value=$3
-			AND EXISTS (
-				SELECT 1 FROM transmissions t WHERE t.message_id=m.id
-				AND ABS(EXTRACT(EPOCH FROM (t.observed_at-$4::timestamptz))) <= $5::numeric
-			)
-			ORDER BY m.id FOR UPDATE OF m`,
-			submission.Identity.Form, submission.Identity.Subtype, submission.Identity.Value,
-			submission.ObservedAt, window)
-		if err != nil {
-			return messages.Decision{}, err
-		}
-		for rows.Next() {
-			var id uuid.UUID
-			if err := rows.Scan(&id); err != nil {
-				rows.Close()
-				return messages.Decision{}, err
-			}
-			ids = append(ids, id)
-		}
-		if err := rows.Close(); err != nil {
-			return messages.Decision{}, err
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return messages.Decision{}, err
-		}
-	}
-	if len(ids) == 0 {
-		id := uuid.New()
-		if _, err := executor.ExecContext(ctx, `INSERT INTO messages
-			(id,identity_form,identity_subtype,identity_value,first_observed_at,last_observed_at,publication_status)
-			VALUES($1,$2,$3,$4,$5,$5,'pending')`, id, submission.Identity.Form, submission.Identity.Subtype,
-			submission.Identity.Value, submission.ObservedAt); err != nil {
-			return messages.Decision{}, err
-		}
-		return messages.Decision{Kind: "created", MessageID: id, PolicyRevision: revision,
-			MessageRevision: 1}, nil
-	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i].String() < ids[j].String() })
-	survivor := ids[0]
-	absorbed := append([]uuid.UUID(nil), ids[1:]...)
-	var first, last time.Time
-	var messageRevision int64
-	if err := executor.QueryRowContext(ctx, `SELECT first_observed_at,last_observed_at,revision
-		FROM messages WHERE id=$1`, survivor).Scan(&first, &last, &messageRevision); err != nil {
-		return messages.Decision{}, err
-	}
-	for _, id := range absorbed {
-		var candidateFirst, candidateLast time.Time
-		if err := executor.QueryRowContext(ctx, `SELECT first_observed_at,last_observed_at FROM messages WHERE id=$1`,
-			id).Scan(&candidateFirst, &candidateLast); err != nil {
-			return messages.Decision{}, err
-		}
-		if candidateFirst.Before(first) {
-			first = candidateFirst
-		}
-		if candidateLast.After(last) {
-			last = candidateLast
-		}
-	}
-	late := submission.ObservedAt.Before(last)
-	if submission.ObservedAt.Before(first) {
-		first = submission.ObservedAt
-	}
-	if submission.ObservedAt.After(last) {
-		last = submission.ObservedAt
-	}
-	if err := executor.QueryRowContext(ctx, `UPDATE messages SET revision=revision+1,
-		first_observed_at=$2,last_observed_at=$3,publication_status='pending' WHERE id=$1
-		RETURNING revision`, survivor, first, last).Scan(&messageRevision); err != nil {
-		return messages.Decision{}, err
-	}
-	kind := "joined"
-	if len(absorbed) > 0 {
-		kind = "merged"
-	}
-	return messages.Decision{Kind: kind, MessageID: survivor, AbsorbedMessage: absorbed, Joined: true,
-		PolicyRevision: revision, MessageRevision: messageRevision, LateJoin: late}, nil
+	return status, nil
 }
 
 func (s *Store) storeTargets(ctx context.Context, tx platform.TransactionContext, executor postgres.Executor,
 	transmission, message uuid.UUID, messageRevision int64, submission ingest.ValidatedSubmission,
 	accepted time.Time, match assignments.MatchResult) error {
-	if err := s.captureCorrectionDirty(ctx, executor, transmission, submission.ResolvedNetwork, accepted, match.Revision); err != nil {
-		return err
-	}
+	resolved := make([]events.IntakeTarget, 0, len(submission.TransmissionTargets))
+	unassigned := false
 	for position, target := range submission.TransmissionTargets {
 		original, err := json.Marshal(target)
 		if err != nil {
@@ -597,152 +497,104 @@ func (s *Store) storeTargets(ctx context.Context, tx platform.TransactionContext
 		if resolution.TargetPosition != position || resolution.Status != "assigned" && resolution.Status != "unassigned" {
 			return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("matcher returned invalid target resolution"))
 		}
+		addressNumber, addressText, function, err := typedTarget(target)
+		if err != nil {
+			return err
+		}
 		if _, err := executor.ExecContext(ctx, `INSERT INTO transmission_targets
-			(transmission_id,position,original,resolution_status,unit_id,matched_rule_id,assignment_revision)
-			VALUES($1,$2,$3,$4,$5,$6,$7)`, transmission, position, string(original),
-			resolution.Status, resolution.UnitID, resolution.AddressRuleID, match.Revision); err != nil {
+			(transmission_id,position,original,resolution_status,unit_id,matched_rule_id,assignment_revision,
+			 network_id,protocol,observed_at,accepted_at,address_number,address_text,function)
+			VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`, transmission, position, string(original),
+			resolution.Status, resolution.UnitID, resolution.AddressRuleID, match.Revision,
+			submission.ResolvedNetwork, string(submission.Protocol), submission.ObservedAt, accepted,
+			addressNumber, addressText, function); err != nil {
 			return err
 		}
-		after := &events.IntakeResolution{Status: resolution.Status, UnitID: resolution.UnitID, AddressRuleID: resolution.AddressRuleID}
-		targetPosition := position
-		if err := s.appendFact(ctx, tx, events.IntakeFact{ID: uuid.New(), Type: events.AssignmentChanged,
-			TransmissionID: transmission, MessageID: message, Revision: messageRevision, OccurredAt: accepted,
-			Reason: "created", TargetPosition: &targetPosition, After: after}); err != nil {
-			return err
-		}
+		resolved = append(resolved, events.IntakeTarget{Position: position, IntakeResolution: events.IntakeResolution{
+			Status: resolution.Status, UnitID: resolution.UnitID, AddressRuleID: resolution.AddressRuleID}})
 		if resolution.UnitID == nil {
+			unassigned = true
 			continue
 		}
-		var contributionID uuid.UUID
-		err = executor.QueryRowContext(ctx, `SELECT id FROM message_contributions
-			WHERE message_id=$1 AND unit_id=$2`, message, *resolution.UnitID).Scan(&contributionID)
-		if errors.Is(err, sql.ErrNoRows) {
-			contributionID = uuid.New()
-			ageAnchor := submission.ObservedAt
-			if accepted.Before(ageAnchor) {
-				ageAnchor = accepted
-			}
-			if _, err := executor.ExecContext(ctx, `INSERT INTO message_contributions
-				(id,message_id,unit_id,contribution_time,age_anchor,ready)
-				VALUES($1,$2,$3,$4,$5,false)`, contributionID, message, *resolution.UnitID,
-				submission.ObservedAt, ageAnchor); err != nil {
-				return err
-			}
-		} else if err == nil {
-			if _, err := executor.ExecContext(ctx, `UPDATE message_contributions SET
-				contribution_time=LEAST(contribution_time,$2), age_anchor=LEAST(age_anchor,LEAST($2,$3)),ready=false
-				WHERE id=$1`, contributionID, submission.ObservedAt, accepted); err != nil {
-				return err
-			}
-		} else {
-			return err
-		}
-		if _, err = executor.ExecContext(ctx, `INSERT INTO contribution_supports
-			(id,contribution_id,transmission_id,target_position,observed_at,accepted_at)
-			VALUES($1,$2,$3,$4,$5,$6)`, uuid.New(), contributionID, transmission, position,
-			submission.ObservedAt, accepted); err != nil {
+		// The cache row carries the Unit's Agency; an earlier observation moves both times back.
+		if _, err := executor.ExecContext(ctx, `INSERT INTO message_units
+			(message_id,unit_id,agency_id,first_observed_at,age_anchor)
+			SELECT $1::uuid,$2::uuid,u.agency_id,$3::timestamptz,LEAST($3::timestamptz,$4::timestamptz) FROM units u WHERE u.id=$2
+			ON CONFLICT (message_id,unit_id) WHERE unit_id IS NOT NULL DO UPDATE SET
+				first_observed_at=LEAST(message_units.first_observed_at,EXCLUDED.first_observed_at),
+				age_anchor=LEAST(message_units.age_anchor,EXCLUDED.age_anchor)`,
+			message, *resolution.UnitID, submission.ObservedAt, accepted); err != nil {
 			return err
 		}
 	}
-	if len(submission.TransmissionTargets) == 0 {
-		var contributionID uuid.UUID
-		err := executor.QueryRowContext(ctx, `SELECT id FROM message_contributions
-			WHERE message_id=$1 AND unit_id IS NULL`, message).Scan(&contributionID)
-		if errors.Is(err, sql.ErrNoRows) {
-			contributionID = uuid.New()
-			ageAnchor := submission.ObservedAt
-			if accepted.Before(ageAnchor) {
-				ageAnchor = accepted
-			}
-			if _, err := executor.ExecContext(ctx, `INSERT INTO message_contributions
-				(id,message_id,unit_id,contribution_time,age_anchor,ready)
-				VALUES($1,$2,NULL,$3,$4,false)`, contributionID, message, submission.ObservedAt, ageAnchor); err != nil {
-				return err
-			}
-		} else if err != nil {
-			return err
-		} else if _, err := executor.ExecContext(ctx, `UPDATE message_contributions SET
-			contribution_time=LEAST(contribution_time,$2),age_anchor=LEAST(age_anchor,LEAST($2,$3)),ready=false
-			WHERE id=$1`, contributionID, submission.ObservedAt, accepted); err != nil {
+	if len(resolved) > 0 {
+		// One fact per Transmission keeps the log proportional to submissions, not to targets.
+		if err := s.appendFact(ctx, tx, events.IntakeFact{ID: uuid.New(), Type: events.AssignmentChanged,
+			TransmissionID: transmission, MessageID: message, Revision: messageRevision, OccurredAt: accepted,
+			Reason: "created", Targets: resolved}); err != nil {
 			return err
 		}
-		_, err = executor.ExecContext(ctx, `INSERT INTO contribution_supports
-			(id,contribution_id,transmission_id,target_position,observed_at,accepted_at)
-			VALUES($1,$2,$3,NULL,$4,$5)`, uuid.New(), contributionID, transmission, submission.ObservedAt, accepted)
-		if err != nil {
+	}
+	if unassigned || len(submission.TransmissionTargets) == 0 {
+		// Targetless traffic and targets no rule matches are cached per Message and Network Agency
+		// without a Unit, so the Network's Agency sees them as unassigned.
+		if _, err := executor.ExecContext(ctx, `INSERT INTO message_units
+			(message_id,unit_id,agency_id,first_observed_at,age_anchor)
+			SELECT $1::uuid,NULL,n.agency_id,$3::timestamptz,LEAST($3::timestamptz,$4::timestamptz) FROM networks n WHERE n.id=$2
+			ON CONFLICT (message_id,agency_id) WHERE unit_id IS NULL DO UPDATE SET
+				first_observed_at=LEAST(message_units.first_observed_at,EXCLUDED.first_observed_at),
+				age_anchor=LEAST(message_units.age_anchor,EXCLUDED.age_anchor)`,
+			message, submission.ResolvedNetwork, submission.ObservedAt, accepted); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *Store) captureCorrectionDirty(ctx context.Context, executor postgres.Executor,
-	transmission, network uuid.UUID, accepted time.Time, assignmentRevision int64,
-) error {
-	_, err := executor.ExecContext(ctx, `INSERT INTO correction_dirty_transmissions
-		(scope_id,transmission_id,accepted_at,recorded_at)
-		SELECT scope.id,$1,$2,$2 FROM assignment_pending_scopes scope
-		WHERE scope.assignment_revision=$3 AND scope.state IN ('queued','running')
-		AND (jsonb_array_length(scope.network_ids)=0 OR scope.network_ids @> jsonb_build_array($4::text))
-		ON CONFLICT (scope_id,accepted_at,transmission_id) DO NOTHING`,
-		transmission, accepted, assignmentRevision, network)
-	return err
+// typedTarget returns the indexed address columns of a target: exactly one of the numeric and
+// the text address is set, and the function is carried as a small integer.
+func typedTarget(target protocols.Target) (*int64, *string, *int16, error) {
+	var addressNumber *int64
+	var addressText *string
+	if number, ok := target.Address.Number(); ok {
+		if number > math.MaxInt64 {
+			return nil, nil, nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("numeric address exceeds the stored range"))
+		}
+		value := int64(number)
+		addressNumber = &value
+	} else if text, ok := target.Address.Text(); ok {
+		value := text
+		addressText = &value
+	} else {
+		return nil, nil, nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("target without an address"))
+	}
+	var function *int16
+	if target.Function != nil {
+		value := int16(*target.Function)
+		function = &value
+	}
+	return addressNumber, addressText, function, nil
 }
 
-func (s *Store) mergeContributions(ctx context.Context, executor postgres.Executor, survivor, absorbed uuid.UUID) error {
-	rows, err := executor.QueryContext(ctx, `SELECT id,unit_id,contribution_time,age_anchor
-		FROM message_contributions WHERE message_id=$1 ORDER BY id FOR UPDATE`, absorbed)
-	if err != nil {
-		return err
-	}
-	type contribution struct {
-		id     uuid.UUID
-		unit   *uuid.UUID
-		time   time.Time
-		anchor time.Time
-	}
-	var rowsToMove []contribution
-	for rows.Next() {
-		var item contribution
-		if err := rows.Scan(&item.id, &item.unit, &item.time, &item.anchor); err != nil {
-			rows.Close()
-			return err
-		}
-		rowsToMove = append(rowsToMove, item)
-	}
-	if err := rows.Close(); err != nil {
-		return err
-	}
-	for _, item := range rowsToMove {
-		var target uuid.UUID
-		var err error
-		if item.unit != nil {
-			err = executor.QueryRowContext(ctx, `SELECT id FROM message_contributions
-				WHERE message_id=$1 AND unit_id=$2 FOR UPDATE`, survivor, *item.unit).Scan(&target)
-		} else {
-			err = executor.QueryRowContext(ctx, `SELECT id FROM message_contributions
-				WHERE message_id=$1 AND unit_id IS NULL FOR UPDATE`, survivor).Scan(&target)
-		}
-		if errors.Is(err, sql.ErrNoRows) {
-			if _, err := executor.ExecContext(ctx, `UPDATE message_contributions SET message_id=$2
-				WHERE id=$1`, item.id, survivor); err != nil {
-				return err
-			}
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		if _, err := executor.ExecContext(ctx, `UPDATE contribution_supports SET contribution_id=$2
-			WHERE contribution_id=$1`, item.id, target); err != nil {
-			return err
-		}
-		if _, err := executor.ExecContext(ctx, `UPDATE message_contributions SET
-			contribution_time=LEAST(contribution_time,$2),age_anchor=LEAST(age_anchor,$3),ready=false WHERE id=$1`,
-			target, item.time, item.anchor); err != nil {
-			return err
-		}
-		if _, err := executor.ExecContext(ctx, `DELETE FROM message_contributions WHERE id=$1`, item.id); err != nil {
+// mergeMessageUnits folds the cache rows of an absorbed Message into the survivor: equal rows
+// keep the earliest times and stay correcting if either side was; the absorbed rows vanish with
+// their Message (ON DELETE CASCADE).
+func (s *Store) mergeMessageUnits(ctx context.Context, executor postgres.Executor, survivor, absorbed uuid.UUID) error {
+	const merged = `first_observed_at=LEAST(message_units.first_observed_at,EXCLUDED.first_observed_at),
+			age_anchor=LEAST(message_units.age_anchor,EXCLUDED.age_anchor),
+			correction_status=CASE WHEN 'correcting' IN (message_units.correction_status,EXCLUDED.correction_status)
+				THEN 'correcting' ELSE 'current' END`
+	for _, statement := range []string{
+		`INSERT INTO message_units (message_id,unit_id,agency_id,first_observed_at,age_anchor,correction_status)
+		SELECT $1::uuid,unit_id,agency_id,first_observed_at,age_anchor,correction_status FROM message_units
+		WHERE message_id=$2 AND unit_id IS NOT NULL
+		ON CONFLICT (message_id,unit_id) WHERE unit_id IS NOT NULL DO UPDATE SET ` + merged,
+		`INSERT INTO message_units (message_id,unit_id,agency_id,first_observed_at,age_anchor,correction_status)
+		SELECT $1::uuid,NULL,agency_id,first_observed_at,age_anchor,correction_status FROM message_units
+		WHERE message_id=$2 AND unit_id IS NULL
+		ON CONFLICT (message_id,agency_id) WHERE unit_id IS NULL DO UPDATE SET ` + merged,
+	} {
+		if _, err := executor.ExecContext(ctx, statement, survivor, absorbed); err != nil {
 			return err
 		}
 	}
@@ -786,4 +638,3 @@ func boolInt64(value bool) int64 {
 
 var _ ingest.Repository = (*Store)(nil)
 var _ assignments.NetworkOwner = (*Store)(nil)
-var _ identity.ScopeReferences = (*Store)(nil)

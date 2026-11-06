@@ -4,7 +4,7 @@ package ent
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"time"
@@ -93,7 +93,7 @@ func (_c *GatewayCreate) SetNillableLastTransmissionAt(v *time.Time) *GatewayCre
 }
 
 // SetLastReport sets the "last_report" field.
-func (_c *GatewayCreate) SetLastReport(v json.RawMessage) *GatewayCreate {
+func (_c *GatewayCreate) SetLastReport(v jsontext.Value) *GatewayCreate {
 	_c.mutation.SetLastReport(v)
 	return _c
 }

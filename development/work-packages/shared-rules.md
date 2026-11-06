@@ -11,9 +11,19 @@
 5. Later APs are compatibility context only. Do not depend on their unfinished outputs or implement their tasks. Add a library/seam only for a verified current need, not a possible later use.
 6. Report missing prior inputs or insufficient scope to the planner; stop only affected work. Do not backfill earlier obligations, revise fixed behavior, enlarge the current assignment or silently choose an unowned default.
 
+## Package Approval
+
+1. The user approves a package once, before it starts (the order to execute the named AP). That single approval covers the whole package: its planning, contract and decision work, supporting slices, documentation, and the disposable environments and experiments the AP names.
+2. There are no intermediate gates: no per-slice, per-contract, freeze, owner sign-off or per-experiment approval. A decision the AP leaves open (for example a delivery disposition) is made and recorded during the package, with the user's start approval as its authority; a genuine clarification is a question that blocks only the affected work, not a gate.
+3. Completion keeps its evidence requirements ([Execution and Verification](#execution-and-verification)): the package is complete only with executed checks, current documentation and a recorded handover. A change of fixed behavior outside the assignment still needs a planning revision before the affected work.
+
+## Package Layout
+
+Write scopes in the APs use the current layout: domain code in `internal/<domain>/` (for example `internal/units/`, `internal/assignments/`, `internal/ingest/`), HTTP adapters and handlers in `internal/httpapi/`, store implementations under `internal/persistence/`, and `cmd/gopager/` for composition and process wiring only (no HTTP adapters, no domain logic). The architecture's [allowed dependencies](../architecture.md#allowed-dependencies) govern imports.
+
 ## Session Start
 
-1. Read the assigned AP, [delivery scope](../authoritative-plan.md#delivery-scope), relevant [approval](../authoritative-plan.md#workflow-and-approval-gates), [document rules](../README.md#change-rules), [permanent documentation](../README.md#permanent-documentation), [naming](../README.md#naming), [tooling](../README.md#skills-agents-and-mcp-servers) and [library policy](../README.md#library-reuse).
+1. Read the assigned AP, [delivery scope](../authoritative-plan.md#delivery-scope), the package [start approval](#package-approval), [document rules](../README.md#change-rules), [permanent documentation](../README.md#permanent-documentation), [naming](../README.md#naming), [tooling](../README.md#skills-agents-and-mcp-servers) and [library policy](../README.md#library-reuse).
 2. Follow only relevant REQ/C/F/TECH/decision links and glossary terms. Use targeted sections; do not load source assignments, decision history or unrelated contracts as startup context.
 3. Inspect the worktree and actual artifacts. Preserve others' changes. Verify required producer outputs against their handovers and focused evidence; a draft needed slice belongs to the current AP only when explicitly assigned.
 4. Create/continue only this AP's execution record. Record the actual baseline revision/delta, start authority, assignee, task IDs and scope references. Plan, code and verify within that scope.
@@ -61,12 +71,12 @@ An AP execution assignment requires the whole assigned package: its planning, al
 
 After every partial result, reassess all remaining assigned work and continue with the next actionable item. Milestones, foundation work, passing focused tests and updated execution records are progress, not reasons to end execution. Repair in-scope implementation or validation failures and rerun the affected checks; the first failed check is not itself an external blocker.
 
-Ask genuine clarification through a structured question tool when needed, while continuing independent work. Missing earlier inputs, approval or planner repairs block only their dependent work. Resume that work once resolved; do not request a second authorization for already assigned work.
+Ask genuine clarification through a structured question tool when needed, while continuing independent work. Missing earlier inputs or planner repairs block only their dependent work. Resume that work once resolved; do not request a second authorization for already assigned work.
 
 An incomplete execution may end only when:
 
 - The user explicitly pauses, cancels or narrows the assignment.
-- Every remaining item is blocked by a verified external input, unresolved clarification, required authority, unavailable access/environment or other concrete impediment that cannot be resolved safely within the assigned scope and available tools.
+- Every remaining item is blocked by a verified external input, unresolved clarification, a missing package start approval, unavailable access/environment or other concrete impediment that cannot be resolved safely within the assigned scope and available tools.
 - A hard runtime/tool limit actually prevents further execution. Preserve a truthful checkpoint at the execution owner when possible; do not present it as completion or an external planning blocker.
 
 Package size, complexity, effort already spent, a preferred response length, voluntary timeboxing or an anticipated context limit are not stop conditions. Nor is the absence of a commit, unless the assignment explicitly requires one. Do not defer actionable assigned work to a future session or ask whether to continue an already authorized AP.

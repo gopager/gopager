@@ -6,11 +6,12 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/authz"
+	"github.com/gopager/gopager/internal/units"
 )
 
 func TestOrganizationDefaultsTemplateSnapshotAndAtomicBulkUnits(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	defaultColor := "#AABBCC"
 	changedDefault := "#445566"
@@ -29,11 +30,11 @@ func TestOrganizationDefaultsTemplateSnapshotAndAtomicBulkUnits(t *testing.T) {
 
 	organizationID := organization.ID
 	inherited, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
-		units.UnitInput{Name: "Inherited", OrganizationID: &organizationID, CollectionIDs: []uuid.UUID{}}, checkedMutation)
+		units.UnitInput{AgencyID: f.agency, Name: "Inherited", OrganizationID: &organizationID, CollectionIDs: []uuid.UUID{}}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
-	overridden, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{
+	overridden, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{AgencyID: f.agency,
 		Name: "Override", OrganizationID: &organizationID, CollectionIDs: []uuid.UUID{},
 		Settings: units.Settings{Color: units.FieldSetting[string]{Mode: "value", Value: &overrideColor}},
 	}, checkedMutation)
@@ -47,7 +48,7 @@ func TestOrganizationDefaultsTemplateSnapshotAndAtomicBulkUnits(t *testing.T) {
 		t.Fatal(err)
 	}
 	copied, err := f.units.CreateUnitFromTemplate(t.Context(), f.proof, uuid.New(), template.ID,
-		units.UnitInput{Name: "Copied", CollectionIDs: []uuid.UUID{}}, checkedMutation)
+		units.UnitInput{AgencyID: f.agency, Name: "Copied", CollectionIDs: []uuid.UUID{}}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +123,7 @@ func TestOrganizationDefaultsTemplateSnapshotAndAtomicBulkUnits(t *testing.T) {
 	}
 	hiddenOrganizationID := hiddenOrganization.ID
 	hiddenUnit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
-		units.UnitInput{Name: "Hidden Station", OrganizationID: &hiddenOrganizationID, CollectionIDs: []uuid.UUID{}},
+		units.UnitInput{AgencyID: f.agency, Name: "Hidden Station", OrganizationID: &hiddenOrganizationID, CollectionIDs: []uuid.UUID{}},
 		checkedMutation)
 	if err != nil {
 		t.Fatal(err)
@@ -162,12 +163,12 @@ func TestOrganizationDefaultsTemplateSnapshotAndAtomicBulkUnits(t *testing.T) {
 	}
 
 	bulkA, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
-		units.UnitInput{Name: "Bulk A", CollectionIDs: []uuid.UUID{}}, checkedMutation)
+		units.UnitInput{AgencyID: f.agency, Name: "Bulk A", CollectionIDs: []uuid.UUID{}}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
 	bulkB, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
-		units.UnitInput{Name: "Bulk B", CollectionIDs: []uuid.UUID{}}, checkedMutation)
+		units.UnitInput{AgencyID: f.agency, Name: "Bulk B", CollectionIDs: []uuid.UUID{}}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +220,7 @@ func TestOrganizationDefaultsTemplateSnapshotAndAtomicBulkUnits(t *testing.T) {
 	bulkItems := make([]units.BulkUnitItem, 100)
 	for i := range bulkItems {
 		unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
-			units.UnitInput{Name: "Batch " + string(rune('A'+i%26)) + " " + string(rune('0'+i/26)),
+			units.UnitInput{AgencyID: f.agency, Name: "Batch " + string(rune('A'+i%26)) + " " + string(rune('0'+i/26)),
 				CollectionIDs: []uuid.UUID{}}, checkedMutation)
 		if err != nil {
 			t.Fatal(err)
@@ -270,6 +271,7 @@ func TestOrganizationDefaultsTemplateSnapshotAndAtomicBulkUnits(t *testing.T) {
 }
 
 func TestDeleteOrganizationRollsBackOnStaleAffectedUnitRevision(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	color := "#AABBCC"
 	organization, err := f.units.CreateOrganization(t.Context(), f.proof, uuid.New(), units.OrganizationInput{
@@ -286,7 +288,7 @@ func TestDeleteOrganizationRollsBackOnStaleAffectedUnitRevision(t *testing.T) {
 	organizationID := organization.ID
 	members := make([]units.Unit, 2)
 	for i := range members {
-		created, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{
+		created, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{AgencyID: f.agency,
 			Name: "Concurrent Member", OrganizationID: &organizationID, CollectionIDs: []uuid.UUID{},
 		}, checkedMutation)
 		if err != nil {
@@ -330,6 +332,7 @@ func TestDeleteOrganizationRollsBackOnStaleAffectedUnitRevision(t *testing.T) {
 
 // TestTemplateActionsAreNotInferredFromUnitOrOrganizationRights covers the rule that template actions require explicit grants.
 func TestTemplateActionsAreNotInferredFromUnitOrOrganizationRights(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	template, err := f.units.CreateUnitTemplate(t.Context(), f.proof, uuid.New(),
 		units.UnitTemplateInput{Name: "Explicit Template"}, checkedMutation)
@@ -362,7 +365,7 @@ func TestTemplateActionsAreNotInferredFromUnitOrOrganizationRights(t *testing.T)
 		t.Fatalf("template delete inferred from other rights: %v", err)
 	}
 	if _, err := f.units.CreateUnitFromTemplate(t.Context(), f.proof, uuid.New(), template.ID,
-		units.UnitInput{Name: "Copy", CollectionIDs: []uuid.UUID{}}, checkedMutation); !errors.Is(err, authz.ErrForbidden) &&
+		units.UnitInput{AgencyID: f.agency, Name: "Copy", CollectionIDs: []uuid.UUID{}}, checkedMutation); !errors.Is(err, authz.ErrForbidden) &&
 		!errors.Is(err, authz.ErrNotFound) {
 		t.Fatalf("template copy inferred from unit.create: %v", err)
 	}

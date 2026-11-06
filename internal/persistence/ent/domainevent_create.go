@@ -4,9 +4,10 @@ package ent
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
+	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
@@ -21,9 +22,51 @@ type DomainEventCreate struct {
 	hooks    []Hook
 }
 
+// SetSeq sets the "seq" field.
+func (_c *DomainEventCreate) SetSeq(v int64) *DomainEventCreate {
+	_c.mutation.SetSeq(v)
+	return _c
+}
+
+// SetNillableSeq sets the "seq" field if the given value is not nil.
+func (_c *DomainEventCreate) SetNillableSeq(v *int64) *DomainEventCreate {
+	if v != nil {
+		_c.SetSeq(*v)
+	}
+	return _c
+}
+
 // SetEnvelope sets the "envelope" field.
-func (_c *DomainEventCreate) SetEnvelope(v json.RawMessage) *DomainEventCreate {
+func (_c *DomainEventCreate) SetEnvelope(v jsontext.Value) *DomainEventCreate {
 	_c.mutation.SetEnvelope(v)
+	return _c
+}
+
+// SetType sets the "type" field.
+func (_c *DomainEventCreate) SetType(v string) *DomainEventCreate {
+	_c.mutation.SetType(v)
+	return _c
+}
+
+// SetNillableType sets the "type" field if the given value is not nil.
+func (_c *DomainEventCreate) SetNillableType(v *string) *DomainEventCreate {
+	if v != nil {
+		_c.SetType(*v)
+	}
+	return _c
+}
+
+// SetOccurredAt sets the "occurred_at" field.
+func (_c *DomainEventCreate) SetOccurredAt(v time.Time) *DomainEventCreate {
+	_c.mutation.SetOccurredAt(v)
+	return _c
+}
+
+// SetNillableOccurredAt sets the "occurred_at" field if the given value is not nil.
+func (_c *DomainEventCreate) SetNillableOccurredAt(v *time.Time) *DomainEventCreate {
+	if v != nil {
+		_c.SetOccurredAt(*v)
+	}
 	return _c
 }
 
@@ -105,9 +148,21 @@ func (_c *DomainEventCreate) createSpec() (*DomainEvent, *sqlgraph.CreateSpec) {
 		_node.ID = id
 		_spec.ID.Value = &id
 	}
+	if value, ok := _c.mutation.Seq(); ok {
+		_spec.SetField(domainevent.FieldSeq, field.TypeInt64, value)
+		_node.Seq = value
+	}
 	if value, ok := _c.mutation.Envelope(); ok {
 		_spec.SetField(domainevent.FieldEnvelope, field.TypeJSON, value)
 		_node.Envelope = value
+	}
+	if value, ok := _c.mutation.GetType(); ok {
+		_spec.SetField(domainevent.FieldType, field.TypeString, value)
+		_node.Type = value
+	}
+	if value, ok := _c.mutation.OccurredAt(); ok {
+		_spec.SetField(domainevent.FieldOccurredAt, field.TypeTime, value)
+		_node.OccurredAt = value
 	}
 	return _node, _spec
 }

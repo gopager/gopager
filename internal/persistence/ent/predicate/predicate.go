@@ -12,6 +12,9 @@ type Account func(*sql.Selector)
 // AddressRule is the predicate function for addressrule builders.
 type AddressRule func(*sql.Selector)
 
+// Agency is the predicate function for agency builders.
+type Agency func(*sql.Selector)
+
 // AssignmentControl is the predicate function for assignmentcontrol builders.
 type AssignmentControl func(*sql.Selector)
 
@@ -21,11 +24,8 @@ type AuditRecord func(*sql.Selector)
 // CommandReceipt is the predicate function for commandreceipt builders.
 type CommandReceipt func(*sql.Selector)
 
-// ContributionSupport is the predicate function for contributionsupport builders.
-type ContributionSupport func(*sql.Selector)
-
-// CorrectionDirtyTransmission is the predicate function for correctiondirtytransmission builders.
-type CorrectionDirtyTransmission func(*sql.Selector)
+// ConsumerOffset is the predicate function for consumeroffset builders.
+type ConsumerOffset func(*sql.Selector)
 
 // Credential is the predicate function for credential builders.
 type Credential func(*sql.Selector)
@@ -63,8 +63,8 @@ type Membership func(*sql.Selector)
 // Message is the predicate function for message builders.
 type Message func(*sql.Selector)
 
-// MessageContribution is the predicate function for messagecontribution builders.
-type MessageContribution func(*sql.Selector)
+// MessageUnit is the predicate function for messageunit builders.
+type MessageUnit func(*sql.Selector)
 
 // Network is the predicate function for network builders.
 type Network func(*sql.Selector)

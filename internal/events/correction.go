@@ -12,9 +12,11 @@ import (
 
 // CorrectionFact is the producer input for a historical-correction fact. Type
 // selects the vocabulary: "assignment.changed" records that a correction run
-// changed a stored message target's resolution (Aggregate is the message;
-// Before and After are required and must differ; Reason must be "corrected"),
-// and "suppression.changed" records that an operator created or lifted a
+// changed stored target resolutions of one Transmission (Aggregate is the
+// message; Targets lists the changed positions in ascending order, each with
+// differing Before and After; Reason must be "corrected"),
+// "correction.failed" records a correction scope that used up its attempts, and
+// "suppression.changed" records that an operator created or lifted a
 // suppression (Aggregate is the suppression; ChangeKind is created or lifted).
 type CorrectionFact struct {
 	ID             uuid.UUID
@@ -28,24 +30,31 @@ type CorrectionFact struct {
 	MessageID      uuid.UUID
 	NetworkID      uuid.UUID
 	UnitID         *uuid.UUID
-	Before         *IntakeResolution
-	After          *IntakeResolution
+	Targets        []CorrectionTarget
 	ChangeKind     string
 	Reason         string
+	FailureCode    string
+}
+
+// CorrectionTarget is one target position whose resolution a correction changed.
+type CorrectionTarget struct {
+	Position int              `json:"position"`
+	Before   IntakeResolution `json:"before"`
+	After    IntakeResolution `json:"after"`
 }
 
 // CorrectionData is the data payload of a correction envelope; only the fields
 // relevant to the envelope type are set.
 type CorrectionData struct {
-	TargetPosition *int              `json:"targetPosition,omitempty"`
-	TransmissionID uuid.UUID         `json:"transmissionId,omitempty"`
-	MessageID      uuid.UUID         `json:"messageId,omitempty"`
-	NetworkID      uuid.UUID         `json:"networkId,omitempty"`
-	UnitID         *uuid.UUID        `json:"unitId,omitempty"`
-	Before         *IntakeResolution `json:"before,omitempty"`
-	After          *IntakeResolution `json:"after,omitempty"`
-	ChangeKind     string            `json:"changeKind,omitempty"`
-	Reason         string            `json:"reason,omitempty"`
+	TargetPosition *int               `json:"targetPosition,omitempty"`
+	TransmissionID uuid.UUID          `json:"transmissionId,omitempty"`
+	MessageID      uuid.UUID          `json:"messageId,omitempty"`
+	NetworkID      uuid.UUID          `json:"networkId,omitempty"`
+	UnitID         *uuid.UUID         `json:"unitId,omitempty"`
+	Targets        []CorrectionTarget `json:"targets,omitempty"`
+	ChangeKind     string             `json:"changeKind,omitempty"`
+	Reason         string             `json:"reason,omitempty"`
+	FailureCode    string             `json:"failureCode,omitempty"`
 }
 
 // CorrectionEnvelope is the persisted serialization of a CorrectionFact,
@@ -91,14 +100,12 @@ func (fact CorrectionFact) Envelope(recordedAt time.Time) (CorrectionEnvelope, e
 	switch fact.Type {
 	case "assignment.changed":
 		if fact.Aggregate.Type != "message" || fact.MessageID != fact.Aggregate.ID ||
-			fact.TransmissionID == uuid.Nil || fact.NetworkID == uuid.Nil || fact.TargetPosition == nil ||
-			*fact.TargetPosition < 0 || fact.Before == nil || fact.After == nil ||
-			!validIntakeResolution(*fact.Before) || !validIntakeResolution(*fact.After) ||
-			equalIntakeResolution(fact.Before, fact.After) || fact.Reason != "corrected" {
+			fact.TransmissionID == uuid.Nil || fact.NetworkID == uuid.Nil || fact.Reason != "corrected" ||
+			!validCorrectionTargets(fact.Targets) {
 			return CorrectionEnvelope{}, ErrInvalidFact
 		}
-		envelope.Data = CorrectionData{TargetPosition: fact.TargetPosition, TransmissionID: fact.TransmissionID,
-			MessageID: fact.MessageID, NetworkID: fact.NetworkID, Before: fact.Before, After: fact.After, Reason: fact.Reason}
+		envelope.Data = CorrectionData{TransmissionID: fact.TransmissionID, MessageID: fact.MessageID,
+			NetworkID: fact.NetworkID, Targets: slices.Clone(fact.Targets), Reason: fact.Reason}
 	case "suppression.changed":
 		if fact.Aggregate.Type != "suppression" || fact.TransmissionID == uuid.Nil || fact.NetworkID == uuid.Nil ||
 			fact.TargetPosition == nil || *fact.TargetPosition < 0 ||
@@ -107,10 +114,32 @@ func (fact CorrectionFact) Envelope(recordedAt time.Time) (CorrectionEnvelope, e
 		}
 		envelope.Data = CorrectionData{TargetPosition: fact.TargetPosition, TransmissionID: fact.TransmissionID,
 			NetworkID: fact.NetworkID, UnitID: fact.UnitID, ChangeKind: fact.ChangeKind}
+	case "correction.failed":
+		if fact.Aggregate.Type != "correction" || fact.Aggregate.ID == uuid.Nil || fact.FailureCode == "" ||
+			!slices.Contains([]string{"rule-change", "unit-deleted", "suppression-change"}, fact.Reason) {
+			return CorrectionEnvelope{}, ErrInvalidFact
+		}
+		envelope.Data = CorrectionData{Reason: fact.Reason, FailureCode: fact.FailureCode}
 	default:
 		return CorrectionEnvelope{}, errors.Join(ErrInvalidFact, errors.New("unknown correction fact type"))
 	}
 	return envelope, nil
+}
+
+// validCorrectionTargets reports whether targets is non-empty, strictly ascending from a
+// non-negative position and every entry is a valid, actual change.
+func validCorrectionTargets(targets []CorrectionTarget) bool {
+	if len(targets) == 0 {
+		return false
+	}
+	for i, target := range targets {
+		if target.Position < 0 || i > 0 && target.Position <= targets[i-1].Position ||
+			!validIntakeResolution(target.Before) || !validIntakeResolution(target.After) ||
+			equalIntakeResolution(&target.Before, &target.After) {
+			return false
+		}
+	}
+	return true
 }
 
 func equalIntakeResolution(left, right *IntakeResolution) bool {

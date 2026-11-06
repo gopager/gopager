@@ -4,8 +4,10 @@ package ent
 
 import (
 	"encoding/json"
+	"encoding/json/jsontext"
 	"fmt"
 	"strings"
+	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -23,7 +25,7 @@ type TransmissionTarget struct {
 	// Position holds the value of the "position" field.
 	Position int `json:"position,omitempty"`
 	// Original holds the value of the "original" field.
-	Original json.RawMessage `json:"-"`
+	Original jsontext.Value `json:"-"`
 	// ResolutionStatus holds the value of the "resolution_status" field.
 	ResolutionStatus transmissiontarget.ResolutionStatus `json:"resolution_status,omitempty"`
 	// UnitID holds the value of the "unit_id" field.
@@ -32,7 +34,21 @@ type TransmissionTarget struct {
 	MatchedRuleID *uuid.UUID `json:"matched_rule_id,omitempty"`
 	// AssignmentRevision holds the value of the "assignment_revision" field.
 	AssignmentRevision int64 `json:"assignment_revision,omitempty"`
-	selectValues       sql.SelectValues
+	// NetworkID holds the value of the "network_id" field.
+	NetworkID uuid.UUID `json:"network_id,omitempty"`
+	// Protocol holds the value of the "protocol" field.
+	Protocol transmissiontarget.Protocol `json:"protocol,omitempty"`
+	// ObservedAt holds the value of the "observed_at" field.
+	ObservedAt time.Time `json:"observed_at,omitempty"`
+	// AcceptedAt holds the value of the "accepted_at" field.
+	AcceptedAt time.Time `json:"accepted_at,omitempty"`
+	// AddressNumber holds the value of the "address_number" field.
+	AddressNumber *int64 `json:"address_number,omitempty"`
+	// AddressText holds the value of the "address_text" field.
+	AddressText *string `json:"address_text,omitempty"`
+	// Function holds the value of the "function" field.
+	Function     *int16 `json:"function,omitempty"`
+	selectValues sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -44,11 +60,13 @@ func (*TransmissionTarget) scanValues(columns []string) ([]any, error) {
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		case transmissiontarget.FieldOriginal:
 			values[i] = new([]byte)
-		case transmissiontarget.FieldID, transmissiontarget.FieldPosition, transmissiontarget.FieldAssignmentRevision:
+		case transmissiontarget.FieldID, transmissiontarget.FieldPosition, transmissiontarget.FieldAssignmentRevision, transmissiontarget.FieldAddressNumber, transmissiontarget.FieldFunction:
 			values[i] = new(sql.NullInt64)
-		case transmissiontarget.FieldResolutionStatus:
+		case transmissiontarget.FieldResolutionStatus, transmissiontarget.FieldProtocol, transmissiontarget.FieldAddressText:
 			values[i] = new(sql.NullString)
-		case transmissiontarget.FieldTransmissionID:
+		case transmissiontarget.FieldObservedAt, transmissiontarget.FieldAcceptedAt:
+			values[i] = new(sql.NullTime)
+		case transmissiontarget.FieldTransmissionID, transmissiontarget.FieldNetworkID:
 			values[i] = new(uuid.UUID)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -117,6 +135,51 @@ func (_m *TransmissionTarget) assignValues(columns []string, values []any) error
 			} else if value.Valid {
 				_m.AssignmentRevision = value.Int64
 			}
+		case transmissiontarget.FieldNetworkID:
+			if value, ok := values[i].(*uuid.UUID); !ok {
+				return fmt.Errorf("unexpected type %T for field network_id", values[i])
+			} else if value != nil {
+				_m.NetworkID = *value
+			}
+		case transmissiontarget.FieldProtocol:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field protocol", values[i])
+			} else if value.Valid {
+				_m.Protocol = transmissiontarget.Protocol(value.String)
+			}
+		case transmissiontarget.FieldObservedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field observed_at", values[i])
+			} else if value.Valid {
+				_m.ObservedAt = value.Time
+			}
+		case transmissiontarget.FieldAcceptedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field accepted_at", values[i])
+			} else if value.Valid {
+				_m.AcceptedAt = value.Time
+			}
+		case transmissiontarget.FieldAddressNumber:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field address_number", values[i])
+			} else if value.Valid {
+				_m.AddressNumber = new(int64)
+				*_m.AddressNumber = value.Int64
+			}
+		case transmissiontarget.FieldAddressText:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field address_text", values[i])
+			} else if value.Valid {
+				_m.AddressText = new(string)
+				*_m.AddressText = value.String
+			}
+		case transmissiontarget.FieldFunction:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field function", values[i])
+			} else if value.Valid {
+				_m.Function = new(int16)
+				*_m.Function = int16(value.Int64)
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -176,6 +239,33 @@ func (_m *TransmissionTarget) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("assignment_revision=")
 	builder.WriteString(fmt.Sprintf("%v", _m.AssignmentRevision))
+	builder.WriteString(", ")
+	builder.WriteString("network_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.NetworkID))
+	builder.WriteString(", ")
+	builder.WriteString("protocol=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Protocol))
+	builder.WriteString(", ")
+	builder.WriteString("observed_at=")
+	builder.WriteString(_m.ObservedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("accepted_at=")
+	builder.WriteString(_m.AcceptedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	if v := _m.AddressNumber; v != nil {
+		builder.WriteString("address_number=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.AddressText; v != nil {
+		builder.WriteString("address_text=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.Function; v != nil {
+		builder.WriteString("function=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

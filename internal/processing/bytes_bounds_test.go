@@ -11,6 +11,7 @@ import (
 )
 
 func TestBytesEncodedInputAndDecodedAggregateExactBoundaries(t *testing.T) {
+	t.Parallel()
 	value, err := Literal(BytesValue, make([]byte, (MaxInputBytes-64)/4*3))
 	if err != nil {
 		t.Fatal(err)
@@ -51,6 +52,7 @@ func TestBytesEncodedInputAndDecodedAggregateExactBoundaries(t *testing.T) {
 }
 
 func TestBytesEvaluationEncodedOutputExactBoundary(t *testing.T) {
+	t.Parallel()
 	binary, _ := Literal(BytesValue, []byte{})
 	padding, _ := Literal(StringValue, "")
 	result := Evaluation{Selected: true, Fields: map[string]FieldValue{
@@ -90,6 +92,7 @@ func TestBytesEvaluationEncodedOutputExactBoundary(t *testing.T) {
 }
 
 func TestBytesComparisonCostUsesMaximumLengthsAndSumsCompositeLeaves(t *testing.T) {
+	t.Parallel()
 	if got := byteComparisonCost([]byte{1, 2, 3}, []byte{1}); got != 3 {
 		t.Fatalf("comparison cost %d, want max(3,1)", got)
 	}
@@ -107,7 +110,7 @@ func TestBytesComparisonCostUsesMaximumLengthsAndSumsCompositeLeaves(t *testing.
 		t.Fatal(err)
 	}
 	result, err := program.Evaluate(context.Background(), fixture)
-	if err != nil || result.Truth != DefiniteTrue {
+	if err != nil || !result {
 		t.Fatalf("nullable bytes membership failed: %+v, %v", result, err)
 	}
 }

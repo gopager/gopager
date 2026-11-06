@@ -13,11 +13,10 @@ import (
 )
 
 func TestMigrationCheckWithReadOnlyConnection(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
-	schema := storeTestSchema(t, store)
-	readOnlyURL := testDatabaseURL(t)
 	// This setting applies to every physical test connection, not just one pooled session.
-	readOnly := newStoreInSchemaWithParams(t, readOnlyURL, schema, map[string]string{"default_transaction_read_only": "on"})
+	readOnly := newStoreAtWithParams(t, storeTestDSN(store), map[string]string{"default_transaction_read_only": "on"})
 	if err := readOnly.Migrate(context.Background(), nil, platform.MigrationCheck); platform.FailureCode(err) != platform.CodeIncompatibleVersion {
 		t.Fatalf("read-only missing ledger: %v", err)
 	}
@@ -33,6 +32,7 @@ func TestMigrationCheckWithReadOnlyConnection(t *testing.T) {
 }
 
 func TestMigrationLockReleasedAfterCancelledWait(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	conn, err := store.db.Conn(context.Background())
 	if err != nil {
@@ -58,6 +58,7 @@ func TestMigrationLockReleasedAfterCancelledWait(t *testing.T) {
 }
 
 func TestMigrationConcurrencyDoesNotExhaustPool(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	store.db.SetMaxOpenConns(2)
 	files := migrationFiles("SELECT pg_sleep(0.02)")
@@ -75,6 +76,7 @@ func TestMigrationConcurrencyDoesNotExhaustPool(t *testing.T) {
 }
 
 func TestMigrationFailureMappingRetainsLibraryCause(t *testing.T) {
+	t.Parallel()
 	err := &goose.PartialError{Err: errors.New("synthetic transport failure")}
 	if !isUnknownCommit(err) {
 		t.Fatal("untyped migration transport outcome was assumed rolled back")

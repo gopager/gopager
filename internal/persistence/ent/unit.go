@@ -10,9 +10,10 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
+	"github.com/gopager/gopager/internal/persistence/ent/agency"
 	"github.com/gopager/gopager/internal/persistence/ent/organization"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
+	"github.com/gopager/gopager/internal/units"
 )
 
 // Unit is the model entity for the Unit schema.
@@ -24,6 +25,8 @@ type Unit struct {
 	Revision int64 `json:"revision,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
+	// AgencyID holds the value of the "agency_id" field.
+	AgencyID uuid.UUID `json:"agency_id,omitempty"`
 	// Deleted holds the value of the "deleted" field.
 	Deleted bool `json:"deleted,omitempty"`
 	// OrganizationID holds the value of the "organization_id" field.
@@ -44,9 +47,11 @@ type UnitEdges struct {
 	AddressRules []*AddressRule `json:"address_rules,omitempty"`
 	// Organization holds the value of the organization edge.
 	Organization *Organization `json:"organization,omitempty"`
+	// Agency holds the value of the agency edge.
+	Agency *Agency `json:"agency,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [3]bool
+	loadedTypes [4]bool
 }
 
 // CollectionsOrErr returns the Collections value or an error if the edge
@@ -78,6 +83,17 @@ func (e UnitEdges) OrganizationOrErr() (*Organization, error) {
 	return nil, &NotLoadedError{edge: "organization"}
 }
 
+// AgencyOrErr returns the Agency value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e UnitEdges) AgencyOrErr() (*Agency, error) {
+	if e.Agency != nil {
+		return e.Agency, nil
+	} else if e.loadedTypes[3] {
+		return nil, &NotFoundError{label: agency.Label}
+	}
+	return nil, &NotLoadedError{edge: "agency"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*Unit) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
@@ -93,7 +109,7 @@ func (*Unit) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullInt64)
 		case unit.FieldName:
 			values[i] = new(sql.NullString)
-		case unit.FieldID:
+		case unit.FieldID, unit.FieldAgencyID:
 			values[i] = new(uuid.UUID)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -127,6 +143,12 @@ func (_m *Unit) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field name", values[i])
 			} else if value.Valid {
 				_m.Name = value.String
+			}
+		case unit.FieldAgencyID:
+			if value, ok := values[i].(*uuid.UUID); !ok {
+				return fmt.Errorf("unexpected type %T for field agency_id", values[i])
+			} else if value != nil {
+				_m.AgencyID = *value
 			}
 		case unit.FieldDeleted:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -177,6 +199,11 @@ func (_m *Unit) QueryOrganization() *OrganizationQuery {
 	return NewUnitClient(_m.config).QueryOrganization(_m)
 }
 
+// QueryAgency queries the "agency" edge of the Unit entity.
+func (_m *Unit) QueryAgency() *AgencyQuery {
+	return NewUnitClient(_m.config).QueryAgency(_m)
+}
+
 // Update returns a builder for updating this Unit.
 // Note that you need to call Unit.Unwrap() before calling this method if this Unit
 // was returned from a transaction, and the transaction was committed or rolled back.
@@ -205,6 +232,9 @@ func (_m *Unit) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("name=")
 	builder.WriteString(_m.Name)
+	builder.WriteString(", ")
+	builder.WriteString("agency_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AgencyID))
 	builder.WriteString(", ")
 	builder.WriteString("deleted=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Deleted))

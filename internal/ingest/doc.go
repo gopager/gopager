@@ -3,8 +3,8 @@
 //
 // Service.Submit authenticates the Gateway bearer credential, validates the
 // Submission, resolves the target Network (declared identifier, single
-// protocol-compatible Network, unique address-rule match, or the protocol's
-// default Network), matches targets and stores the Transmission, all in one
+// protocol-compatible Network, unique address-rule match, or the highest
+// Gateway Network priority among the matching or all Networks), matches targets and stores the Transmission, all in one
 // transaction using the database clock. Submissions are idempotent per
 // Gateway and Submission ID: a retry with the same fingerprint returns the
 // original Receipt, a different fingerprint fails with ErrSubmissionConflict.

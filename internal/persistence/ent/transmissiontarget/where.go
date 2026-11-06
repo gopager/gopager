@@ -3,6 +3,8 @@
 package transmissiontarget
 
 import (
+	"time"
+
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/persistence/ent/predicate"
@@ -76,6 +78,36 @@ func MatchedRuleID(v uuid.UUID) predicate.TransmissionTarget {
 // AssignmentRevision applies equality check predicate on the "assignment_revision" field. It's identical to AssignmentRevisionEQ.
 func AssignmentRevision(v int64) predicate.TransmissionTarget {
 	return predicate.TransmissionTarget(sql.FieldEQ(FieldAssignmentRevision, v))
+}
+
+// NetworkID applies equality check predicate on the "network_id" field. It's identical to NetworkIDEQ.
+func NetworkID(v uuid.UUID) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldEQ(FieldNetworkID, v))
+}
+
+// ObservedAt applies equality check predicate on the "observed_at" field. It's identical to ObservedAtEQ.
+func ObservedAt(v time.Time) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldEQ(FieldObservedAt, v))
+}
+
+// AcceptedAt applies equality check predicate on the "accepted_at" field. It's identical to AcceptedAtEQ.
+func AcceptedAt(v time.Time) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldEQ(FieldAcceptedAt, v))
+}
+
+// AddressNumber applies equality check predicate on the "address_number" field. It's identical to AddressNumberEQ.
+func AddressNumber(v int64) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldEQ(FieldAddressNumber, v))
+}
+
+// AddressText applies equality check predicate on the "address_text" field. It's identical to AddressTextEQ.
+func AddressText(v string) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldEQ(FieldAddressText, v))
+}
+
+// Function applies equality check predicate on the "function" field. It's identical to FunctionEQ.
+func Function(v int16) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldEQ(FieldFunction, v))
 }
 
 // TransmissionIDEQ applies the EQ predicate on the "transmission_id" field.
@@ -316,6 +348,321 @@ func AssignmentRevisionLT(v int64) predicate.TransmissionTarget {
 // AssignmentRevisionLTE applies the LTE predicate on the "assignment_revision" field.
 func AssignmentRevisionLTE(v int64) predicate.TransmissionTarget {
 	return predicate.TransmissionTarget(sql.FieldLTE(FieldAssignmentRevision, v))
+}
+
+// NetworkIDEQ applies the EQ predicate on the "network_id" field.
+func NetworkIDEQ(v uuid.UUID) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldEQ(FieldNetworkID, v))
+}
+
+// NetworkIDNEQ applies the NEQ predicate on the "network_id" field.
+func NetworkIDNEQ(v uuid.UUID) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldNEQ(FieldNetworkID, v))
+}
+
+// NetworkIDIn applies the In predicate on the "network_id" field.
+func NetworkIDIn(vs ...uuid.UUID) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldIn(FieldNetworkID, vs...))
+}
+
+// NetworkIDNotIn applies the NotIn predicate on the "network_id" field.
+func NetworkIDNotIn(vs ...uuid.UUID) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldNotIn(FieldNetworkID, vs...))
+}
+
+// NetworkIDGT applies the GT predicate on the "network_id" field.
+func NetworkIDGT(v uuid.UUID) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldGT(FieldNetworkID, v))
+}
+
+// NetworkIDGTE applies the GTE predicate on the "network_id" field.
+func NetworkIDGTE(v uuid.UUID) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldGTE(FieldNetworkID, v))
+}
+
+// NetworkIDLT applies the LT predicate on the "network_id" field.
+func NetworkIDLT(v uuid.UUID) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldLT(FieldNetworkID, v))
+}
+
+// NetworkIDLTE applies the LTE predicate on the "network_id" field.
+func NetworkIDLTE(v uuid.UUID) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldLTE(FieldNetworkID, v))
+}
+
+// ProtocolEQ applies the EQ predicate on the "protocol" field.
+func ProtocolEQ(v Protocol) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldEQ(FieldProtocol, v))
+}
+
+// ProtocolNEQ applies the NEQ predicate on the "protocol" field.
+func ProtocolNEQ(v Protocol) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldNEQ(FieldProtocol, v))
+}
+
+// ProtocolIn applies the In predicate on the "protocol" field.
+func ProtocolIn(vs ...Protocol) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldIn(FieldProtocol, vs...))
+}
+
+// ProtocolNotIn applies the NotIn predicate on the "protocol" field.
+func ProtocolNotIn(vs ...Protocol) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldNotIn(FieldProtocol, vs...))
+}
+
+// ObservedAtEQ applies the EQ predicate on the "observed_at" field.
+func ObservedAtEQ(v time.Time) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldEQ(FieldObservedAt, v))
+}
+
+// ObservedAtNEQ applies the NEQ predicate on the "observed_at" field.
+func ObservedAtNEQ(v time.Time) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldNEQ(FieldObservedAt, v))
+}
+
+// ObservedAtIn applies the In predicate on the "observed_at" field.
+func ObservedAtIn(vs ...time.Time) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldIn(FieldObservedAt, vs...))
+}
+
+// ObservedAtNotIn applies the NotIn predicate on the "observed_at" field.
+func ObservedAtNotIn(vs ...time.Time) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldNotIn(FieldObservedAt, vs...))
+}
+
+// ObservedAtGT applies the GT predicate on the "observed_at" field.
+func ObservedAtGT(v time.Time) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldGT(FieldObservedAt, v))
+}
+
+// ObservedAtGTE applies the GTE predicate on the "observed_at" field.
+func ObservedAtGTE(v time.Time) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldGTE(FieldObservedAt, v))
+}
+
+// ObservedAtLT applies the LT predicate on the "observed_at" field.
+func ObservedAtLT(v time.Time) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldLT(FieldObservedAt, v))
+}
+
+// ObservedAtLTE applies the LTE predicate on the "observed_at" field.
+func ObservedAtLTE(v time.Time) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldLTE(FieldObservedAt, v))
+}
+
+// AcceptedAtEQ applies the EQ predicate on the "accepted_at" field.
+func AcceptedAtEQ(v time.Time) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldEQ(FieldAcceptedAt, v))
+}
+
+// AcceptedAtNEQ applies the NEQ predicate on the "accepted_at" field.
+func AcceptedAtNEQ(v time.Time) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldNEQ(FieldAcceptedAt, v))
+}
+
+// AcceptedAtIn applies the In predicate on the "accepted_at" field.
+func AcceptedAtIn(vs ...time.Time) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldIn(FieldAcceptedAt, vs...))
+}
+
+// AcceptedAtNotIn applies the NotIn predicate on the "accepted_at" field.
+func AcceptedAtNotIn(vs ...time.Time) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldNotIn(FieldAcceptedAt, vs...))
+}
+
+// AcceptedAtGT applies the GT predicate on the "accepted_at" field.
+func AcceptedAtGT(v time.Time) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldGT(FieldAcceptedAt, v))
+}
+
+// AcceptedAtGTE applies the GTE predicate on the "accepted_at" field.
+func AcceptedAtGTE(v time.Time) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldGTE(FieldAcceptedAt, v))
+}
+
+// AcceptedAtLT applies the LT predicate on the "accepted_at" field.
+func AcceptedAtLT(v time.Time) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldLT(FieldAcceptedAt, v))
+}
+
+// AcceptedAtLTE applies the LTE predicate on the "accepted_at" field.
+func AcceptedAtLTE(v time.Time) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldLTE(FieldAcceptedAt, v))
+}
+
+// AddressNumberEQ applies the EQ predicate on the "address_number" field.
+func AddressNumberEQ(v int64) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldEQ(FieldAddressNumber, v))
+}
+
+// AddressNumberNEQ applies the NEQ predicate on the "address_number" field.
+func AddressNumberNEQ(v int64) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldNEQ(FieldAddressNumber, v))
+}
+
+// AddressNumberIn applies the In predicate on the "address_number" field.
+func AddressNumberIn(vs ...int64) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldIn(FieldAddressNumber, vs...))
+}
+
+// AddressNumberNotIn applies the NotIn predicate on the "address_number" field.
+func AddressNumberNotIn(vs ...int64) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldNotIn(FieldAddressNumber, vs...))
+}
+
+// AddressNumberGT applies the GT predicate on the "address_number" field.
+func AddressNumberGT(v int64) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldGT(FieldAddressNumber, v))
+}
+
+// AddressNumberGTE applies the GTE predicate on the "address_number" field.
+func AddressNumberGTE(v int64) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldGTE(FieldAddressNumber, v))
+}
+
+// AddressNumberLT applies the LT predicate on the "address_number" field.
+func AddressNumberLT(v int64) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldLT(FieldAddressNumber, v))
+}
+
+// AddressNumberLTE applies the LTE predicate on the "address_number" field.
+func AddressNumberLTE(v int64) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldLTE(FieldAddressNumber, v))
+}
+
+// AddressNumberIsNil applies the IsNil predicate on the "address_number" field.
+func AddressNumberIsNil() predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldIsNull(FieldAddressNumber))
+}
+
+// AddressNumberNotNil applies the NotNil predicate on the "address_number" field.
+func AddressNumberNotNil() predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldNotNull(FieldAddressNumber))
+}
+
+// AddressTextEQ applies the EQ predicate on the "address_text" field.
+func AddressTextEQ(v string) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldEQ(FieldAddressText, v))
+}
+
+// AddressTextNEQ applies the NEQ predicate on the "address_text" field.
+func AddressTextNEQ(v string) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldNEQ(FieldAddressText, v))
+}
+
+// AddressTextIn applies the In predicate on the "address_text" field.
+func AddressTextIn(vs ...string) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldIn(FieldAddressText, vs...))
+}
+
+// AddressTextNotIn applies the NotIn predicate on the "address_text" field.
+func AddressTextNotIn(vs ...string) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldNotIn(FieldAddressText, vs...))
+}
+
+// AddressTextGT applies the GT predicate on the "address_text" field.
+func AddressTextGT(v string) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldGT(FieldAddressText, v))
+}
+
+// AddressTextGTE applies the GTE predicate on the "address_text" field.
+func AddressTextGTE(v string) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldGTE(FieldAddressText, v))
+}
+
+// AddressTextLT applies the LT predicate on the "address_text" field.
+func AddressTextLT(v string) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldLT(FieldAddressText, v))
+}
+
+// AddressTextLTE applies the LTE predicate on the "address_text" field.
+func AddressTextLTE(v string) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldLTE(FieldAddressText, v))
+}
+
+// AddressTextContains applies the Contains predicate on the "address_text" field.
+func AddressTextContains(v string) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldContains(FieldAddressText, v))
+}
+
+// AddressTextHasPrefix applies the HasPrefix predicate on the "address_text" field.
+func AddressTextHasPrefix(v string) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldHasPrefix(FieldAddressText, v))
+}
+
+// AddressTextHasSuffix applies the HasSuffix predicate on the "address_text" field.
+func AddressTextHasSuffix(v string) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldHasSuffix(FieldAddressText, v))
+}
+
+// AddressTextIsNil applies the IsNil predicate on the "address_text" field.
+func AddressTextIsNil() predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldIsNull(FieldAddressText))
+}
+
+// AddressTextNotNil applies the NotNil predicate on the "address_text" field.
+func AddressTextNotNil() predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldNotNull(FieldAddressText))
+}
+
+// AddressTextEqualFold applies the EqualFold predicate on the "address_text" field.
+func AddressTextEqualFold(v string) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldEqualFold(FieldAddressText, v))
+}
+
+// AddressTextContainsFold applies the ContainsFold predicate on the "address_text" field.
+func AddressTextContainsFold(v string) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldContainsFold(FieldAddressText, v))
+}
+
+// FunctionEQ applies the EQ predicate on the "function" field.
+func FunctionEQ(v int16) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldEQ(FieldFunction, v))
+}
+
+// FunctionNEQ applies the NEQ predicate on the "function" field.
+func FunctionNEQ(v int16) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldNEQ(FieldFunction, v))
+}
+
+// FunctionIn applies the In predicate on the "function" field.
+func FunctionIn(vs ...int16) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldIn(FieldFunction, vs...))
+}
+
+// FunctionNotIn applies the NotIn predicate on the "function" field.
+func FunctionNotIn(vs ...int16) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldNotIn(FieldFunction, vs...))
+}
+
+// FunctionGT applies the GT predicate on the "function" field.
+func FunctionGT(v int16) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldGT(FieldFunction, v))
+}
+
+// FunctionGTE applies the GTE predicate on the "function" field.
+func FunctionGTE(v int16) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldGTE(FieldFunction, v))
+}
+
+// FunctionLT applies the LT predicate on the "function" field.
+func FunctionLT(v int16) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldLT(FieldFunction, v))
+}
+
+// FunctionLTE applies the LTE predicate on the "function" field.
+func FunctionLTE(v int16) predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldLTE(FieldFunction, v))
+}
+
+// FunctionIsNil applies the IsNil predicate on the "function" field.
+func FunctionIsNil() predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldIsNull(FieldFunction))
+}
+
+// FunctionNotNil applies the NotNil predicate on the "function" field.
+func FunctionNotNil() predicate.TransmissionTarget {
+	return predicate.TransmissionTarget(sql.FieldNotNull(FieldFunction))
 }
 
 // And groups predicates with the AND operator between them.

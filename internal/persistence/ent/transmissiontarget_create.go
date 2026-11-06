@@ -4,9 +4,10 @@ package ent
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
+	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
@@ -34,7 +35,7 @@ func (_c *TransmissionTargetCreate) SetPosition(v int) *TransmissionTargetCreate
 }
 
 // SetOriginal sets the "original" field.
-func (_c *TransmissionTargetCreate) SetOriginal(v json.RawMessage) *TransmissionTargetCreate {
+func (_c *TransmissionTargetCreate) SetOriginal(v jsontext.Value) *TransmissionTargetCreate {
 	_c.mutation.SetOriginal(v)
 	return _c
 }
@@ -76,6 +77,72 @@ func (_c *TransmissionTargetCreate) SetNillableMatchedRuleID(v *uuid.UUID) *Tran
 // SetAssignmentRevision sets the "assignment_revision" field.
 func (_c *TransmissionTargetCreate) SetAssignmentRevision(v int64) *TransmissionTargetCreate {
 	_c.mutation.SetAssignmentRevision(v)
+	return _c
+}
+
+// SetNetworkID sets the "network_id" field.
+func (_c *TransmissionTargetCreate) SetNetworkID(v uuid.UUID) *TransmissionTargetCreate {
+	_c.mutation.SetNetworkID(v)
+	return _c
+}
+
+// SetProtocol sets the "protocol" field.
+func (_c *TransmissionTargetCreate) SetProtocol(v transmissiontarget.Protocol) *TransmissionTargetCreate {
+	_c.mutation.SetProtocol(v)
+	return _c
+}
+
+// SetObservedAt sets the "observed_at" field.
+func (_c *TransmissionTargetCreate) SetObservedAt(v time.Time) *TransmissionTargetCreate {
+	_c.mutation.SetObservedAt(v)
+	return _c
+}
+
+// SetAcceptedAt sets the "accepted_at" field.
+func (_c *TransmissionTargetCreate) SetAcceptedAt(v time.Time) *TransmissionTargetCreate {
+	_c.mutation.SetAcceptedAt(v)
+	return _c
+}
+
+// SetAddressNumber sets the "address_number" field.
+func (_c *TransmissionTargetCreate) SetAddressNumber(v int64) *TransmissionTargetCreate {
+	_c.mutation.SetAddressNumber(v)
+	return _c
+}
+
+// SetNillableAddressNumber sets the "address_number" field if the given value is not nil.
+func (_c *TransmissionTargetCreate) SetNillableAddressNumber(v *int64) *TransmissionTargetCreate {
+	if v != nil {
+		_c.SetAddressNumber(*v)
+	}
+	return _c
+}
+
+// SetAddressText sets the "address_text" field.
+func (_c *TransmissionTargetCreate) SetAddressText(v string) *TransmissionTargetCreate {
+	_c.mutation.SetAddressText(v)
+	return _c
+}
+
+// SetNillableAddressText sets the "address_text" field if the given value is not nil.
+func (_c *TransmissionTargetCreate) SetNillableAddressText(v *string) *TransmissionTargetCreate {
+	if v != nil {
+		_c.SetAddressText(*v)
+	}
+	return _c
+}
+
+// SetFunction sets the "function" field.
+func (_c *TransmissionTargetCreate) SetFunction(v int16) *TransmissionTargetCreate {
+	_c.mutation.SetFunction(v)
+	return _c
+}
+
+// SetNillableFunction sets the "function" field if the given value is not nil.
+func (_c *TransmissionTargetCreate) SetNillableFunction(v *int16) *TransmissionTargetCreate {
+	if v != nil {
+		_c.SetFunction(*v)
+	}
 	return _c
 }
 
@@ -143,6 +210,23 @@ func (_c *TransmissionTargetCreate) check() error {
 			return &ValidationError{Name: "assignment_revision", err: fmt.Errorf(`ent: validator failed for field "TransmissionTarget.assignment_revision": %w`, err)}
 		}
 	}
+	if _, ok := _c.mutation.NetworkID(); !ok {
+		return &ValidationError{Name: "network_id", err: errors.New(`ent: missing required field "TransmissionTarget.network_id"`)}
+	}
+	if _, ok := _c.mutation.Protocol(); !ok {
+		return &ValidationError{Name: "protocol", err: errors.New(`ent: missing required field "TransmissionTarget.protocol"`)}
+	}
+	if v, ok := _c.mutation.Protocol(); ok {
+		if err := transmissiontarget.ProtocolValidator(v); err != nil {
+			return &ValidationError{Name: "protocol", err: fmt.Errorf(`ent: validator failed for field "TransmissionTarget.protocol": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.ObservedAt(); !ok {
+		return &ValidationError{Name: "observed_at", err: errors.New(`ent: missing required field "TransmissionTarget.observed_at"`)}
+	}
+	if _, ok := _c.mutation.AcceptedAt(); !ok {
+		return &ValidationError{Name: "accepted_at", err: errors.New(`ent: missing required field "TransmissionTarget.accepted_at"`)}
+	}
 	return nil
 }
 
@@ -196,6 +280,34 @@ func (_c *TransmissionTargetCreate) createSpec() (*TransmissionTarget, *sqlgraph
 	if value, ok := _c.mutation.AssignmentRevision(); ok {
 		_spec.SetField(transmissiontarget.FieldAssignmentRevision, field.TypeInt64, value)
 		_node.AssignmentRevision = value
+	}
+	if value, ok := _c.mutation.NetworkID(); ok {
+		_spec.SetField(transmissiontarget.FieldNetworkID, field.TypeUUID, value)
+		_node.NetworkID = value
+	}
+	if value, ok := _c.mutation.Protocol(); ok {
+		_spec.SetField(transmissiontarget.FieldProtocol, field.TypeEnum, value)
+		_node.Protocol = value
+	}
+	if value, ok := _c.mutation.ObservedAt(); ok {
+		_spec.SetField(transmissiontarget.FieldObservedAt, field.TypeTime, value)
+		_node.ObservedAt = value
+	}
+	if value, ok := _c.mutation.AcceptedAt(); ok {
+		_spec.SetField(transmissiontarget.FieldAcceptedAt, field.TypeTime, value)
+		_node.AcceptedAt = value
+	}
+	if value, ok := _c.mutation.AddressNumber(); ok {
+		_spec.SetField(transmissiontarget.FieldAddressNumber, field.TypeInt64, value)
+		_node.AddressNumber = &value
+	}
+	if value, ok := _c.mutation.AddressText(); ok {
+		_spec.SetField(transmissiontarget.FieldAddressText, field.TypeString, value)
+		_node.AddressText = &value
+	}
+	if value, ok := _c.mutation.Function(); ok {
+		_spec.SetField(transmissiontarget.FieldFunction, field.TypeInt16, value)
+		_node.Function = &value
 	}
 	return _node, _spec
 }

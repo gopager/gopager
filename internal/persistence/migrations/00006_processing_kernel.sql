@@ -58,18 +58,15 @@ CREATE TABLE processing_candidates (
     due_at timestamptz NOT NULL,
     failure_code varchar,
     failure_step varchar,
-    barrier_applied_at timestamptz,
     created_at timestamptz NOT NULL,
     updated_at timestamptz NOT NULL,
     FOREIGN KEY (workflow_id, definition_version_id) REFERENCES processing_workflow_versions(workflow_id, id),
     UNIQUE (transmission_id, workflow_id, definition_version_id, source_revision, context_revision),
     CHECK ((worker_id IS NULL) = (lease_until IS NULL)),
     CHECK (state <> 'running' OR (worker_id IS NOT NULL AND fencing_token > 0)),
-    CHECK (state <> 'completed' OR selected IS NOT NULL),
-    CHECK (barrier_applied_at IS NULL OR state = 'completed')
+    CHECK (state <> 'completed' OR selected IS NOT NULL)
 );
 CREATE INDEX processing_candidate_due ON processing_candidates(state, due_at, id);
-CREATE INDEX processing_candidate_barrier ON processing_candidates(transmission_id, barrier_applied_at);
 CREATE TABLE processing_results (
     id uuid PRIMARY KEY,
     revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),

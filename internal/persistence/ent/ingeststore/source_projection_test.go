@@ -7,13 +7,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/assignments"
 	"github.com/gopager/gopager/internal/processing"
 	"github.com/gopager/gopager/internal/protocols"
+	"github.com/gopager/gopager/internal/units"
 )
 
 func TestProjectProcessingSourcePreservesOriginalTargetContexts(t *testing.T) {
+	t.Parallel()
 	var payload protocols.TransmissionPayload
 	if err := json.Unmarshal([]byte(`{"form":"numeric","value":"123"}`), &payload); err != nil {
 		t.Fatal(err)

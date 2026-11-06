@@ -21,6 +21,33 @@ const (
 	statusCheckInterval    = 5 * time.Second
 )
 
+// Application HTTP server limits. They bound how long a slow or stalled client can
+// hold a connection and its goroutine. WriteTimeout covers the whole response, so a
+// future long-lived response (server-sent events) must lift or extend it per request
+// with http.NewResponseController(w).SetWriteDeadline instead of raising the global
+// value. Request body limits are enforced per route, not here.
+const (
+	httpReadHeaderTimeout = 5 * time.Second
+	httpReadTimeout       = 30 * time.Second
+	httpWriteTimeout      = 60 * time.Second
+	httpIdleTimeout       = 120 * time.Second
+	httpMaxHeaderBytes    = 64 << 10
+)
+
+// newHTTPServer returns the application server with the connection limits above; its
+// requests inherit root so that shutdown cancels in-flight handlers.
+func newHTTPServer(root context.Context, handler http.Handler) *http.Server {
+	return &http.Server{
+		Handler:           handler,
+		ReadHeaderTimeout: httpReadHeaderTimeout,
+		ReadTimeout:       httpReadTimeout,
+		WriteTimeout:      httpWriteTimeout,
+		IdleTimeout:       httpIdleTimeout,
+		MaxHeaderBytes:    httpMaxHeaderBytes,
+		BaseContext:       func(net.Listener) context.Context { return root },
+	}
+}
+
 // Store supplies platform infrastructure without exposing SQL or driver handles.
 type Store interface {
 	Ping(context.Context) error
@@ -42,7 +69,6 @@ type Runner interface {
 type Status struct {
 	Live           bool
 	Ready          bool
-	Profile        string
 	Roles          []Role
 	MigrationState string
 	FailureCode    ErrorCode
@@ -102,7 +128,7 @@ func StartWithAPI(ctx context.Context, config Config, migrations fs.FS, store St
 	root, cancel := context.WithCancel(ctx)
 	handle := &RunningHandle{
 		status: Status{
-			Live: true, Ready: true, Profile: config.Profile,
+			Live: true, Ready: true,
 			Roles: append([]Role(nil), config.Roles...), MigrationState: "current",
 		},
 		migrations: migrations,
@@ -116,10 +142,7 @@ func StartWithAPI(ctx context.Context, config Config, migrations fs.FS, store St
 			cancel()
 			return nil, NewFailure(CodeInternalError, err)
 		}
-		handle.server = &http.Server{
-			Handler: handle.applicationHandler(api), ReadHeaderTimeout: 5 * time.Second,
-			BaseContext: func(net.Listener) context.Context { return root },
-		}
+		handle.server = newHTTPServer(root, handle.applicationHandler(api))
 		handle.workers.Add(1)
 		go func() {
 			defer handle.workers.Done()

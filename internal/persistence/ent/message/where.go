@@ -375,26 +375,6 @@ func LastObservedAtLTE(v time.Time) predicate.Message {
 	return predicate.Message(sql.FieldLTE(FieldLastObservedAt, v))
 }
 
-// PublicationStatusEQ applies the EQ predicate on the "publication_status" field.
-func PublicationStatusEQ(v PublicationStatus) predicate.Message {
-	return predicate.Message(sql.FieldEQ(FieldPublicationStatus, v))
-}
-
-// PublicationStatusNEQ applies the NEQ predicate on the "publication_status" field.
-func PublicationStatusNEQ(v PublicationStatus) predicate.Message {
-	return predicate.Message(sql.FieldNEQ(FieldPublicationStatus, v))
-}
-
-// PublicationStatusIn applies the In predicate on the "publication_status" field.
-func PublicationStatusIn(vs ...PublicationStatus) predicate.Message {
-	return predicate.Message(sql.FieldIn(FieldPublicationStatus, vs...))
-}
-
-// PublicationStatusNotIn applies the NotIn predicate on the "publication_status" field.
-func PublicationStatusNotIn(vs ...PublicationStatus) predicate.Message {
-	return predicate.Message(sql.FieldNotIn(FieldPublicationStatus, vs...))
-}
-
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.Message) predicate.Message {
 	return predicate.Message(sql.AndPredicates(predicates...))

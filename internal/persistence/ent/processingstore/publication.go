@@ -6,9 +6,7 @@ import (
 
 	"entgo.io/ent/entql"
 	"github.com/gopager/gopager/internal/authz"
-	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/persistence/ent"
-	"github.com/gopager/gopager/internal/persistence/ent/processingcandidate"
 	"github.com/gopager/gopager/internal/persistence/ent/processingresult"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
@@ -16,8 +14,11 @@ import (
 
 var _ processing.PublicationRepository = (*Store)(nil)
 
-// ReadPublicationItem locks completed evidence with the exact current active Workflow/configuration pins.
-// Incomplete, superseded or already applied evidence cannot become a replacement publication.
+// ReadPublicationItem locks the candidate of a binding and returns its current state with the saved
+// definition and, for a selected completion, its result including a publication already applied.
+// It returns authz.ErrNotFound when no candidate exists for the binding and a revision conflict
+// when the Workflow is no longer active at the binding's version, the configuration revision moved
+// or the candidate's revisions differ from the binding.
 func (s *Store) ReadPublicationItem(ctx context.Context, tx platform.TransactionContext,
 	binding processing.CandidateBinding) (processing.PublicationItem, error) {
 	if err := binding.Validate(); err != nil {
@@ -51,7 +52,7 @@ func (s *Store) ReadPublicationItem(ctx context.Context, tx platform.Transaction
 	}
 	row, err := client.ProcessingCandidate.Query().ForUpdate().Only(scope)
 	if ent.IsNotFound(err) {
-		return processing.PublicationItem{}, authz.ErrRevisionConflict
+		return processing.PublicationItem{}, authz.ErrNotFound
 	}
 	if err != nil {
 		return processing.PublicationItem{}, err
@@ -60,8 +61,7 @@ func (s *Store) ReadPublicationItem(ctx context.Context, tx platform.Transaction
 	if err != nil {
 		return processing.PublicationItem{}, err
 	}
-	if candidate.CandidateBinding != binding || candidate.State != "completed" ||
-		candidate.Selected == nil || candidate.BarrierAppliedAt != nil {
+	if candidate.CandidateBinding != binding {
 		return processing.PublicationItem{}, authz.ErrRevisionConflict
 	}
 	version, err := client.WorkflowVersion.Query().Only(scope)
@@ -69,13 +69,12 @@ func (s *Store) ReadPublicationItem(ctx context.Context, tx platform.Transaction
 		return processing.PublicationItem{}, err
 	}
 	item := processing.PublicationItem{Candidate: candidate, Definition: version.Definition}
-	if !*candidate.Selected {
+	if candidate.State != "completed" || candidate.Selected == nil || !*candidate.Selected {
 		return item, nil
 	}
 	resultClient, resultScope, err := s.client(ctx, tx, map[string]entql.P{
 		"ProcessingResult": entql.And(entql.FieldEQ("candidate_id", candidate.ID),
-			entql.FieldEQ("revision", candidate.Revision), entql.FieldEQ("producing_fence", candidate.FencingToken),
-			entql.FieldNil("published_at"), entql.FieldNil("message_id")),
+			entql.FieldEQ("revision", candidate.Revision), entql.FieldEQ("producing_fence", candidate.FencingToken)),
 	}, nil)
 	if err != nil {
 		return processing.PublicationItem{}, err
@@ -86,60 +85,40 @@ func (s *Store) ReadPublicationItem(ctx context.Context, tx platform.Transaction
 	}
 	item.Result = &processing.PrivateResult{ID: result.ID, CandidateID: result.CandidateID,
 		Revision: result.Revision, ProducingFence: result.ProducingFence,
-		Evaluation: result.Evaluation, CompletedAt: result.CompletedAt}
+		Evaluation: result.Evaluation, CompletedAt: result.CompletedAt,
+		PublishedAt: result.PublishedAt, MessageID: result.MessageID}
 	return item, nil
 }
 
-// ApplyPublicationItem re-reads current evidence and applies only matching candidate/result fences.
-// Source readiness and required facts must commit in this same transaction or all writes roll back.
+// ApplyPublicationItem re-reads the candidate's current evidence, verifies that it still matches
+// expected and attaches the result to the Message by setting its publication time and Message
+// under the result's revision and producing fence; the candidate row is unchanged. The source
+// status refresh and the completion fact must commit in this same transaction or all writes roll back.
 func (s *Store) ApplyPublicationItem(ctx context.Context, tx platform.TransactionContext,
 	binding processing.PublicationBinding, expected processing.PublicationItem) error {
 	if err := binding.Validate(); err != nil {
 		return err
 	}
+	if !expected.Publishable() {
+		return authz.ErrRevisionConflict
+	}
 	item, err := s.ReadPublicationItem(ctx, tx, expected.Candidate.CandidateBinding)
 	if err != nil {
 		return err
 	}
-	if item.Candidate.ID != expected.Candidate.ID || item.Candidate.Revision != expected.Candidate.Revision ||
+	if !item.Publishable() || item.Candidate.ID != expected.Candidate.ID ||
+		item.Candidate.Revision != expected.Candidate.Revision ||
 		item.Candidate.FencingToken != expected.Candidate.FencingToken ||
 		item.Candidate.TransmissionID != binding.Source.TransmissionID ||
 		item.Candidate.SourceRevision != binding.Source.SourceRevision ||
 		item.Candidate.ContextRevision != binding.Source.ContextRevision ||
-		(item.Result == nil) != (expected.Result == nil) {
-		return authz.ErrRevisionConflict
-	}
-	if item.Result != nil && (item.Result.ID != expected.Result.ID || item.Result.Revision != expected.Result.Revision ||
-		item.Result.ProducingFence != expected.Result.ProducingFence) {
+		item.Result.ID != expected.Result.ID || item.Result.Revision != expected.Result.Revision ||
+		item.Result.ProducingFence != expected.Result.ProducingFence {
 		return authz.ErrRevisionConflict
 	}
 	now, err := s.primary.Now(ctx, tx)
 	if err != nil {
 		return err
-	}
-	next, err := commands.NextRevision(item.Candidate.Revision, item.Candidate.Revision)
-	if err != nil {
-		return err
-	}
-	client, scope, err := s.client(ctx, tx, map[string]entql.P{
-		"ProcessingCandidate": entql.FieldEQ("id", item.Candidate.ID),
-		"ProcessingResult":    entql.FieldEQ("candidate_id", item.Candidate.ID),
-	}, nil)
-	if err != nil {
-		return err
-	}
-	changed, err := client.ProcessingCandidate.Update().
-		Where(processingcandidate.Revision(item.Candidate.Revision),
-			processingcandidate.FencingToken(item.Candidate.FencingToken), processingcandidate.BarrierAppliedAtIsNil()).
-		SetRevision(next).SetBarrierAppliedAt(now).SetUpdatedAt(now).Save(scope)
-	if err != nil {
-		return err
-	}
-	if changed != 1 {
-		return authz.ErrRevisionConflict
-	}
-	if item.Result == nil {
-		return nil
 	}
 	if err := processing.ValidateEvaluation(item.Result.Evaluation, item.Definition.OutputSchema, processing.EvaluationBinding{
 		TransmissionID: binding.Source.TransmissionID, SourceRevision: binding.Source.SourceRevision,
@@ -147,7 +126,13 @@ func (s *Store) ApplyPublicationItem(ctx context.Context, tx platform.Transactio
 	}); err != nil {
 		return err
 	}
-	changed, err = client.ProcessingResult.Update().Where(processingresult.ID(item.Result.ID),
+	client, scope, err := s.client(ctx, tx, map[string]entql.P{
+		"ProcessingResult": entql.FieldEQ("candidate_id", item.Candidate.ID),
+	}, nil)
+	if err != nil {
+		return err
+	}
+	changed, err := client.ProcessingResult.Update().Where(processingresult.ID(item.Result.ID),
 		processingresult.Revision(item.Result.Revision), processingresult.ProducingFence(item.Result.ProducingFence),
 		processingresult.PublishedAtIsNil(), processingresult.MessageIDIsNil()).
 		SetPublishedAt(now).SetMessageID(binding.MessageID).Save(scope)
@@ -155,7 +140,7 @@ func (s *Store) ApplyPublicationItem(ctx context.Context, tx platform.Transactio
 		return err
 	}
 	if changed != 1 {
-		return platform.NewFailure(platform.CodeRevisionConflict, errors.New("private result changed before source publication"))
+		return platform.NewFailure(platform.CodeRevisionConflict, errors.New("private result changed before publication"))
 	}
 	return nil
 }

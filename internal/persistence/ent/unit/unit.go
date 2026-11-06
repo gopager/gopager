@@ -18,6 +18,8 @@ const (
 	FieldRevision = "revision"
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
+	// FieldAgencyID holds the string denoting the agency_id field in the database.
+	FieldAgencyID = "agency_id"
 	// FieldDeleted holds the string denoting the deleted field in the database.
 	FieldDeleted = "deleted"
 	// FieldOrganizationID holds the string denoting the organization_id field in the database.
@@ -30,6 +32,8 @@ const (
 	EdgeAddressRules = "address_rules"
 	// EdgeOrganization holds the string denoting the organization edge name in mutations.
 	EdgeOrganization = "organization"
+	// EdgeAgency holds the string denoting the agency edge name in mutations.
+	EdgeAgency = "agency"
 	// Table holds the table name of the unit in the database.
 	Table = "units"
 	// CollectionsTable is the table that holds the collections relation/edge. The primary key declared below.
@@ -51,6 +55,13 @@ const (
 	OrganizationInverseTable = "organizations"
 	// OrganizationColumn is the table column denoting the organization relation/edge.
 	OrganizationColumn = "organization_id"
+	// AgencyTable is the table that holds the agency relation/edge.
+	AgencyTable = "units"
+	// AgencyInverseTable is the table name for the Agency entity.
+	// It exists in this package in order to avoid circular dependency with the "agency" package.
+	AgencyInverseTable = "agencies"
+	// AgencyColumn is the table column denoting the agency relation/edge.
+	AgencyColumn = "agency_id"
 )
 
 // Columns holds all SQL columns for unit fields.
@@ -58,6 +69,7 @@ var Columns = []string{
 	FieldID,
 	FieldRevision,
 	FieldName,
+	FieldAgencyID,
 	FieldDeleted,
 	FieldOrganizationID,
 	FieldSettings,
@@ -117,6 +129,11 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldName, opts...).ToFunc()
 }
 
+// ByAgencyID orders the results by the agency_id field.
+func ByAgencyID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAgencyID, opts...).ToFunc()
+}
+
 // ByDeleted orders the results by the deleted field.
 func ByDeleted(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDeleted, opts...).ToFunc()
@@ -161,6 +178,13 @@ func ByOrganizationField(field string, opts ...sql.OrderTermOption) OrderOption 
 		sqlgraph.OrderByNeighborTerms(s, newOrganizationStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// ByAgencyField orders the results by agency field.
+func ByAgencyField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newAgencyStep(), sql.OrderByField(field, opts...))
+	}
+}
 func newCollectionsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -180,5 +204,12 @@ func newOrganizationStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(OrganizationInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, OrganizationTable, OrganizationColumn),
+	)
+}
+func newAgencyStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(AgencyInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, AgencyTable, AgencyColumn),
 	)
 }

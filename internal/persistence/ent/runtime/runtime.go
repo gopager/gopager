@@ -9,11 +9,11 @@ import (
 	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/persistence/ent/account"
 	"github.com/gopager/gopager/internal/persistence/ent/addressrule"
+	"github.com/gopager/gopager/internal/persistence/ent/agency"
 	"github.com/gopager/gopager/internal/persistence/ent/assignmentcontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/auditrecord"
 	"github.com/gopager/gopager/internal/persistence/ent/commandreceipt"
-	"github.com/gopager/gopager/internal/persistence/ent/contributionsupport"
-	"github.com/gopager/gopager/internal/persistence/ent/correctiondirtytransmission"
+	"github.com/gopager/gopager/internal/persistence/ent/consumeroffset"
 	"github.com/gopager/gopager/internal/persistence/ent/credential"
 	"github.com/gopager/gopager/internal/persistence/ent/domainevent"
 	"github.com/gopager/gopager/internal/persistence/ent/fieldpermission"
@@ -26,7 +26,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/loginattempt"
 	"github.com/gopager/gopager/internal/persistence/ent/membership"
 	"github.com/gopager/gopager/internal/persistence/ent/message"
-	"github.com/gopager/gopager/internal/persistence/ent/messagecontribution"
+	"github.com/gopager/gopager/internal/persistence/ent/messageunit"
 	"github.com/gopager/gopager/internal/persistence/ent/network"
 	"github.com/gopager/gopager/internal/persistence/ent/organization"
 	"github.com/gopager/gopager/internal/persistence/ent/pendingassignmentscope"
@@ -111,6 +111,48 @@ func init() {
 	addressruleDescID := addressruleMixinFields0[0].Descriptor()
 	// addressrule.DefaultID holds the default value on creation for the id field.
 	addressrule.DefaultID = addressruleDescID.Default.(func() uuid.UUID)
+	agencyMixin := schema.Agency{}.Mixin()
+	agency.Policy = privacy.NewPolicies(schema.Agency{})
+	agency.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := agency.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
+	agencyMixinFields0 := agencyMixin[0].Fields()
+	_ = agencyMixinFields0
+	agencyFields := schema.Agency{}.Fields()
+	_ = agencyFields
+	// agencyDescRevision is the schema descriptor for revision field.
+	agencyDescRevision := agencyMixinFields0[1].Descriptor()
+	// agency.DefaultRevision holds the default value on creation for the revision field.
+	agency.DefaultRevision = agencyDescRevision.Default.(int64)
+	// agency.RevisionValidator is a validator for the "revision" field. It is called by the builders before save.
+	agency.RevisionValidator = agencyDescRevision.Validators[0].(func(int64) error)
+	// agencyDescName is the schema descriptor for name field.
+	agencyDescName := agencyFields[0].Descriptor()
+	// agency.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	agency.NameValidator = func() func(string) error {
+		validators := agencyDescName.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(name string) error {
+			for _, fn := range fns {
+				if err := fn(name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// agencyDescID is the schema descriptor for id field.
+	agencyDescID := agencyMixinFields0[0].Descriptor()
+	// agency.DefaultID holds the default value on creation for the id field.
+	agency.DefaultID = agencyDescID.Default.(func() uuid.UUID)
 	assignmentcontrol.Policy = privacy.NewPolicies(schema.AssignmentControl{})
 	assignmentcontrol.Hooks[0] = func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
@@ -187,30 +229,21 @@ func init() {
 	commandreceiptDescID := commandreceiptFields[0].Descriptor()
 	// commandreceipt.DefaultID holds the default value on creation for the id field.
 	commandreceipt.DefaultID = commandreceiptDescID.Default.(func() uuid.UUID)
-	contributionsupport.Policy = privacy.NewPolicies(schema.ContributionSupport{})
-	contributionsupport.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+	consumeroffset.Policy = privacy.NewPolicies(schema.ConsumerOffset{})
+	consumeroffset.Hooks[0] = func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-			if err := contributionsupport.Policy.EvalMutation(ctx, m); err != nil {
+			if err := consumeroffset.Policy.EvalMutation(ctx, m); err != nil {
 				return nil, err
 			}
 			return next.Mutate(ctx, m)
 		})
 	}
-	contributionsupportFields := schema.ContributionSupport{}.Fields()
-	_ = contributionsupportFields
-	// contributionsupportDescTargetPosition is the schema descriptor for target_position field.
-	contributionsupportDescTargetPosition := contributionsupportFields[3].Descriptor()
-	// contributionsupport.TargetPositionValidator is a validator for the "target_position" field. It is called by the builders before save.
-	contributionsupport.TargetPositionValidator = contributionsupportDescTargetPosition.Validators[0].(func(int) error)
-	correctiondirtytransmission.Policy = privacy.NewPolicies(schema.CorrectionDirtyTransmission{})
-	correctiondirtytransmission.Hooks[0] = func(next ent.Mutator) ent.Mutator {
-		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-			if err := correctiondirtytransmission.Policy.EvalMutation(ctx, m); err != nil {
-				return nil, err
-			}
-			return next.Mutate(ctx, m)
-		})
-	}
+	consumeroffsetFields := schema.ConsumerOffset{}.Fields()
+	_ = consumeroffsetFields
+	// consumeroffsetDescLastSeq is the schema descriptor for last_seq field.
+	consumeroffsetDescLastSeq := consumeroffsetFields[2].Descriptor()
+	// consumeroffset.LastSeqValidator is a validator for the "last_seq" field. It is called by the builders before save.
+	consumeroffset.LastSeqValidator = consumeroffsetDescLastSeq.Validators[0].(func(int64) error)
 	credentialMixin := schema.Credential{}.Mixin()
 	credential.Policy = privacy.NewPolicies(schema.Credential{})
 	credential.Hooks[0] = func(next ent.Mutator) ent.Mutator {
@@ -333,6 +366,10 @@ func init() {
 			return nil
 		}
 	}()
+	// gatewaynetworkDescPriority is the schema descriptor for priority field.
+	gatewaynetworkDescPriority := gatewaynetworkFields[4].Descriptor()
+	// gatewaynetwork.PriorityValidator is a validator for the "priority" field. It is called by the builders before save.
+	gatewaynetwork.PriorityValidator = gatewaynetworkDescPriority.Validators[0].(func(int) error)
 	// gatewaynetworkDescID is the schema descriptor for id field.
 	gatewaynetworkDescID := gatewaynetworkFields[0].Descriptor()
 	// gatewaynetwork.DefaultID holds the default value on creation for the id field.
@@ -475,21 +512,21 @@ func init() {
 	messageDescIdentitySubtype := messageFields[3].Descriptor()
 	// message.DefaultIdentitySubtype holds the default value on creation for the identity_subtype field.
 	message.DefaultIdentitySubtype = messageDescIdentitySubtype.Default.(string)
-	messagecontribution.Policy = privacy.NewPolicies(schema.MessageContribution{})
-	messagecontribution.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+	messageunit.Policy = privacy.NewPolicies(schema.MessageUnit{})
+	messageunit.Hooks[0] = func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-			if err := messagecontribution.Policy.EvalMutation(ctx, m); err != nil {
+			if err := messageunit.Policy.EvalMutation(ctx, m); err != nil {
 				return nil, err
 			}
 			return next.Mutate(ctx, m)
 		})
 	}
-	messagecontributionFields := schema.MessageContribution{}.Fields()
-	_ = messagecontributionFields
-	// messagecontributionDescReady is the schema descriptor for ready field.
-	messagecontributionDescReady := messagecontributionFields[5].Descriptor()
-	// messagecontribution.DefaultReady holds the default value on creation for the ready field.
-	messagecontribution.DefaultReady = messagecontributionDescReady.Default.(bool)
+	messageunitFields := schema.MessageUnit{}.Fields()
+	_ = messageunitFields
+	// messageunitDescID is the schema descriptor for id field.
+	messageunitDescID := messageunitFields[0].Descriptor()
+	// messageunit.DefaultID holds the default value on creation for the id field.
+	messageunit.DefaultID = messageunitDescID.Default.(func() uuid.UUID)
 	network.Policy = privacy.NewPolicies(schema.Network{})
 	network.Hooks[0] = func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
@@ -526,7 +563,7 @@ func init() {
 		}
 	}()
 	// networkDescDeleted is the schema descriptor for deleted field.
-	networkDescDeleted := networkFields[4].Descriptor()
+	networkDescDeleted := networkFields[5].Descriptor()
 	// network.DefaultDeleted holds the default value on creation for the deleted field.
 	network.DefaultDeleted = networkDescDeleted.Default.(bool)
 	organizationMixin := schema.Organization{}.Mixin()
@@ -590,26 +627,24 @@ func init() {
 	pendingassignmentscopeDescAssignmentRevision := pendingassignmentscopeFields[1].Descriptor()
 	// pendingassignmentscope.AssignmentRevisionValidator is a validator for the "assignment_revision" field. It is called by the builders before save.
 	pendingassignmentscope.AssignmentRevisionValidator = pendingassignmentscopeDescAssignmentRevision.Validators[0].(func(int64) error)
+	// pendingassignmentscopeDescTargetPosition is the schema descriptor for target_position field.
+	pendingassignmentscopeDescTargetPosition := pendingassignmentscopeFields[12].Descriptor()
+	// pendingassignmentscope.TargetPositionValidator is a validator for the "target_position" field. It is called by the builders before save.
+	pendingassignmentscope.TargetPositionValidator = pendingassignmentscopeDescTargetPosition.Validators[0].(func(int) error)
 	// pendingassignmentscopeDescAttempts is the schema descriptor for attempts field.
-	pendingassignmentscopeDescAttempts := pendingassignmentscopeFields[11].Descriptor()
+	pendingassignmentscopeDescAttempts := pendingassignmentscopeFields[17].Descriptor()
 	// pendingassignmentscope.DefaultAttempts holds the default value on creation for the attempts field.
 	pendingassignmentscope.DefaultAttempts = pendingassignmentscopeDescAttempts.Default.(int)
 	// pendingassignmentscope.AttemptsValidator is a validator for the "attempts" field. It is called by the builders before save.
 	pendingassignmentscope.AttemptsValidator = pendingassignmentscopeDescAttempts.Validators[0].(func(int) error)
 	// pendingassignmentscopeDescFencingToken is the schema descriptor for fencing_token field.
-	pendingassignmentscopeDescFencingToken := pendingassignmentscopeFields[13].Descriptor()
+	pendingassignmentscopeDescFencingToken := pendingassignmentscopeFields[19].Descriptor()
 	// pendingassignmentscope.DefaultFencingToken holds the default value on creation for the fencing_token field.
 	pendingassignmentscope.DefaultFencingToken = pendingassignmentscopeDescFencingToken.Default.(int64)
 	// pendingassignmentscope.FencingTokenValidator is a validator for the "fencing_token" field. It is called by the builders before save.
 	pendingassignmentscope.FencingTokenValidator = pendingassignmentscopeDescFencingToken.Validators[0].(func(int64) error)
-	// pendingassignmentscopeDescAccessRevision is the schema descriptor for access_revision field.
-	pendingassignmentscopeDescAccessRevision := pendingassignmentscopeFields[14].Descriptor()
-	// pendingassignmentscope.DefaultAccessRevision holds the default value on creation for the access_revision field.
-	pendingassignmentscope.DefaultAccessRevision = pendingassignmentscopeDescAccessRevision.Default.(int64)
-	// pendingassignmentscope.AccessRevisionValidator is a validator for the "access_revision" field. It is called by the builders before save.
-	pendingassignmentscope.AccessRevisionValidator = pendingassignmentscopeDescAccessRevision.Validators[0].(func(int64) error)
 	// pendingassignmentscopeDescFailureCode is the schema descriptor for failure_code field.
-	pendingassignmentscopeDescFailureCode := pendingassignmentscopeFields[15].Descriptor()
+	pendingassignmentscopeDescFailureCode := pendingassignmentscopeFields[20].Descriptor()
 	// pendingassignmentscope.FailureCodeValidator is a validator for the "failure_code" field. It is called by the builders before save.
 	pendingassignmentscope.FailureCodeValidator = pendingassignmentscopeDescFailureCode.Validators[0].(func(string) error)
 	// pendingassignmentscopeDescID is the schema descriptor for id field.
@@ -792,11 +827,11 @@ func init() {
 	// transmission.NetworkResolutionValidator is a validator for the "network_resolution" field. It is called by the builders before save.
 	transmission.NetworkResolutionValidator = transmissionDescNetworkResolution.Validators[0].(func(string) error)
 	// transmissionDescSourceRevision is the schema descriptor for source_revision field.
-	transmissionDescSourceRevision := transmissionFields[12].Descriptor()
+	transmissionDescSourceRevision := transmissionFields[11].Descriptor()
 	// transmission.SourceRevisionValidator is a validator for the "source_revision" field. It is called by the builders before save.
 	transmission.SourceRevisionValidator = transmissionDescSourceRevision.Validators[0].(func(int64) error)
 	// transmissionDescIncomplete is the schema descriptor for incomplete field.
-	transmissionDescIncomplete := transmissionFields[13].Descriptor()
+	transmissionDescIncomplete := transmissionFields[12].Descriptor()
 	// transmission.DefaultIncomplete holds the default value on creation for the incomplete field.
 	transmission.DefaultIncomplete = transmissionDescIncomplete.Default.(bool)
 	transmissiontarget.Policy = privacy.NewPolicies(schema.TransmissionTarget{})
@@ -857,7 +892,7 @@ func init() {
 		}
 	}()
 	// unitDescDeleted is the schema descriptor for deleted field.
-	unitDescDeleted := unitFields[1].Descriptor()
+	unitDescDeleted := unitFields[2].Descriptor()
 	// unit.DefaultDeleted holds the default value on creation for the deleted field.
 	unit.DefaultDeleted = unitDescDeleted.Default.(bool)
 	// unitDescID is the schema descriptor for id field.

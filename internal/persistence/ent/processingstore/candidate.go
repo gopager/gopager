@@ -34,7 +34,7 @@ func candidateState(row *ent.ProcessingCandidate) (processing.Candidate, error) 
 		ManualRetryPending: row.ManualRetryPending, FencingToken: row.FencingToken,
 		WorkerID: row.WorkerID, LeaseUntil: row.LeaseUntil, DueAt: row.DueAt,
 		FailureCode: row.FailureCode, FailureStep: row.FailureStep,
-		BarrierAppliedAt: row.BarrierAppliedAt, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}
 	return value, value.Validate()
 }
@@ -102,7 +102,7 @@ func (s *Store) AdmitCandidate(ctx context.Context, tx platform.TransactionConte
 	}
 	update := client.ProcessingCandidate.Update().
 		Where(processingcandidate.ID(current.ID), processingcandidate.Revision(current.Revision),
-			processingcandidate.FencingToken(current.FencingToken), processingcandidate.BarrierAppliedAtIsNil()).
+			processingcandidate.FencingToken(current.FencingToken)).
 		SetRevision(next.Revision).SetWorkflowRevision(next.WorkflowRevision).
 		SetConfigurationRevision(next.ConfigurationRevision).SetFencingToken(next.FencingToken).
 		SetState(processingcandidate.State(next.State)).SetDueAt(now).SetUpdatedAt(now).
@@ -248,13 +248,13 @@ func (s *Store) RecoverCandidate(ctx context.Context, tx platform.TransactionCon
 	})
 }
 
-// ReadRetryCandidate correlates private work with a natively rule.reprocess-authorized Workflow.
+// ReadRetryCandidate correlates private work with a natively workflow.reprocess-authorized Workflow.
 func (s *Store) ReadRetryCandidate(ctx context.Context, tx platform.TransactionContext, authority authz.Authority,
 	parent, id uuid.UUID, now time.Time) (processing.Candidate, error) {
 	if parent == uuid.Nil || id == uuid.Nil {
 		return processing.Candidate{}, authz.ErrInvalidInput
 	}
-	if _, err := s.ReadWorkflow(ctx, tx, authority, "rule.reprocess", parent, now); err != nil {
+	if _, err := s.ReadWorkflow(ctx, tx, authority, "workflow.reprocess", parent, now); err != nil {
 		return processing.Candidate{}, err
 	}
 	client, scope, err := s.client(ctx, tx, map[string]entql.P{"ProcessingCandidate": entql.And(
@@ -299,7 +299,7 @@ func (s *Store) RetryCandidate(ctx context.Context, tx platform.TransactionConte
 	if err != nil {
 		return processing.Candidate{}, err
 	}
-	if err := client.AuditRecord.Create().SetActorID(actor).SetTargetID(id).SetAction("rule.reprocess").
+	if err := client.AuditRecord.Create().SetActorID(actor).SetTargetID(id).SetAction("workflow.reprocess").
 		SetOutcome("completed").SetRecordedAt(next.UpdatedAt).Exec(scope); err != nil {
 		return processing.Candidate{}, err
 	}

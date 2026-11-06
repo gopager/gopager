@@ -11,7 +11,6 @@ import (
 
 	"entgo.io/ent/entql"
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/persistence/ent"
@@ -25,6 +24,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/unittemplate"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
+	"github.com/gopager/gopager/internal/units"
 )
 
 // Store persists Units, Organizations, Unit templates and Unit collections, filtering rows
@@ -68,8 +68,8 @@ func unitScope(kind string, references []uuid.UUID) (entql.P, error) {
 		return entql.FieldIn("id", values...), nil
 	case "unitCollection":
 		return entql.HasEdgeWith("collections", entql.FieldIn("id", values...)), nil
-	case "network":
-		return entql.HasEdgeWith("address_rules", entql.FieldIn("network_id", values...)), nil
+	case "agency":
+		return entql.FieldIn("agency_id", values...), nil
 	default:
 		return nil, authz.ErrInvalidInput
 	}
@@ -83,12 +83,20 @@ func collectionScope(kind string, references []uuid.UUID) (entql.P, error) {
 		return entql.FieldIn("id", values...), nil
 	case "unit":
 		return entql.HasEdgeWith("units", entql.And(entql.FieldEQ("deleted", false), entql.FieldIn("id", values...))), nil
-	case "network":
-		return entql.HasEdgeWith("units", entql.And(entql.FieldEQ("deleted", false),
-			entql.HasEdgeWith("address_rules", entql.FieldIn("network_id", values...)))), nil
+	case "agency":
+		return entql.HasEdgeWith("units", entql.And(entql.FieldEQ("deleted", false), entql.FieldIn("agency_id", values...))), nil
 	default:
 		return nil, authz.ErrInvalidInput
 	}
+}
+
+// agencyScope binds a grant to Agencies themselves; Agency management is grantable on all or on
+// the Agency, never through Units or collections.
+func agencyScope(kind string, references []uuid.UUID) (entql.P, error) {
+	if kind != "agency" {
+		return nil, authz.ErrInvalidInput
+	}
+	return entql.FieldIn("id", referenceValues(references)...), nil
 }
 
 // plan preserves the central action/key/field composition while binding owner relations.
@@ -123,7 +131,7 @@ func organizationPlan(authority authz.Authority, action string, now time.Time) (
 
 // unitDTO projects the supported public configuration without exposing Ent entities.
 func unitDTO(row *ent.Unit) units.Unit {
-	result := units.Unit{ID: row.ID, Revision: row.Revision, Name: row.Name, Deleted: row.Deleted,
+	result := units.Unit{ID: row.ID, Revision: row.Revision, Name: row.Name, AgencyID: row.AgencyID, Deleted: row.Deleted,
 		OrganizationID: row.OrganizationID, Settings: row.Settings, CollectionIDs: []uuid.UUID{}}
 	var defaults *units.Defaults
 	if row.Edges.Organization != nil {
@@ -203,8 +211,8 @@ func (s *Store) ReadOrganizationContext(ctx context.Context, tx platform.Transac
 	}
 	members := make([]units.Unit, len(unitRows))
 	for i, member := range unitRows {
-		value := units.Unit{ID: member.ID, Revision: member.Revision, Name: member.Name, Deleted: member.Deleted,
-			OrganizationID: member.OrganizationID, Settings: member.Settings, CollectionIDs: []uuid.UUID{}}
+		value := units.Unit{ID: member.ID, Revision: member.Revision, Name: member.Name, AgencyID: member.AgencyID,
+			Deleted: member.Deleted, OrganizationID: member.OrganizationID, Settings: member.Settings, CollectionIDs: []uuid.UUID{}}
 		for _, collection := range member.Edges.Collections {
 			value.CollectionIDs = append(value.CollectionIDs, collection.ID)
 		}
@@ -477,14 +485,15 @@ func (s *Store) ReadUnitContext(ctx context.Context, tx platform.TransactionCont
 	if err != nil {
 		return units.Context{}, err
 	}
-	row, err := client.Unit.Query().Select(unit.FieldID, unit.FieldRevision, unit.FieldDeleted).WithCollections(withCollections).Only(scope)
+	row, err := client.Unit.Query().Select(unit.FieldID, unit.FieldRevision, unit.FieldAgencyID, unit.FieldDeleted).
+		WithCollections(withCollections).Only(scope)
 	if ent.IsNotFound(err) {
 		return units.Context{}, authz.ErrNotFound
 	}
 	if err != nil {
 		return units.Context{}, err
 	}
-	result := units.Context{ID: row.ID, Revision: row.Revision, Deleted: row.Deleted, CollectionIDs: []uuid.UUID{}}
+	result := units.Context{ID: row.ID, Revision: row.Revision, AgencyID: row.AgencyID, Deleted: row.Deleted, CollectionIDs: []uuid.UUID{}}
 	for _, collection := range row.Edges.Collections {
 		result.CollectionIDs = append(result.CollectionIDs, collection.ID)
 	}
@@ -619,7 +628,7 @@ func (s *Store) SaveUnit(ctx context.Context, tx platform.TransactionContext, au
 		if err != nil {
 			return err
 		}
-		create := client.Unit.Create().SetID(value.ID).SetRevision(1).SetName(value.Name).
+		create := client.Unit.Create().SetID(value.ID).SetRevision(1).SetName(value.Name).SetAgencyID(value.AgencyID).
 			SetSettings(value.Settings).AddCollectionIDs(value.CollectionIDs...)
 		if value.OrganizationID != nil {
 			create.SetOrganizationID(*value.OrganizationID)
@@ -645,7 +654,7 @@ func (s *Store) SaveUnit(ctx context.Context, tx platform.TransactionContext, au
 	if err != nil {
 		return err
 	}
-	current, err := currentClient.Unit.Query().Select(unit.FieldOrganizationID).Only(currentScope)
+	current, err := currentClient.Unit.Query().Select(unit.FieldOrganizationID, unit.FieldAgencyID).Only(currentScope)
 	if ent.IsNotFound(err) {
 		return authz.ErrNotFound
 	}
@@ -655,8 +664,8 @@ func (s *Store) SaveUnit(ctx context.Context, tx platform.TransactionContext, au
 	if err := s.lockOrganizations(ctx, tx, current.OrganizationID, value.OrganizationID); err != nil {
 		return err
 	}
-	update := client.Unit.Update().SetName(value.Name).SetRevision(value.Revision).SetDeleted(value.Deleted).
-		SetSettings(value.Settings).ClearCollections().AddCollectionIDs(value.CollectionIDs...)
+	update := client.Unit.Update().SetName(value.Name).SetAgencyID(value.AgencyID).SetRevision(value.Revision).
+		SetDeleted(value.Deleted).SetSettings(value.Settings).ClearCollections().AddCollectionIDs(value.CollectionIDs...)
 	if value.OrganizationID == nil {
 		update.ClearOrganizationID()
 	} else {
@@ -669,7 +678,22 @@ func (s *Store) SaveUnit(ctx context.Context, tx platform.TransactionContext, au
 	if updated != 1 {
 		return authz.ErrRevisionConflict
 	}
-	return nil
+	if current.AgencyID == value.AgencyID {
+		return nil
+	}
+	return s.moveMessageUnits(tx, value.ID, value.AgencyID)
+}
+
+// moveMessageUnits rewrites the Unit's message_units rows to its new Agency in the Unit's own
+// transaction, so the old Agency does not keep the Unit's history and the new Agency is not
+// left without it. Unit-less rows belong to a Network Agency and are not touched.
+func (s *Store) moveMessageUnits(tx platform.TransactionContext, unitID, agencyID uuid.UUID) error {
+	executor, err := s.primary.Resolve(tx)
+	if err != nil {
+		return err
+	}
+	_, err = executor.ExecContext(tx.Context(), `UPDATE message_units SET agency_id=$1 WHERE unit_id=$2`, agencyID, unitID)
+	return err
 }
 
 // ReadCollection protects the named configuration without revealing hidden members.
@@ -853,42 +877,6 @@ func (s *Store) RecordChange(ctx context.Context, tx platform.TransactionContext
 		return err
 	}
 	return owner.RecordConfigurationChange(ctx, tx, actor, target, action, now)
-}
-
-// ScopeExists checks every restricting reference against its current owning entity.
-func (s *Store) ScopeExists(ctx context.Context, tx platform.TransactionContext, target authz.Scope) (bool, error) {
-	if !authz.ValidScope(target) || (target.Kind != "unit" && target.Kind != "unitCollection") {
-		return false, authz.ErrInvalidInput
-	}
-	values := make([]any, 0, len(target.References))
-	seen := make(map[uuid.UUID]bool, len(target.References))
-	for _, reference := range target.References {
-		id, err := uuid.Parse(reference)
-		if err != nil {
-			return false, authz.ErrInvalidInput
-		}
-		if !seen[id] {
-			seen[id] = true
-			values = append(values, id)
-		}
-	}
-	predicate := entql.FieldIn("id", values...)
-	entity := "UnitCollection"
-	if target.Kind == "unit" {
-		entity = "Unit"
-		predicate = entql.And(predicate, entql.FieldEQ("deleted", false))
-	}
-	client, scope, err := s.client(ctx, tx, map[string]entql.P{entity: predicate}, nil)
-	if err != nil {
-		return false, err
-	}
-	var count int
-	if entity == "Unit" {
-		count, err = client.Unit.Query().Count(scope)
-	} else {
-		count, err = client.UnitCollection.Query().Count(scope)
-	}
-	return count == len(values), err
 }
 
 var _ units.Repository = (*Store)(nil)

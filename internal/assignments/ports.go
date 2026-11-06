@@ -5,28 +5,29 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/protocols"
+	"github.com/gopager/gopager/internal/units"
 )
 
-// NetworkOwner is implemented by the Network owner (transmission intake) and
-// reports a Network's current existence and Protocol inside the caller's
-// transaction.
+// NetworkOwner is implemented by the Radio network owner (transmission intake) and
+// reports a Network's current existence, Protocol and home Agency inside the
+// caller's transaction.
 type NetworkOwner interface {
-	ReadNetworkProtocol(context.Context, platform.TransactionContext, uuid.UUID) (protocols.Protocol, error)
+	ReadNetwork(context.Context, platform.TransactionContext, uuid.UUID) (protocols.Protocol, uuid.UUID, error)
 }
 
 // Repository owns current rules and durable invalidation, not historical Message/support tables.
 type Repository interface {
 	LockRevision(context.Context, platform.TransactionContext) (int64, error)
+	LockRevisionForChange(context.Context, platform.TransactionContext) (int64, error)
 	CurrentRules(context.Context, platform.TransactionContext, []uuid.UUID) ([]Rule, error)
 	ReadRule(context.Context, platform.TransactionContext, authz.Authority, string, uuid.UUID, time.Time) (Rule, error)
 	ListRules(context.Context, platform.TransactionContext, authz.Authority, units.PageInput, time.Time) (units.Page[Rule], error)
 	SaveRule(context.Context, platform.TransactionContext, authz.Authority, Rule, int64, time.Time) error
 	DeleteRule(context.Context, platform.TransactionContext, authz.Authority, Rule, time.Time) error
-	MarkPending(context.Context, platform.TransactionContext, []uuid.UUID, *uuid.UUID, string) (int64, error)
+	MarkPending(context.Context, platform.TransactionContext, []CorrectionScope, string) (int64, error)
 	RecordChange(context.Context, platform.TransactionContext, uuid.UUID, uuid.UUID, string, time.Time) error
 }
 

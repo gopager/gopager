@@ -27,6 +27,8 @@ type gatewayHTTPFixture struct {
 	current  uuid.UUID
 	sibling  uuid.UUID
 	proposed uuid.UUID
+	// agencies maps each fixture Network to the Agency that owns it.
+	agencies map[uuid.UUID]uuid.UUID
 }
 
 type gatewayCredentialResponse struct {
@@ -49,12 +51,20 @@ func newGatewayHTTPFixture(t *testing.T) gatewayHTTPFixture {
 		if err != nil {
 			return err
 		}
+		// Every fixture Network has its own Agency, so grants on one Network stay distinguishable.
+		fixture.agencies = make(map[uuid.UUID]uuid.UUID)
 		for _, network := range []struct {
 			id   uuid.UUID
 			name string
 		}{{fixture.current, "Current"}, {fixture.sibling, "Sibling"}, {fixture.proposed, "Proposed"}} {
-			if _, err := executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol)
-				VALUES($1,$2,'pocsag')`, network.id, network.name); err != nil {
+			agency := uuid.New()
+			fixture.agencies[network.id] = agency
+			if _, err := executor.ExecContext(tx.Context(), `INSERT INTO agencies(id,name) VALUES($1,$2)`,
+				agency, network.name+" agency"); err != nil {
+				return err
+			}
+			if _, err := executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol,agency_id)
+				VALUES($1,$2,'pocsag',$3)`, network.id, network.name, agency); err != nil {
 				return err
 			}
 		}
@@ -65,15 +75,15 @@ func newGatewayHTTPFixture(t *testing.T) gatewayHTTPFixture {
 			id         uuid.UUID
 			identifier string
 			network    uuid.UUID
-			isDefault  bool
+			priority   int
 		}{
-			{uuid.New(), "current", fixture.current, true},
-			{uuid.New(), "sibling", fixture.sibling, false},
+			{uuid.New(), "current", fixture.current, 0},
+			{uuid.New(), "sibling", fixture.sibling, 1},
 		} {
 			if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateway_networks
-				(id,gateway_id,gateway_network_identifier,network_id,is_default)
+				(id,gateway_id,gateway_network_identifier,network_id,priority)
 				VALUES($1,$2,$3,$4,$5)`, assignment.id, fixture.gateway, assignment.identifier,
-				assignment.network, assignment.isDefault); err != nil {
+				assignment.network, assignment.priority); err != nil {
 				return err
 			}
 		}
@@ -85,7 +95,7 @@ func newGatewayHTTPFixture(t *testing.T) gatewayHTTPFixture {
 	backend := httptest.NewUnstartedServer(nil)
 	t.Cleanup(backend.Close)
 	fixture.origin = "http://" + backend.Listener.Addr().String()
-	handler, err := composeApplicationAPI(fixture.origin, identity.DefaultLoginRateLimits(), store, nil, nil)
+	handler, err := composeApplicationAPI(fixture.origin, identity.DefaultLoginRateLimits(), mustComposeCore(t, store), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,9 +156,9 @@ func (fixture gatewayHTTPFixture) request(t *testing.T, method, path, body, csrf
 
 func (fixture gatewayHTTPFixture) setGrant(t *testing.T, networks []uuid.UUID, actions ...string) {
 	t.Helper()
-	scope := authz.Scope{Kind: "network"}
+	scope := authz.Scope{Kind: "agency"}
 	for _, network := range networks {
-		scope.References = append(scope.References, network.String())
+		scope.References = append(scope.References, fixture.agencies[network].String())
 	}
 	scopeJSON, err := json.Marshal(scope)
 	if err != nil {
@@ -182,6 +192,7 @@ func (fixture gatewayHTTPFixture) setGrant(t *testing.T, networks []uuid.UUID, a
 }
 
 func TestGatewayNetworkReplacementHTTPAuthorizationAndValidation(t *testing.T) {
+	t.Parallel()
 	fixture := newGatewayHTTPFixture(t)
 	path := "/api/v1/gateways/" + fixture.gateway.String() + "/networks"
 	replace := func(revision string, networks string, expected int) []byte {
@@ -191,18 +202,22 @@ func TestGatewayNetworkReplacementHTTPAuthorizationAndValidation(t *testing.T) {
 
 	fixture.request(t, http.MethodPut, path,
 		`{"schemaVersion":1,"expectedRevision":"1","networks":[{"gatewayNetworkIdentifier":"proposed","networkId":"`+
-			fixture.proposed.String()+`","default":true}]}`, fixture.csrf, "Bearer invalid", http.StatusUnauthorized)
-	replace("1", `[{"gatewayNetworkIdentifier":"proposed","networkId":"`+fixture.proposed.String()+`","default":false}]`,
+			fixture.proposed.String()+`","priority":0}]}`, fixture.csrf, "Bearer invalid", http.StatusUnauthorized)
+	replace("1", `[{"gatewayNetworkIdentifier":"proposed","networkId":"`+fixture.proposed.String()+`","priority":1}]`,
 		http.StatusBadRequest)
 	replace("1", `[]`, http.StatusBadRequest)
-	replace("1", `[{"gatewayNetworkIdentifier":"same","networkId":"`+fixture.proposed.String()+`","default":true},{"gatewayNetworkIdentifier":"same","networkId":"`+fixture.current.String()+`","default":false}]`,
+	replace("1", `[{"gatewayNetworkIdentifier":"first","networkId":"`+fixture.proposed.String()+`","priority":0},{"gatewayNetworkIdentifier":"second","networkId":"`+fixture.current.String()+`","priority":0}]`,
+		http.StatusBadRequest)
+	replace("1", `[{"gatewayNetworkIdentifier":"first","networkId":"`+fixture.proposed.String()+`","priority":0},{"gatewayNetworkIdentifier":"second","networkId":"`+fixture.current.String()+`","priority":2}]`,
+		http.StatusBadRequest)
+	replace("1", `[{"gatewayNetworkIdentifier":"same","networkId":"`+fixture.proposed.String()+`","priority":0},{"gatewayNetworkIdentifier":"same","networkId":"`+fixture.current.String()+`","priority":1}]`,
 		http.StatusBadRequest)
 
 	fixture.setGrant(t, []uuid.UUID{fixture.current}, "gateway.update")
-	replace("1", `[{"gatewayNetworkIdentifier":"proposed","networkId":"`+fixture.proposed.String()+`","default":true}]`,
+	replace("1", `[{"gatewayNetworkIdentifier":"proposed","networkId":"`+fixture.proposed.String()+`","priority":0}]`,
 		http.StatusForbidden)
 	fixture.setGrant(t, []uuid.UUID{fixture.proposed}, "gateway.update")
-	replace("1", `[{"gatewayNetworkIdentifier":"proposed","networkId":"`+fixture.proposed.String()+`","default":true}]`,
+	replace("1", `[{"gatewayNetworkIdentifier":"proposed","networkId":"`+fixture.proposed.String()+`","priority":0}]`,
 		http.StatusForbidden)
 
 	fixture.setGrant(t, []uuid.UUID{fixture.current, fixture.sibling, fixture.proposed}, "gateway.update")
@@ -210,36 +225,37 @@ func TestGatewayNetworkReplacementHTTPAuthorizationAndValidation(t *testing.T) {
 		SchemaVersion int    `json:"schemaVersion"`
 		Revision      string `json:"revision"`
 	}
-	response := replace("1", `[{"gatewayNetworkIdentifier":"proposed","networkId":"`+fixture.proposed.String()+`","default":true}]`,
+	response := replace("1", `[{"gatewayNetworkIdentifier":"proposed","networkId":"`+fixture.proposed.String()+`","priority":0}]`,
 		http.StatusOK)
 	if err := json.Unmarshal(response, &success); err != nil || success.Revision != "2" {
 		t.Fatalf("replacement response = %s, error=%v", response, err)
 	}
-	replace("1", `[{"gatewayNetworkIdentifier":"proposed","networkId":"`+fixture.proposed.String()+`","default":true}]`,
+	replace("1", `[{"gatewayNetworkIdentifier":"proposed","networkId":"`+fixture.proposed.String()+`","priority":0}]`,
 		http.StatusConflict)
 
 	var count int
 	var network uuid.UUID
-	var isDefault bool
+	var priority int
 	if err := fixture.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		executor, err := fixture.store.Resolve(tx)
 		if err != nil {
 			return err
 		}
-		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*), min(network_id::text)::uuid, bool_and(is_default)
-			FROM gateway_networks WHERE gateway_id=$1`, fixture.gateway).Scan(&count, &network, &isDefault); err != nil {
+		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*), min(network_id::text)::uuid, min(priority)
+			FROM gateway_networks WHERE gateway_id=$1`, fixture.gateway).Scan(&count, &network, &priority); err != nil {
 			return err
 		}
 		return nil
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if count != 1 || network != fixture.proposed || !isDefault {
-		t.Fatalf("replacement persisted count=%d network=%s default=%t", count, network, isDefault)
+	if count != 1 || network != fixture.proposed || priority != 0 {
+		t.Fatalf("replacement persisted count=%d network=%s priority=%d", count, network, priority)
 	}
 }
 
 func TestGatewayCredentialManagementHTTPSecretLifecycleAndAuthorization(t *testing.T) {
+	t.Parallel()
 	fixture := newGatewayHTTPFixture(t)
 	path := "/api/v1/gateways/" + fixture.gateway.String() + "/credentials"
 	fixture.setGrant(t, []uuid.UUID{fixture.current}, "gateway.update", "gateway.read")

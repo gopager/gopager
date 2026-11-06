@@ -24,6 +24,8 @@ const (
 	EdgeWorkflow = "workflow"
 	// EdgeUnit holds the string denoting the unit edge name in mutations.
 	EdgeUnit = "unit"
+	// EdgeNetwork holds the string denoting the network edge name in mutations.
+	EdgeNetwork = "network"
 	// Table holds the table name of the workflowscopereference in the database.
 	Table = "processing_workflow_scope_references"
 	// WorkflowTable is the table that holds the workflow relation/edge.
@@ -40,6 +42,13 @@ const (
 	UnitInverseTable = "units"
 	// UnitColumn is the table column denoting the unit relation/edge.
 	UnitColumn = "unit_id"
+	// NetworkTable is the table that holds the network relation/edge.
+	NetworkTable = "processing_workflow_scope_references"
+	// NetworkInverseTable is the table name for the Network entity.
+	// It exists in this package in order to avoid circular dependency with the "network" package.
+	NetworkInverseTable = "networks"
+	// NetworkColumn is the table column denoting the network relation/edge.
+	NetworkColumn = "network_id"
 )
 
 // Columns holds all SQL columns for workflowscopereference fields.
@@ -108,6 +117,13 @@ func ByUnitField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newUnitStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// ByNetworkField orders the results by network field.
+func ByNetworkField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newNetworkStep(), sql.OrderByField(field, opts...))
+	}
+}
 func newWorkflowStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -120,5 +136,12 @@ func newUnitStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(UnitInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, false, UnitTable, UnitColumn),
+	)
+}
+func newNetworkStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(NetworkInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, false, NetworkTable, NetworkColumn),
 	)
 }

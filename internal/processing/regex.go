@@ -20,7 +20,7 @@ const (
 	maxRegexInsts        = 20_000
 	maxRegexNFABytes     = 32 << 20
 	regexCallBudget      = time.Second
-	regexCancelInterval  = 256
+	regexCancelInterval  = 16
 )
 
 // RegexCapture is one named capture group of a match. Index is the group's position in
@@ -103,7 +103,7 @@ func (CoreRegex) Regex(ctx context.Context, pattern string, text *string) (Regex
 func admitRegex(pattern string) (*regexp.Regexp, error) {
 	parsed, err := syntax.Parse(pattern, syntax.Perl)
 	if err != nil {
-		return nil, invalid(errors.New("Core regex rejected its pattern"))
+		return nil, invalid(errors.New("core regex rejected its pattern"))
 	}
 	slots := int64(2 * (parsed.MaxCap() + 1))
 	if !regexWithinBounds(estimateRegexInsts(parsed), slots) {
@@ -111,14 +111,14 @@ func admitRegex(pattern string) (*regexp.Regexp, error) {
 	}
 	program, err := syntax.Compile(parsed.Simplify())
 	if err != nil {
-		return nil, invalid(errors.New("Core regex rejected its pattern"))
+		return nil, invalid(errors.New("core regex rejected its pattern"))
 	}
 	if !regexWithinBounds(int64(len(program.Inst)), slots) {
 		return nil, resource(errors.New("regex program boundary"))
 	}
 	compiled, err := regexp.Compile(pattern)
 	if err != nil {
-		return nil, invalid(errors.New("Core regex rejected its pattern"))
+		return nil, invalid(errors.New("core regex rejected its pattern"))
 	}
 	return compiled, nil
 }
@@ -165,7 +165,9 @@ func estimateRegexInsts(re *syntax.Regexp) int64 {
 	}
 }
 
-// cancellableReader checks its context periodically so regexp stops reading after cancellation.
+// cancellableReader checks its context every regexCancelInterval runes so regexp stops reading
+// after cancellation. The interval is small because one rune of a near-limit pattern can cost
+// milliseconds of NFA work; a coarse interval let a call overrun its budget by up to half a second.
 type cancellableReader struct {
 	ctx    context.Context
 	source io.RuneReader

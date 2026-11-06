@@ -10,6 +10,8 @@ import (
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
+	"github.com/gopager/gopager/internal/protocols"
+	"github.com/gopager/gopager/internal/units"
 )
 
 type previewRecheckRepository struct {
@@ -23,11 +25,16 @@ func (r *previewRecheckRepository) ReadWorkflow(context.Context, platform.Transa
 	return r.workflow, nil
 }
 
-type previewReferences struct{}
+type previewScopes struct{}
 
-// ScopeExists represents an existing global fixture scope.
-func (previewReferences) ScopeExists(context.Context, platform.TransactionContext, authz.Scope) (bool, error) {
-	return true, nil
+// ReadNetwork represents an existing fixture Network of a nil Agency; `all` grants cover it.
+func (previewScopes) ReadNetwork(context.Context, platform.TransactionContext, uuid.UUID) (protocols.Protocol, uuid.UUID, error) {
+	return protocols.POCSAG, uuid.Nil, nil
+}
+
+// ReadUnitContext represents an existing fixture Unit of a nil Agency.
+func (previewScopes) ReadUnitContext(_ context.Context, _ platform.TransactionContext, id uuid.UUID) (units.Context, error) {
+	return units.Context{ID: id, Revision: 1, CollectionIDs: []uuid.UUID{}}, nil
 }
 
 type previewRecheckSource struct {
@@ -48,14 +55,15 @@ func (s *previewRecheckSource) CheckInstalledSource(_ context.Context, _ platfor
 }
 
 func TestPreviewFinalFenceRechecksSourceAndRejectsChangedWorkflowOrAuthority(t *testing.T) {
+	t.Parallel()
 	principal := uuid.NewString()
 	authority := authz.Authority{PrincipalID: principal, Revision: 1, Active: true,
 		Grants: []authz.Grant{{ID: uuid.NewString(), SubjectID: principal, SubjectKind: "principal",
-			Actions: []string{"rule.preview"}, Scope: authz.Scope{Kind: "all"}}}}
+			Actions: []string{"workflow.preview"}, Scope: authz.Scope{Kind: "all"}}}}
 	workflow := processing.WorkflowConfiguration{ID: uuid.New(), Revision: 1, Scope: authz.Scope{Kind: "all"}}
 	repository := &previewRecheckRepository{workflow: workflow}
 	source := &previewRecheckSource{}
-	service := &PreviewService{management: &Service{repository: repository, references: previewReferences{}}, sourceOwner: source}
+	service := &PreviewService{management: &Service{repository: repository, scopes: previewScopes{}}, sourceOwner: source}
 	binding := processing.ExecutionBinding{WorkflowID: workflow.ID, Source: processing.SourceIdentity{
 		TransmissionID: uuid.New(), NetworkID: uuid.New(), SourceRevision: 1, ContextRevision: 1, Synthetic: true}}
 	check := func(authority authz.Authority) error {

@@ -65,9 +65,14 @@ func (c CredentialRecord) LogValue() slog.Value {
 	return slog.GroupValue(slog.String("id", c.ID.String()), slog.String("kind", string(c.Kind)))
 }
 
-// AuthorityRepository loads primary identity state under the shared revocation lock.
+// AuthorityRepository loads primary identity state under the access lock. LockAccess is the
+// shared lock that authority resolution holds; configuration changes bump the access
+// revision without waiting for it. LockAccessForChange is the exclusive lock for commands
+// that change grants, field permissions, credentials or account state; such a command takes
+// it before it resolves authority, so two of them never wait for each other's shared lock.
 type AuthorityRepository interface {
 	LockAccess(context.Context, platform.TransactionContext) (int64, error)
+	LockAccessForChange(context.Context, platform.TransactionContext) (int64, error)
 	Account(context.Context, platform.TransactionContext, uuid.UUID) (AccountRecord, error)
 	Guest(context.Context, platform.TransactionContext) (AccountRecord, error)
 	Credential(context.Context, platform.TransactionContext, [32]byte) (CredentialRecord, error)
@@ -76,9 +81,17 @@ type AuthorityRepository interface {
 	TouchCredential(context.Context, platform.TransactionContext, uuid.UUID, time.Time) error
 }
 
+// touchInterval is the minimum age of a credential's stored last-use time before Resolve
+// writes it again. It spares a write per authenticated request while keeping the session
+// inactivity rule honest to within this interval.
+const touchInterval = 5 * time.Minute
+
 // ScopeReferences checks current existence through the owning domain, not a cached ID list.
+// ScopesExist answers for all scopes at once so the cost of a resolution does not grow with
+// the number of grants: the result is aligned with the input (true means every reference of
+// that scope exists). Implementations batch their lookups per scope kind.
 type ScopeReferences interface {
-	ScopeExists(context.Context, platform.TransactionContext, authz.Scope) (bool, error)
+	ScopesExist(context.Context, platform.TransactionContext, []authz.Scope) ([]bool, error)
 }
 
 // Resolver derives a caller's current authority from proof or from a trusted
@@ -118,12 +131,15 @@ func NewResolver(repository AuthorityRepository, clock platform.Clock, reference
 
 // Resolve derives current authority inside the caller's transaction. It takes
 // the shared access (revocation) lock, which is held until the transaction
-// ends, so the authority cannot be revoked during the protected operation.
+// ends, so an access-changing command commits either before this operation
+// resolved its authority or after the operation completed.
 // It returns ErrLoginRequired for an unknown, wrong-kind, revoked, consumed or
 // expired credential (sessions also expire 30 days after creation or 7 days
 // after last use), an inactive account, or an access key restricted to a
 // scope that no longer exists. Grants on scopes that no longer exist are
-// dropped. On success it updates the credential's last-used time.
+// dropped. On success it updates the credential's last-used time, but only when the stored
+// value is at least touchInterval (5 minutes) old; the 7-day session inactivity rule can
+// therefore be off by up to that interval.
 func (r *Resolver) Resolve(ctx context.Context, tx platform.TransactionContext, proof Proof) (Authentication, error) {
 	if proof.Kind != AnonymousProof && proof.Kind != SessionProof && proof.Kind != AccessKeyProof ||
 		(proof.Kind == AnonymousProof && proof.Secret != "") {
@@ -150,11 +166,7 @@ func (r *Resolver) Resolve(ctx context.Context, tx platform.TransactionContext, 
 		if err != nil {
 			return Authentication{}, err
 		}
-		if credential.Kind != proof.Kind || credential.RevokedAt != nil || credential.ConsumedAt != nil ||
-			(credential.ExpiresAt != nil && !now.Before(*credential.ExpiresAt)) ||
-			(proof.Kind == SessionProof && (credential.ExpiresAt == nil ||
-				!now.Before(credential.CreatedAt.Add(30*24*time.Hour)) ||
-				!now.Before(credential.LastUsedAt.Add(7*24*time.Hour)))) {
+		if !credentialUsable(proof.Kind, credential, now) {
 			return Authentication{}, ErrLoginRequired
 		}
 		account, err = r.repository.Account(ctx, tx, credential.AccountID)
@@ -162,10 +174,7 @@ func (r *Resolver) Resolve(ctx context.Context, tx platform.TransactionContext, 
 	if err != nil {
 		return Authentication{}, err
 	}
-	if account.State != "active" || account.ID == uuid.Nil ||
-		(proof.Kind == SessionProof && account.Kind != "human") ||
-		(proof.Kind != AnonymousProof && account.Kind == "guest") ||
-		(proof.Kind == AnonymousProof && account.Kind != "guest") {
+	if !accountUsable(proof.Kind, account) {
 		return Authentication{}, ErrLoginRequired
 	}
 	authority, err := r.accountAuthority(ctx, tx, account.ID, revision)
@@ -176,17 +185,17 @@ func (r *Resolver) Resolve(ctx context.Context, tx platform.TransactionContext, 
 		if err := authz.ValidateRestrictions(credential.Restrictions); err != nil {
 			return Authentication{}, platform.NewFailure(platform.CodeAuthorityUnavailable, err)
 		}
-		for _, scope := range credential.Restrictions.Scopes {
-			exists, err := r.references.ScopeExists(ctx, tx, scope)
-			if err != nil {
-				return Authentication{}, err
-			}
+		existing, err := r.scopesExist(ctx, tx, credential.Restrictions.Scopes)
+		if err != nil {
+			return Authentication{}, err
+		}
+		for _, exists := range existing {
 			if !exists {
 				return Authentication{}, ErrLoginRequired
 			}
 		}
 	}
-	if proof.Kind != AnonymousProof {
+	if proof.Kind != AnonymousProof && now.Sub(credential.LastUsedAt) >= touchInterval {
 		if err := r.repository.TouchCredential(ctx, tx, credential.ID, now); err != nil {
 			return Authentication{}, err
 		}
@@ -197,6 +206,64 @@ func (r *Resolver) Resolve(ctx context.Context, tx platform.TransactionContext, 
 		CredentialID: credential.ID, Kind: proof.Kind, CSRFToken: credential.CSRFToken,
 		ExpiresAt: credential.ExpiresAt,
 	}, nil
+}
+
+// credentialUsable reports whether a stored credential may authenticate a proof of the given kind at
+// now: matching kind, not revoked, consumed or expired, and, for sessions, within the absolute and
+// inactivity limits. Resolve and Authenticate share it so the early and the transactional check
+// cannot drift apart.
+func credentialUsable(kind ProofKind, credential CredentialRecord, now time.Time) bool {
+	if credential.Kind != kind || credential.RevokedAt != nil || credential.ConsumedAt != nil ||
+		(credential.ExpiresAt != nil && !now.Before(*credential.ExpiresAt)) {
+		return false
+	}
+	return kind != SessionProof || (credential.ExpiresAt != nil &&
+		now.Before(credential.CreatedAt.Add(30*24*time.Hour)) &&
+		now.Before(credential.LastUsedAt.Add(7*24*time.Hour)))
+}
+
+// accountUsable reports whether the account is active and of a kind the proof kind may act as.
+func accountUsable(kind ProofKind, account AccountRecord) bool {
+	return account.State == "active" && account.ID != uuid.Nil &&
+		(kind != SessionProof || account.Kind == "human") &&
+		(kind == AnonymousProof) == (account.Kind == "guest")
+}
+
+// Authenticate is the cheap early check that a session or access-key proof names an existing,
+// usable credential of an active account: a hash lookup of the credential and its account only.
+// It takes no access lock, resolves no grants and does not write the credential's last-used time.
+// The result is advisory: it lets the HTTP layer refuse an unauthenticated request before reading
+// its body, while the authoritative decision (current grants, restrictions, CSRF) is still taken
+// by Resolve inside the operation's own transaction, where it stays consistent with the data the
+// operation changes. An anonymous proof has no credential to check and yields ErrLoginRequired;
+// callers skip those (see Preauthenticator).
+func (r *Resolver) Authenticate(ctx context.Context, tx platform.TransactionContext, proof Proof) error {
+	if proof.Kind != SessionProof && proof.Kind != AccessKeyProof {
+		return ErrLoginRequired
+	}
+	hash, err := SecretHash(proof.Secret)
+	if err != nil {
+		return err
+	}
+	now, err := r.clock.Now(ctx, tx)
+	if err != nil {
+		return err
+	}
+	credential, err := r.repository.Credential(ctx, tx, hash)
+	if err != nil {
+		return err
+	}
+	if !credentialUsable(proof.Kind, credential, now) {
+		return ErrLoginRequired
+	}
+	account, err := r.repository.Account(ctx, tx, credential.AccountID)
+	if err != nil {
+		return err
+	}
+	if !accountUsable(proof.Kind, account) {
+		return ErrLoginRequired
+	}
+	return nil
 }
 
 // ResolvePrincipalAuthority returns current owner authority for a trusted internal
@@ -226,16 +293,20 @@ func (r *Resolver) accountAuthority(ctx context.Context, tx platform.Transaction
 	if err != nil {
 		return authz.Authority{}, err
 	}
-	active := make([]authz.Grant, 0, len(grants))
-	for _, grant := range grants {
+	scopes := make([]authz.Scope, len(grants))
+	for i, grant := range grants {
 		if err := authz.ValidateGrant(grant); err != nil {
 			return authz.Authority{}, platform.NewFailure(platform.CodeAuthorityUnavailable, err)
 		}
-		exists, err := r.references.ScopeExists(ctx, tx, grant.Scope)
-		if err != nil {
-			return authz.Authority{}, err
-		}
-		if exists {
+		scopes[i] = grant.Scope
+	}
+	existing, err := r.scopesExist(ctx, tx, scopes)
+	if err != nil {
+		return authz.Authority{}, err
+	}
+	active := make([]authz.Grant, 0, len(grants))
+	for i, grant := range grants {
+		if existing[i] {
 			active = append(active, grant)
 		}
 	}
@@ -249,4 +320,20 @@ func (r *Resolver) accountAuthority(ctx context.Context, tx platform.Transaction
 		return authz.Authority{}, platform.NewFailure(platform.CodeAuthorityUnavailable, err)
 	}
 	return authority, nil
+}
+
+// scopesExist resolves all scopes with one batched owner call and rejects an owner that
+// answers for a different number of scopes, which would silently misalign grants.
+func (r *Resolver) scopesExist(ctx context.Context, tx platform.TransactionContext, scopes []authz.Scope) ([]bool, error) {
+	if len(scopes) == 0 {
+		return nil, nil
+	}
+	existing, err := r.references.ScopesExist(ctx, tx, scopes)
+	if err != nil {
+		return nil, err
+	}
+	if len(existing) != len(scopes) {
+		return nil, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("scope owner answered a different number of scopes"))
+	}
+	return existing, nil
 }

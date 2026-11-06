@@ -9,6 +9,7 @@ import (
 )
 
 func TestClassifyFailureKeepsResourceLimitTerminalAndAuthorityRetryable(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		err       error
 		code      platform.ErrorCode

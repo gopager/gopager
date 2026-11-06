@@ -32,12 +32,12 @@ var (
 	AddressRulesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "revision", Type: field.TypeInt64, Default: 1},
-		{Name: "network_id", Type: field.TypeUUID},
 		{Name: "protocol", Type: field.TypeEnum, Enums: []string{"pocsag", "flex", "zvei", "eas"}},
 		{Name: "selector", Type: field.TypeJSON},
 		{Name: "valid_from", Type: field.TypeTime, Nullable: true},
 		{Name: "valid_until", Type: field.TypeTime, Nullable: true},
 		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "network_id", Type: field.TypeUUID},
 		{Name: "unit_id", Type: field.TypeUUID},
 	}
 	// AddressRulesTable holds the schema information for the "address_rules" table.
@@ -46,6 +46,12 @@ var (
 		Columns:    AddressRulesColumns,
 		PrimaryKey: []*schema.Column{AddressRulesColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "address_rules_networks_address_rules",
+				Columns:    []*schema.Column{AddressRulesColumns[7]},
+				RefColumns: []*schema.Column{NetworksColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
 			{
 				Symbol:     "address_rules_units_address_rules",
 				Columns:    []*schema.Column{AddressRulesColumns[8]},
@@ -57,7 +63,7 @@ var (
 			{
 				Name:    "addressrule_network_id_protocol_enabled",
 				Unique:  false,
-				Columns: []*schema.Column{AddressRulesColumns[2], AddressRulesColumns[3], AddressRulesColumns[7]},
+				Columns: []*schema.Column{AddressRulesColumns[7], AddressRulesColumns[2], AddressRulesColumns[6]},
 			},
 			{
 				Name:    "addressrule_unit_id",
@@ -65,6 +71,18 @@ var (
 				Columns: []*schema.Column{AddressRulesColumns[8]},
 			},
 		},
+	}
+	// AgenciesColumns holds the columns for the "agencies" table.
+	AgenciesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "revision", Type: field.TypeInt64, Default: 1},
+		{Name: "name", Type: field.TypeString, Size: 256},
+	}
+	// AgenciesTable holds the schema information for the "agencies" table.
+	AgenciesTable = &schema.Table{
+		Name:       "agencies",
+		Columns:    AgenciesColumns,
+		PrimaryKey: []*schema.Column{AgenciesColumns[0]},
 	}
 	// AssignmentControlColumns holds the columns for the "assignment_control" table.
 	AssignmentControlColumns = []*schema.Column{
@@ -118,58 +136,18 @@ var (
 			},
 		},
 	}
-	// ContributionSupportsColumns holds the columns for the "contribution_supports" table.
-	ContributionSupportsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeUUID},
-		{Name: "contribution_id", Type: field.TypeUUID},
-		{Name: "transmission_id", Type: field.TypeUUID},
-		{Name: "target_position", Type: field.TypeInt, Nullable: true},
-		{Name: "observed_at", Type: field.TypeTime},
-		{Name: "accepted_at", Type: field.TypeTime},
+	// ConsumerOffsetsColumns holds the columns for the "consumer_offsets" table.
+	ConsumerOffsetsColumns = []*schema.Column{
+		{Name: "consumer", Type: field.TypeString},
+		{Name: "last_tx_id", Type: field.TypeUint64, SchemaType: map[string]string{"postgres": "xid8"}},
+		{Name: "last_seq", Type: field.TypeInt64},
+		{Name: "updated_at", Type: field.TypeTime},
 	}
-	// ContributionSupportsTable holds the schema information for the "contribution_supports" table.
-	ContributionSupportsTable = &schema.Table{
-		Name:       "contribution_supports",
-		Columns:    ContributionSupportsColumns,
-		PrimaryKey: []*schema.Column{ContributionSupportsColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "contributionsupport_transmission_id_target_position",
-				Unique:  true,
-				Columns: []*schema.Column{ContributionSupportsColumns[2], ContributionSupportsColumns[3]},
-			},
-			{
-				Name:    "contributionsupport_contribution_id",
-				Unique:  false,
-				Columns: []*schema.Column{ContributionSupportsColumns[1]},
-			},
-		},
-	}
-	// CorrectionDirtyTransmissionsColumns holds the columns for the "correction_dirty_transmissions" table.
-	CorrectionDirtyTransmissionsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "scope_id", Type: field.TypeUUID},
-		{Name: "transmission_id", Type: field.TypeUUID},
-		{Name: "accepted_at", Type: field.TypeTime},
-		{Name: "recorded_at", Type: field.TypeTime},
-	}
-	// CorrectionDirtyTransmissionsTable holds the schema information for the "correction_dirty_transmissions" table.
-	CorrectionDirtyTransmissionsTable = &schema.Table{
-		Name:       "correction_dirty_transmissions",
-		Columns:    CorrectionDirtyTransmissionsColumns,
-		PrimaryKey: []*schema.Column{CorrectionDirtyTransmissionsColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "correctiondirtytransmission_scope_id_accepted_at_transmission_id",
-				Unique:  true,
-				Columns: []*schema.Column{CorrectionDirtyTransmissionsColumns[1], CorrectionDirtyTransmissionsColumns[3], CorrectionDirtyTransmissionsColumns[2]},
-			},
-			{
-				Name:    "correctiondirtytransmission_transmission_id",
-				Unique:  false,
-				Columns: []*schema.Column{CorrectionDirtyTransmissionsColumns[2]},
-			},
-		},
+	// ConsumerOffsetsTable holds the schema information for the "consumer_offsets" table.
+	ConsumerOffsetsTable = &schema.Table{
+		Name:       "consumer_offsets",
+		Columns:    ConsumerOffsetsColumns,
+		PrimaryKey: []*schema.Column{ConsumerOffsetsColumns[0]},
 	}
 	// IdentityCredentialsColumns holds the columns for the "identity_credentials" table.
 	IdentityCredentialsColumns = []*schema.Column{
@@ -202,7 +180,10 @@ var (
 	// DomainEventsColumns holds the columns for the "domain_events" table.
 	DomainEventsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
+		{Name: "seq", Type: field.TypeInt64, Unique: true, Nullable: true},
 		{Name: "envelope", Type: field.TypeJSON},
+		{Name: "type", Type: field.TypeString, Nullable: true},
+		{Name: "occurred_at", Type: field.TypeTime, Nullable: true},
 	}
 	// DomainEventsTable holds the schema information for the "domain_events" table.
 	DomainEventsTable = &schema.Table{
@@ -290,7 +271,7 @@ var (
 		{Name: "gateway_id", Type: field.TypeUUID},
 		{Name: "gateway_network_identifier", Type: field.TypeString, Size: 128},
 		{Name: "network_id", Type: field.TypeUUID},
-		{Name: "default", Type: field.TypeBool},
+		{Name: "priority", Type: field.TypeInt},
 	}
 	// GatewayNetworksTable holds the schema information for the "gateway_networks" table.
 	GatewayNetworksTable = &schema.Table{
@@ -307,6 +288,11 @@ var (
 				Name:    "gatewaynetwork_gateway_id_network_id",
 				Unique:  true,
 				Columns: []*schema.Column{GatewayNetworksColumns[1], GatewayNetworksColumns[3]},
+			},
+			{
+				Name:    "gatewaynetwork_gateway_id_priority",
+				Unique:  true,
+				Columns: []*schema.Column{GatewayNetworksColumns[1], GatewayNetworksColumns[4]},
 			},
 		},
 	}
@@ -362,6 +348,7 @@ var (
 	IdentityLoginAttemptsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "account_key", Type: field.TypeBytes},
+		{Name: "source_key", Type: field.TypeBytes},
 		{Name: "attempted_at", Type: field.TypeTime},
 	}
 	// IdentityLoginAttemptsTable holds the schema information for the "identity_login_attempts" table.
@@ -373,12 +360,17 @@ var (
 			{
 				Name:    "loginattempt_attempted_at",
 				Unique:  false,
-				Columns: []*schema.Column{IdentityLoginAttemptsColumns[2]},
+				Columns: []*schema.Column{IdentityLoginAttemptsColumns[3]},
 			},
 			{
 				Name:    "loginattempt_account_key_attempted_at",
 				Unique:  false,
-				Columns: []*schema.Column{IdentityLoginAttemptsColumns[1], IdentityLoginAttemptsColumns[2]},
+				Columns: []*schema.Column{IdentityLoginAttemptsColumns[1], IdentityLoginAttemptsColumns[3]},
+			},
+			{
+				Name:    "loginattempt_source_key_attempted_at",
+				Unique:  false,
+				Columns: []*schema.Column{IdentityLoginAttemptsColumns[2], IdentityLoginAttemptsColumns[3]},
 			},
 		},
 	}
@@ -411,7 +403,6 @@ var (
 		{Name: "identity_value", Type: field.TypeBytes},
 		{Name: "first_observed_at", Type: field.TypeTime},
 		{Name: "last_observed_at", Type: field.TypeTime},
-		{Name: "publication_status", Type: field.TypeEnum, Enums: []string{"pending", "ready", "failed"}, Default: "pending"},
 	}
 	// MessagesTable holds the schema information for the "messages" table.
 	MessagesTable = &schema.Table{
@@ -420,47 +411,53 @@ var (
 		PrimaryKey: []*schema.Column{MessagesColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "message_identity_form_identity_subtype_identity_value",
+				Name:    "message_identity_form_identity_subtype_identity_value_last_observed_at",
 				Unique:  false,
-				Columns: []*schema.Column{MessagesColumns[2], MessagesColumns[3], MessagesColumns[4]},
+				Columns: []*schema.Column{MessagesColumns[2], MessagesColumns[3], MessagesColumns[4], MessagesColumns[6]},
 			},
 		},
 	}
-	// MessageContributionsColumns holds the columns for the "message_contributions" table.
-	MessageContributionsColumns = []*schema.Column{
+	// MessageUnitsColumns holds the columns for the "message_units" table.
+	MessageUnitsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "message_id", Type: field.TypeUUID},
 		{Name: "unit_id", Type: field.TypeUUID, Nullable: true},
-		{Name: "contribution_time", Type: field.TypeTime},
+		{Name: "agency_id", Type: field.TypeUUID},
+		{Name: "first_observed_at", Type: field.TypeTime},
 		{Name: "age_anchor", Type: field.TypeTime},
-		{Name: "ready", Type: field.TypeBool, Default: false},
+		{Name: "correction_status", Type: field.TypeEnum, Enums: []string{"current", "correcting"}, Default: "current"},
 	}
-	// MessageContributionsTable holds the schema information for the "message_contributions" table.
-	MessageContributionsTable = &schema.Table{
-		Name:       "message_contributions",
-		Columns:    MessageContributionsColumns,
-		PrimaryKey: []*schema.Column{MessageContributionsColumns[0]},
+	// MessageUnitsTable holds the schema information for the "message_units" table.
+	MessageUnitsTable = &schema.Table{
+		Name:       "message_units",
+		Columns:    MessageUnitsColumns,
+		PrimaryKey: []*schema.Column{MessageUnitsColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "messagecontribution_message_id_unit_id",
+				Name:    "messageunit_message_id_unit_id",
 				Unique:  true,
-				Columns: []*schema.Column{MessageContributionsColumns[1], MessageContributionsColumns[2]},
+				Columns: []*schema.Column{MessageUnitsColumns[1], MessageUnitsColumns[2]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "unit_id IS NOT NULL",
 				},
 			},
 			{
-				Name:    "messagecontribution_message_id",
+				Name:    "messageunit_message_id_agency_id",
 				Unique:  true,
-				Columns: []*schema.Column{MessageContributionsColumns[1]},
+				Columns: []*schema.Column{MessageUnitsColumns[1], MessageUnitsColumns[3]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "unit_id IS NULL",
 				},
 			},
 			{
-				Name:    "messagecontribution_unit_id_age_anchor",
+				Name:    "messageunit_unit_id_age_anchor",
 				Unique:  false,
-				Columns: []*schema.Column{MessageContributionsColumns[2], MessageContributionsColumns[4]},
+				Columns: []*schema.Column{MessageUnitsColumns[2], MessageUnitsColumns[5]},
+			},
+			{
+				Name:    "messageunit_agency_id_first_observed_at",
+				Unique:  false,
+				Columns: []*schema.Column{MessageUnitsColumns[3], MessageUnitsColumns[4]},
 			},
 		},
 	}
@@ -471,12 +468,28 @@ var (
 		{Name: "name", Type: field.TypeString, Size: 256},
 		{Name: "protocol", Type: field.TypeEnum, Enums: []string{"pocsag", "flex", "zvei", "eas"}},
 		{Name: "deleted", Type: field.TypeBool, Default: false},
+		{Name: "agency_id", Type: field.TypeUUID},
 	}
 	// NetworksTable holds the schema information for the "networks" table.
 	NetworksTable = &schema.Table{
 		Name:       "networks",
 		Columns:    NetworksColumns,
 		PrimaryKey: []*schema.Column{NetworksColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "networks_agencies_networks",
+				Columns:    []*schema.Column{NetworksColumns[5]},
+				RefColumns: []*schema.Column{AgenciesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "network_agency_id",
+				Unique:  false,
+				Columns: []*schema.Column{NetworksColumns[5]},
+			},
+		},
 	}
 	// OrganizationsColumns holds the columns for the "organizations" table.
 	OrganizationsColumns = []*schema.Column{
@@ -496,19 +509,24 @@ var (
 	AssignmentPendingScopesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "assignment_revision", Type: field.TypeInt64},
-		{Name: "network_ids", Type: field.TypeJSON},
-		{Name: "unit_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "reason", Type: field.TypeEnum, Enums: []string{"rule-change", "unit-deleted", "suppression-change"}},
+		{Name: "network_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "protocol", Type: field.TypeEnum, Nullable: true, Enums: []string{"pocsag", "flex", "zvei", "eas"}},
+		{Name: "address_from", Type: field.TypeInt64, Nullable: true},
+		{Name: "address_to", Type: field.TypeInt64, Nullable: true},
+		{Name: "address_text", Type: field.TypeString, Nullable: true},
+		{Name: "valid_from", Type: field.TypeTime, Nullable: true},
+		{Name: "valid_until", Type: field.TypeTime, Nullable: true},
+		{Name: "unit_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "transmission_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "target_position", Type: field.TypeInt, Nullable: true},
 		{Name: "recorded_at", Type: field.TypeTime},
 		{Name: "state", Type: field.TypeEnum, Enums: []string{"queued", "running", "completed", "failed", "superseded"}, Default: "queued"},
-		{Name: "high_water_accepted_at", Type: field.TypeTime, Nullable: true},
-		{Name: "high_water_transmission_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "cursor_accepted_at", Type: field.TypeTime, Nullable: true},
 		{Name: "cursor_transmission_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "attempts", Type: field.TypeInt, Default: 0},
 		{Name: "lease_until", Type: field.TypeTime, Nullable: true},
 		{Name: "fencing_token", Type: field.TypeInt64, Default: 0},
-		{Name: "access_revision", Type: field.TypeInt64, Default: 1},
 		{Name: "failure_code", Type: field.TypeString, Nullable: true},
 	}
 	// AssignmentPendingScopesTable holds the schema information for the "assignment_pending_scopes" table.
@@ -539,7 +557,6 @@ var (
 		{Name: "due_at", Type: field.TypeTime},
 		{Name: "failure_code", Type: field.TypeString, Nullable: true},
 		{Name: "failure_step", Type: field.TypeString, Nullable: true},
-		{Name: "barrier_applied_at", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
@@ -558,11 +575,6 @@ var (
 				Name:    "processingcandidate_state_due_at_id",
 				Unique:  false,
 				Columns: []*schema.Column{ProcessingCandidatesColumns[9], ProcessingCandidatesColumns[17], ProcessingCandidatesColumns[0]},
-			},
-			{
-				Name:    "processingcandidate_transmission_id_barrier_applied_at",
-				Unique:  false,
-				Columns: []*schema.Column{ProcessingCandidatesColumns[2], ProcessingCandidatesColumns[20]},
 			},
 		},
 	}
@@ -669,7 +681,6 @@ var (
 		{Name: "network_resolution", Type: field.TypeString},
 		{Name: "protocol", Type: field.TypeEnum, Enums: []string{"pocsag", "flex", "zvei", "eas"}},
 		{Name: "payload", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "json"}},
-		{Name: "targets", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "json"}},
 		{Name: "observed_at", Type: field.TypeTime},
 		{Name: "observation_offset_seconds", Type: field.TypeInt},
 		{Name: "accepted_at", Type: field.TypeTime},
@@ -677,8 +688,7 @@ var (
 		{Name: "incomplete", Type: field.TypeBool, Default: false},
 		{Name: "quality_metrics", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "json"}},
 		{Name: "message_id", Type: field.TypeUUID},
-		{Name: "processing_status", Type: field.TypeEnum, Enums: []string{"pending", "completed", "failed"}, Default: "pending"},
-		{Name: "publication_status", Type: field.TypeEnum, Enums: []string{"pending", "ready", "failed"}, Default: "pending"},
+		{Name: "processing_status", Type: field.TypeEnum, Enums: []string{"none", "pending", "completed", "failed"}, Default: "pending"},
 	}
 	// TransmissionsTable holds the schema information for the "transmissions" table.
 	TransmissionsTable = &schema.Table{
@@ -694,20 +704,12 @@ var (
 			{
 				Name:    "transmission_protocol_observed_at_id",
 				Unique:  false,
-				Columns: []*schema.Column{TransmissionsColumns[6], TransmissionsColumns[9], TransmissionsColumns[0]},
+				Columns: []*schema.Column{TransmissionsColumns[6], TransmissionsColumns[8], TransmissionsColumns[0]},
 			},
 			{
 				Name:    "transmission_message_id_observed_at_id",
 				Unique:  false,
-				Columns: []*schema.Column{TransmissionsColumns[15], TransmissionsColumns[9], TransmissionsColumns[0]},
-			},
-			{
-				Name:    "transmissions_unpublished",
-				Unique:  false,
-				Columns: []*schema.Column{TransmissionsColumns[11], TransmissionsColumns[0]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "processing_status = 'pending' AND publication_status = 'pending'",
-				},
+				Columns: []*schema.Column{TransmissionsColumns[14], TransmissionsColumns[8], TransmissionsColumns[0]},
 			},
 		},
 	}
@@ -721,6 +723,13 @@ var (
 		{Name: "unit_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "matched_rule_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "assignment_revision", Type: field.TypeInt64},
+		{Name: "network_id", Type: field.TypeUUID},
+		{Name: "protocol", Type: field.TypeEnum, Enums: []string{"pocsag", "flex", "zvei", "eas"}},
+		{Name: "observed_at", Type: field.TypeTime},
+		{Name: "accepted_at", Type: field.TypeTime},
+		{Name: "address_number", Type: field.TypeInt64, Nullable: true},
+		{Name: "address_text", Type: field.TypeString, Nullable: true},
+		{Name: "function", Type: field.TypeInt16, Nullable: true},
 	}
 	// TransmissionTargetsTable holds the schema information for the "transmission_targets" table.
 	TransmissionTargetsTable = &schema.Table{
@@ -734,9 +743,25 @@ var (
 				Columns: []*schema.Column{TransmissionTargetsColumns[1], TransmissionTargetsColumns[2]},
 			},
 			{
-				Name:    "transmissiontarget_unit_id",
+				Name:    "transmissiontarget_network_id_protocol_address_number_observed_at",
 				Unique:  false,
-				Columns: []*schema.Column{TransmissionTargetsColumns[5]},
+				Columns: []*schema.Column{TransmissionTargetsColumns[8], TransmissionTargetsColumns[9], TransmissionTargetsColumns[12], TransmissionTargetsColumns[10]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "address_number IS NOT NULL",
+				},
+			},
+			{
+				Name:    "transmissiontarget_network_id_protocol_address_text_observed_at",
+				Unique:  false,
+				Columns: []*schema.Column{TransmissionTargetsColumns[8], TransmissionTargetsColumns[9], TransmissionTargetsColumns[13], TransmissionTargetsColumns[10]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "address_text IS NOT NULL",
+				},
+			},
+			{
+				Name:    "transmissiontarget_unit_id_observed_at",
+				Unique:  false,
+				Columns: []*schema.Column{TransmissionTargetsColumns[5], TransmissionTargetsColumns[10]},
 			},
 		},
 	}
@@ -747,6 +772,7 @@ var (
 		{Name: "name", Type: field.TypeString, Size: 256},
 		{Name: "deleted", Type: field.TypeBool, Default: false},
 		{Name: "settings", Type: field.TypeJSON},
+		{Name: "agency_id", Type: field.TypeUUID},
 		{Name: "organization_id", Type: field.TypeUUID, Nullable: true},
 	}
 	// UnitsTable holds the schema information for the "units" table.
@@ -756,8 +782,14 @@ var (
 		PrimaryKey: []*schema.Column{UnitsColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "units_organizations_units",
+				Symbol:     "units_agencies_units",
 				Columns:    []*schema.Column{UnitsColumns[5]},
+				RefColumns: []*schema.Column{AgenciesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "units_organizations_units",
+				Columns:    []*schema.Column{UnitsColumns[6]},
 				RefColumns: []*schema.Column{OrganizationsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -765,6 +797,11 @@ var (
 		Indexes: []*schema.Index{
 			{
 				Name:    "unit_organization_id",
+				Unique:  false,
+				Columns: []*schema.Column{UnitsColumns[6]},
+			},
+			{
+				Name:    "unit_agency_id",
 				Unique:  false,
 				Columns: []*schema.Column{UnitsColumns[5]},
 			},
@@ -845,9 +882,9 @@ var (
 	// ProcessingWorkflowScopeReferencesColumns holds the columns for the "processing_workflow_scope_references" table.
 	ProcessingWorkflowScopeReferencesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
-		{Name: "network_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "workflow_id", Type: field.TypeUUID},
 		{Name: "unit_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "network_id", Type: field.TypeUUID, Nullable: true},
 	}
 	// ProcessingWorkflowScopeReferencesTable holds the schema information for the "processing_workflow_scope_references" table.
 	ProcessingWorkflowScopeReferencesTable = &schema.Table{
@@ -857,14 +894,20 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "processing_workflow_scope_references_processing_workflows_scope_references",
-				Columns:    []*schema.Column{ProcessingWorkflowScopeReferencesColumns[2]},
+				Columns:    []*schema.Column{ProcessingWorkflowScopeReferencesColumns[1]},
 				RefColumns: []*schema.Column{ProcessingWorkflowsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "processing_workflow_scope_references_units_unit",
-				Columns:    []*schema.Column{ProcessingWorkflowScopeReferencesColumns[3]},
+				Columns:    []*schema.Column{ProcessingWorkflowScopeReferencesColumns[2]},
 				RefColumns: []*schema.Column{UnitsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "processing_workflow_scope_references_networks_network",
+				Columns:    []*schema.Column{ProcessingWorkflowScopeReferencesColumns[3]},
+				RefColumns: []*schema.Column{NetworksColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 		},
@@ -872,12 +915,12 @@ var (
 			{
 				Name:    "workflowscopereference_workflow_id_network_id",
 				Unique:  true,
-				Columns: []*schema.Column{ProcessingWorkflowScopeReferencesColumns[2], ProcessingWorkflowScopeReferencesColumns[1]},
+				Columns: []*schema.Column{ProcessingWorkflowScopeReferencesColumns[1], ProcessingWorkflowScopeReferencesColumns[3]},
 			},
 			{
 				Name:    "workflowscopereference_workflow_id_unit_id",
 				Unique:  true,
-				Columns: []*schema.Column{ProcessingWorkflowScopeReferencesColumns[2], ProcessingWorkflowScopeReferencesColumns[3]},
+				Columns: []*schema.Column{ProcessingWorkflowScopeReferencesColumns[1], ProcessingWorkflowScopeReferencesColumns[2]},
 			},
 		},
 	}
@@ -944,11 +987,11 @@ var (
 	Tables = []*schema.Table{
 		IdentityAccountsTable,
 		AddressRulesTable,
+		AgenciesTable,
 		AssignmentControlTable,
 		IdentityAuditTable,
 		CommandReceiptsTable,
-		ContributionSupportsTable,
-		CorrectionDirtyTransmissionsTable,
+		ConsumerOffsetsTable,
 		IdentityCredentialsTable,
 		DomainEventsTable,
 		IdentityFieldPermissionsTable,
@@ -961,7 +1004,7 @@ var (
 		IdentityLoginAttemptsTable,
 		IdentityMembershipsTable,
 		MessagesTable,
-		MessageContributionsTable,
+		MessageUnitsTable,
 		NetworksTable,
 		OrganizationsTable,
 		AssignmentPendingScopesTable,
@@ -988,9 +1031,13 @@ func init() {
 	IdentityAccountsTable.Annotation = &entsql.Annotation{
 		Table: "identity_accounts",
 	}
-	AddressRulesTable.ForeignKeys[0].RefTable = UnitsTable
+	AddressRulesTable.ForeignKeys[0].RefTable = NetworksTable
+	AddressRulesTable.ForeignKeys[1].RefTable = UnitsTable
 	AddressRulesTable.Annotation = &entsql.Annotation{
 		Table: "address_rules",
+	}
+	AgenciesTable.Annotation = &entsql.Annotation{
+		Table: "agencies",
 	}
 	AssignmentControlTable.Annotation = &entsql.Annotation{
 		Table: "assignment_control",
@@ -1001,11 +1048,8 @@ func init() {
 	CommandReceiptsTable.Annotation = &entsql.Annotation{
 		Table: "command_receipts",
 	}
-	ContributionSupportsTable.Annotation = &entsql.Annotation{
-		Table: "contribution_supports",
-	}
-	CorrectionDirtyTransmissionsTable.Annotation = &entsql.Annotation{
-		Table: "correction_dirty_transmissions",
+	ConsumerOffsetsTable.Annotation = &entsql.Annotation{
+		Table: "consumer_offsets",
 	}
 	IdentityCredentialsTable.Annotation = &entsql.Annotation{
 		Table: "identity_credentials",
@@ -1043,9 +1087,10 @@ func init() {
 	MessagesTable.Annotation = &entsql.Annotation{
 		Table: "messages",
 	}
-	MessageContributionsTable.Annotation = &entsql.Annotation{
-		Table: "message_contributions",
+	MessageUnitsTable.Annotation = &entsql.Annotation{
+		Table: "message_units",
 	}
+	NetworksTable.ForeignKeys[0].RefTable = AgenciesTable
 	NetworksTable.Annotation = &entsql.Annotation{
 		Table: "networks",
 	}
@@ -1079,7 +1124,8 @@ func init() {
 	TransmissionTargetsTable.Annotation = &entsql.Annotation{
 		Table: "transmission_targets",
 	}
-	UnitsTable.ForeignKeys[0].RefTable = OrganizationsTable
+	UnitsTable.ForeignKeys[0].RefTable = AgenciesTable
+	UnitsTable.ForeignKeys[1].RefTable = OrganizationsTable
 	UnitsTable.Annotation = &entsql.Annotation{
 		Table: "units",
 	}
@@ -1098,6 +1144,7 @@ func init() {
 	}
 	ProcessingWorkflowScopeReferencesTable.ForeignKeys[0].RefTable = ProcessingWorkflowsTable
 	ProcessingWorkflowScopeReferencesTable.ForeignKeys[1].RefTable = UnitsTable
+	ProcessingWorkflowScopeReferencesTable.ForeignKeys[2].RefTable = NetworksTable
 	ProcessingWorkflowScopeReferencesTable.Annotation = &entsql.Annotation{
 		Table: "processing_workflow_scope_references",
 	}

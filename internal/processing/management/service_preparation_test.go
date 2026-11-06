@@ -67,6 +67,7 @@ func preparedDefinition(t *testing.T) processing.Definition {
 }
 
 func TestPrepareClosesTemporaryPreparedProgram(t *testing.T) {
+	t.Parallel()
 	programDefinition := preparedDefinition(t)
 	program, err := processing.CompileWorkflow(t.Context(), programDefinition,
 		preparationDeclarations{"source\x00flag": {Kind: processing.BooleanValue}}, nil)
@@ -84,6 +85,7 @@ func TestPrepareClosesTemporaryPreparedProgram(t *testing.T) {
 }
 
 func TestPrepareClosesProgramAfterSubstitutionRejection(t *testing.T) {
+	t.Parallel()
 	programDefinition := preparedDefinition(t)
 	program, err := processing.CompileWorkflow(t.Context(), programDefinition,
 		preparationDeclarations{"source\x00flag": {Kind: processing.BooleanValue}}, nil)
@@ -103,6 +105,7 @@ func TestPrepareClosesProgramAfterSubstitutionRejection(t *testing.T) {
 }
 
 func TestPrepareReturnsTemporaryArtifactCloseFailure(t *testing.T) {
+	t.Parallel()
 	programDefinition := preparedDefinition(t)
 	program, err := processing.CompileWorkflow(t.Context(), programDefinition,
 		preparationDeclarations{"source\x00flag": {Kind: processing.BooleanValue}}, nil)

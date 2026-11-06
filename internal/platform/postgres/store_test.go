@@ -17,6 +17,7 @@ import (
 )
 
 func TestNewStoreRequiresVerifiedTLSForRemoteHosts(t *testing.T) {
+	t.Parallel()
 	insecureURL := "postgres://user:secret-marker@db.example.test/gopager?sslmode=disable"
 	if _, _, err := NewStore(insecureURL, false); platform.FailureCode(err) != platform.CodeInvalidInput {
 		t.Fatalf("remote non-TLS DSN error = %v, want INVALID_INPUT", err)
@@ -47,6 +48,7 @@ func TestNewStoreRequiresVerifiedTLSForRemoteHosts(t *testing.T) {
 }
 
 func TestMigrationsAgainstPostgreSQL(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	ctx := context.Background()
 	first := migrationFiles("CREATE TABLE synthetic_one (id BIGINT PRIMARY KEY)")
@@ -105,8 +107,9 @@ func TestMigrationsAgainstPostgreSQL(t *testing.T) {
 }
 
 func TestConcurrentMigrationApplicationsSerialize(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
-	second := newStoreInSchema(t, testDatabaseURL(t), storeTestSchema(t, store))
+	second := newStoreAt(t, storeTestDSN(store))
 	migrations := migrationFiles("CREATE TABLE synthetic_once (id BIGINT PRIMARY KEY)")
 
 	start := make(chan struct{})
@@ -138,6 +141,7 @@ func TestConcurrentMigrationApplicationsSerialize(t *testing.T) {
 }
 
 func TestMigrationFailureRollsBackDDLAndLedgerRow(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	migrations := migrationFiles(
 		"CREATE TABLE synthetic_kept (id BIGINT PRIMARY KEY); INSERT INTO synthetic_kept VALUES (1)",
@@ -182,8 +186,9 @@ func TestMigrationFailureRollsBackDDLAndLedgerRow(t *testing.T) {
 }
 
 func TestMigrationLockWaitHonorsCancellation(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
-	waitingStore := newStoreInSchema(t, testDatabaseURL(t), storeTestSchema(t, store))
+	waitingStore := newStoreAt(t, storeTestDSN(store))
 	conn, err := store.db.Conn(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -233,6 +238,7 @@ func TestMigrationLockWaitHonorsCancellation(t *testing.T) {
 }
 
 func TestSyntheticParticipantsCommitAtomically(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	ctx := context.Background()
 	for _, statement := range []string{
@@ -292,6 +298,7 @@ func TestSyntheticParticipantsCommitAtomically(t *testing.T) {
 }
 
 func TestPossibleCommitAcknowledgementLossRequiresReceiptLookup(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	if _, err := store.db.Exec("CREATE TABLE synthetic_receipts (operation TEXT PRIMARY KEY)"); err != nil {
 		t.Fatalf("create synthetic receipt table: %v", err)
@@ -328,6 +335,7 @@ func TestPossibleCommitAcknowledgementLossRequiresReceiptLookup(t *testing.T) {
 }
 
 func TestFullStartupExposesSafeHealthAndShutdown(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -338,10 +346,9 @@ func TestFullStartupExposesSafeHealthAndShutdown(t *testing.T) {
 		t.Fatalf("release API port: %v", err)
 	}
 	config := platform.Config{
-		Profile:       "full",
 		Roles:         []platform.Role{platform.RoleAPI, platform.RoleWorker},
 		MigrationMode: platform.MigrationApply,
-		DatabaseURL:   testDatabaseURL(t),
+		DatabaseURL:   storeTestDSN(store),
 		ListenAddress: address,
 	}
 	handle, err := platform.Start(context.Background(), config, nil, store, nil)
@@ -349,7 +356,7 @@ func TestFullStartupExposesSafeHealthAndShutdown(t *testing.T) {
 		t.Fatalf("start Full API+worker composition: %v", err)
 	}
 	status := handle.ReadStatus()
-	if !status.Live || !status.Ready || status.Profile != "full" || len(status.Roles) != 2 {
+	if !status.Live || !status.Ready || len(status.Roles) != 2 {
 		t.Fatalf("startup status = %+v", status)
 	}
 	response, err := http.Get("http://" + address + "/health/ready")
@@ -388,6 +395,7 @@ func TestFullStartupExposesSafeHealthAndShutdown(t *testing.T) {
 }
 
 func TestSyntheticLeaseFencingAndExactMicrosecondBoundary(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	if _, err := store.db.Exec(`CREATE TABLE synthetic_boundary_lease (
 			id INTEGER PRIMARY KEY, token BIGINT NOT NULL, expires_at TIMESTAMPTZ NOT NULL);
@@ -406,6 +414,7 @@ func TestSyntheticLeaseFencingAndExactMicrosecondBoundary(t *testing.T) {
 		{"after expiry", 8, "2026-10-26T12:01:00.000001Z", 0},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			// Fixed primary-time input characterizes the strict predicate; the other
 			// lease test separately verifies actual clock_timestamp() inside a transaction.
 			result, err := store.db.Exec(`UPDATE synthetic_boundary_lease SET token=token
@@ -421,6 +430,7 @@ func TestSyntheticLeaseFencingAndExactMicrosecondBoundary(t *testing.T) {
 }
 
 func TestPrimaryClockAndLeaseExpiryUseLiveDatabaseTime(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	ctx := context.Background()
 	if _, err := store.db.ExecContext(ctx, `
@@ -496,6 +506,7 @@ func TestPrimaryClockAndLeaseExpiryUseLiveDatabaseTime(t *testing.T) {
 }
 
 func TestLedgerShapeConflictFailsClosed(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	if _, err := store.db.Exec(`
 		CREATE TABLE platform_schema_migrations (

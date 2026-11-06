@@ -17,14 +17,14 @@ import (
 	"github.com/gopager/gopager/internal/processing/publication"
 )
 
-// publicationSourceFixture owns a real SQL test barrier, not a production Original or Message.
+// publicationSourceFixture owns a real SQL test source row, not a production Original or Message.
 type publicationSourceFixture struct {
 	primary    *postgres.Store
 	repository *processingstore.Store
 	binding    processing.PublicationBinding
 	candidates []processing.CandidateBinding
 	deny       bool
-	failReady  bool
+	failStatus bool
 	mutate     bool
 	staleFence bool
 	supersede  bool
@@ -38,16 +38,15 @@ func (s *publicationSourceFixture) CapturePublication(ctx context.Context, tx pl
 	if err != nil {
 		return processing.PublicationBinding{}, nil, err
 	}
-	var ready bool
 	binding := s.binding
 	if err := executor.QueryRowContext(ctx,
-		`SELECT ready, fence, message_id, network_id, source_revision, context_revision
+		`SELECT fence, message_id, network_id, source_revision, context_revision
 		 FROM processing_publication_fixture WHERE id=$1 FOR UPDATE`, id).
-		Scan(&ready, &binding.SourceFence, &binding.MessageID, &binding.Source.NetworkID,
+		Scan(&binding.SourceFence, &binding.MessageID, &binding.Source.NetworkID,
 			&binding.Source.SourceRevision, &binding.Source.ContextRevision); err != nil {
 		return processing.PublicationBinding{}, nil, err
 	}
-	if ready || id != s.binding.Source.TransmissionID {
+	if id != s.binding.Source.TransmissionID {
 		return processing.PublicationBinding{}, nil, authz.ErrRevisionConflict
 	}
 	if s.staleFence {
@@ -76,14 +75,15 @@ func (s *publicationSourceFixture) CheckItem(ctx context.Context, tx platform.Tr
 	return nil
 }
 
-func (s *publicationSourceFixture) ApplyReadiness(ctx context.Context, tx platform.TransactionContext, binding processing.PublicationBinding) error {
+// ApplyProcessingStatus records the status refresh idempotently under the same fence checks.
+func (s *publicationSourceFixture) ApplyProcessingStatus(ctx context.Context, tx platform.TransactionContext, binding processing.PublicationBinding) error {
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {
 		return err
 	}
 	result, err := executor.ExecContext(ctx, `UPDATE processing_publication_fixture
-		SET ready=true WHERE id=$1 AND fence=$2 AND message_id=$3 AND network_id=$4
-			AND source_revision=$5 AND context_revision=$6 AND ready=false`,
+		SET applied=true WHERE id=$1 AND fence=$2 AND message_id=$3 AND network_id=$4
+			AND source_revision=$5 AND context_revision=$6`,
 		binding.Source.TransmissionID, binding.SourceFence, binding.MessageID,
 		binding.Source.NetworkID, binding.Source.SourceRevision, binding.Source.ContextRevision)
 	if err != nil {
@@ -93,7 +93,7 @@ func (s *publicationSourceFixture) ApplyReadiness(ctx context.Context, tx platfo
 	if err != nil {
 		return err
 	}
-	if changed != 1 || s.failReady {
+	if changed != 1 || s.failStatus {
 		return authz.ErrRevisionConflict
 	}
 	return nil
@@ -109,7 +109,11 @@ func (f failingPublicationFacts) AppendProcessingCompletion(ctx context.Context,
 	return id, platform.NewFailure(platform.CodeStorageUnavailable, errors.New("fixture failure after real fact insert"))
 }
 
-func TestProcessingPublicationAtomicBarrierAndFences(t *testing.T) {
+// TestProcessingPublicationAtomicEvidenceAndFences expects published results, their facts and the
+// source status refresh to commit together, completed evidence to be applied even while a sibling
+// candidate is pending, and repeated or concurrent publication to be idempotent.
+func TestProcessingPublicationAtomicEvidenceAndFences(t *testing.T) {
+	t.Parallel()
 	primary := newStore(t)
 	repository, err := processingstore.New(primary)
 	if err != nil {
@@ -136,14 +140,14 @@ func TestProcessingPublicationAtomicBarrierAndFences(t *testing.T) {
 				CreatedAt: now, UpdatedAt: now}
 			version := processing.Version{ID: uuid.New(), WorkflowID: configuration.ID,
 				CreatedAt: now, CreatedBy: actor, Definition: preparedProcessingDefinition(t)}
-			if err := repository.SaveWorkflow(tx.Context(), tx, authority, "rule.create", configuration, 0, now); err != nil {
+			if err := repository.SaveWorkflow(tx.Context(), tx, authority, "workflow.create", configuration, 0, now); err != nil {
 				return err
 			}
 			if err := repository.SaveVersion(tx.Context(), tx, version); err != nil {
 				return err
 			}
 			configuration.Revision, configuration.ActiveVersionID = 2, &version.ID
-			if err := repository.SaveWorkflow(tx.Context(), tx, authority, "rule.activate", configuration, 1, now); err != nil {
+			if err := repository.SaveWorkflow(tx.Context(), tx, authority, "workflow.activate", configuration, 1, now); err != nil {
 				return err
 			}
 			bindings = append(bindings, processing.CandidateBinding{WorkflowID: configuration.ID,
@@ -157,20 +161,21 @@ func TestProcessingPublicationAtomicBarrierAndFences(t *testing.T) {
 		_, err = executor.ExecContext(tx.Context(), `CREATE TABLE processing_publication_fixture
 			(id uuid PRIMARY KEY, message_id uuid NOT NULL, network_id uuid NOT NULL,
 			source_revision bigint NOT NULL, context_revision bigint NOT NULL,
-			fence bigint NOT NULL, ready boolean NOT NULL DEFAULT false)`)
+			fence bigint NOT NULL, applied boolean NOT NULL DEFAULT false)`)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"selected", "false", "no-candidate", "pending", "stale-config",
-		"stale-fence", "principal-revoked", "fact-failure", "readiness-failure", "duplicate-set",
+		"stale-fence", "principal-revoked", "fact-failure", "status-failure", "duplicate-set",
 		"source-changed", "context-changed", "network-changed", "superseded", "detached-check", "concurrent"} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			source := processing.PublicationBinding{Source: processing.SourceIdentity{
 				TransmissionID: uuid.New(), NetworkID: uuid.New(), SourceRevision: 1, ContextRevision: 1},
 				MessageID: uuid.New(), SourceFence: 1}
 			owner := &publicationSourceFixture{primary: primary, repository: repository, binding: source,
-				deny: name == "principal-revoked", failReady: name == "readiness-failure",
+				deny: name == "principal-revoked", failStatus: name == "status-failure",
 				mutate: name == "detached-check", staleFence: name == "stale-fence", supersede: name == "superseded"}
 			var completed []processing.Candidate
 			if err := primary.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
@@ -211,6 +216,13 @@ func TestProcessingPublicationAtomicBarrierAndFences(t *testing.T) {
 				}
 				executor, err := primary.Resolve(tx)
 				if err != nil {
+					return err
+				}
+				// Published results reference their Message, so the fixture source needs a Message row.
+				if _, err := executor.ExecContext(tx.Context(), `INSERT INTO messages
+					(id,identity_form,identity_subtype,identity_value,first_observed_at,last_observed_at)
+					VALUES($1,'test','',$2,clock_timestamp(),clock_timestamp())`,
+					source.MessageID, source.Source.TransmissionID[:]); err != nil {
 					return err
 				}
 				_, err = executor.ExecContext(tx.Context(),
@@ -255,7 +267,8 @@ func TestProcessingPublicationAtomicBarrierAndFences(t *testing.T) {
 					return service.Publish(tx.Context(), tx, source.Source.TransmissionID)
 				})
 			}
-			success := name == "selected" || name == "false" || name == "no-candidate" || name == "detached-check" || name == "concurrent"
+			success := name == "selected" || name == "false" || name == "no-candidate" || name == "pending" ||
+				name == "detached-check" || name == "concurrent"
 			if name == "concurrent" {
 				var wait sync.WaitGroup
 				results := make(chan error, 2)
@@ -264,23 +277,17 @@ func TestProcessingPublicationAtomicBarrierAndFences(t *testing.T) {
 				}
 				wait.Wait()
 				close(results)
-				winners := 0
 				for err := range results {
-					if err == nil {
-						winners++
-					} else if !errors.Is(err, authz.ErrRevisionConflict) {
-						t.Fatalf("unexpected concurrent publication failure: %v", err)
+					if err != nil {
+						t.Fatalf("concurrent publication failed instead of serializing: %v", err)
 					}
-				}
-				if winners != 1 {
-					t.Fatalf("publication winners=%d", winners)
 				}
 			} else if err := publish(); (err == nil) != success {
 				t.Fatalf("publication success=%t err=%v", success, err)
 			}
 			if success {
-				if err := publish(); !errors.Is(err, authz.ErrRevisionConflict) {
-					t.Fatalf("repeated source publication was not fenced: %v", err)
+				if err := publish(); err != nil {
+					t.Fatalf("repeated publication was not idempotent: %v", err)
 				}
 			}
 			if err := primary.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
@@ -288,29 +295,25 @@ func TestProcessingPublicationAtomicBarrierAndFences(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				var ready bool
-				var applied, published, factCount, injected int
-				if err := executor.QueryRowContext(tx.Context(), `SELECT ready,
-					(SELECT count(*) FROM processing_candidates WHERE transmission_id=$1 AND barrier_applied_at IS NOT NULL),
+				var applied bool
+				var published, factCount, injected int
+				if err := executor.QueryRowContext(tx.Context(), `SELECT applied,
 					(SELECT count(*) FROM processing_results WHERE message_id=$2 AND published_at IS NOT NULL),
 					(SELECT count(*) FROM domain_events WHERE envelope->'data'->>'transmissionId'=$3),
 					(SELECT count(*) FROM domain_events WHERE envelope->'data'->>'transmissionId'=$3
 						AND envelope->'data'->'result'->'fields' ? 'injected')
 					FROM processing_publication_fixture WHERE id=$1`,
 					source.Source.TransmissionID, source.MessageID, source.Source.TransmissionID.String()).
-					Scan(&ready, &applied, &published, &factCount, &injected); err != nil {
+					Scan(&applied, &published, &factCount, &injected); err != nil {
 					return err
 				}
-				wantApplied, wantFacts := 0, 0
-				if success {
-					wantApplied = len(completed)
-					if name != "false" && name != "no-candidate" {
-						wantFacts = 1
-					}
+				wantFacts := 0
+				if success && name != "false" && name != "no-candidate" {
+					wantFacts = 1
 				}
-				if ready != success || applied != wantApplied || published != wantFacts || factCount != wantFacts || injected != 0 {
-					t.Fatalf("partial/substituted publication: ready=%t applied=%d published=%d facts=%d injected=%d",
-						ready, applied, published, factCount, injected)
+				if applied != success || published != wantFacts || factCount != wantFacts || injected != 0 {
+					t.Fatalf("partial/substituted publication: applied=%t published=%d facts=%d injected=%d",
+						applied, published, factCount, injected)
 				}
 				return nil
 			}); err != nil {
@@ -324,62 +327,6 @@ func TestProcessingPublicationAtomicBarrierAndFences(t *testing.T) {
 					}
 					if item.Candidate.Revision != completed[0].Revision || item.Candidate.FencingToken != completed[0].FencingToken {
 						t.Fatal("rolled-back publication advanced private candidate revision/fence")
-					}
-					return nil
-				}); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if name == "selected" {
-				reception := source
-				reception.Source.TransmissionID = uuid.New()
-				pendingOwner := &publicationSourceFixture{primary: primary, repository: repository, binding: reception}
-				if err := primary.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-					for _, binding := range owner.candidates {
-						binding.TransmissionID = reception.Source.TransmissionID
-						if _, err := repository.AdmitCandidate(tx.Context(), tx, binding); err != nil {
-							return err
-						}
-						pendingOwner.candidates = append(pendingOwner.candidates, binding)
-					}
-					executor, err := primary.Resolve(tx)
-					if err != nil {
-						return err
-					}
-					_, err = executor.ExecContext(tx.Context(),
-						`INSERT INTO processing_publication_fixture(id,message_id,fence,network_id,source_revision,context_revision)
-						 VALUES($1,$2,$3,$4,$5,$6)`, reception.Source.TransmissionID, reception.MessageID,
-						reception.SourceFence, reception.Source.NetworkID, reception.Source.SourceRevision, reception.Source.ContextRevision)
-					return err
-				}); err != nil {
-					t.Fatal(err)
-				}
-				pendingService, err := publication.New(repository, pendingOwner, facts, primary)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err := primary.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-					return pendingService.Publish(tx.Context(), tx, reception.Source.TransmissionID)
-				}); !errors.Is(err, authz.ErrRevisionConflict) {
-					t.Fatalf("pending reception bypassed completed evidence: %v", err)
-				}
-				if err := primary.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-					executor, err := primary.Resolve(tx)
-					if err != nil {
-						return err
-					}
-					var oldReady, newReady bool
-					var published int
-					if err := executor.QueryRowContext(tx.Context(),
-						`SELECT (SELECT ready FROM processing_publication_fixture WHERE id=$1),
-							(SELECT ready FROM processing_publication_fixture WHERE id=$2),
-							(SELECT count(*) FROM processing_results WHERE message_id=$3 AND published_at IS NOT NULL)`,
-						source.Source.TransmissionID, reception.Source.TransmissionID, source.MessageID).
-						Scan(&oldReady, &newReady, &published); err != nil {
-						return err
-					}
-					if !oldReady || newReady || published != 1 {
-						t.Fatalf("pending reception removed or replaced ready evidence: old=%t new=%t results=%d", oldReady, newReady, published)
 					}
 					return nil
 				}); err != nil {

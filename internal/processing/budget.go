@@ -55,7 +55,9 @@ func (b *executionBudget) bound(err error) error {
 	return err
 }
 
-// guestWait pauses only guest instantiation/execution; preparation and result checks remain charged.
+// guestWait pauses the compute allowance while run waits on something that is not built-in
+// compute: guest instantiation/execution, or the database transaction that authorizes an installed
+// call. run receives the caller's context. Preparation and result checks remain charged.
 func (b *executionBudget) guestWait(run func(context.Context) error) error {
 	if b.active == nil || b.parent == nil || b.started.IsZero() {
 		return invalid(errors.New("invalid accumulated compute budget"))

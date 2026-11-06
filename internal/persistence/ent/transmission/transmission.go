@@ -28,8 +28,6 @@ const (
 	FieldProtocol = "protocol"
 	// FieldPayload holds the string denoting the payload field in the database.
 	FieldPayload = "payload"
-	// FieldTargets holds the string denoting the targets field in the database.
-	FieldTargets = "targets"
 	// FieldObservedAt holds the string denoting the observed_at field in the database.
 	FieldObservedAt = "observed_at"
 	// FieldObservationOffsetSeconds holds the string denoting the observation_offset_seconds field in the database.
@@ -46,8 +44,6 @@ const (
 	FieldMessageID = "message_id"
 	// FieldProcessingStatus holds the string denoting the processing_status field in the database.
 	FieldProcessingStatus = "processing_status"
-	// FieldPublicationStatus holds the string denoting the publication_status field in the database.
-	FieldPublicationStatus = "publication_status"
 	// Table holds the table name of the transmission in the database.
 	Table = "transmissions"
 )
@@ -62,7 +58,6 @@ var Columns = []string{
 	FieldNetworkResolution,
 	FieldProtocol,
 	FieldPayload,
-	FieldTargets,
 	FieldObservedAt,
 	FieldObservationOffsetSeconds,
 	FieldAcceptedAt,
@@ -71,7 +66,6 @@ var Columns = []string{
 	FieldQualityMetrics,
 	FieldMessageID,
 	FieldProcessingStatus,
-	FieldPublicationStatus,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -135,6 +129,7 @@ const DefaultProcessingStatus = ProcessingStatusPending
 
 // ProcessingStatus values.
 const (
+	ProcessingStatusNone      ProcessingStatus = "none"
 	ProcessingStatusPending   ProcessingStatus = "pending"
 	ProcessingStatusCompleted ProcessingStatus = "completed"
 	ProcessingStatusFailed    ProcessingStatus = "failed"
@@ -147,37 +142,10 @@ func (ps ProcessingStatus) String() string {
 // ProcessingStatusValidator is a validator for the "processing_status" field enum values. It is called by the builders before save.
 func ProcessingStatusValidator(ps ProcessingStatus) error {
 	switch ps {
-	case ProcessingStatusPending, ProcessingStatusCompleted, ProcessingStatusFailed:
+	case ProcessingStatusNone, ProcessingStatusPending, ProcessingStatusCompleted, ProcessingStatusFailed:
 		return nil
 	default:
 		return fmt.Errorf("transmission: invalid enum value for processing_status field: %q", ps)
-	}
-}
-
-// PublicationStatus defines the type for the "publication_status" enum field.
-type PublicationStatus string
-
-// PublicationStatusPending is the default value of the PublicationStatus enum.
-const DefaultPublicationStatus = PublicationStatusPending
-
-// PublicationStatus values.
-const (
-	PublicationStatusPending PublicationStatus = "pending"
-	PublicationStatusReady   PublicationStatus = "ready"
-	PublicationStatusFailed  PublicationStatus = "failed"
-)
-
-func (ps PublicationStatus) String() string {
-	return string(ps)
-}
-
-// PublicationStatusValidator is a validator for the "publication_status" field enum values. It is called by the builders before save.
-func PublicationStatusValidator(ps PublicationStatus) error {
-	switch ps {
-	case PublicationStatusPending, PublicationStatusReady, PublicationStatusFailed:
-		return nil
-	default:
-		return fmt.Errorf("transmission: invalid enum value for publication_status field: %q", ps)
 	}
 }
 
@@ -247,9 +215,4 @@ func ByMessageID(opts ...sql.OrderTermOption) OrderOption {
 // ByProcessingStatus orders the results by the processing_status field.
 func ByProcessingStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldProcessingStatus, opts...).ToFunc()
-}
-
-// ByPublicationStatus orders the results by the publication_status field.
-func ByPublicationStatus(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPublicationStatus, opts...).ToFunc()
 }

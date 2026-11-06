@@ -39,8 +39,8 @@ type ExtractStep struct {
 	Captures map[string]CaptureMapping `json:"captures"`
 }
 
-// BranchStep runs Then when Condition is definitely true and Else otherwise, then
-// evaluates the matching outputs mapping. An Indeterminate condition fails the step.
+// BranchStep runs Then when Condition is true and Else when it is false, then evaluates the
+// matching outputs mapping. The condition is ordinary two-valued logic.
 type BranchStep struct {
 	Condition   Predicate             `json:"condition"`
 	Then        []Step                `json:"then"`
@@ -88,7 +88,6 @@ type compiledStep struct {
 	then       []compiledStep
 	otherwise  []compiledStep
 	installed  *InstalledArtifact
-	preview    *InstalledArtifact
 }
 
 // WorkflowProgram holds detached checked definitions and prepared CEL programs.
@@ -97,6 +96,8 @@ type WorkflowProgram struct {
 	selector             *PredicateProgram
 	steps                []compiledStep
 	targeted             bool
+	selectorReferences   *referenceSet
+	bodyReferences       *referenceSet
 	regex                RegexEvaluator
 	preparationArtifacts any
 }
@@ -247,10 +248,14 @@ func compileWorkflow(ctx context.Context, definition Definition, source Declarat
 	if detached.SchemaVersion != 1 {
 		return nil, invalid(errors.New("unsupported Workflow schema"))
 	}
-	program := &WorkflowProgram{definition: detached, regex: regex}
+	program := &WorkflowProgram{definition: detached, regex: regex,
+		selectorReferences: newReferenceSet(source), bodyReferences: newReferenceSet(source)}
 	declarations := workflowDeclarations{source: source, local: make(map[string]FieldSchema)}
-	tracking := declarationTracker{Declarations: declarations, targeted: &program.targeted}
-	program.selector, err = CompilePredicate(ctx, detached.Selector, tracking)
+	selectorTracking := declarationTracker{Declarations: declarations, targeted: &program.targeted,
+		references: program.selectorReferences}
+	tracking := declarationTracker{Declarations: declarations, targeted: &program.targeted,
+		references: program.bodyReferences}
+	program.selector, err = CompilePredicate(ctx, detached.Selector, selectorTracking)
 	if err != nil {
 		return nil, err
 	}
@@ -259,7 +264,7 @@ func compileWorkflow(ctx context.Context, definition Definition, source Declarat
 	var prepare func([]Step, map[string]FieldSchema, int) ([]compiledStep, error)
 	prepare = func(steps []Step, local map[string]FieldSchema, depth int) ([]compiledStep, error) {
 		if depth > MaxDepth {
-			return nil, resource(errors.New("Workflow branch depth boundary"))
+			return nil, resource(errors.New("workflow branch depth boundary"))
 		}
 		var compiled []compiledStep
 		for _, step := range steps {
@@ -268,7 +273,7 @@ func compileWorkflow(ctx context.Context, definition Definition, source Declarat
 			}
 			count++
 			if count > MaxSteps {
-				return nil, resource(errors.New("Workflow total step boundary"))
+				return nil, resource(errors.New("workflow total step boundary"))
 			}
 			if !validLocalName(step.ID) || ids[step.ID] {
 				return nil, invalid(errors.New("duplicate/invalid local step ID"))
@@ -285,7 +290,8 @@ func compileWorkflow(ctx context.Context, definition Definition, source Declarat
 			if len(step.OutputSchema) > MaxCollection {
 				return nil, resource(errors.New("step output schema boundary"))
 			}
-			current := declarationTracker{Declarations: workflowDeclarations{source: source, local: local}, targeted: &program.targeted}
+			current := declarationTracker{Declarations: workflowDeclarations{source: source, local: local},
+				targeted: &program.targeted, references: program.bodyReferences}
 			item := compiledStep{definition: step}
 			switch step.Kind {
 			case "map":
@@ -356,11 +362,13 @@ func compileWorkflow(ctx context.Context, definition Definition, source Declarat
 					return nil, err
 				}
 				if err := validateMappings(step.OutputSchema, step.Branch.ThenOutputs,
-					declarationTracker{Declarations: workflowDeclarations{source, thenLocal}, targeted: &program.targeted}); err != nil {
+					declarationTracker{Declarations: workflowDeclarations{source, thenLocal}, targeted: &program.targeted,
+						references: program.bodyReferences}); err != nil {
 					return nil, err
 				}
 				if err := validateMappings(step.OutputSchema, step.Branch.ElseOutputs,
-					declarationTracker{Declarations: workflowDeclarations{source, elseLocal}, targeted: &program.targeted}); err != nil {
+					declarationTracker{Declarations: workflowDeclarations{source, elseLocal}, targeted: &program.targeted,
+						references: program.bodyReferences}); err != nil {
 					return nil, err
 				}
 			case "installed":
@@ -387,21 +395,6 @@ func compileWorkflow(ctx context.Context, definition Definition, source Declarat
 				}
 				if !sameOutputSchema(step.OutputSchema, manifest.ResultSchema) {
 					return nil, invalid(errors.New("installed step result declaration differs from capability"))
-				}
-				if previews, ok := artifacts.(InstalledPreviewArtifacts); ok {
-					preview, configured, err := previews.PrepareInstalledPreview(ctx,
-						step.Installed.InstanceID, step.Installed.ConfigurationRevision)
-					if err != nil {
-						return nil, err
-					}
-					if configured {
-						if err := validatePreviewArtifact(item.installed, preview); err != nil {
-							return nil, err
-						}
-						item.preview = preview
-					} else if preview != nil {
-						return nil, invalid(errors.New("unconfigured preview returned an artifact"))
-					}
 				}
 			default:
 				return nil, invalid(errors.New("unknown Workflow step kind"))
@@ -437,26 +430,35 @@ func compileWorkflow(ctx context.Context, definition Definition, source Declarat
 	return program, nil
 }
 
+// declarationTracker records, at compile time, whether a definition is target-scoped and which
+// source and target fields it reads, so that its classification never depends on evaluation.
 type declarationTracker struct {
 	Declarations
-	targeted *bool
+	targeted   *bool
+	references *referenceSet
 }
 
 func (d declarationTracker) FieldSchema(ref FieldRef) (FieldSchema, error) {
 	if ref.Namespace == "target" {
 		*d.targeted = true
 	}
-	return d.Declarations.FieldSchema(ref)
+	schema, err := d.Declarations.FieldSchema(ref)
+	if err != nil {
+		return FieldSchema{}, err
+	}
+	return schema, d.references.record(ref)
 }
 
-// TargetResult is one classified output set tied to an original target position.
+// TargetResult is one derived output set tied to an original target position.
 type TargetResult struct {
 	TargetPosition uint32                `json:"targetPosition"`
 	Fields         map[string]FieldValue `json:"fields"`
 }
 
 // Evaluation exposes no partial successful output on any selected-context failure.
-// Final fields implicitly require global derived visibility plus all retained dependencies.
+// Final fields are derived values: they carry no per-value classification. They implicitly
+// require global derived visibility plus the groups of Dependencies, which classify the
+// whole definition's outputs once.
 type Evaluation struct {
 	Selected      bool                  `json:"selected"`
 	Fields        map[string]FieldValue `json:"fields,omitempty"`
@@ -464,8 +466,10 @@ type Evaluation struct {
 	dependencies  []Dependency
 }
 
-// Dependencies returns detached evidence used by evaluation, including a false selector.
-// The evidence is host-only and is never added to the public result envelope.
+// Dependencies returns the detached classification of the evaluation: the owner dependency of
+// every source field the definition references, including fields on a branch arm that did not
+// run and fields read by a false selector. The set is a property of the definition, not of the
+// values or of any reader. It is host-only and is never added to the public result envelope.
 func (e Evaluation) Dependencies() ([]Dependency, error) {
 	dependencies := append([]Dependency(nil), e.dependencies...)
 	for _, field := range e.Fields {
@@ -510,7 +514,7 @@ func (b *executionBudget) consume(value any) error {
 	}
 	b.used += len(encoded)
 	if b.used > MaxInputBytes {
-		return resource(errors.New("Workflow aggregate input/intermediate boundary"))
+		return resource(errors.New("workflow aggregate input/intermediate boundary"))
 	}
 	decodedBytes, err := decodedBytesInJSON(encoded)
 	if err != nil {
@@ -518,11 +522,15 @@ func (b *executionBudget) consume(value any) error {
 	}
 	b.bytesUsed += decodedBytes
 	if b.bytesUsed > MaxInputBytes {
-		return resource(errors.New("Workflow aggregate decoded bytes boundary"))
+		return resource(errors.New("workflow aggregate decoded bytes boundary"))
 	}
 	return nil
 }
 
+// executionFrame is the lexical state of one evaluation context. dependencies is the
+// context's definition-level classification (the owner dependencies of every source field the
+// definition references plus installed-configuration dependencies); it is never attached to a
+// derived value.
 type executionFrame struct {
 	source       FieldReader
 	local        map[string]FieldValue
@@ -583,6 +591,8 @@ func convertValue(value Value, target FieldSchema, conversion ValueKind) (Value,
 	return converted, nil
 }
 
+// evaluateMappings produces derived values: whatever the source of an assignment, the result
+// carries no per-value classification, because the definition is classified as a whole.
 func evaluateMappings(ctx context.Context, schema map[string]FieldSchema, mappings map[string]Assignment, frame *executionFrame) (map[string]FieldValue, error) {
 	result := make(map[string]FieldValue, len(schema))
 	for _, name := range sortedNames(schema) {
@@ -601,9 +611,6 @@ func evaluateMappings(ctx context.Context, schema map[string]FieldSchema, mappin
 			} else {
 				field.State, field.Value = FieldPresent, assignment.Literal
 			}
-			if field.State == FieldHidden {
-				return nil, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("mapping dependency hidden"))
-			}
 			if field.State == FieldPresent {
 				value, err := convertValue(*field.Value, schema[name], assignment.Conversion)
 				if err != nil {
@@ -612,29 +619,8 @@ func evaluateMappings(ctx context.Context, schema map[string]FieldSchema, mappin
 				field.Value = &value
 			}
 		}
-		var err error
-		field.Dependencies, err = UnionDependencies(frame.dependencies, field.Dependencies)
-		if err != nil {
-			return nil, err
-		}
+		field.Dependencies = nil
 		if err := validateFieldValue(schema[name], field, false); err != nil {
-			return nil, err
-		}
-		result[name] = field
-	}
-	dependencies := frame.dependencies
-	for _, field := range result {
-		var err error
-		dependencies, err = UnionDependencies(dependencies, field.Dependencies)
-		if err != nil {
-			return nil, err
-		}
-	}
-	frame.dependencies = dependencies
-	for name, field := range result {
-		var err error
-		field.Dependencies, err = UnionDependencies(dependencies)
-		if err != nil {
 			return nil, err
 		}
 		result[name] = field
@@ -656,26 +642,19 @@ func (p *WorkflowProgram) execute(ctx context.Context, steps []compiledStep, fra
 		case "extract":
 			fields, err = p.extract(ctx, step.definition, frame)
 		case "branch":
-			var condition PredicateResult
+			var condition bool
 			condition, err = step.condition.Evaluate(ctx, frame)
 			if err != nil {
 				break
-			}
-			if condition.Truth == Indeterminate {
-				return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("branch dependency hidden"))
 			}
 			local := make(map[string]FieldValue, len(frame.local))
 			for key, value := range frame.local {
 				local[key] = value
 			}
-			dependencies, unionErr := UnionDependencies(frame.dependencies, condition.Dependencies)
-			if unionErr != nil {
-				return unionErr
-			}
-			nested := &executionFrame{source: frame.source, local: local, dependencies: dependencies, budget: frame.budget,
+			nested := &executionFrame{source: frame.source, local: local, dependencies: frame.dependencies, budget: frame.budget,
 				invocations: frame.invocations, invocation: frame.invocation}
 			body, outputs := step.otherwise, step.definition.Branch.ElseOutputs
-			if condition.Truth == DefiniteTrue {
+			if condition {
 				body, outputs = step.then, step.definition.Branch.ThenOutputs
 			}
 			err = p.execute(ctx, body, nested)
@@ -695,10 +674,6 @@ func (p *WorkflowProgram) execute(ctx context.Context, steps []compiledStep, fra
 		}
 		for name, field := range fields {
 			frame.local[(FieldRef{Namespace: "step", Path: []string{step.definition.ID, name}}).key()] = field
-			frame.dependencies, err = UnionDependencies(frame.dependencies, field.Dependencies)
-			if err != nil {
-				return err
-			}
 		}
 		if err := frame.budget.consume(fields); err != nil {
 			return err
@@ -711,9 +686,6 @@ func (p *WorkflowProgram) extract(ctx context.Context, step Step, frame *executi
 	input, err := frame.LookupField(ctx, step.Extract.Input)
 	if err != nil {
 		return nil, err
-	}
-	if input.State == FieldHidden {
-		return nil, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("extraction input hidden"))
 	}
 	var matched RegexResult
 	if input.State == FieldPresent {
@@ -728,12 +700,8 @@ func (p *WorkflowProgram) extract(ctx context.Context, step Step, frame *executi
 		}
 	}
 	fields := make(map[string]FieldValue, len(step.OutputSchema))
-	dependencies, err := UnionDependencies(frame.dependencies, input.Dependencies)
-	if err != nil {
-		return nil, err
-	}
 	for _, name := range sortedNames(step.OutputSchema) {
-		field := FieldValue{State: FieldAbsent, Dependencies: dependencies}
+		field := FieldValue{State: FieldAbsent}
 		mapping, exists := step.Extract.Captures[name]
 		if exists && matched.Matched {
 			for _, capture := range matched.Captures {
@@ -778,7 +746,7 @@ func (p *WorkflowProgram) evaluate(ctx context.Context, source *CapturedSource, 
 }
 
 // EvaluationScope is trusted owner eligibility, separate from field visibility and CEL selection.
-// TargetPositions retain original order/indexes; excluded contexts are not interpreted as hidden/false predicates.
+// TargetPositions retain original order/indexes; excluded contexts are not evaluated and never read as a false selector.
 type EvaluationScope struct {
 	SourceEligible  bool
 	TargetPositions []uint32
@@ -849,18 +817,19 @@ func (p *WorkflowProgram) evaluateScoped(ctx context.Context, source *CapturedSo
 	var selected []*uint32
 	var selectionDependencies []Dependency
 	for _, target := range contexts {
-		result, err := p.selector.Evaluate(ctx, capturedView{source, target})
+		isSelected, err := p.selector.Evaluate(ctx, capturedView{source, target})
 		if err != nil {
 			return Evaluation{}, err
 		}
-		if result.Truth == Indeterminate {
-			return Evaluation{}, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("selector dependency hidden"))
-		}
-		selectionDependencies, err = UnionDependencies(selectionDependencies, result.Dependencies)
+		dependencies, err := source.referenceDependencies(ctx, p.selectorReferences.fields(), target)
 		if err != nil {
 			return Evaluation{}, err
 		}
-		if result.Truth == DefiniteTrue {
+		selectionDependencies, err = UnionDependencies(selectionDependencies, dependencies)
+		if err != nil {
+			return Evaluation{}, err
+		}
+		if isSelected {
 			selected = append(selected, target)
 		}
 	}
@@ -869,8 +838,13 @@ func (p *WorkflowProgram) evaluateScoped(ctx context.Context, source *CapturedSo
 		return Evaluation{}, err
 	}
 	for _, target := range selected {
+		contextDependencies, err := source.referenceDependencies(budget.computeContext(),
+			append(p.selectorReferences.fields(), p.bodyReferences.fields()...), target)
+		if err != nil {
+			return Evaluation{}, err
+		}
 		frame := &executionFrame{source: capturedView{source, target}, local: make(map[string]FieldValue),
-			dependencies: selectionDependencies, budget: budget, invocations: invocations,
+			dependencies: contextDependencies, budget: budget, invocations: invocations,
 			invocation: InvocationContext{Source: identity, TargetPosition: target}}
 		if err := p.execute(ctx, p.steps, frame); err != nil {
 			return Evaluation{}, err
@@ -896,7 +870,7 @@ func (p *WorkflowProgram) evaluateScoped(ctx context.Context, source *CapturedSo
 			return Evaluation{}, invalid(err)
 		}
 		if len(encoded) > MaxOutputBytes {
-			return Evaluation{}, resource(errors.New("Workflow complete result boundary"))
+			return Evaluation{}, resource(errors.New("workflow complete result boundary"))
 		}
 	}
 	if err := budget.computeContext().Err(); err != nil {

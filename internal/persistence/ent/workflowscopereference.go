@@ -9,6 +9,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/persistence/ent/network"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
 	"github.com/gopager/gopager/internal/persistence/ent/workflow"
 	"github.com/gopager/gopager/internal/persistence/ent/workflowscopereference"
@@ -37,9 +38,11 @@ type WorkflowScopeReferenceEdges struct {
 	Workflow *Workflow `json:"workflow,omitempty"`
 	// Unit holds the value of the unit edge.
 	Unit *Unit `json:"unit,omitempty"`
+	// Network holds the value of the network edge.
+	Network *Network `json:"network,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [3]bool
 }
 
 // WorkflowOrErr returns the Workflow value or an error if the edge
@@ -62,6 +65,17 @@ func (e WorkflowScopeReferenceEdges) UnitOrErr() (*Unit, error) {
 		return nil, &NotFoundError{label: unit.Label}
 	}
 	return nil, &NotLoadedError{edge: "unit"}
+}
+
+// NetworkOrErr returns the Network value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e WorkflowScopeReferenceEdges) NetworkOrErr() (*Network, error) {
+	if e.Network != nil {
+		return e.Network, nil
+	} else if e.loadedTypes[2] {
+		return nil, &NotFoundError{label: network.Label}
+	}
+	return nil, &NotLoadedError{edge: "network"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -135,6 +149,11 @@ func (_m *WorkflowScopeReference) QueryWorkflow() *WorkflowQuery {
 // QueryUnit queries the "unit" edge of the WorkflowScopeReference entity.
 func (_m *WorkflowScopeReference) QueryUnit() *UnitQuery {
 	return NewWorkflowScopeReferenceClient(_m.config).QueryUnit(_m)
+}
+
+// QueryNetwork queries the "network" edge of the WorkflowScopeReference entity.
+func (_m *WorkflowScopeReference) QueryNetwork() *NetworkQuery {
+	return NewWorkflowScopeReferenceClient(_m.config).QueryNetwork(_m)
 }
 
 // Update returns a builder for updating this WorkflowScopeReference.

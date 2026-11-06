@@ -15,6 +15,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/persistence/ent/addressrule"
+	"github.com/gopager/gopager/internal/persistence/ent/network"
 	"github.com/gopager/gopager/internal/persistence/ent/predicate"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
 )
@@ -22,12 +23,13 @@ import (
 // AddressRuleQuery is the builder for querying AddressRule entities.
 type AddressRuleQuery struct {
 	config
-	ctx        *QueryContext
-	order      []addressrule.OrderOption
-	inters     []Interceptor
-	predicates []predicate.AddressRule
-	withUnit   *UnitQuery
-	modifiers  []func(*sql.Selector)
+	ctx         *QueryContext
+	order       []addressrule.OrderOption
+	inters      []Interceptor
+	predicates  []predicate.AddressRule
+	withUnit    *UnitQuery
+	withNetwork *NetworkQuery
+	modifiers   []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -79,6 +81,28 @@ func (_q *AddressRuleQuery) QueryUnit() *UnitQuery {
 			sqlgraph.From(addressrule.Table, addressrule.FieldID, selector),
 			sqlgraph.To(unit.Table, unit.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, addressrule.UnitTable, addressrule.UnitColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryNetwork chains the current query on the "network" edge.
+func (_q *AddressRuleQuery) QueryNetwork() *NetworkQuery {
+	query := (&NetworkClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(addressrule.Table, addressrule.FieldID, selector),
+			sqlgraph.To(network.Table, network.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, addressrule.NetworkTable, addressrule.NetworkColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -273,12 +297,13 @@ func (_q *AddressRuleQuery) Clone() *AddressRuleQuery {
 		return nil
 	}
 	return &AddressRuleQuery{
-		config:     _q.config,
-		ctx:        _q.ctx.Clone(),
-		order:      append([]addressrule.OrderOption{}, _q.order...),
-		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.AddressRule{}, _q.predicates...),
-		withUnit:   _q.withUnit.Clone(),
+		config:      _q.config,
+		ctx:         _q.ctx.Clone(),
+		order:       append([]addressrule.OrderOption{}, _q.order...),
+		inters:      append([]Interceptor{}, _q.inters...),
+		predicates:  append([]predicate.AddressRule{}, _q.predicates...),
+		withUnit:    _q.withUnit.Clone(),
+		withNetwork: _q.withNetwork.Clone(),
 		// clone intermediate query.
 		sql:       _q.sql.Clone(),
 		path:      _q.path,
@@ -294,6 +319,17 @@ func (_q *AddressRuleQuery) WithUnit(opts ...func(*UnitQuery)) *AddressRuleQuery
 		opt(query)
 	}
 	_q.withUnit = query
+	return _q
+}
+
+// WithNetwork tells the query-builder to eager-load the nodes that are connected to
+// the "network" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *AddressRuleQuery) WithNetwork(opts ...func(*NetworkQuery)) *AddressRuleQuery {
+	query := (&NetworkClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withNetwork = query
 	return _q
 }
 
@@ -381,8 +417,9 @@ func (_q *AddressRuleQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*
 	var (
 		nodes       = []*AddressRule{}
 		_spec       = _q.querySpec()
-		loadedTypes = [1]bool{
+		loadedTypes = [2]bool{
 			_q.withUnit != nil,
+			_q.withNetwork != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -412,6 +449,12 @@ func (_q *AddressRuleQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*
 			return nil, err
 		}
 	}
+	if query := _q.withNetwork; query != nil {
+		if err := _q.loadNetwork(ctx, query, nodes, nil,
+			func(n *AddressRule, e *Network) { n.Edges.Network = e }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
 }
 
@@ -437,6 +480,35 @@ func (_q *AddressRuleQuery) loadUnit(ctx context.Context, query *UnitQuery, node
 		nodes, ok := nodeids[n.ID]
 		if !ok {
 			return fmt.Errorf(`unexpected foreign-key "unit_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
+func (_q *AddressRuleQuery) loadNetwork(ctx context.Context, query *NetworkQuery, nodes []*AddressRule, init func(*AddressRule), assign func(*AddressRule, *Network)) error {
+	ids := make([]uuid.UUID, 0, len(nodes))
+	nodeids := make(map[uuid.UUID][]*AddressRule)
+	for i := range nodes {
+		fk := nodes[i].NetworkID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(network.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "network_id" returned %v`, n.ID)
 		}
 		for i := range nodes {
 			assign(nodes[i], n)
@@ -475,6 +547,9 @@ func (_q *AddressRuleQuery) querySpec() *sqlgraph.QuerySpec {
 		}
 		if _q.withUnit != nil {
 			_spec.Node.AddColumnOnce(addressrule.FieldUnitID)
+		}
+		if _q.withNetwork != nil {
+			_spec.Node.AddColumnOnce(addressrule.FieldNetworkID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

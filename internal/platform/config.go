@@ -32,7 +32,6 @@ const (
 // Config is the validated process configuration consumed by Start.
 // DatabaseURL is private and never reported through Status.
 type Config struct {
-	Profile            string
 	Roles              []Role
 	MigrationMode      MigrationMode
 	DatabaseURL        string
@@ -49,16 +48,12 @@ func (c Config) WithDefaults() Config {
 	return c
 }
 
-// Validate checks c after applying WithDefaults. It requires profile "full", a
-// known migration mode, a non-blank DatabaseURL and a non-empty, duplicate-free
-// list of known roles; when RoleAPI is present ListenAddress must be an explicit
+// Validate checks c after applying WithDefaults. It requires a known migration mode, a non-blank
+// DatabaseURL and a non-empty, duplicate-free list of known roles; when RoleAPI is present ListenAddress must be an explicit
 // host:port with a port in 1..65535. Every violation is a *Failure with
 // CodeInvalidInput whose message does not reveal the offending value.
 func (c Config) Validate() error {
 	c = c.WithDefaults()
-	if c.Profile != "full" {
-		return NewFailure(CodeInvalidInput, fmt.Errorf("unsupported profile"))
-	}
 	if c.MigrationMode != MigrationCheck && c.MigrationMode != MigrationApply {
 		return NewFailure(CodeInvalidInput, fmt.Errorf("unsupported migration mode"))
 	}

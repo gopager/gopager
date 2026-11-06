@@ -4,7 +4,7 @@ package ent
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"time"
@@ -109,26 +109,14 @@ func (_u *TransmissionUpdate) SetNillableProtocol(v *transmission.Protocol) *Tra
 }
 
 // SetPayload sets the "payload" field.
-func (_u *TransmissionUpdate) SetPayload(v json.RawMessage) *TransmissionUpdate {
+func (_u *TransmissionUpdate) SetPayload(v jsontext.Value) *TransmissionUpdate {
 	_u.mutation.SetPayload(v)
 	return _u
 }
 
 // AppendPayload appends value to the "payload" field.
-func (_u *TransmissionUpdate) AppendPayload(v json.RawMessage) *TransmissionUpdate {
+func (_u *TransmissionUpdate) AppendPayload(v jsontext.Value) *TransmissionUpdate {
 	_u.mutation.AppendPayload(v)
-	return _u
-}
-
-// SetTargets sets the "targets" field.
-func (_u *TransmissionUpdate) SetTargets(v json.RawMessage) *TransmissionUpdate {
-	_u.mutation.SetTargets(v)
-	return _u
-}
-
-// AppendTargets appends value to the "targets" field.
-func (_u *TransmissionUpdate) AppendTargets(v json.RawMessage) *TransmissionUpdate {
-	_u.mutation.AppendTargets(v)
 	return _u
 }
 
@@ -217,13 +205,13 @@ func (_u *TransmissionUpdate) SetNillableIncomplete(v *bool) *TransmissionUpdate
 }
 
 // SetQualityMetrics sets the "quality_metrics" field.
-func (_u *TransmissionUpdate) SetQualityMetrics(v json.RawMessage) *TransmissionUpdate {
+func (_u *TransmissionUpdate) SetQualityMetrics(v jsontext.Value) *TransmissionUpdate {
 	_u.mutation.SetQualityMetrics(v)
 	return _u
 }
 
 // AppendQualityMetrics appends value to the "quality_metrics" field.
-func (_u *TransmissionUpdate) AppendQualityMetrics(v json.RawMessage) *TransmissionUpdate {
+func (_u *TransmissionUpdate) AppendQualityMetrics(v jsontext.Value) *TransmissionUpdate {
 	_u.mutation.AppendQualityMetrics(v)
 	return _u
 }
@@ -258,20 +246,6 @@ func (_u *TransmissionUpdate) SetProcessingStatus(v transmission.ProcessingStatu
 func (_u *TransmissionUpdate) SetNillableProcessingStatus(v *transmission.ProcessingStatus) *TransmissionUpdate {
 	if v != nil {
 		_u.SetProcessingStatus(*v)
-	}
-	return _u
-}
-
-// SetPublicationStatus sets the "publication_status" field.
-func (_u *TransmissionUpdate) SetPublicationStatus(v transmission.PublicationStatus) *TransmissionUpdate {
-	_u.mutation.SetPublicationStatus(v)
-	return _u
-}
-
-// SetNillablePublicationStatus sets the "publication_status" field if the given value is not nil.
-func (_u *TransmissionUpdate) SetNillablePublicationStatus(v *transmission.PublicationStatus) *TransmissionUpdate {
-	if v != nil {
-		_u.SetPublicationStatus(*v)
 	}
 	return _u
 }
@@ -335,11 +309,6 @@ func (_u *TransmissionUpdate) check() error {
 			return &ValidationError{Name: "processing_status", err: fmt.Errorf(`ent: validator failed for field "Transmission.processing_status": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.PublicationStatus(); ok {
-		if err := transmission.PublicationStatusValidator(v); err != nil {
-			return &ValidationError{Name: "publication_status", err: fmt.Errorf(`ent: validator failed for field "Transmission.publication_status": %w`, err)}
-		}
-	}
 	return nil
 }
 
@@ -387,14 +356,6 @@ func (_u *TransmissionUpdate) sqlSave(ctx context.Context) (_node int, err error
 			sqljson.Append(u, transmission.FieldPayload, value)
 		})
 	}
-	if value, ok := _u.mutation.Targets(); ok {
-		_spec.SetField(transmission.FieldTargets, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.AppendedTargets(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, transmission.FieldTargets, value)
-		})
-	}
 	if value, ok := _u.mutation.ObservedAt(); ok {
 		_spec.SetField(transmission.FieldObservedAt, field.TypeTime, value)
 	}
@@ -432,9 +393,6 @@ func (_u *TransmissionUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if value, ok := _u.mutation.ProcessingStatus(); ok {
 		_spec.SetField(transmission.FieldProcessingStatus, field.TypeEnum, value)
-	}
-	if value, ok := _u.mutation.PublicationStatus(); ok {
-		_spec.SetField(transmission.FieldPublicationStatus, field.TypeEnum, value)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
@@ -535,26 +493,14 @@ func (_u *TransmissionUpdateOne) SetNillableProtocol(v *transmission.Protocol) *
 }
 
 // SetPayload sets the "payload" field.
-func (_u *TransmissionUpdateOne) SetPayload(v json.RawMessage) *TransmissionUpdateOne {
+func (_u *TransmissionUpdateOne) SetPayload(v jsontext.Value) *TransmissionUpdateOne {
 	_u.mutation.SetPayload(v)
 	return _u
 }
 
 // AppendPayload appends value to the "payload" field.
-func (_u *TransmissionUpdateOne) AppendPayload(v json.RawMessage) *TransmissionUpdateOne {
+func (_u *TransmissionUpdateOne) AppendPayload(v jsontext.Value) *TransmissionUpdateOne {
 	_u.mutation.AppendPayload(v)
-	return _u
-}
-
-// SetTargets sets the "targets" field.
-func (_u *TransmissionUpdateOne) SetTargets(v json.RawMessage) *TransmissionUpdateOne {
-	_u.mutation.SetTargets(v)
-	return _u
-}
-
-// AppendTargets appends value to the "targets" field.
-func (_u *TransmissionUpdateOne) AppendTargets(v json.RawMessage) *TransmissionUpdateOne {
-	_u.mutation.AppendTargets(v)
 	return _u
 }
 
@@ -643,13 +589,13 @@ func (_u *TransmissionUpdateOne) SetNillableIncomplete(v *bool) *TransmissionUpd
 }
 
 // SetQualityMetrics sets the "quality_metrics" field.
-func (_u *TransmissionUpdateOne) SetQualityMetrics(v json.RawMessage) *TransmissionUpdateOne {
+func (_u *TransmissionUpdateOne) SetQualityMetrics(v jsontext.Value) *TransmissionUpdateOne {
 	_u.mutation.SetQualityMetrics(v)
 	return _u
 }
 
 // AppendQualityMetrics appends value to the "quality_metrics" field.
-func (_u *TransmissionUpdateOne) AppendQualityMetrics(v json.RawMessage) *TransmissionUpdateOne {
+func (_u *TransmissionUpdateOne) AppendQualityMetrics(v jsontext.Value) *TransmissionUpdateOne {
 	_u.mutation.AppendQualityMetrics(v)
 	return _u
 }
@@ -684,20 +630,6 @@ func (_u *TransmissionUpdateOne) SetProcessingStatus(v transmission.ProcessingSt
 func (_u *TransmissionUpdateOne) SetNillableProcessingStatus(v *transmission.ProcessingStatus) *TransmissionUpdateOne {
 	if v != nil {
 		_u.SetProcessingStatus(*v)
-	}
-	return _u
-}
-
-// SetPublicationStatus sets the "publication_status" field.
-func (_u *TransmissionUpdateOne) SetPublicationStatus(v transmission.PublicationStatus) *TransmissionUpdateOne {
-	_u.mutation.SetPublicationStatus(v)
-	return _u
-}
-
-// SetNillablePublicationStatus sets the "publication_status" field if the given value is not nil.
-func (_u *TransmissionUpdateOne) SetNillablePublicationStatus(v *transmission.PublicationStatus) *TransmissionUpdateOne {
-	if v != nil {
-		_u.SetPublicationStatus(*v)
 	}
 	return _u
 }
@@ -774,11 +706,6 @@ func (_u *TransmissionUpdateOne) check() error {
 			return &ValidationError{Name: "processing_status", err: fmt.Errorf(`ent: validator failed for field "Transmission.processing_status": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.PublicationStatus(); ok {
-		if err := transmission.PublicationStatusValidator(v); err != nil {
-			return &ValidationError{Name: "publication_status", err: fmt.Errorf(`ent: validator failed for field "Transmission.publication_status": %w`, err)}
-		}
-	}
 	return nil
 }
 
@@ -843,14 +770,6 @@ func (_u *TransmissionUpdateOne) sqlSave(ctx context.Context) (_node *Transmissi
 			sqljson.Append(u, transmission.FieldPayload, value)
 		})
 	}
-	if value, ok := _u.mutation.Targets(); ok {
-		_spec.SetField(transmission.FieldTargets, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.AppendedTargets(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, transmission.FieldTargets, value)
-		})
-	}
 	if value, ok := _u.mutation.ObservedAt(); ok {
 		_spec.SetField(transmission.FieldObservedAt, field.TypeTime, value)
 	}
@@ -888,9 +807,6 @@ func (_u *TransmissionUpdateOne) sqlSave(ctx context.Context) (_node *Transmissi
 	}
 	if value, ok := _u.mutation.ProcessingStatus(); ok {
 		_spec.SetField(transmission.FieldProcessingStatus, field.TypeEnum, value)
-	}
-	if value, ok := _u.mutation.PublicationStatus(); ok {
-		_spec.SetField(transmission.FieldPublicationStatus, field.TypeEnum, value)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	_node = &Transmission{config: _u.config}

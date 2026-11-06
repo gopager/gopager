@@ -14,6 +14,29 @@ type syntheticDeclarations struct {
 	fields map[string]FieldSchema
 }
 
+// syntheticFieldGroups declares the field group of every catalog field. They mirror the
+// groups the projection owners attach to the captured values, so a definition is classified
+// at save time exactly as its evaluation is later classified.
+func syntheticFieldGroups(ref FieldRef) (string, bool) {
+	switch ref.Namespace {
+	case "source":
+		switch ref.Path[0] {
+		case "protocol", "form", "subtype", "payload":
+			return "payload", true
+		case "observedAt", "network":
+			return "gateway", true
+		}
+	case "target":
+		switch ref.Path[0] {
+		case "address", "function":
+			return "address", true
+		case "unit":
+			return "unit", true
+		}
+	}
+	return "", false
+}
+
 // NewSyntheticDeclarationOwner returns the closed, server-owned catalog of field declarations for
 // synthetic preview sources (one fixed schema per Protocol form); it is not configurable.
 func NewSyntheticDeclarationOwner() SourceDeclarationOwner {
@@ -66,6 +89,21 @@ func (d syntheticDeclarations) FieldSchema(ref FieldRef) (FieldSchema, error) {
 		schema.Element = &element
 	}
 	return schema, nil
+}
+
+// FieldGroups returns the field group declared for a catalog field. It implements
+// FieldGroupDeclarations so save-time validation can judge a definition by the author's
+// readable groups.
+func (d syntheticDeclarations) FieldGroups(ref FieldRef) ([]string, error) {
+	if _, ok := d.fields[ref.key()]; !ok {
+		return nil, platform.NewFailure(platform.CodeInvalidInput,
+			errors.New("field is outside the trusted synthetic declaration catalog"))
+	}
+	group, ok := syntheticFieldGroups(ref)
+	if !ok {
+		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("synthetic field declares no field group"))
+	}
+	return []string{group}, nil
 }
 
 func sourceFieldKey(path ...string) string {

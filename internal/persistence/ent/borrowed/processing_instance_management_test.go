@@ -36,8 +36,8 @@ func (i *instanceInspectionFixture) InspectInstance(_ context.Context, value pro
 	if len(value.Configuration.Value) > 0 {
 		value.Configuration.Value[0] = '['
 	}
-	if value.Preview != nil {
-		value.Preview.Pin.Digest = strings.Repeat("b", 64)
+	if value.Main.Pin.Digest != "" {
+		value.Main.Pin.Digest = strings.Repeat("b", 64)
 	}
 	return nil
 }
@@ -52,6 +52,7 @@ func (f invalidInstanceFactFixture) AppendProcessingInstance(ctx context.Context
 }
 
 func TestProcessingInstanceManagementFreshAuthorityReceiptsAndAtomicFacts(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	base, capture := newProcessingManagementFixture(t, f, &processingPreparationFixture{}, f.facts)
 	repository, err := processingstore.New(f.store)
@@ -76,8 +77,8 @@ func TestProcessingInstanceManagementFreshAuthorityReceiptsAndAtomicFacts(t *tes
 	pin := processing.ArtifactPin{PluginID: "processor", Version: "1",
 		CapabilityID: "convert", Digest: strings.Repeat("a", 64)}
 	input := management.InstanceInput{Enabled: &enabled, ExecutionPrincipalID: f.principal,
-		Main:    processing.ProvisionedArtifact{ManifestPath: "main.json", Pin: pin},
-		Preview: &processing.ProvisionedArtifact{ManifestPath: "preview.json", Pin: pin}, Configuration: config}
+		Main:          processing.ProvisionedArtifact{ManifestPath: "main.json", Pin: pin},
+		Configuration: config}
 	command := uuid.New()
 	first, err := service.SaveInstance(t.Context(), f.proof, command, uuid.Nil, 0, input, checkedMutation)
 	if err != nil {
@@ -92,7 +93,7 @@ func TestProcessingInstanceManagementFreshAuthorityReceiptsAndAtomicFacts(t *tes
 		if err != nil {
 			return err
 		}
-		if string(value.Configuration.Value) != "{}" || value.Preview.Pin != pin {
+		if string(value.Configuration.Value) != "{}" || value.Main.Pin != pin {
 			t.Fatal("inspector substituted immutable configuration")
 		}
 		return nil
@@ -103,7 +104,7 @@ func TestProcessingInstanceManagementFreshAuthorityReceiptsAndAtomicFacts(t *tes
 		t.Fatalf("missing mutation participant accepted: %v", err)
 	}
 	inspector.before = func() {
-		replaceManagementGrants(t, f, []authz.Grant{{Actions: []string{"rule.read"}, Scope: authz.Scope{Kind: "all"}}})
+		replaceManagementGrants(t, f, []authz.Grant{{Actions: []string{"workflow.read"}, Scope: authz.Scope{Kind: "all"}}})
 	}
 	if _, err := service.SaveInstance(t.Context(), f.proof, uuid.New(), first.ID, 1, input, checkedMutation); !errors.Is(err, authz.ErrForbidden) {
 		t.Fatalf("revoked plugin configuration rights survived inspection: %v", err)

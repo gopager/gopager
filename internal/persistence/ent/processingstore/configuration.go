@@ -13,7 +13,6 @@ import (
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/persistence/ent"
-	"github.com/gopager/gopager/internal/persistence/ent/assignmentstore"
 	"github.com/gopager/gopager/internal/persistence/ent/borrowed"
 	"github.com/gopager/gopager/internal/persistence/ent/guard"
 	"github.com/gopager/gopager/internal/persistence/ent/identitystore"
@@ -49,20 +48,31 @@ func (s *Store) client(ctx context.Context, tx platform.TransactionContext, pred
 	}), nil
 }
 
-// LockRevision preserves shared access, Assignment, then Processing control lock order.
+// LockRevision takes the shared Processing-control lock (candidate work, reads, intake
+// admission) and returns the current configuration revision; configuration changes take the
+// exclusive lock through LockRevisionForChange.
 func (s *Store) LockRevision(ctx context.Context, tx platform.TransactionContext) (int64, error) {
-	assignments, err := assignmentstore.New(s.primary)
-	if err != nil {
-		return 0, err
-	}
-	if _, err := assignments.LockRevision(ctx, tx); err != nil {
-		return 0, err
-	}
+	return s.lockRevision(ctx, tx, false)
+}
+
+// LockRevisionForChange takes the exclusive Processing-control lock for a command that
+// changes Workflow or instance configuration and will bump the configuration revision.
+func (s *Store) LockRevisionForChange(ctx context.Context, tx platform.TransactionContext) (int64, error) {
+	return s.lockRevision(ctx, tx, true)
+}
+
+func (s *Store) lockRevision(ctx context.Context, tx platform.TransactionContext, exclusive bool) (int64, error) {
 	client, scope, err := s.client(ctx, tx, map[string]entql.P{"ProcessingControl": entql.FieldEQ("id", 1)}, nil)
 	if err != nil {
 		return 0, err
 	}
-	row, err := client.ProcessingControl.Query().ForUpdate().Only(scope)
+	query := client.ProcessingControl.Query()
+	if exclusive {
+		query = query.ForUpdate()
+	} else {
+		query = query.ForShare()
+	}
+	row, err := query.Only(scope)
 	if err != nil {
 		return 0, err
 	}
@@ -75,10 +85,10 @@ func scopeReference(kind string, references []uuid.UUID) (entql.P, error) {
 		values[i] = id
 	}
 	switch kind {
-	case "network":
-		return entql.Or(entql.FieldIn("network_id", values...),
+	case "agency":
+		return entql.Or(entql.HasEdgeWith("network", entql.FieldIn("agency_id", values...)),
 			entql.HasEdgeWith("unit", entql.And(entql.FieldEQ("deleted", false),
-				entql.HasEdgeWith("address_rules", entql.FieldIn("network_id", values...))))), nil
+				entql.FieldIn("agency_id", values...)))), nil
 	case "unit":
 		return entql.And(entql.FieldIn("unit_id", values...),
 			entql.HasEdgeWith("unit", entql.FieldEQ("deleted", false))), nil
@@ -177,7 +187,7 @@ func (s *Store) ListWorkflows(ctx context.Context, tx platform.TransactionContex
 	if err != nil {
 		return processing.Page[processing.WorkflowConfiguration]{}, err
 	}
-	client, scope, err := s.readClient(ctx, tx, authority, "rule.read", now)
+	client, scope, err := s.readClient(ctx, tx, authority, "workflow.read", now)
 	if err != nil {
 		return processing.Page[processing.WorkflowConfiguration]{}, err
 	}
@@ -208,12 +218,12 @@ func version(row *ent.WorkflowVersion) processing.Version {
 
 // ReadVersion keeps immutable definitions inside their currently readable owning Workflow.
 func (s *Store) ReadVersion(ctx context.Context, tx platform.TransactionContext, authority authz.Authority, parent, id uuid.UUID, now time.Time) (processing.Version, error) {
-	return s.ReadVersionForAction(ctx, tx, authority, "rule.read", parent, id, now)
+	return s.ReadVersionForAction(ctx, tx, authority, "workflow.read", parent, id, now)
 }
 
 // ReadVersionForAction loads an owning definition for a trusted command, without adding a public read grant.
 func (s *Store) ReadVersionForAction(ctx context.Context, tx platform.TransactionContext, authority authz.Authority, action string, parent, id uuid.UUID, now time.Time) (processing.Version, error) {
-	if !slices.Contains([]string{"rule.read", "rule.update", "rule.activate", "rule.preview"}, action) {
+	if !slices.Contains([]string{"workflow.read", "workflow.update", "workflow.activate", "workflow.preview"}, action) {
 		return processing.Version{}, authz.ErrInvalidInput
 	}
 	client, scope, err := s.readClient(ctx, tx, authority, action, now)
@@ -236,10 +246,10 @@ func (s *Store) ListVersions(ctx context.Context, tx platform.TransactionContext
 	if err != nil {
 		return processing.Page[processing.Version]{}, err
 	}
-	if _, err := s.ReadWorkflow(ctx, tx, authority, "rule.read", parent, now); err != nil {
+	if _, err := s.ReadWorkflow(ctx, tx, authority, "workflow.read", parent, now); err != nil {
 		return processing.Page[processing.Version]{}, err
 	}
-	client, scope, err := s.readClient(ctx, tx, authority, "rule.read", now)
+	client, scope, err := s.readClient(ctx, tx, authority, "workflow.read", now)
 	if err != nil {
 		return processing.Page[processing.Version]{}, err
 	}
@@ -261,7 +271,7 @@ func (s *Store) ListVersions(ctx context.Context, tx platform.TransactionContext
 
 // SaveWorkflow persists a service-authorized complete metadata change with expected-revision CAS.
 func (s *Store) SaveWorkflow(ctx context.Context, tx platform.TransactionContext, authority authz.Authority, action string, value processing.WorkflowConfiguration, expected int64, now time.Time) error {
-	if !slices.Contains([]string{"rule.create", "rule.update", "rule.activate", "rule.delete"}, action) ||
+	if !slices.Contains([]string{"workflow.create", "workflow.update", "workflow.activate", "workflow.delete"}, action) ||
 		expected < 0 || now.IsZero() {
 		return authz.ErrInvalidInput
 	}
@@ -364,7 +374,7 @@ func (s *Store) SaveVersion(ctx context.Context, tx platform.TransactionContext,
 
 // RecordChange increments Processing and shared configuration revisions with the safe existing audit.
 func (s *Store) RecordChange(ctx context.Context, tx platform.TransactionContext, actor, target uuid.UUID, action string, now time.Time) error {
-	current, err := s.LockRevision(ctx, tx)
+	current, err := s.LockRevisionForChange(ctx, tx)
 	if err != nil {
 		return err
 	}

@@ -28,6 +28,7 @@ import (
 var errRollbackFixture = errors.New("roll back source owner fixture")
 
 func TestProcessingSourceOwnerMapsMissingMessageToNotFound(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	facts, err := eventstore.New(store)
 	if err != nil {
@@ -111,10 +112,10 @@ func TestProcessingSourceOwnerMapsMissingMessageToNotFound(t *testing.T) {
 			query string
 			args  []any
 		}{
-			{`INSERT INTO networks(id,name,protocol) VALUES($1,'owner network','pocsag')`, []any{network}},
+			{`WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id) INSERT INTO networks(id,name,protocol,agency_id) SELECT $1,'owner network','pocsag',a.id FROM a`, []any{network}},
 			{`INSERT INTO gateways(id,state) VALUES($1,'active')`, []any{gateway}},
-			{`INSERT INTO gateway_networks(id,gateway_id,gateway_network_identifier,network_id,is_default)
-				VALUES($1,$2,'default',$3,true)`, []any{uuid.New(), gateway, network}},
+			{`INSERT INTO gateway_networks(id,gateway_id,gateway_network_identifier,network_id,priority)
+				VALUES($1,$2,'default',$3,0)`, []any{uuid.New(), gateway, network}},
 			{`INSERT INTO processing_workflows(id,name,scope_kind,enabled,created_at,updated_at)
 				VALUES($1,'owner workflow','all',true,$2,$2)`, []any{workflow, now}},
 			{`INSERT INTO processing_workflow_versions(id,workflow_id,definition,created_at,created_by)
@@ -195,13 +196,14 @@ func TestProcessingSourceOwnerMapsMissingMessageToNotFound(t *testing.T) {
 	}
 	if err := withoutMessage(func(tx platform.TransactionContext, binding processing.PublicationBinding,
 		_ []processing.CandidateBinding) error {
-		return owner.ApplyReadiness(tx.Context(), tx, binding)
+		return owner.ApplyProcessingStatus(tx.Context(), tx, binding)
 	}); !errors.Is(err, authz.ErrNotFound) {
-		t.Fatalf("ApplyReadiness with missing Message = %v, want not found", err)
+		t.Fatalf("ApplyProcessingStatus with missing Message = %v, want not found", err)
 	}
 }
 
 func TestIntakeStoreReadsSyntheticNetwork(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	facts, err := eventstore.New(store)
 	if err != nil {
@@ -217,8 +219,8 @@ func TestIntakeStoreReadsSyntheticNetwork(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol,deleted)
-			VALUES($1,'Live FLEX','flex',false),($2,'Deleted ZVEI','zvei',true)`, live, deleted); err != nil {
+		if _, err := executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id)
+			INSERT INTO networks(id,name,protocol,deleted,agency_id) SELECT v.id,v.name,v.protocol,v.deleted,a.id FROM (VALUES ($1::uuid,'Live FLEX','flex',false),($2::uuid,'Deleted ZVEI','zvei',true)) AS v(id,name,protocol,deleted), a`, live, deleted); err != nil {
 			return err
 		}
 		got, err := intakeRepository.ReadSyntheticNetwork(tx.Context(), tx, live)

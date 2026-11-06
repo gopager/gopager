@@ -16,16 +16,16 @@ type Tx struct {
 	Account *AccountClient
 	// AddressRule is the client for interacting with the AddressRule builders.
 	AddressRule *AddressRuleClient
+	// Agency is the client for interacting with the Agency builders.
+	Agency *AgencyClient
 	// AssignmentControl is the client for interacting with the AssignmentControl builders.
 	AssignmentControl *AssignmentControlClient
 	// AuditRecord is the client for interacting with the AuditRecord builders.
 	AuditRecord *AuditRecordClient
 	// CommandReceipt is the client for interacting with the CommandReceipt builders.
 	CommandReceipt *CommandReceiptClient
-	// ContributionSupport is the client for interacting with the ContributionSupport builders.
-	ContributionSupport *ContributionSupportClient
-	// CorrectionDirtyTransmission is the client for interacting with the CorrectionDirtyTransmission builders.
-	CorrectionDirtyTransmission *CorrectionDirtyTransmissionClient
+	// ConsumerOffset is the client for interacting with the ConsumerOffset builders.
+	ConsumerOffset *ConsumerOffsetClient
 	// Credential is the client for interacting with the Credential builders.
 	Credential *CredentialClient
 	// DomainEvent is the client for interacting with the DomainEvent builders.
@@ -50,8 +50,8 @@ type Tx struct {
 	Membership *MembershipClient
 	// Message is the client for interacting with the Message builders.
 	Message *MessageClient
-	// MessageContribution is the client for interacting with the MessageContribution builders.
-	MessageContribution *MessageContributionClient
+	// MessageUnit is the client for interacting with the MessageUnit builders.
+	MessageUnit *MessageUnitClient
 	// Network is the client for interacting with the Network builders.
 	Network *NetworkClient
 	// Organization is the client for interacting with the Organization builders.
@@ -221,11 +221,11 @@ func (tx *Tx) Client() *Client {
 func (tx *Tx) init() {
 	tx.Account = NewAccountClient(tx.config)
 	tx.AddressRule = NewAddressRuleClient(tx.config)
+	tx.Agency = NewAgencyClient(tx.config)
 	tx.AssignmentControl = NewAssignmentControlClient(tx.config)
 	tx.AuditRecord = NewAuditRecordClient(tx.config)
 	tx.CommandReceipt = NewCommandReceiptClient(tx.config)
-	tx.ContributionSupport = NewContributionSupportClient(tx.config)
-	tx.CorrectionDirtyTransmission = NewCorrectionDirtyTransmissionClient(tx.config)
+	tx.ConsumerOffset = NewConsumerOffsetClient(tx.config)
 	tx.Credential = NewCredentialClient(tx.config)
 	tx.DomainEvent = NewDomainEventClient(tx.config)
 	tx.FieldPermission = NewFieldPermissionClient(tx.config)
@@ -238,7 +238,7 @@ func (tx *Tx) init() {
 	tx.LoginAttempt = NewLoginAttemptClient(tx.config)
 	tx.Membership = NewMembershipClient(tx.config)
 	tx.Message = NewMessageClient(tx.config)
-	tx.MessageContribution = NewMessageContributionClient(tx.config)
+	tx.MessageUnit = NewMessageUnitClient(tx.config)
 	tx.Network = NewNetworkClient(tx.config)
 	tx.Organization = NewOrganizationClient(tx.config)
 	tx.PendingAssignmentScope = NewPendingAssignmentScopeClient(tx.config)

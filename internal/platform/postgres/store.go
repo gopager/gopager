@@ -18,12 +18,16 @@ import (
 )
 
 // Store is the PostgreSQL platform.Store. It is safe for concurrent use; its
-// connection pool is limited to 10 open connections.
+// connection pool is limited to 10 open connections. After a successful Migrate it
+// remembers the applied schema version so that every transaction can verify it
+// with one statement instead of repeating the locked migration check.
 type Store struct {
 	db            *sql.DB
+	config        *pgx.ConnConfig // parsed once; Listen derives dedicated connections from it
 	mu            sync.RWMutex
 	migrations    fs.FS
 	registered    bool
+	schemaVersion int64
 	migrationGate chan struct{}
 	migrationOnce sync.Once
 }
@@ -52,7 +56,7 @@ func NewStore(databaseURL string, allowInsecureRemote bool) (*Store, bool, error
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(30 * time.Minute)
-	return &Store{db: db}, insecureRemote, nil
+	return &Store{db: db, config: config}, insecureRemote, nil
 }
 
 // Ping verifies database connectivity, failing with CodeStorageUnavailable.

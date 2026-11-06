@@ -7,6 +7,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -20,10 +21,30 @@ const (
 	FieldName = "name"
 	// FieldProtocol holds the string denoting the protocol field in the database.
 	FieldProtocol = "protocol"
+	// FieldAgencyID holds the string denoting the agency_id field in the database.
+	FieldAgencyID = "agency_id"
 	// FieldDeleted holds the string denoting the deleted field in the database.
 	FieldDeleted = "deleted"
+	// EdgeAgency holds the string denoting the agency edge name in mutations.
+	EdgeAgency = "agency"
+	// EdgeAddressRules holds the string denoting the address_rules edge name in mutations.
+	EdgeAddressRules = "address_rules"
 	// Table holds the table name of the network in the database.
 	Table = "networks"
+	// AgencyTable is the table that holds the agency relation/edge.
+	AgencyTable = "networks"
+	// AgencyInverseTable is the table name for the Agency entity.
+	// It exists in this package in order to avoid circular dependency with the "agency" package.
+	AgencyInverseTable = "agencies"
+	// AgencyColumn is the table column denoting the agency relation/edge.
+	AgencyColumn = "agency_id"
+	// AddressRulesTable is the table that holds the address_rules relation/edge.
+	AddressRulesTable = "address_rules"
+	// AddressRulesInverseTable is the table name for the AddressRule entity.
+	// It exists in this package in order to avoid circular dependency with the "addressrule" package.
+	AddressRulesInverseTable = "address_rules"
+	// AddressRulesColumn is the table column denoting the address_rules relation/edge.
+	AddressRulesColumn = "network_id"
 )
 
 // Columns holds all SQL columns for network fields.
@@ -32,6 +53,7 @@ var Columns = []string{
 	FieldRevision,
 	FieldName,
 	FieldProtocol,
+	FieldAgencyID,
 	FieldDeleted,
 }
 
@@ -111,7 +133,47 @@ func ByProtocol(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldProtocol, opts...).ToFunc()
 }
 
+// ByAgencyID orders the results by the agency_id field.
+func ByAgencyID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAgencyID, opts...).ToFunc()
+}
+
 // ByDeleted orders the results by the deleted field.
 func ByDeleted(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDeleted, opts...).ToFunc()
+}
+
+// ByAgencyField orders the results by agency field.
+func ByAgencyField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newAgencyStep(), sql.OrderByField(field, opts...))
+	}
+}
+
+// ByAddressRulesCount orders the results by address_rules count.
+func ByAddressRulesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newAddressRulesStep(), opts...)
+	}
+}
+
+// ByAddressRules orders the results by address_rules terms.
+func ByAddressRules(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newAddressRulesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+func newAgencyStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(AgencyInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, AgencyTable, AgencyColumn),
+	)
+}
+func newAddressRulesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(AddressRulesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, AddressRulesTable, AddressRulesColumn),
+	)
 }

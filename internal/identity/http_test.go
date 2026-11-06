@@ -15,6 +15,7 @@ import (
 )
 
 func TestHTTPProofSelectionNeverFallsBack(t *testing.T) {
+	t.Parallel()
 	transport, err := NewHTTPTransport("http://localhost:8080")
 	if err != nil {
 		t.Fatal(err)
@@ -55,6 +56,7 @@ func TestHTTPProofSelectionNeverFallsBack(t *testing.T) {
 		{name: "duplicate session headers", cookies: []string{SessionCookieName + "=" + session, SessionCookieName + "=" + session}, reject: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			request := httptest.NewRequest(http.MethodPost, "/", nil)
 			request.Header["Authorization"] = test.authorization
 			request.Header["Cookie"] = test.cookies
@@ -71,6 +73,7 @@ func TestHTTPProofSelectionNeverFallsBack(t *testing.T) {
 }
 
 func TestHTTPOriginValidation(t *testing.T) {
+	t.Parallel()
 	for _, origin := range []string{
 		"", "null", "//example.test", "ftp://example.test", "http://user@example.test",
 		"http://example.test/path", "http://example.test?", "http://example.test#",
@@ -106,8 +109,10 @@ func TestHTTPOriginValidation(t *testing.T) {
 }
 
 func TestHTTPAndTLSProxySessionProtection(t *testing.T) {
+	t.Parallel()
 	for _, behindTLSProxy := range []bool{false, true} {
 		t.Run(map[bool]string{false: "direct HTTP", true: "HTTPS edge HTTP upstream"}[behindTLSProxy], func(t *testing.T) {
+			t.Parallel()
 			session, _, err := NewSecret()
 			if err != nil {
 				t.Fatal(err)
@@ -148,7 +153,7 @@ func TestHTTPAndTLSProxySessionProtection(t *testing.T) {
 				}
 				w.WriteHeader(http.StatusNoContent)
 			}))
-			defer backend.Close()
+			t.Cleanup(backend.Close)
 			edge := backend
 			if behindTLSProxy {
 				upstream, err := url.Parse(backend.URL)
@@ -156,7 +161,7 @@ func TestHTTPAndTLSProxySessionProtection(t *testing.T) {
 					t.Fatal(err)
 				}
 				edge = httptest.NewTLSServer(httputil.NewSingleHostReverseProxy(upstream))
-				defer edge.Close()
+				t.Cleanup(edge.Close)
 			}
 			transport, err = NewHTTPTransport(edge.URL)
 			if err != nil {
@@ -203,6 +208,7 @@ func TestHTTPAndTLSProxySessionProtection(t *testing.T) {
 				{"duplicate CSRF", []string{edge.URL}, []string{csrf, csrf}, http.StatusForbidden},
 			} {
 				t.Run(test.name, func(t *testing.T) {
+					t.Parallel()
 					request, err := http.NewRequest(http.MethodPost, edge.URL+"/write", strings.NewReader("{}"))
 					if err != nil {
 						t.Fatal(err)

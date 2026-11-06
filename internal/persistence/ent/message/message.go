@@ -3,8 +3,6 @@
 package message
 
 import (
-	"fmt"
-
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 )
@@ -26,8 +24,6 @@ const (
 	FieldFirstObservedAt = "first_observed_at"
 	// FieldLastObservedAt holds the string denoting the last_observed_at field in the database.
 	FieldLastObservedAt = "last_observed_at"
-	// FieldPublicationStatus holds the string denoting the publication_status field in the database.
-	FieldPublicationStatus = "publication_status"
 	// Table holds the table name of the message in the database.
 	Table = "messages"
 )
@@ -41,7 +37,6 @@ var Columns = []string{
 	FieldIdentityValue,
 	FieldFirstObservedAt,
 	FieldLastObservedAt,
-	FieldPublicationStatus,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -71,33 +66,6 @@ var (
 	// DefaultIdentitySubtype holds the default value on creation for the "identity_subtype" field.
 	DefaultIdentitySubtype string
 )
-
-// PublicationStatus defines the type for the "publication_status" enum field.
-type PublicationStatus string
-
-// PublicationStatusPending is the default value of the PublicationStatus enum.
-const DefaultPublicationStatus = PublicationStatusPending
-
-// PublicationStatus values.
-const (
-	PublicationStatusPending PublicationStatus = "pending"
-	PublicationStatusReady   PublicationStatus = "ready"
-	PublicationStatusFailed  PublicationStatus = "failed"
-)
-
-func (ps PublicationStatus) String() string {
-	return string(ps)
-}
-
-// PublicationStatusValidator is a validator for the "publication_status" field enum values. It is called by the builders before save.
-func PublicationStatusValidator(ps PublicationStatus) error {
-	switch ps {
-	case PublicationStatusPending, PublicationStatusReady, PublicationStatusFailed:
-		return nil
-	default:
-		return fmt.Errorf("message: invalid enum value for publication_status field: %q", ps)
-	}
-}
 
 // OrderOption defines the ordering options for the Message queries.
 type OrderOption func(*sql.Selector)
@@ -130,9 +98,4 @@ func ByFirstObservedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByLastObservedAt orders the results by the last_observed_at field.
 func ByLastObservedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldLastObservedAt, opts...).ToFunc()
-}
-
-// ByPublicationStatus orders the results by the publication_status field.
-func ByPublicationStatus(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPublicationStatus, opts...).ToFunc()
 }

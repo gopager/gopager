@@ -10,6 +10,8 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/persistence/ent/addressrule"
+	"github.com/gopager/gopager/internal/persistence/ent/agency"
 	"github.com/gopager/gopager/internal/persistence/ent/network"
 )
 
@@ -46,6 +48,12 @@ func (_c *NetworkCreate) SetProtocol(v network.Protocol) *NetworkCreate {
 	return _c
 }
 
+// SetAgencyID sets the "agency_id" field.
+func (_c *NetworkCreate) SetAgencyID(v uuid.UUID) *NetworkCreate {
+	_c.mutation.SetAgencyID(v)
+	return _c
+}
+
 // SetDeleted sets the "deleted" field.
 func (_c *NetworkCreate) SetDeleted(v bool) *NetworkCreate {
 	_c.mutation.SetDeleted(v)
@@ -64,6 +72,26 @@ func (_c *NetworkCreate) SetNillableDeleted(v *bool) *NetworkCreate {
 func (_c *NetworkCreate) SetID(v uuid.UUID) *NetworkCreate {
 	_c.mutation.SetID(v)
 	return _c
+}
+
+// SetAgency sets the "agency" edge to the Agency entity.
+func (_c *NetworkCreate) SetAgency(v *Agency) *NetworkCreate {
+	return _c.SetAgencyID(v.ID)
+}
+
+// AddAddressRuleIDs adds the "address_rules" edge to the AddressRule entity by IDs.
+func (_c *NetworkCreate) AddAddressRuleIDs(ids ...uuid.UUID) *NetworkCreate {
+	_c.mutation.AddAddressRuleIDs(ids...)
+	return _c
+}
+
+// AddAddressRules adds the "address_rules" edges to the AddressRule entity.
+func (_c *NetworkCreate) AddAddressRules(v ...*AddressRule) *NetworkCreate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddAddressRuleIDs(ids...)
 }
 
 // Mutation returns the NetworkMutation object of the builder.
@@ -140,8 +168,14 @@ func (_c *NetworkCreate) check() error {
 			return &ValidationError{Name: "protocol", err: fmt.Errorf(`ent: validator failed for field "Network.protocol": %w`, err)}
 		}
 	}
+	if _, ok := _c.mutation.AgencyID(); !ok {
+		return &ValidationError{Name: "agency_id", err: errors.New(`ent: missing required field "Network.agency_id"`)}
+	}
 	if _, ok := _c.mutation.Deleted(); !ok {
 		return &ValidationError{Name: "deleted", err: errors.New(`ent: missing required field "Network.deleted"`)}
+	}
+	if len(_c.mutation.AgencyIDs()) == 0 {
+		return &ValidationError{Name: "agency", err: errors.New(`ent: missing required edge "Network.agency"`)}
 	}
 	return nil
 }
@@ -193,6 +227,39 @@ func (_c *NetworkCreate) createSpec() (*Network, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Deleted(); ok {
 		_spec.SetField(network.FieldDeleted, field.TypeBool, value)
 		_node.Deleted = value
+	}
+	if nodes := _c.mutation.AgencyIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   network.AgencyTable,
+			Columns: []string{network.AgencyColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(agency.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.AgencyID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.AddressRulesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   network.AddressRulesTable,
+			Columns: []string{network.AddressRulesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(addressrule.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }

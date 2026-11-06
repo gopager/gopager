@@ -1,4 +1,4 @@
-// Package eventstore atomically records classified facts and their transport references.
+// Package eventstore atomically appends classified facts to the sequenced domain_events log, announces them with NOTIFY and serves gap-safe reads and consumer offsets.
 package eventstore
 
 import (
@@ -15,9 +15,9 @@ import (
 	"github.com/gopager/gopager/internal/platform/postgres"
 )
 
-// Store appends classified domain facts as DomainEvent rows and publishes a transport
-// reference for each to FactTopic. It holds no transaction of its own: every append runs
-// in the caller's active primary transaction, so the fact and its reference commit or roll
+// Store appends classified domain facts as DomainEvent rows and announces each on
+// events.NotifyChannel. It also implements events.Log. It holds no transaction of its own: every call runs
+// in the caller's active primary transaction, so the fact and its notification commit or roll
 // back together with the caller's state change.
 type Store struct{ primary *postgres.Store }
 
@@ -53,7 +53,7 @@ func (s *Store) AppendIdentityFact(ctx context.Context, tx platform.TransactionC
 	if err := client.DomainEvent.Create().SetID(fact.ID).SetEnvelope(encoded).Exec(scope); err != nil {
 		return uuid.Nil, err
 	}
-	if err := s.publishReference(tx, fact.ID); err != nil {
+	if err := s.notify(ctx, tx, fact.ID); err != nil {
 		return uuid.Nil, err
 	}
 	return fact.ID, nil
@@ -84,7 +84,7 @@ func (s *Store) AppendConfigurationFact(ctx context.Context, tx platform.Transac
 	if err := client.DomainEvent.Create().SetID(fact.ID).SetEnvelope(encoded).Exec(scope); err != nil {
 		return uuid.Nil, err
 	}
-	if err := s.publishReference(tx, fact.ID); err != nil {
+	if err := s.notify(ctx, tx, fact.ID); err != nil {
 		return uuid.Nil, err
 	}
 	return fact.ID, nil
@@ -93,7 +93,7 @@ func (s *Store) AppendConfigurationFact(ctx context.Context, tx platform.Transac
 var _ events.ConfigurationAppender = (*Store)(nil)
 
 // AppendMasterDataFact records a master-data change fact, stamped with primary time, and
-// its transport reference in the caller's transaction. It returns the fact ID.
+// announces it with NOTIFY in the caller's transaction. It returns the fact ID.
 func (s *Store) AppendMasterDataFact(ctx context.Context, tx platform.TransactionContext, fact events.MasterDataFact) (uuid.UUID, error) {
 	driver, err := borrowed.New(s.primary, tx)
 	if err != nil {
@@ -116,7 +116,7 @@ func (s *Store) AppendMasterDataFact(ctx context.Context, tx platform.Transactio
 	if err := client.DomainEvent.Create().SetID(fact.ID).SetEnvelope(encoded).Exec(scope); err != nil {
 		return uuid.Nil, err
 	}
-	if err := s.publishReference(tx, fact.ID); err != nil {
+	if err := s.notify(ctx, tx, fact.ID); err != nil {
 		return uuid.Nil, err
 	}
 	return fact.ID, nil
@@ -125,7 +125,7 @@ func (s *Store) AppendMasterDataFact(ctx context.Context, tx platform.Transactio
 var _ events.MasterDataAppender = (*Store)(nil)
 
 // AppendCorrectionFact records a historical-correction or suppression-change fact, stamped with primary time,
-// and its transport reference in the caller's transaction. It returns the fact ID.
+// and announces it with NOTIFY in the caller's transaction. It returns the fact ID.
 func (s *Store) AppendCorrectionFact(ctx context.Context, tx platform.TransactionContext, fact events.CorrectionFact) (uuid.UUID, error) {
 	driver, err := borrowed.New(s.primary, tx)
 	if err != nil {
@@ -148,7 +148,7 @@ func (s *Store) AppendCorrectionFact(ctx context.Context, tx platform.Transactio
 	if err := client.DomainEvent.Create().SetID(fact.ID).SetEnvelope(encoded).Exec(scope); err != nil {
 		return uuid.Nil, err
 	}
-	if err := s.publishReference(tx, fact.ID); err != nil {
+	if err := s.notify(ctx, tx, fact.ID); err != nil {
 		return uuid.Nil, err
 	}
 	return fact.ID, nil

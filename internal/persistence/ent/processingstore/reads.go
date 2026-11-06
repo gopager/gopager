@@ -41,7 +41,7 @@ func (s *Store) processingReadClient(ctx context.Context, tx platform.Transactio
 	if workflowID == uuid.Nil {
 		return nil, nil, authz.ErrInvalidInput
 	}
-	filter, err := workflowScope(authority, "rule.read", now)
+	filter, err := workflowScope(authority, "workflow.read", now)
 	if err != nil {
 		return nil, nil, err
 	}

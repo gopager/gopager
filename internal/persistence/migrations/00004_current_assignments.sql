@@ -6,16 +6,25 @@ CREATE TABLE organizations (
     defaults jsonb NOT NULL,
     deleted boolean NOT NULL DEFAULT false
 );
+-- A Agency is the administrative area (county, city) that owns Units and Radio networks and
+-- is the normal grant scope above a Unit; it is deleted only once nothing references it.
+CREATE TABLE agencies (
+    id uuid PRIMARY KEY,
+    revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
+    name varchar(256) NOT NULL CHECK (name <> '')
+);
 CREATE TABLE units (
     id uuid PRIMARY KEY,
     revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
     name varchar(256) NOT NULL CHECK (name <> ''),
+    agency_id uuid NOT NULL REFERENCES agencies(id),
     deleted boolean NOT NULL DEFAULT false,
     organization_id uuid REFERENCES organizations(id),
     settings jsonb NOT NULL DEFAULT
         '{"color":{"mode":"inherit"},"icon":{"mode":"inherit"},"functionMeanings":{"mode":"inherit"}}'::jsonb
 );
 CREATE INDEX units_organization_id ON units (organization_id);
+CREATE INDEX units_agency_id ON units (agency_id);
 CREATE TABLE unit_templates (
     id uuid PRIMARY KEY,
     revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
@@ -55,27 +64,42 @@ CREATE TABLE assignment_control (
     revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0)
 );
 INSERT INTO assignment_control (id) VALUES (1);
+-- A correction scope names the targets it re-resolves: an address selector on one Network and
+-- Protocol with an optional validity window (rule change), one Unit (Unit deletion) or one target
+-- (suppression change). Scopes run independently; a target already re-resolved by a newer scope
+-- carries a newer assignment revision and is skipped by older scopes.
 CREATE TABLE assignment_pending_scopes (
     id uuid PRIMARY KEY,
     assignment_revision bigint NOT NULL CHECK (assignment_revision > 0),
-    network_ids jsonb NOT NULL,
-    unit_id uuid,
     reason varchar NOT NULL CHECK (reason IN ('rule-change', 'unit-deleted', 'suppression-change')),
+    network_id uuid,
+    protocol varchar CHECK (protocol IN ('pocsag', 'flex', 'zvei', 'eas')),
+    address_from bigint,
+    address_to bigint,
+    address_text varchar,
+    valid_from timestamptz,
+    valid_until timestamptz,
+    unit_id uuid,
+    transmission_id uuid,
+    target_position integer CHECK (target_position >= 0),
     recorded_at timestamptz NOT NULL,
     state varchar NOT NULL DEFAULT 'queued'
         CHECK (state IN ('queued', 'running', 'completed', 'failed', 'superseded')),
-    high_water_accepted_at timestamptz,
-    high_water_transmission_id uuid,
     cursor_accepted_at timestamptz,
     cursor_transmission_id uuid,
     attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
     lease_until timestamptz,
     fencing_token bigint NOT NULL DEFAULT 0 CHECK (fencing_token >= 0),
-    access_revision bigint NOT NULL DEFAULT 1 CHECK (access_revision > 0),
-    failure_code varchar
+    failure_code varchar,
+    CHECK (
+        (network_id IS NOT NULL AND protocol IS NOT NULL AND unit_id IS NULL AND transmission_id IS NULL
+            AND ((address_from IS NOT NULL AND address_to IS NOT NULL AND address_text IS NULL)
+                OR (address_text IS NOT NULL AND address_from IS NULL AND address_to IS NULL)))
+        OR (unit_id IS NOT NULL AND network_id IS NULL AND transmission_id IS NULL)
+        OR (transmission_id IS NOT NULL AND target_position IS NOT NULL AND network_id IS NULL AND unit_id IS NULL)
+    )
 );
-CREATE INDEX assignment_pending_scopes_state_revision
-    ON assignment_pending_scopes (state, assignment_revision);
+CREATE INDEX assignment_pending_scopes_state ON assignment_pending_scopes (state, recorded_at, id);
 CREATE TABLE command_receipts (
     id uuid PRIMARY KEY,
     actor_id uuid NOT NULL,
@@ -99,3 +123,4 @@ DROP TABLE unit_collections;
 DROP TABLE unit_templates;
 DROP TABLE units;
 DROP TABLE organizations;
+DROP TABLE agencies;

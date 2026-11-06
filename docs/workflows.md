@@ -18,10 +18,11 @@ Related: [HTTP API](http-api.md) (routes, authentication, errors) · [Plugins](p
 | --- | --- |
 | **Workflow** | Revisioned metadata: `name`, `scope`, `enabled`, `activeVersionId`. Every change increments `revision`. Deleting a workflow is logical: it sets `enabled=false` and clears the active version. |
 | **Workflow version** | An immutable saved **definition** (selector, steps, output schema). Saving a version does not activate it. Any retained version can be activated. |
-| **Processing instance** | An administratively configured, revisioned binding of one plugin capability: the `main` plugin artifact, an optional `preview` artifact, an execution principal and a configuration value. Each save creates a new immutable revision. Installed steps pin an instance ID and revision. |
+| **Processing instance** | An administratively configured, revisioned binding of one plugin capability: the `main` plugin artifact, an execution principal and a configuration value. Each save creates a new immutable revision. Installed steps pin an instance ID and revision. |
 | **Candidate** | Durable work item for one (transmission, workflow, definition version, source revision, context revision). It is admitted when a transmission is accepted and an enabled workflow's scope covers it. Admission does not mean the selector matched. |
 | **Result** | Private evaluation evidence stored when a candidate completes with `selected=true`. Not-selected completions store no result. |
-| **Publication** | Atomic step that marks a transmission ready once every current candidate for it has completed. It also appends a `processing.completed` event for each stored result. |
+| **Publication** | Step that attaches a completed candidate's result to the transmission's message, appends its `processing.completed` event and refreshes the transmission's processing status. It runs in the same transaction as the completion; it never hides evidence. |
+| **Processing status** | Per-transmission marker `none` (no workflow selected), `pending`, `completed` or `failed`, derived from the candidates of the currently selected workflows. Accepted evidence is visible regardless of it. |
 
 ```mermaid
 flowchart LR
@@ -32,8 +33,9 @@ flowchart LR
   C -->|worker evaluates| R{selected?}
   R -->|yes| RES[Result]
   R -->|no| N[completed, no result]
-  RES --> P[Publication<br/>processing.completed event<br/>transmission ready]
-  N --> P
+  RES --> P[Publication<br/>result attached to message<br/>processing.completed event]
+  N --> S[Processing status refreshed]
+  P --> S
 ```
 
 Multiple workflows can match the same transmission. Each one runs independently and produces its own result namespace.
@@ -131,7 +133,7 @@ The server defines a fixed catalog. Only these references are accepted:
 | `target.unit.id` | string (UUID) | yes | `unit` | target is assigned to a unit |
 | `target.unit.collections` | list of string (UUID) | yes | `unit` | target is assigned to a unit |
 
-Every field value carries **dependencies**: the transmission, network, source/context revision, optional target position, and the field groups it was derived from. Dependencies propagate through every step, selector and branch condition, and are part of each output field.
+Every captured source field carries the owner's **dependency**: the transmission, network, source/context revision, optional target position, and the field group declared for it. Derived values (step outputs and final outputs) carry none. A definition is classified **once per definition version**, not per value: its outputs are `derived` plus the union of the field groups of every source field the definition reads (see [Classification](#classification)).
 
 ### Field schema
 
@@ -191,7 +193,6 @@ Rules:
 - With `conversion`, the source must be a `string`, and the target kind must be `integer`, `number`, `boolean` or `timestamp`. The only other accepted conversion is an identity conversion to an equal schema.
 - Every name in the mapping must be declared in the target schema. Every non-optional target name must be mapped.
 - An absent source value produces an absent output. If that output is required, the run fails with `INVALID_INPUT`.
-- A hidden source value fails the run with `AUTHORITY_UNAVAILABLE`.
 
 String conversions applied at run time. A value that cannot be converted fails the run with `INVALID_INPUT`:
 
@@ -234,7 +235,6 @@ Behavior at run time:
 | Situation | Result |
 | --- | --- |
 | Input absent | All outputs are absent. |
-| Input hidden | The run fails with `AUTHORITY_UNAVAILABLE`. |
 | No match, or the group did not participate | That output is absent. If the output is required, the run fails with `INVALID_INPUT`. |
 | Conversion fails | The run fails with `INVALID_INPUT`. |
 
@@ -257,11 +257,9 @@ Patterns are checked when the definition is compiled, so an inadmissible pattern
 "branch": {"condition": Predicate, "then": [Step...], "else": [Step...], "thenOutputs": {...}, "elseOutputs": {...}}
 ```
 
-- `then` runs if `condition` is definitely true. `else` runs if it is definitely false.
-- If `condition` is indeterminate (it depends on a hidden field), the run fails with `AUTHORITY_UNAVAILABLE`.
+- `then` runs if `condition` is true. `else` runs if it is false. There is no third outcome.
 - `then` and `else` are nested step lists, at most 32 levels deep. Each sees the steps before the branch plus its own earlier steps.
 - `thenOutputs` and `elseOutputs` both assign the branch step's `outputSchema`. Each is validated against its own branch scope.
-- Outputs also inherit the condition's dependencies.
 - Steps in the branch that does not run still count toward target dependence. For example, a `target` reference in an unused `else` still makes the workflow per-target.
 
 #### Installed (plugin step)
@@ -274,8 +272,8 @@ Patterns are checked when the definition is compiled, so an inadmissible pattern
 - `input` assigns the plugin manifest's `inputSchema`.
 - The step's `outputSchema` must equal the manifest's `resultSchema` exactly.
 - At save, activation and run time the pinned revision must be the instance's **current** revision, and the instance must be enabled. An instance update therefore requires saving and activating a workflow version that pins the new revision.
-- Each call is authorized again at run time. The instance's execution principal must hold field permission for every dependency group of the input and read access to the source. The input sent to the plugin must equal the evaluated input.
-- Each invocation is bounded to 30 s. Exceeding it fails the run with `RESOURCE_LIMIT` and kills the plugin process. The time spent waiting for the plugin is not charged to the 1 s built-in budget.
+- Each call is authorized again at run time. The instance's execution principal must hold field permission for every group of the definition's [classification](#classification) and read access to the source. The input sent to the plugin must equal the evaluated input.
+- Each invocation is bounded to 30 s. Exceeding it fails the run with `RESOURCE_LIMIT` and kills the plugin process. The time spent waiting for the plugin, and for the authorization transaction that precedes each call, is not charged to the 1 s built-in budget.
 - Plugin failure reasons map to codes:
   - `resource-limit` → `RESOURCE_LIMIT`
   - `capability-unavailable` → `AUTHORITY_UNAVAILABLE`
@@ -283,7 +281,8 @@ Patterns are checked when the definition is compiled, so an inadmissible pattern
   - Any other reason, or a malformed response → `INVALID_INPUT`
   - A plugin error, crash or broken connection during the call → `INVALID_INPUT`
   - A plugin process that cannot be started or does not complete its handshake → `AUTHORITY_UNAVAILABLE`
-- During preview only the instance's `preview` artifact runs. If no preview artifact is configured, the step fails with `AUTHORITY_UNAVAILABLE`.
+- During preview the instance's plugin is called with `mode: "preview"` and must answer without effects outside its process. If its manifest does not declare `supportsPreview`, the plugin is not called and the step fails with `AUTHORITY_UNAVAILABLE`.
+- The plugin process of an instance revision is long-lived and shared by all runs and previews that use it, one call at a time; see [Plugins](plugins.md#1-runtime-model).
 - Plugins whose configuration policy declares a secret, or user-scoped configuration, cannot be used: `AUTHORITY_UNAVAILABLE`.
 
 The manifest, artifact pinning and gRPC invocation are described in [Plugins](plugins.md).
@@ -306,9 +305,7 @@ Semantics:
 
 - **Absent fields.** Every comparison is guarded by presence, so a comparison on an absent field is `false`, and `not` of it is `true`.
 - **Literals.** A literal must validate against the field's schema. For example, comparing an `integer` field with a `string` literal is rejected at compile time.
-- **Hidden fields.** A hidden field (one the reading authority may not see) is unknown, and a result that depends on it is **indeterminate**:
-  - an indeterminate selector fails the run with `AUTHORITY_UNAVAILABLE`;
-  - an indeterminate branch condition fails the run with `AUTHORITY_UNAVAILABLE`.
+- **Two-valued logic.** Evaluation runs as the system, so a field is only ever `present` or `absent`. `and`, `or` and `not` are ordinary boolean operators, a selector is `true` or `false`, and a branch runs `then` or `else`. Whether a human may read a field never changes the result; it is checked when the version is saved (see [Validation](#validation)).
 - **Target contexts.** In a per-target evaluation, `target` fields refer to the current target context. A single predicate cannot mix target contexts.
 - **Evaluation limits.**
 
@@ -333,31 +330,39 @@ Evaluation runs once for the whole source unless the workflow is target-dependen
 - Each selected position yields its own field set in `targetResults`.
 
 ```json
-{"selected": true, "fields": {"level": {"state": "present", "value": {"kind": "integer", "value": "7"},
-  "dependencies": [{"transmissionId": "…", "sourceRevision": "1", "contextRevision": "1", "networkId": "…", "groups": ["payload"]}]}}}
+{"selected": true, "fields": {"level": {"state": "present", "value": {"kind": "integer", "value": "7"}}}}
 ```
 
 ```json
-{"selected": true, "targetResults": [{"targetPosition": 1, "fields": {"address": {"state": "present", "value": {"kind": "string", "value": "222"}, "dependencies": […]}}}]}
+{"selected": true, "targetResults": [{"targetPosition": 1, "fields": {"address": {"state": "present", "value": {"kind": "string", "value": "222"}}}}]}
 ```
 
 - Not selected: `{"selected": false}`.
 - Selected with no outputs: `{"selected": true, "fields": {}}`.
-- Field `state` is `present` or `absent`. A published result never contains `hidden`.
+- Field `state` is `present` or `absent`. There is no `hidden` state.
+- Output fields carry no per-value `dependencies`; the result is classified once per definition (see [Classification](#classification)).
 - If any selected context fails, the whole evaluation fails. Partial results are never returned.
 - The encoded result must not exceed 256 KiB, and decoded bytes inside it must not exceed 256 KiB. Otherwise the run fails with `RESOURCE_LIMIT`.
+
+### Classification
+
+A definition version's outputs are classified once, as `derived` plus the union of the field groups the definition reads. The groups come from the source declarations (the catalog above) for every source and target field the definition references in its selector, steps (installed-step inputs included, and both branch arms whether or not they run) and outputs. They depend only on the definition, never on source values, on which branch runs or on a reader's rights, and they are computed from the definition and the declarations whenever it is loaded rather than stored.
+
+At run time `Evaluation.Dependencies()` returns the owner dependency (transmission, network, revisions, optional target position, groups) of each referenced source field. Publication and preview rechecks authorize exactly that set, and an installed plugin's execution principal must be able to read the whole set before a call.
 
 ## Validation
 
 A definition is compiled when a version is **saved**, when it is **activated**, when it is **previewed**, and again at the start of every **run**. Compilation is checked against the server's field catalog and the current processing instances. If saving the version would change the definition in any way, the request is rejected.
 
+**Field validation.** Saving a version, and previewing an unsaved draft, additionally check every source or target field the selector, steps (installed-step inputs included) and outputs reference against the author's current field permissions and the field group declared for it. If the author may not read one of those groups the request fails with `INVALID_INPUT`; the offending reference is recorded in the private cause. Nothing at evaluation time depends on a human reader's rights, so this check is the only place an author's readable groups constrain a definition. Previewing a saved version is not re-validated here: its result is instead authorized against the previewer's field permissions when it is rechecked after evaluation.
+
 All failures use the platform error codes. Messages are internal and never part of the API response.
 
 | Code | Raised for |
 | --- | --- |
-| `INVALID_INPUT` | `schemaVersion` ≠ 1; unknown or duplicate JSON properties; unknown step `kind` or mismatched step configuration; duplicate or empty step `id`; invalid output name; unknown field reference or field outside lexical scope; malformed predicate operands (for example `not` with ≠ 1 arg, `in` without `values`, `contains` on a non-string, ordered comparison on a non-numeric field); literal not matching the schema; incompatible assignment or undeclared conversion; required output unmapped; mapping to an undeclared output; extraction input not a string; capture group missing or ambiguous; invalid capture conversion; unparseable regex; installed step without `instanceId` or with revision ≤ 0; installed `outputSchema` differing from the manifest's `resultSchema`; runtime: required value absent, conversion failure, plugin failure. |
+| `INVALID_INPUT` | `schemaVersion` ≠ 1; unknown or duplicate JSON properties; unknown step `kind` or mismatched step configuration; duplicate or empty step `id`; invalid output name; unknown field reference or field outside lexical scope; malformed predicate operands (for example `not` with ≠ 1 arg, `in` without `values`, `contains` on a non-string, ordered comparison on a non-numeric field); literal not matching the schema; incompatible assignment or undeclared conversion; required output unmapped; mapping to an undeclared output; extraction input not a string; capture group missing or ambiguous; invalid capture conversion; unparseable regex; installed step without `instanceId` or with revision ≤ 0; installed `outputSchema` differing from the manifest's `resultSchema`; a selector, step or output referencing a source field whose field group the author may not read (save and draft preview); runtime: required value absent, conversion failure, plugin failure. |
 | `RESOURCE_LIMIT` | More than 128 steps; branch depth > 32; JSON/schema/value/predicate nesting > 32; collection > 1000; predicate args/values > 1024; encoded input > 1 MiB; regex bounds; CEL cost or memory; aggregate run input/intermediate > 1 MiB; result > 256 KiB; accumulated built-in compute > 1 s; installed call > 30 s; plugin reports `resource-limit`. |
-| `AUTHORITY_UNAVAILABLE` | Hidden selector, branch or extraction input; instance disabled, missing artifact root, or preview artifact unavailable; plugin uses secret or user-scoped configuration; plugin reports `capability-unavailable`; execution principal no longer resolvable or authorized. |
+| `AUTHORITY_UNAVAILABLE` | Instance disabled, missing artifact root, or preview requested for a plugin that does not support preview; plugin uses secret or user-scoped configuration; plugin reports `capability-unavailable`; execution principal no longer resolvable or authorized. |
 | `INCOMPATIBLE_VERSION` | Plugin manifest schema or SDK version not supported (see [Plugins](plugins.md)). |
 | `REVISION_CONFLICT` | `expectedRevision` does not match; pinned instance revision is no longer current; authority or workflow changed between preparation and commit. |
 
@@ -369,15 +374,15 @@ Management operations (see [HTTP API](http-api.md) for the routes and envelopes)
 
 | Operation | Permission | Effect | Event `changeKind` |
 | --- | --- | --- | --- |
-| List / read workflow, list / read versions | `rule.read` | Results are filtered by scope. | — |
-| Create workflow | `rule.create` | New workflow with `revision` 1 and no active version. `commandId` makes the request idempotent. | `created` |
-| Update workflow | `rule.update` | Changes `name`, `scope` and `enabled`. The active version is unchanged. | `updated` |
-| Save version | `rule.update` | Compiles the definition, stores an immutable version, and increments the workflow revision. Idempotent by `commandId`. | `version-saved` |
-| Activate version | `rule.activate` | Recompiles the version and sets `activeVersionId`. Any retained version can be activated, including an earlier one. | `activated` |
-| Delete workflow | `rule.delete` | Sets `enabled=false` and clears the active version. Versions are retained. | `deleted` |
-| Preview | `rule.preview` | See [Preview](#preview). | — |
-| List / read candidate status, read result metadata | `rule.read` | See [Status reads](#status-reads). | — |
-| Retry failed candidate | `rule.reprocess` | See [Retries](#retries). | — |
+| List / read workflow, list / read versions | `workflow.read` | Results are filtered by scope. | — |
+| Create workflow | `workflow.create` | New workflow with `revision` 1 and no active version. `commandId` makes the request idempotent. | `created` |
+| Update workflow | `workflow.update` | Changes `name`, `scope` and `enabled`. The active version is unchanged. | `updated` |
+| Save version | `workflow.update` | Compiles the definition, stores an immutable version, and increments the workflow revision. Idempotent by `commandId`. | `version-saved` |
+| Activate version | `workflow.activate` | Recompiles the version and sets `activeVersionId`. Any retained version can be activated, including an earlier one. | `activated` |
+| Delete workflow | `workflow.delete` | Sets `enabled=false` and clears the active version. Versions are retained. | `deleted` |
+| Preview | `workflow.preview` | See [Preview](#preview). | — |
+| List / read candidate status, read result metadata | `workflow.read` | See [Status reads](#status-reads). | — |
+| Retry failed candidate | `workflow.reprocess` | See [Retries](#retries). | — |
 
 Common rules:
 
@@ -418,7 +423,6 @@ Input fields:
 | `enabled` | Required. |
 | `executionPrincipalId` | Required. The principal must currently resolve. |
 | `main` | `{"manifestPath", "pin": {"pluginId", "version", "capabilityId", "digest"}}`. `digest` is lowercase SHA-256 hex. |
-| `preview` | Optional, same structure. Must declare `pure` and `purePreview`, and match `main` in plugin, version, capability, input/result/configuration schemas and configuration policy. |
 | `configuration` | A typed value valid against the manifest's `configurationSchema`. |
 
 Before the instance is stored:
@@ -464,8 +468,8 @@ Rules:
 - The network must exist and use the same protocol.
 - Targets are matched against current assignments.
 - The workflow scope is applied for the given network or unit.
-- Fields the editor may not read are **hidden**, so a definition that depends on them fails with `AUTHORITY_UNAVAILABLE`.
-- Installed steps run only the instance's preview artifact. Each call checks both the execution principal and the editor.
+- An unsaved draft that references a field the editor may not read is rejected with `INVALID_INPUT`, exactly as on save. A saved version is evaluated in full, and its result is released only if the editor may read every group of its [classification](#classification).
+- Installed steps call the instance's plugin in preview mode, and only if its manifest declares `supportsPreview`. Each call checks both the execution principal and the editor.
 - After evaluation, the workflow revision and source authority are checked again. If the workflow changed, the request fails with `REVISION_CONFLICT`.
 - The response is the [result shape](#result-shape).
 
@@ -477,9 +481,9 @@ When a transmission is accepted, the same transaction:
 2. Selects every enabled, non-deleted workflow with an active version whose scope covers the transmission (network, or a unit of any target).
 3. Inserts one `pending` candidate per workflow, due immediately. Each candidate pins the transmission, the workflow and its revision, the active version, the configuration revision, the source revision (1) and the assignment context revision.
 
-If no workflow is selected, the transmission is immediately `completed` and publication-`ready`. Its message becomes ready once all of the message's transmissions are ready.
+The transmission's `processing_status` is `pending` when at least one candidate was admitted and `none` otherwise. The receipt reports the same value; the HTTP status is `202` for `pending` and `200` for every other value. Evidence is visible to readers in both cases.
 
-After an assignment correction, a background pass revisits unpublished transmissions that have no unfinished candidate. It admits candidates for the currently selected workflows, or publishes the transmission if every current candidate has completed.
+When an assignment correction changes a target's resolution, the correction batch re-admits processing for that transmission in the same transaction: candidates bound to the old assignment context are superseded, a candidate is admitted for every currently selected workflow, and the processing status becomes `pending` again. Transmissions whose resolution did not change keep their candidates and status.
 
 ### Worker dispatch
 
@@ -487,11 +491,14 @@ Each worker process runs one dispatcher:
 
 | Setting | Default |
 | --- | --- |
-| Concurrent evaluations | 2 |
-| Fallback poll interval | 5 s |
-| Due-work page size | 200 |
+| Concurrent evaluations (`--processing-concurrency`) | 2 |
+| Fallback poll interval (`--processing-poll-interval`) | 5 s |
 
-Work is selected by primary-database time. A candidate is due if it is `pending` with `due_at ≤ now`, or `running` with `lease_until ≤ now`, and it has not been published. Due work is ordered by `due_at` and ID. Selection is round-robin across pages. A slot whose work failed to dispatch cools down until the next poll or wake-up.
+Work is selected by primary-database time. A candidate is due if it is `pending` with `due_at ≤ now`, or `running` with `lease_until ≤ now`. Due work is ordered by `due_at` and ID. One selection asks for at most the configured concurrency plus the number of failed candidates this process still tracks, locks the rows with `FOR UPDATE SKIP LOCKED` and takes no lock on the Processing control row. Dispatchers never wait for each other or for a configuration change, and a selection skips rows another open selection holds. The selection transaction ends before execution, so its locks end at commit and two dispatchers can still select the same row one after the other; the revision-checked claim below is the guard against double execution.
+
+A dispatcher selects when it starts, when a wake-up arrives and on every poll. Intake, and the Processing readmission that follows a correction, send a PostgreSQL notification on channel `gopager_processing_due` in the transaction that admits candidates; every worker process listens on a dedicated connection, so new work starts without waiting for the poll. The listener reconnects with backoff and signals once after each reconnect, because notifications sent while it was disconnected are lost. The poll is the fallback for such losses and for work that becomes due by time (retry delays, expired leases).
+
+A candidate whose dispatch failed cools down until the next wake-up or poll and is then retried behind fresh due work, so a persistently rejected early candidate cannot starve later ones.
 
 For each selected candidate the worker:
 
@@ -505,10 +512,10 @@ For each selected candidate the worker:
    - Installed calls add their own 30 s bound each. Exceeding it fails the run with `RESOURCE_LIMIT`.
    - Worker shutdown or a lost lease cancels the evaluation. Nothing is stored for that attempt; the candidate is recovered after its lease expires.
    - The aggregate encoded input and intermediate data is bounded to 1 MiB.
-   - The lease is renewed every 20 s, after the source is checked again.
+   - The lease is renewed every 20 s, after the source is checked again. A transient renewal failure (`STORAGE_UNAVAILABLE`, `AUTHORITY_UNAVAILABLE`, `COMMIT_UNCERTAIN`) does not abort the evaluation while the lease would still outlive the next renewal attempt; the renewal is retried at the next tick. A `REVISION_CONFLICT`, any other failure, or a lease that would expire without a renewal aborts the evaluation.
 4. **Finishes.** It rechecks the source and configuration, then writes under the lease fence:
-   - **Success:** the candidate becomes `completed` with `selected` set. A result row is stored if selected. Publication is attempted in the same transaction.
-   - **Failure:** the failure is classified, then retried or marked terminal.
+   - **Success:** the candidate becomes `completed` with `selected` set. A result row is stored if selected and published in the same transaction (see [Publication](#publication)).
+   - **Failure:** the failure is classified, then retried or marked terminal. The transmission's processing status is refreshed in the same transaction.
 
 ### Retries
 
@@ -532,7 +539,7 @@ Each delay has uniform ±20 % jitter. After the fifth automatic attempt the cand
 
 **Manual retry** of a `failed`, unpublished candidate:
 
-- Requires `rule.reprocess` and the candidate's `expectedRevision`.
+- Requires `workflow.reprocess` and the candidate's `expectedRevision`.
 - Checks, in the same transaction, that the candidate is still current: its transmission is unpublished with unchanged targets, source and assignment context revisions; its workflow is still selected at the same active version and workflow revision; the processing configuration revision is unchanged; and every processing instance the definition uses is still valid. Anything stale fails with `409 REVISION_CONFLICT` and leaves the candidate `failed`.
 - On success, queues one attempt immediately: the candidate becomes `pending`, due now.
 - The manual attempt does not count against or reset the automatic budget.
@@ -553,29 +560,38 @@ stateDiagram-v2
   pending --> superseded: obsolete
   running --> superseded: obsolete
   failed --> superseded: obsolete
-  completed --> pending: reselected before publication
+  completed --> pending: reselected (workflow or configuration revision moved)
 ```
 
 | State | Terminal | Meaning |
 | --- | --- | --- |
 | `pending` | no | Waiting until `due_at`. |
 | `running` | no | Claimed under a lease and fencing token. |
-| `completed` | yes once published | `selected` is set. A result is stored only if `selected=true`. |
+| `completed` | yes | `selected` is set. A result is stored only if `selected=true`; a stored result is published in the same transaction. |
 | `failed` | until retried | `failureCode` holds one of `INVALID_INPUT`, `INCOMPATIBLE_VERSION`, `RESOURCE_LIMIT`, `STORAGE_UNAVAILABLE`, `AUTHORITY_UNAVAILABLE`, `INTERNAL_ERROR`. |
 | `superseded` | yes | The binding is no longer current. Evidence is retained. |
 
 ### Publication
 
-Publication runs in the same transaction as the completion that finishes the last outstanding candidate. It also runs when a superseded candidate is processed or a correction pass revisits the transmission. If any currently selected workflow's candidate is not `completed`, publication waits.
+Publication runs in the same transaction as every candidate transition: a completion, a classified failure, the processing of a superseded candidate, a manual retry and a correction's readmission. It never waits for sibling candidates and never hides evidence.
 
-When all are completed, for each current candidate publication:
+For each current candidate that is `completed` with `selected=true` and a result not yet published, publication:
 
 1. Verifies that the source revision, context revision and message revision are unchanged, and that the candidate still matches the active workflow version and configuration revision.
 2. Verifies that the instances used by the definition are enabled and current.
-3. For results, verifies that every target position is inside the current workflow scope. If the definition has installed steps, it also verifies that each instance's execution principal may read every dependency (`message.read` on its field groups).
-4. Marks the candidate as applied and, for a selected result, appends a `processing.completed` event.
+3. Verifies that every target position of the result is inside the current workflow scope. If the definition has installed steps, it also verifies that each instance's execution principal may read every dependency (`message.read` on its field groups).
+4. Sets the result's `published_at` and `message_id` and appends a `processing.completed` event.
 
-It then sets the transmission to `processing_status=completed`, `publication_status=ready`. When every transmission of the message is ready, the message and its contributions become ready. Any failed check rolls the whole transaction back with `REVISION_CONFLICT`. The work is retried by a later reconciliation.
+It then derives the transmission's processing status from the candidates of the currently selected workflows:
+
+| Candidates of current bindings | `processing_status` |
+| --- | --- |
+| any `pending` or `running` | `pending` |
+| none pending, at least one `failed` | `failed` |
+| all `completed` | `completed` |
+| none (for example after a workflow was enabled later) | unchanged |
+
+Any failed check rolls the whole transaction back with `REVISION_CONFLICT`; the candidate transition is retried by a later reconciliation. Published results stay attached to their message when their candidate is later superseded, and a message merge moves them to the surviving message (`processing_results.message_id` references `messages`).
 
 ### Events
 
@@ -587,11 +603,11 @@ All processing events use schema version 1 and producer version `processing-kern
 | `configuration.changed` | `processing-instance` (ID, revision) | `configuration` | `{"changeKind": "created" \| "updated"}`. Paths, configuration values and the principal are not included. |
 | `processing.completed` | `processingResult` (result ID, result revision) | `source-classified` | `transmissionId`, `messageId`, `workflowId`, `definitionVersionId`, `resultId`, `resultRevision`, `sourceRevision`, `contextRevision`, `status: "completed"`, `result` (the [result shape](#result-shape)). |
 
-`processing.completed` is emitted only for selected results, and only at publication. Not-selected outcomes and failures emit no event. Replay mode is `normal`, or `historical-reprocessing` for historical replays.
+`processing.completed` is emitted only for selected results, when the result is published. Not-selected outcomes and failures emit no event; a failure is visible as the transmission's `failed` processing status. Replay mode is `normal`, or `historical-reprocessing` for historical replays.
 
 ### Status reads
 
-Candidate status reads require `rule.read` on the workflow and are permission-filtered. Their response contains only:
+Candidate status reads require `workflow.read` on the workflow and are permission-filtered. Their response contains only:
 
 ```json
 {"id": "…", "revision": "4", "state": "failed", "selected": true, "failureCode": "RESOURCE_LIMIT", "updatedAt": "…"}
@@ -621,5 +637,5 @@ Result metadata returns `{"id", "revision", "completedAt"}`. Source identity, ex
 | Candidate lease / renewal interval | 60 s / 20 s | — |
 | Automatic attempts | 5 | terminal `failed` |
 | Retry delays | 30 s, 2 min, 10 min, 30 min, ±20 % jitter | — |
-| Dispatcher concurrency / poll interval | 2 / 5 s | — |
+| Dispatcher concurrency / poll interval | 2 / 5 s (`--processing-concurrency`, `--processing-poll-interval`) | `INVALID_INPUT` at startup if not positive |
 | Page `limit` (workflow, candidate and instance lists) | 1–200, default 50 | `INVALID_INPUT` |

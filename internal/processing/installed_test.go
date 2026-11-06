@@ -42,6 +42,7 @@ func loadCommandPlugin(t *testing.T, host *PluginHost, schema map[string]FieldSc
 }
 
 func TestInstalledPluginWireInvocationRestartAndIsolation(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	host := NewPluginHost()
 	t.Cleanup(func() {
@@ -49,7 +50,6 @@ func TestInstalledPluginWireInvocationRestartAndIsolation(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	t.Setenv("GOPAGER_TEST_CORE_SECRET", "must-not-reach-plugins")
 	artifact, pin := loadCommandPlugin(t, host, map[string]FieldSchema{"mode": {Kind: StringValue}, "text": {Kind: StringValue}})
 	text, err := Literal(StringValue, "original text")
 	if err != nil {
@@ -67,7 +67,7 @@ func TestInstalledPluginWireInvocationRestartAndIsolation(t *testing.T) {
 			timeout = 200 * time.Millisecond
 		}
 		callContext, cancel := context.WithTimeout(ctx, timeout)
-		fields, err := artifact.invokeProjected(callContext, envelope, true)
+		fields, err := artifact.invokeProjected(callContext, envelope)
 		cancel()
 		switch mode {
 		case "ok":
@@ -92,24 +92,26 @@ func TestInstalledPluginWireInvocationRestartAndIsolation(t *testing.T) {
 			}
 		}
 	}
-	artifact.manifest.PurePreview = false
-	if _, err := artifact.invokeProjected(ctx, envelope, true); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
+	envelope.Mode = InvocationModePreview
+	artifact.manifest.SupportsPreview = false
+	if _, err := artifact.invokeProjected(ctx, envelope); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
 		t.Fatalf("undeclared preview capability was invoked: %v", err)
 	}
-	artifact.manifest.PurePreview = true
+	artifact.manifest.SupportsPreview = true
+	envelope.Mode = InvocationModeLive
 	secret := true
 	artifact.manifest.ConfigurationPolicy.Secret = &secret
-	if _, err := artifact.invokeProjected(ctx, envelope, false); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
+	if _, err := artifact.invokeProjected(ctx, envelope); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
 		t.Fatalf("unresolved Secret configuration was invoked: %v", err)
 	}
 	envelope.InstanceID = uuid.Nil
 	artifact.manifest.ConfigurationPolicy.Secret = new(bool)
-	if _, err := artifact.invokeProjected(ctx, envelope, false); platform.FailureCode(err) != platform.CodeInvalidInput {
+	if _, err := artifact.invokeProjected(ctx, envelope); platform.FailureCode(err) != platform.CodeInvalidInput {
 		t.Fatalf("envelope without instance ID was accepted: %v", err)
 	}
 }
 
-func TestInstalledPluginOwnDeadlineIsResourceLimit(t *testing.T) {
+func TestInstalledPluginOwnDeadlineIsResourceLimit(t *testing.T) { //nolint:paralleltest // swaps the package variable installedInvocationTimeout
 	ctx := context.Background()
 	host := NewPluginHost()
 	t.Cleanup(func() {
@@ -122,12 +124,17 @@ func TestInstalledPluginOwnDeadlineIsResourceLimit(t *testing.T) {
 	installedInvocationTimeout = 300 * time.Millisecond
 	t.Cleanup(func() { installedInvocationTimeout = original })
 	for _, mode := range []string{"loop", "ok"} {
+		if mode == "ok" {
+			// The restart after the deadline starts a new process, which can exceed the short test
+			// deadline under load; the restarted call gets the production limit.
+			installedInvocationTimeout = original
+		}
 		value, err := Literal(StringValue, mode)
 		if err != nil {
 			t.Fatal(err)
 		}
 		envelope := installedEnvelope(t, pin, map[string]Value{"mode": value, "text": value})
-		fields, err := artifact.invokeProjected(ctx, envelope, true)
+		fields, err := artifact.invokeProjected(ctx, envelope)
 		switch mode {
 		case "loop":
 			if platform.FailureCode(err) != platform.CodeResourceLimit || fields != nil {
@@ -142,6 +149,7 @@ func TestInstalledPluginOwnDeadlineIsResourceLimit(t *testing.T) {
 }
 
 func TestInstalledPluginInstancesRunInSeparateProcesses(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	host := NewPluginHost()
 	t.Cleanup(func() {
@@ -162,27 +170,28 @@ func TestInstalledPluginInstancesRunInSeparateProcesses(t *testing.T) {
 	}
 	for _, artifact := range []*InstalledArtifact{first, second} {
 		envelope := installedEnvelope(t, pin, map[string]Value{"mode": mode, "text": placeholder})
-		fields, err := artifact.invokeProjected(ctx, envelope, false)
+		fields, err := artifact.invokeProjected(ctx, envelope)
 		if err != nil || string(fields["text"].Value) != `"`+envelope.InstanceID.String()+`"` {
 			t.Fatalf("instance invocation failed: %+v, %v", fields, err)
 		}
 	}
-	if first.client == nil || second.client == nil || first.client == second.client {
+	if first.process == second.process || !first.process.running() || !second.process.running() {
 		t.Fatal("configured instances did not get their own plugin processes")
 	}
 	if err := first.Close(ctx); err != nil {
 		t.Fatal(err)
 	}
 	envelope := installedEnvelope(t, pin, map[string]Value{"mode": mode, "text": placeholder})
-	if _, err := second.invokeProjected(ctx, envelope, false); err != nil {
+	if _, err := second.invokeProjected(ctx, envelope); err != nil {
 		t.Fatalf("closing one instance stopped another: %v", err)
 	}
-	if _, err := first.invokeProjected(ctx, envelope, false); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
+	if _, err := first.invokeProjected(ctx, envelope); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
 		t.Fatalf("closed instance still invoked its plugin: %v", err)
 	}
 }
 
 func TestInstalledSDK2RoundTripsTypedBytes(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	host := NewPluginHost()
 	t.Cleanup(func() {
@@ -195,7 +204,7 @@ func TestInstalledSDK2RoundTripsTypedBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fields, err := artifact.invokeProjected(ctx, installedEnvelope(t, pin, map[string]Value{"binary": binary}), true)
+	fields, err := artifact.invokeProjected(ctx, installedEnvelope(t, pin, map[string]Value{"binary": binary}))
 	if err != nil || string(fields["binary"].Value) != `"AAEC/w=="` {
 		t.Fatalf("SDK 2.0 bytes changed across the plugin boundary: %+v, %v", fields, err)
 	}

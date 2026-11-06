@@ -58,7 +58,7 @@ type MasterDataAppender interface {
 // ErrInvalidFact when validation fails.
 func (fact MasterDataFact) Envelope(recordedAt time.Time) (MasterDataEnvelope, error) {
 	if fact.ID == uuid.Nil || fact.Aggregate.ID == uuid.Nil || fact.Revision <= 0 ||
-		!slices.Contains([]string{"unit", "unitCollection", "organization", "unitTemplate"}, fact.Aggregate.Type) ||
+		!slices.Contains([]string{"unit", "unitCollection", "organization", "unitTemplate", "agency"}, fact.Aggregate.Type) ||
 		!slices.Contains([]string{"created", "updated", "deleted", "membership-changed", "defaults-changed", "bulk-updated"}, fact.ChangeKind) ||
 		fact.OccurredAt.IsZero() || recordedAt.IsZero() ||
 		fact.OccurredAt.Nanosecond()%1000 != 0 || recordedAt.Nanosecond()%1000 != 0 ||

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/assignments"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/ingest"
@@ -19,22 +18,21 @@ import (
 	"github.com/gopager/gopager/internal/processing"
 	"github.com/gopager/gopager/internal/processing/worker"
 	"github.com/gopager/gopager/internal/protocols"
+	"github.com/gopager/gopager/internal/units"
 )
 
-// noCorrectionPublication isolates correction derivation tests from Processing re-entry, which is covered below.
-type noCorrectionPublication struct{}
+// noProcessingReadmission isolates correction derivation tests from Processing readmission, which is covered below.
+type noProcessingReadmission struct{}
 
-func (noCorrectionPublication) PublicationReentries(context.Context, platform.TransactionContext, int) ([]uuid.UUID, error) {
-	return nil, nil
+func (noProcessingReadmission) ReadmitProcessing(context.Context, platform.TransactionContext, uuid.UUID) error {
+	return nil
 }
 
-func (noCorrectionPublication) ReenterPublication(context.Context, platform.TransactionContext, uuid.UUID) (bool, error) {
-	return false, nil
-}
-
-// TestCorrectionPublicationReentryWaitsForCompletionAndRepublishes covers post-correction publication
-// re-entry, unavailability until correction completes, and refusal of stale Processing publication.
-func TestCorrectionPublicationReentryWaitsForCompletionAndRepublishes(t *testing.T) {
+// TestCorrectionReadmitsProcessingForChangedTargets expects a correction that changes a target's
+// resolution to supersede the Transmission's completed candidate and admit a current one in the
+// same batch transaction, leave untouched Transmissions alone, and never hide published evidence.
+func TestCorrectionReadmitsProcessingForChangedTargets(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	intakeRepository, err := ingeststore.New(f.store, f.facts, f.facts)
 	if err != nil {
@@ -70,7 +68,11 @@ func TestCorrectionPublicationReentryWaitsForCompletionAndRepublishes(t *testing
 		t.Fatal(err)
 	}
 	if _, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, f.ruleStore, f.facts, nil); err == nil {
-		t.Fatal("correction runner accepted a missing publication participant")
+		t.Fatal("correction runner accepted a missing readmission participant")
+	}
+	service, err := worker.NewWithPublisher(f.store, processingRepository, sourceOwner, processing.CoreRegex{}, uuid.New(), sourceOwner)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	networkID, gatewayID := f.networks[0], uuid.New()
@@ -87,17 +89,16 @@ func TestCorrectionPublicationReentryWaitsForCompletionAndRepublishes(t *testing
 			t.Fatal(err)
 		}
 	}
-	exec(`INSERT INTO networks(id,name,protocol) VALUES($1,'Correction publication','pocsag')`, networkID)
 	exec(`INSERT INTO gateways(id,state) VALUES($1,'active')`, gatewayID)
-	exec(`INSERT INTO gateway_networks(id,gateway_id,gateway_network_identifier,network_id,is_default)
-		VALUES($1,$2,'default',$3,true)`, uuid.New(), gatewayID, networkID)
+	exec(`INSERT INTO gateway_networks(id,gateway_id,gateway_network_identifier,network_id,priority)
+		VALUES($1,$2,'default',$3,0)`, uuid.New(), gatewayID, networkID)
 	unitA, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
-		units.UnitInput{Name: "Publication A", CollectionIDs: []uuid.UUID{}}, checkedMutation)
+		units.UnitInput{AgencyID: f.agency, Name: "Readmission A", CollectionIDs: []uuid.UUID{}}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
 	unitB, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
-		units.UnitInput{Name: "Publication B", CollectionIDs: []uuid.UUID{}}, checkedMutation)
+		units.UnitInput{AgencyID: f.agency, Name: "Readmission B", CollectionIDs: []uuid.UUID{}}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,12 +107,23 @@ func TestCorrectionPublicationReentryWaitsForCompletionAndRepublishes(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
+	workflowID, versionID := uuid.New(), uuid.New()
+	definition, err := json.Marshal(protocolSelectorDefinition(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	exec(`INSERT INTO processing_workflows(id,name,scope_kind,enabled,created_at,updated_at)
+		VALUES($1,'correction readmission','all',true,$2,$2)`, workflowID, now)
+	exec(`INSERT INTO processing_workflow_versions(id,workflow_id,definition,created_at,created_by)
+		VALUES($1,$2,$3,$4,$5)`, versionID, workflowID, definition, now, uuid.New())
+	exec(`UPDATE processing_workflows SET active_version_id=$2 WHERE id=$1`, workflowID, versionID)
 
 	function := uint8(1)
-	target := protocols.Target{Address: protocols.NumericAddress(10), Function: &function}
 	base := time.Now().UTC().Truncate(time.Second).Add(-2 * time.Hour)
-	accept := func(id string, observed time.Time) ingest.Receipt {
+	accept := func(id string, observed time.Time, address uint64) ingest.Receipt {
 		t.Helper()
+		target := protocols.Target{Address: protocols.NumericAddress(address), Function: &function}
 		submission := ingest.Submission{SchemaVersion: 1, SubmissionID: id, Protocol: protocols.POCSAG,
 			ObservationTime: observed.Format(time.RFC3339), GatewayNetworkIdentifier: "default",
 			Payload: json.RawMessage(`{"form":"tone-only"}`), TransmissionTargets: []protocols.Target{target}}
@@ -138,150 +150,109 @@ func TestCorrectionPublicationReentryWaitsForCompletionAndRepublishes(t *testing
 		}
 		return receipt
 	}
-	type published struct {
-		processing, publication, message string
-		unit                             uuid.NullUUID
-		ready                            bool
+	type state struct {
+		status                         string
+		unit                           uuid.NullUUID
+		superseded, pending, completed int
+		currentContext                 int64
+		published                      int
 	}
-	read := func(receipt ingest.Receipt) published {
+	read := func(receipt ingest.Receipt) state {
 		t.Helper()
-		var value published
+		var value state
 		if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 			executor, err := f.store.Resolve(tx)
 			if err != nil {
 				return err
 			}
-			if err := executor.QueryRowContext(tx.Context(), `SELECT t.processing_status,t.publication_status,
-				m.publication_status FROM transmissions t JOIN messages m ON m.id=t.message_id WHERE t.id=$1`,
-				receipt.TransmissionID).Scan(&value.processing, &value.publication, &value.message); err != nil {
-				return err
-			}
-			return executor.QueryRowContext(tx.Context(), `SELECT c.unit_id,c.ready FROM message_contributions c
-				JOIN contribution_supports s ON s.contribution_id=c.id
-				WHERE s.transmission_id=$1 AND s.target_position=0`, receipt.TransmissionID).
-				Scan(&value.unit, &value.ready)
+			return executor.QueryRowContext(tx.Context(), `SELECT t.processing_status,
+				(SELECT unit_id FROM transmission_targets WHERE transmission_id=t.id AND position=0),
+				(SELECT count(*) FROM processing_candidates c WHERE c.transmission_id=t.id AND c.state='superseded'),
+				(SELECT count(*) FROM processing_candidates c WHERE c.transmission_id=t.id AND c.state='pending'),
+				(SELECT count(*) FROM processing_candidates c WHERE c.transmission_id=t.id AND c.state='completed'),
+				(SELECT coalesce(max(c.context_revision),0) FROM processing_candidates c
+					WHERE c.transmission_id=t.id AND c.state<>'superseded'),
+				(SELECT count(*) FROM processing_results r JOIN processing_candidates c ON c.id=r.candidate_id
+					WHERE c.transmission_id=t.id AND r.published_at IS NOT NULL AND r.message_id=t.message_id)
+				FROM transmissions t WHERE t.id=$1`, receipt.TransmissionID).
+				Scan(&value.status, &value.unit, &value.superseded, &value.pending, &value.completed,
+					&value.currentContext, &value.published)
 		}); err != nil {
 			t.Fatal(err)
 		}
 		return value
 	}
-	expect := func(name string, receipt ingest.Receipt, state string, unit uuid.UUID, ready bool) {
+	expect := func(name string, receipt ingest.Receipt, want state) {
 		t.Helper()
-		got := read(receipt)
-		want := published{processing: map[string]string{"ready": "completed", "pending": "pending"}[state],
-			publication: state, message: state, unit: uuid.NullUUID{UUID: unit, Valid: true}, ready: ready}
-		if got != want {
-			t.Fatalf("%s publication state=%+v, want %+v", name, got, want)
+		if got := read(receipt); got != want {
+			t.Fatalf("%s state=%+v, want %+v", name, got, want)
 		}
 	}
+	runDue := func(want int) {
+		t.Helper()
+		var due []processing.Candidate
+		if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+			page, err := processingRepository.SelectDueWork(tx.Context(), tx, 10)
+			due = page
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if len(due) != want {
+			t.Fatalf("due candidates=%d want %d", len(due), want)
+		}
+		for _, candidate := range due {
+			if err := service.ExecuteWork(t.Context(), candidate); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	assignmentRevision := func() int64 {
+		t.Helper()
+		var revision int64
+		if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+			executor, err := f.store.Resolve(tx)
+			if err != nil {
+				return err
+			}
+			return executor.QueryRowContext(tx.Context(), `SELECT revision FROM assignment_control WHERE id=1`).Scan(&revision)
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return revision
+	}
 
-	first := accept("reentry-first", base)
-	expect("initial intake", first, "ready", unitA.ID, true)
+	corrected := accept("corrected", base, 10)
+	untouched := accept("untouched", base.Add(time.Hour), 30)
+	initial := assignmentRevision()
+	runDue(2)
+	expect("processed corrected intake", corrected, state{status: "completed", unit: uuid.NullUUID{UUID: unitA.ID, Valid: true},
+		completed: 1, currentContext: initial, published: 1})
+	expect("processed untouched intake", untouched, state{status: "completed", completed: 1, currentContext: initial, published: 1})
 
-	// r2 rule change: the affected scope becomes unavailable before any correction work runs.
+	// The rule moves the address range to Unit B; the queued correction changes only the first target.
 	if _, err := f.rules.UpdateRule(t.Context(), f.proof, rule.ID, rule.Revision,
 		ruleInput(networkID, unitB.ID, 10, 20, 1), checkedMutation); err != nil {
 		t.Fatal(err)
 	}
-	expect("pending correction", first, "pending", unitA.ID, false)
-
-	// Concurrent intake into a new Message is published at intake, then rebuilt by dirty capture.
-	second := accept("reentry-dirty", base.Add(time.Hour))
-	if second.MessageID == first.MessageID {
-		t.Fatal("dirty intake unexpectedly joined the first Message")
+	changed := assignmentRevision()
+	if changed == initial {
+		t.Fatal("rule change did not advance the Assignment revision")
 	}
-	expect("dirty intake", second, "ready", unitB.ID, true)
-
-	// Stale Processing publication and re-entry are refused while correction is unfinished.
-	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		return sourceOwner.Publish(tx.Context(), tx, first.TransmissionID)
-	}); platform.FailureCode(err) != platform.CodeRevisionConflict {
-		t.Fatalf("publication during unfinished correction was not refused: %v", err)
+	expect("evidence stays visible before correction", corrected, state{status: "completed",
+		unit: uuid.NullUUID{UUID: unitA.ID, Valid: true}, completed: 1, currentContext: initial, published: 1})
+	if drainCorrections(t, runner) == 0 {
+		t.Fatal("correction did not run")
 	}
-	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		ids, err := sourceOwner.PublicationReentries(tx.Context(), tx, 100)
-		if err == nil && len(ids) != 0 {
-			t.Fatalf("re-entry selected Transmissions during unfinished correction: %v", ids)
-		}
-		return err
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	// Select a Workflow so re-entry must admit current Processing work instead of publishing directly.
-	workflowID, versionID := uuid.New(), uuid.New()
-	protocolField := processing.FieldRef{Namespace: "source", Path: []string{"protocol"}}
-	protocolValue, err := processing.Literal(processing.StringValue, string(protocols.POCSAG))
-	if err != nil {
-		t.Fatal(err)
-	}
-	definition, err := json.Marshal(processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "eq", Field: &protocolField, Value: &protocolValue},
-		OutputSchema: map[string]processing.FieldSchema{}, Outputs: map[string]processing.Assignment{}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	now := time.Now().UTC().Truncate(time.Microsecond)
-	exec(`INSERT INTO processing_workflows(id,name,scope_kind,enabled,created_at,updated_at)
-		VALUES($1,'correction re-entry','all',true,$2,$2)`, workflowID, now)
-	exec(`INSERT INTO processing_workflow_versions(id,workflow_id,definition,created_at,created_by)
-		VALUES($1,$2,$3,$4,$5)`, versionID, workflowID, definition, now, uuid.New())
-	exec(`UPDATE processing_workflows SET active_version_id=$2 WHERE id=$1`, workflowID, versionID)
-
-	// The correction claims, rebuilds both Messages and completes, but does not itself publish.
-	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
-		t.Fatalf("correction did not run: worked=%t err=%v", worked, err)
-	}
-	expect("completed correction", first, "pending", unitB.ID, false)
-	expect("rebuilt dirty intake", second, "pending", unitB.ID, false)
-
-	// The next pass re-enters both into Processing and admits current Workflow candidates.
-	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
-		t.Fatalf("publication re-entry did not run: worked=%t err=%v", worked, err)
-	}
-	expect("admitted re-entry", first, "pending", unitB.ID, false)
+	expect("readmitted after correction", corrected, state{status: "pending", unit: uuid.NullUUID{UUID: unitB.ID, Valid: true},
+		superseded: 1, pending: 1, currentContext: changed, published: 1})
+	expect("untouched after correction", untouched, state{status: "completed", completed: 1, currentContext: initial, published: 1})
 	if worked, err := runner.RunOnce(t.Context()); err != nil || worked {
-		t.Fatalf("re-entry selected Transmissions with unfinished Processing work: worked=%t err=%v", worked, err)
+		t.Fatalf("idle correction runner reported work: worked=%t err=%v", worked, err)
 	}
-	var candidates []processing.Candidate
-	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		page, err := processingRepository.ListCandidateWork(tx.Context(), tx, processing.PageInput{Limit: 10})
-		candidates = page.Items
-		return err
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if len(candidates) != 2 {
-		t.Fatalf("re-entry admitted %d candidates, want 2", len(candidates))
-	}
-	service, err := worker.NewWithPublisher(f.store, processingRepository, sourceOwner, processing.CoreRegex{}, uuid.New(), sourceOwner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var assignmentRevision int64
-	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		executor, err := f.store.Resolve(tx)
-		if err != nil {
-			return err
-		}
-		return executor.QueryRowContext(tx.Context(), `SELECT revision FROM assignment_control WHERE id=1`).
-			Scan(&assignmentRevision)
-	}); err != nil {
-		t.Fatal(err)
-	}
-	for _, candidate := range candidates {
-		if candidate.ContextRevision != assignmentRevision {
-			t.Fatalf("candidate bound to a stale Assignment context: %+v", candidate)
-		}
-		if err := service.ExecuteWork(t.Context(), candidate); err != nil {
-			t.Fatal(err)
-		}
-	}
-	expect("republished", first, "ready", unitB.ID, true)
-	expect("republished dirty intake", second, "ready", unitB.ID, true)
-	if worked, err := runner.RunOnce(t.Context()); err != nil || worked {
-		t.Fatalf("idle runner reported work after publication: worked=%t err=%v", worked, err)
-	}
+	runDue(1)
+	expect("reprocessed after correction", corrected, state{status: "completed", unit: uuid.NullUUID{UUID: unitB.ID, Valid: true},
+		superseded: 1, completed: 1, currentContext: changed, published: 2})
 }
 
 // failingCorrectionReads injects a derivation failure before any batch can publish.
@@ -297,11 +268,12 @@ func (failingCorrectionReads) ReadCorrectionBatch(context.Context, platform.Tran
 
 // TestCorrectionExhaustionFailsSafelyAndRetryCreatesCurrentWork covers correction failure and retry.
 func TestCorrectionExhaustionFailsSafelyAndRetryCreatesCurrentWork(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	var revision int64
 	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		var err error
-		revision, err = f.ruleStore.MarkPending(tx.Context(), tx, []uuid.UUID{f.networks[0]}, nil, "rule-change")
+		revision, err = f.ruleStore.MarkPending(tx.Context(), tx, []assignments.CorrectionScope{networkScope(f.networks[0])}, "rule-change")
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -326,7 +298,7 @@ func TestCorrectionExhaustionFailsSafelyAndRetryCreatesCurrentWork(t *testing.T)
 	query(`SELECT id FROM assignment_pending_scopes WHERE assignment_revision=$1`, []any{revision}, &jobID)
 
 	failing, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules,
-		failingCorrectionReads{f.ruleStore}, f.facts, noCorrectionPublication{})
+		failingCorrectionReads{f.ruleStore}, f.facts, noProcessingReadmission{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,7 +332,8 @@ func TestCorrectionExhaustionFailsSafelyAndRetryCreatesCurrentWork(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, private := range []string{f.networks[0].String(), "fencing", "lease", "injected"} {
+	// The scope (Network, selector) is exposed to readers authorized for it; fences and leases are not.
+	for _, private := range []string{"fencing", "lease", "injected"} {
 		if strings.Contains(strings.ToLower(string(encoded)), strings.ToLower(private)) {
 			t.Fatalf("correction status exposed %q: %s", private, encoded)
 		}
@@ -369,7 +342,7 @@ func TestCorrectionExhaustionFailsSafelyAndRetryCreatesCurrentWork(t *testing.T)
 	// A caller covering only another Network cannot distinguish the job from an unavailable one.
 	replaceManagementGrants(t, f, []authz.Grant{{
 		Actions: []string{"assignment-correction.read", "assignment-correction.retry"},
-		Scope:   authz.Scope{Kind: "network", References: []string{f.networks[1].String()}},
+		Scope:   authz.Scope{Kind: "agency", References: []string{f.agencies[1].String()}},
 	}})
 	if _, err := f.rules.ReadCorrection(t.Context(), f.proof, jobID); !errors.Is(err, authz.ErrNotFound) {
 		t.Fatalf("hidden correction read was not NOT_FOUND: %v", err)
@@ -400,12 +373,12 @@ func TestCorrectionExhaustionFailsSafelyAndRetryCreatesCurrentWork(t *testing.T)
 		t.Fatalf("retried job state=%s, want superseded", oldState)
 	}
 
-	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, f.ruleStore, f.facts, noCorrectionPublication{})
+	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, f.ruleStore, f.facts, noProcessingReadmission{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
-		t.Fatalf("retried correction did not run: worked=%t err=%v", worked, err)
+	if drainCorrections(t, runner) == 0 {
+		t.Fatal("retried correction did not run")
 	}
 	completed, err := f.rules.ReadCorrection(t.Context(), f.proof, retried.ID)
 	if err != nil || completed.State != "completed" {

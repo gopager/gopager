@@ -6,20 +6,18 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/events"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/platform"
+	"github.com/gopager/gopager/internal/units"
 )
 
 // CreateSuppressionInput identifies the target position to suppress.
-// ExpectedAssignmentRevision must equal the current global assignment revision.
 type CreateSuppressionInput struct {
-	TransmissionID             uuid.UUID `json:"transmissionId"`
-	TargetPosition             int       `json:"targetPosition"`
-	ExpectedAssignmentRevision int64     `json:"expectedAssignmentRevision,string"`
+	TransmissionID uuid.UUID `json:"transmissionId"`
+	TargetPosition int       `json:"targetPosition"`
 }
 
 func (s *Service) correctionRepository() (CorrectionRepository, error) {
@@ -86,7 +84,11 @@ func (s *Service) ListSuppressions(ctx context.Context, proof identity.Proof, pa
 func (s *Service) targetAuthority(ctx context.Context, tx platform.TransactionContext, authority authz.Authority,
 	action string, value TargetContext, now time.Time,
 ) error {
-	target := authz.Target{NetworkID: value.NetworkID}
+	_, agency, err := s.network(ctx, tx, value.NetworkID)
+	if err != nil {
+		return err
+	}
+	target := authz.Target{AgencyID: agency}
 	if value.Resolution.UnitID != nil {
 		unit, err := s.units.ReadUnitContext(ctx, tx, *value.Resolution.UnitID)
 		if err != nil {
@@ -125,21 +127,20 @@ func suppressionResult(value Suppression, correction CorrectionStatus) Suppressi
 }
 
 // CreateSuppression suppresses one target position and, in the same
-// transaction, bumps the assignment revision, queues a correction scope for the
-// target's Network (and current Unit), records an audit change, appends a
-// suppression.changed fact and stores a command receipt. It returns
-// authz.ErrInvalidInput for invalid input or a nil check,
-// authz.ErrRevisionConflict when the expected assignment revision is stale or
-// the target is already actively suppressed, commands.ErrIdempotencyConflict
-// when the command ID was already used with different input, and authorization
-// errors when the caller may not create suppressions for the target. Replaying
-// the same command ID with the same input returns the stored result even after
-// the assignment revision has advanced.
+// transaction, bumps the assignment revision, queues a correction scope for
+// exactly that target, records an audit change, appends a suppression.changed
+// fact and stores a command receipt. No assignment revision token is required
+// because the exclusive Assignment lock serializes the active-suppression check.
+// It returns authz.ErrInvalidInput for invalid input or a nil check,
+// authz.ErrRevisionConflict when the target is already actively suppressed,
+// commands.ErrIdempotencyConflict when the command ID was already used with
+// different input, and authorization errors when the caller may not create
+// suppressions for the target. Replaying the same command ID with the same
+// input returns the stored result even after the assignment revision has advanced.
 func (s *Service) CreateSuppression(ctx context.Context, proof identity.Proof, command uuid.UUID,
 	input CreateSuppressionInput, check func(identity.Authentication) error,
 ) (SuppressionResult, error) {
-	if command == uuid.Nil || input.TransmissionID == uuid.Nil || input.TargetPosition < 0 ||
-		input.ExpectedAssignmentRevision <= 0 {
+	if command == uuid.Nil || input.TransmissionID == uuid.Nil || input.TargetPosition < 0 {
 		return SuppressionResult{}, authz.ErrInvalidInput
 	}
 	repository, err := s.correctionRepository()
@@ -152,8 +153,9 @@ func (s *Service) CreateSuppression(ctx context.Context, proof identity.Proof, c
 	}
 	var result SuppressionResult
 	err = s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		currentRevision, err := s.repository.LockRevision(tx.Context(), tx)
-		if err != nil {
+		// The exclusive Assignment lock serializes the active-suppression check with other changes;
+		// no client-supplied assignment revision is required, the target is the only context.
+		if _, err := s.repository.LockRevisionForChange(tx.Context(), tx); err != nil {
 			return err
 		}
 		target, err := repository.ReadTargetContext(tx.Context(), tx, input.TransmissionID, input.TargetPosition)
@@ -192,9 +194,6 @@ func (s *Service) CreateSuppression(ctx context.Context, proof identity.Proof, c
 			result = suppressionResult(suppression, correction)
 			return nil
 		}
-		if currentRevision != input.ExpectedAssignmentRevision {
-			return authz.ErrRevisionConflict
-		}
 		if _, active, err := repository.FindActiveSuppression(tx.Context(), tx, input.TransmissionID, input.TargetPosition); err != nil {
 			return err
 		} else if active {
@@ -205,8 +204,8 @@ func (s *Service) CreateSuppression(ctx context.Context, proof identity.Proof, c
 		if err := repository.CreateSuppression(tx.Context(), tx, value, actor); err != nil {
 			return err
 		}
-		revision, err := s.repository.MarkPending(tx.Context(), tx, []uuid.UUID{target.NetworkID},
-			target.Resolution.UnitID, "suppression-change")
+		revision, err := s.repository.MarkPending(tx.Context(), tx,
+			[]CorrectionScope{TargetScope(target.TransmissionID, target.Position)}, "suppression-change")
 		if err != nil {
 			return err
 		}
@@ -268,16 +267,15 @@ func (s *Service) ReadSuppression(ctx context.Context, proof identity.Proof, id 
 	return result, nil
 }
 
-// LiftSuppression lifts the suppression at revision expected when the global
-// assignment revision equals expectedAssignment, then bumps the assignment
-// revision, queues a correction scope, records an audit change and appends a
-// suppression.changed fact in the same transaction. It returns
-// authz.ErrRevisionConflict for stale revisions and authz.ErrNotFound when the
-// caller may not delete suppressions for the target.
-func (s *Service) LiftSuppression(ctx context.Context, proof identity.Proof, id uuid.UUID, expected,
-	expectedAssignment int64, check func(identity.Authentication) error,
+// LiftSuppression lifts the suppression at revision expected, then bumps the
+// assignment revision, queues a correction scope for the target, records an
+// audit change and appends a suppression.changed fact in the same transaction.
+// It returns authz.ErrRevisionConflict for a stale suppression revision and
+// authz.ErrNotFound when the caller may not delete suppressions for the target.
+func (s *Service) LiftSuppression(ctx context.Context, proof identity.Proof, id uuid.UUID, expected int64,
+	check func(identity.Authentication) error,
 ) (SuppressionResult, error) {
-	if id == uuid.Nil || expected <= 0 || expectedAssignment <= 0 {
+	if id == uuid.Nil || expected <= 0 {
 		return SuppressionResult{}, authz.ErrInvalidInput
 	}
 	repository, err := s.correctionRepository()
@@ -286,12 +284,8 @@ func (s *Service) LiftSuppression(ctx context.Context, proof identity.Proof, id 
 	}
 	var result SuppressionResult
 	err = s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		currentRevision, err := s.repository.LockRevision(tx.Context(), tx)
-		if err != nil {
+		if _, err := s.repository.LockRevisionForChange(tx.Context(), tx); err != nil {
 			return err
-		}
-		if currentRevision != expectedAssignment {
-			return authz.ErrRevisionConflict
 		}
 		value, err := repository.ReadSuppression(tx.Context(), tx, id)
 		if err != nil {
@@ -314,8 +308,8 @@ func (s *Service) LiftSuppression(ctx context.Context, proof identity.Proof, id 
 		if err != nil {
 			return err
 		}
-		revision, err := s.repository.MarkPending(tx.Context(), tx, []uuid.UUID{target.NetworkID},
-			target.Resolution.UnitID, "suppression-change")
+		revision, err := s.repository.MarkPending(tx.Context(), tx,
+			[]CorrectionScope{TargetScope(target.TransmissionID, target.Position)}, "suppression-change")
 		if err != nil {
 			return err
 		}
@@ -338,33 +332,57 @@ func (s *Service) LiftSuppression(ctx context.Context, proof identity.Proof, id 
 func (s *Service) correctionAuthority(ctx context.Context, tx platform.TransactionContext, authority authz.Authority,
 	action string, status CorrectionStatus, now time.Time,
 ) error {
-	if len(status.Networks) == 0 && status.UnitID == nil {
-		return authz.Authorize(authority, action, nil, authz.Target{}, now)
+	target, err := s.correctionTarget(ctx, tx, status.Scope)
+	if err != nil {
+		return authz.ErrNotFound
 	}
-	unitContext := []uuid.UUID(nil)
-	if status.UnitID != nil {
-		unit, err := s.units.ReadUnitContext(ctx, tx, *status.UnitID)
-		if err != nil {
-			return authz.ErrNotFound
-		}
-		unitContext = unit.CollectionIDs
-	}
-	if len(status.Networks) == 0 && status.UnitID != nil {
-		if err := authz.Authorize(authority, action, nil, authz.Target{UnitID: *status.UnitID}, now); err != nil {
-			return authz.ErrNotFound
-		}
-	}
-	for _, network := range status.Networks {
-		target := authz.Target{NetworkID: network}
-		if status.UnitID != nil {
-			target.UnitID = *status.UnitID
-			target.UnitCollections = unitContext
-		}
-		if err := authz.Authorize(authority, action, nil, target, now); err != nil {
-			return authz.ErrNotFound
-		}
+	if err := authz.Authorize(authority, action, nil, target, now); err != nil {
+		return authz.ErrNotFound
 	}
 	return nil
+}
+
+// correctionTarget resolves a correction scope to its authorization target: the Agency of the
+// selector's Network, the Unit with its Agency and collections, or the Agency of the target's
+// Network together with its current Unit.
+func (s *Service) correctionTarget(ctx context.Context, tx platform.TransactionContext, scope CorrectionScope) (authz.Target, error) {
+	switch scope.Kind() {
+	case "address-rules":
+		_, agency, err := s.network(ctx, tx, *scope.NetworkID)
+		if err != nil {
+			return authz.Target{}, err
+		}
+		return authz.Target{AgencyID: agency}, nil
+	case "unit":
+		unit, err := s.units.ReadUnitContext(ctx, tx, *scope.UnitID)
+		if err != nil {
+			return authz.Target{}, err
+		}
+		return authz.Target{AgencyID: unit.AgencyID, UnitID: unit.ID, UnitCollections: unit.CollectionIDs}, nil
+	case "target":
+		repository, err := s.correctionRepository()
+		if err != nil {
+			return authz.Target{}, err
+		}
+		context, err := repository.ReadTargetContext(ctx, tx, *scope.TransmissionID, *scope.TargetPosition)
+		if err != nil {
+			return authz.Target{}, err
+		}
+		_, agency, err := s.network(ctx, tx, context.NetworkID)
+		if err != nil {
+			return authz.Target{}, err
+		}
+		target := authz.Target{AgencyID: agency}
+		if context.Resolution.UnitID != nil {
+			unit, err := s.units.ReadUnitContext(ctx, tx, *context.Resolution.UnitID)
+			if err != nil {
+				return authz.Target{}, err
+			}
+			target.UnitID, target.UnitCollections = unit.ID, unit.CollectionIDs
+		}
+		return target, nil
+	}
+	return authz.Target{}, authz.ErrInvalidInput
 }
 
 // ReadCorrection returns a correction scope's status if the caller may read

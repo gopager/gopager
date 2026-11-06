@@ -12,6 +12,7 @@ import (
 )
 
 func TestDetailUsesReadFieldsAndRequiresBothActions(t *testing.T) {
+	t.Parallel()
 	principal := uuid.NewString()
 	read := authz.Grant{SubjectID: principal, SubjectKind: "principal",
 		Actions: []string{"message.read"}, Scope: authz.Scope{Kind: "all"}}
@@ -48,6 +49,7 @@ func TestDetailUsesReadFieldsAndRequiresBothActions(t *testing.T) {
 }
 
 func TestReadScopeRejectsMissingAuthorityAndUnknownCatalogValues(t *testing.T) {
+	t.Parallel()
 	principal := uuid.NewString()
 	grant := authz.Grant{SubjectID: principal, SubjectKind: "principal",
 		Actions: []string{"message.read"}, Scope: authz.Scope{Kind: "all"}}
@@ -57,6 +59,7 @@ func TestReadScopeRejectsMissingAuthorityAndUnknownCatalogValues(t *testing.T) {
 		"unversioned": {PrincipalID: principal, Active: true},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			if _, err := permissions.ReadScope(authority, "message.read", nil,
 				permissions.Attributes{}, time.Now()); !errors.Is(err, authz.ErrForbidden) {
 				t.Fatalf("invalid authority accepted: %v", err)

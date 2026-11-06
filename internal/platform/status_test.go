@@ -51,14 +51,15 @@ type runnerFunc func(context.Context) error
 func (f runnerFunc) Run(ctx context.Context) error { return f(ctx) }
 
 func TestReadinessRequiresEveryAuthorityCheck(t *testing.T) {
+	t.Parallel()
 	store := &probeStore{}
 	h, err := Start(context.Background(), Config{
-		Profile: "full", Roles: []Role{RoleWorker}, DatabaseURL: "synthetic",
+		Roles: []Role{RoleWorker}, DatabaseURL: "synthetic",
 	}, nil, store, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Shutdown(context.Background())
+	defer func() { _ = h.Shutdown(context.Background()) }()
 	for _, code := range []ErrorCode{CodeStorageUnavailable, CodeAuthorityUnavailable, CodeIncompatibleVersion} {
 		store.mu.Lock()
 		failure := NewFailure(code, errors.New("synthetic-secret-dsn"))
@@ -101,9 +102,10 @@ func TestReadinessRequiresEveryAuthorityCheck(t *testing.T) {
 }
 
 func TestShutdownCancelsActiveOperationsAndRejectsNewOnes(t *testing.T) {
+	t.Parallel()
 	store := &cancellingStore{started: make(chan struct{})}
 	h, err := Start(context.Background(), Config{
-		Profile: "full", Roles: []Role{RoleWorker}, DatabaseURL: "synthetic",
+		Roles: []Role{RoleWorker}, DatabaseURL: "synthetic",
 	}, nil, store, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -136,11 +138,13 @@ func (s *cancellingStore) WithinTransaction(ctx context.Context, _ TxFunc) error
 }
 
 func TestShutdownDeadlineAndRunnerFailureAreVisible(t *testing.T) {
+	t.Parallel()
 	t.Run("deadline", func(t *testing.T) {
+		t.Parallel()
 		release := make(chan struct{})
 		exited := make(chan struct{})
 		h, err := Start(context.Background(), Config{
-			Profile: "full", Roles: []Role{RoleWorker}, DatabaseURL: "synthetic",
+			Roles: []Role{RoleWorker}, DatabaseURL: "synthetic",
 		}, nil, &fakeStore{}, []Runner{runnerFunc(func(context.Context) error {
 			defer close(exited)
 			<-release
@@ -165,8 +169,9 @@ func TestShutdownDeadlineAndRunnerFailureAreVisible(t *testing.T) {
 		}
 	})
 	t.Run("runner failure on cancellation", func(t *testing.T) {
+		t.Parallel()
 		h, err := Start(context.Background(), Config{
-			Profile: "full", Roles: []Role{RoleWorker}, DatabaseURL: "synthetic",
+			Roles: []Role{RoleWorker}, DatabaseURL: "synthetic",
 		}, nil, &fakeStore{}, []Runner{runnerFunc(func(ctx context.Context) error {
 			<-ctx.Done()
 			return NewFailure(CodeStorageUnavailable, errors.New("synthetic-private-marker"))
@@ -180,7 +185,7 @@ func TestShutdownDeadlineAndRunnerFailureAreVisible(t *testing.T) {
 	})
 }
 
-func TestSafeDiagnosticsDoNotDependOnDisplayPreferences(t *testing.T) {
+func TestSafeDiagnosticsDoNotDependOnDisplayPreferences(t *testing.T) { //nolint:paralleltest // sets the process environment variable LANG with t.Setenv
 	for _, locale := range []string{"en", "de", "different-format"} {
 		t.Run(locale, func(t *testing.T) {
 			t.Setenv("LANG", locale)
@@ -193,5 +198,19 @@ func TestSafeDiagnosticsDoNotDependOnDisplayPreferences(t *testing.T) {
 				t.Fatalf("unsafe/unstable diagnostics: %s", output.String())
 			}
 		})
+	}
+}
+
+func TestNewHTTPServerBoundsEveryConnectionPhase(t *testing.T) {
+	t.Parallel()
+	server := newHTTPServer(context.Background(), http.NotFoundHandler())
+	if server.ReadHeaderTimeout != httpReadHeaderTimeout || server.ReadTimeout != httpReadTimeout ||
+		server.WriteTimeout != httpWriteTimeout || server.IdleTimeout != httpIdleTimeout ||
+		server.MaxHeaderBytes != httpMaxHeaderBytes {
+		t.Fatalf("server limits not applied: %+v", server)
+	}
+	if httpReadHeaderTimeout <= 0 || httpReadTimeout <= 0 || httpWriteTimeout <= 0 || httpIdleTimeout <= 0 ||
+		httpMaxHeaderBytes <= 0 || httpMaxHeaderBytes > 1<<20 {
+		t.Fatal("a server limit is unset or unreasonably large")
 	}
 }

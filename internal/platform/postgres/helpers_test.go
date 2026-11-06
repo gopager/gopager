@@ -1,39 +1,37 @@
 package postgres
 
 import (
-	"context"
-	"crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 	"testing/fstest"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
+
+	testpostgres "github.com/gopager/gopager/internal/testutil/postgres"
 )
 
-// newTestStore opens a store in a fresh schema, removed when the test finishes.
+// newTestStore opens a store on a fresh empty database, dropped when the test finishes.
 func newTestStore(t testing.TB) *Store {
 	t.Helper()
-	return newStoreInSchema(t, testDatabaseURL(t), createTestSchema(t))
+	return newStoreAt(t, testpostgres.EmptyDatabase(t))
 }
 
-// newStoreInSchema opens another pool in the same isolated test schema.
-func newStoreInSchema(t testing.TB, databaseURL, schema string) *Store {
+// newStoreAt opens a pool on the given test database.
+func newStoreAt(t testing.TB, databaseURL string) *Store {
 	t.Helper()
-	return newStoreInSchemaWithParams(t, databaseURL, schema, nil)
+	return newStoreAtWithParams(t, databaseURL, nil)
 }
 
-// newStoreInSchemaWithParams binds test-only connection settings on every pooled session.
-func newStoreInSchemaWithParams(t testing.TB, databaseURL, schema string, params map[string]string) *Store {
+// newStoreAtWithParams binds test-only connection settings on every pooled session.
+func newStoreAtWithParams(t testing.TB, databaseURL string, params map[string]string) *Store {
 	t.Helper()
 	config, err := pgx.ParseConfig(databaseURL)
 	if err != nil {
 		t.Fatalf("parse test database URL: %v", err)
 	}
-	config.RuntimeParams["search_path"] = schema
 	for key, value := range params {
 		config.RuntimeParams[key] = value
 	}
@@ -44,54 +42,12 @@ func newStoreInSchemaWithParams(t testing.TB, databaseURL, schema string, params
 			t.Errorf("close test database: %v", err)
 		}
 	})
-	return &Store{db: db}
+	return &Store{db: db, config: config}
 }
 
-// testDatabaseURL skips database-dependent cases only in the optional quick run.
-func testDatabaseURL(t testing.TB) string {
-	t.Helper()
-	value := os.Getenv("GOPAGER_TEST_DATABASE_URL")
-	if value == "" {
-		t.Skip("PostgreSQL integration disabled; run with GOPAGER_INTEGRATION=1")
-	}
-	return value
-}
-
-// createTestSchema allocates only this test's schema and registers its cleanup.
-func createTestSchema(t testing.TB) string {
-	t.Helper()
-	config, err := pgx.ParseConfig(testDatabaseURL(t))
-	if err != nil {
-		t.Fatalf("parse test database URL: %v", err)
-	}
-	db := stdlib.OpenDB(*config)
-	var random [6]byte
-	if _, err := rand.Read(random[:]); err != nil {
-		t.Fatalf("generate test schema name: %v", err)
-	}
-	schema := fmt.Sprintf("test_%x", random[:])
-	if _, err := db.ExecContext(context.Background(), `CREATE SCHEMA "`+schema+`"`); err != nil {
-		t.Fatalf("create isolated test schema: %v", err)
-	}
-	t.Cleanup(func() {
-		if _, err := db.ExecContext(context.Background(), `DROP SCHEMA "`+schema+`" CASCADE`); err != nil {
-			t.Errorf("drop isolated test schema: %v", err)
-		}
-		if err := db.Close(); err != nil {
-			t.Errorf("close schema setup database: %v", err)
-		}
-	})
-	return schema
-}
-
-// storeTestSchema returns the store's isolated schema for a second pool.
-func storeTestSchema(t testing.TB, store *Store) string {
-	t.Helper()
-	var schema string
-	if err := store.db.QueryRow("SELECT current_schema()").Scan(&schema); err != nil {
-		t.Fatalf("read isolated schema name: %v", err)
-	}
-	return schema
+// storeTestDSN returns the DSN of the store's isolated database for a second pool.
+func storeTestDSN(store *Store) string {
+	return store.config.ConnString()
 }
 
 // assertRowCounts checks both synthetic participants after a transaction outcome.

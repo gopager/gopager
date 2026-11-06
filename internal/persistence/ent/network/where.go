@@ -4,6 +4,7 @@ package network
 
 import (
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/persistence/ent/predicate"
 )
@@ -61,6 +62,11 @@ func Revision(v int64) predicate.Network {
 // Name applies equality check predicate on the "name" field. It's identical to NameEQ.
 func Name(v string) predicate.Network {
 	return predicate.Network(sql.FieldEQ(FieldName, v))
+}
+
+// AgencyID applies equality check predicate on the "agency_id" field. It's identical to AgencyIDEQ.
+func AgencyID(v uuid.UUID) predicate.Network {
+	return predicate.Network(sql.FieldEQ(FieldAgencyID, v))
 }
 
 // Deleted applies equality check predicate on the "deleted" field. It's identical to DeletedEQ.
@@ -193,6 +199,26 @@ func ProtocolNotIn(vs ...Protocol) predicate.Network {
 	return predicate.Network(sql.FieldNotIn(FieldProtocol, vs...))
 }
 
+// AgencyIDEQ applies the EQ predicate on the "agency_id" field.
+func AgencyIDEQ(v uuid.UUID) predicate.Network {
+	return predicate.Network(sql.FieldEQ(FieldAgencyID, v))
+}
+
+// AgencyIDNEQ applies the NEQ predicate on the "agency_id" field.
+func AgencyIDNEQ(v uuid.UUID) predicate.Network {
+	return predicate.Network(sql.FieldNEQ(FieldAgencyID, v))
+}
+
+// AgencyIDIn applies the In predicate on the "agency_id" field.
+func AgencyIDIn(vs ...uuid.UUID) predicate.Network {
+	return predicate.Network(sql.FieldIn(FieldAgencyID, vs...))
+}
+
+// AgencyIDNotIn applies the NotIn predicate on the "agency_id" field.
+func AgencyIDNotIn(vs ...uuid.UUID) predicate.Network {
+	return predicate.Network(sql.FieldNotIn(FieldAgencyID, vs...))
+}
+
 // DeletedEQ applies the EQ predicate on the "deleted" field.
 func DeletedEQ(v bool) predicate.Network {
 	return predicate.Network(sql.FieldEQ(FieldDeleted, v))
@@ -201,6 +227,52 @@ func DeletedEQ(v bool) predicate.Network {
 // DeletedNEQ applies the NEQ predicate on the "deleted" field.
 func DeletedNEQ(v bool) predicate.Network {
 	return predicate.Network(sql.FieldNEQ(FieldDeleted, v))
+}
+
+// HasAgency applies the HasEdge predicate on the "agency" edge.
+func HasAgency() predicate.Network {
+	return predicate.Network(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, AgencyTable, AgencyColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasAgencyWith applies the HasEdge predicate on the "agency" edge with a given conditions (other predicates).
+func HasAgencyWith(preds ...predicate.Agency) predicate.Network {
+	return predicate.Network(func(s *sql.Selector) {
+		step := newAgencyStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasAddressRules applies the HasEdge predicate on the "address_rules" edge.
+func HasAddressRules() predicate.Network {
+	return predicate.Network(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, AddressRulesTable, AddressRulesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasAddressRulesWith applies the HasEdge predicate on the "address_rules" edge with a given conditions (other predicates).
+func HasAddressRulesWith(preds ...predicate.AddressRule) predicate.Network {
+	return predicate.Network(func(s *sql.Selector) {
+		step := newAddressRulesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // And groups predicates with the AND operator between them.

@@ -1,0 +1,10 @@
+# Build output
+/gopager
+*.test
+/bin/
+# Local tooling scratch
+/.superpowers/
+.claude/worktrees/
+
+# Test reports
+/build/

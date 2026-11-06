@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/persistence/ent/network"
 	"github.com/gopager/gopager/internal/persistence/ent/predicate"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
 	"github.com/gopager/gopager/internal/persistence/ent/workflow"
@@ -95,6 +96,11 @@ func (_u *WorkflowScopeReferenceUpdate) SetUnit(v *Unit) *WorkflowScopeReference
 	return _u.SetUnitID(v.ID)
 }
 
+// SetNetwork sets the "network" edge to the Network entity.
+func (_u *WorkflowScopeReferenceUpdate) SetNetwork(v *Network) *WorkflowScopeReferenceUpdate {
+	return _u.SetNetworkID(v.ID)
+}
+
 // Mutation returns the WorkflowScopeReferenceMutation object of the builder.
 func (_u *WorkflowScopeReferenceUpdate) Mutation() *WorkflowScopeReferenceMutation {
 	return _u.mutation
@@ -109,6 +115,12 @@ func (_u *WorkflowScopeReferenceUpdate) ClearWorkflow() *WorkflowScopeReferenceU
 // ClearUnit clears the "unit" edge to the Unit entity.
 func (_u *WorkflowScopeReferenceUpdate) ClearUnit() *WorkflowScopeReferenceUpdate {
 	_u.mutation.ClearUnit()
+	return _u
+}
+
+// ClearNetwork clears the "network" edge to the Network entity.
+func (_u *WorkflowScopeReferenceUpdate) ClearNetwork() *WorkflowScopeReferenceUpdate {
+	_u.mutation.ClearNetwork()
 	return _u
 }
 
@@ -165,12 +177,6 @@ func (_u *WorkflowScopeReferenceUpdate) sqlSave(ctx context.Context) (_node int,
 			}
 		}
 	}
-	if value, ok := _u.mutation.NetworkID(); ok {
-		_spec.SetField(workflowscopereference.FieldNetworkID, field.TypeUUID, value)
-	}
-	if _u.mutation.NetworkIDCleared() {
-		_spec.ClearField(workflowscopereference.FieldNetworkID, field.TypeUUID)
-	}
 	if _u.mutation.WorkflowCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -222,6 +228,35 @@ func (_u *WorkflowScopeReferenceUpdate) sqlSave(ctx context.Context) (_node int,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(unit.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.NetworkCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   workflowscopereference.NetworkTable,
+			Columns: []string{workflowscopereference.NetworkColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(network.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.NetworkIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   workflowscopereference.NetworkTable,
+			Columns: []string{workflowscopereference.NetworkColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(network.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -315,6 +350,11 @@ func (_u *WorkflowScopeReferenceUpdateOne) SetUnit(v *Unit) *WorkflowScopeRefere
 	return _u.SetUnitID(v.ID)
 }
 
+// SetNetwork sets the "network" edge to the Network entity.
+func (_u *WorkflowScopeReferenceUpdateOne) SetNetwork(v *Network) *WorkflowScopeReferenceUpdateOne {
+	return _u.SetNetworkID(v.ID)
+}
+
 // Mutation returns the WorkflowScopeReferenceMutation object of the builder.
 func (_u *WorkflowScopeReferenceUpdateOne) Mutation() *WorkflowScopeReferenceMutation {
 	return _u.mutation
@@ -329,6 +369,12 @@ func (_u *WorkflowScopeReferenceUpdateOne) ClearWorkflow() *WorkflowScopeReferen
 // ClearUnit clears the "unit" edge to the Unit entity.
 func (_u *WorkflowScopeReferenceUpdateOne) ClearUnit() *WorkflowScopeReferenceUpdateOne {
 	_u.mutation.ClearUnit()
+	return _u
+}
+
+// ClearNetwork clears the "network" edge to the Network entity.
+func (_u *WorkflowScopeReferenceUpdateOne) ClearNetwork() *WorkflowScopeReferenceUpdateOne {
+	_u.mutation.ClearNetwork()
 	return _u
 }
 
@@ -415,12 +461,6 @@ func (_u *WorkflowScopeReferenceUpdateOne) sqlSave(ctx context.Context) (_node *
 			}
 		}
 	}
-	if value, ok := _u.mutation.NetworkID(); ok {
-		_spec.SetField(workflowscopereference.FieldNetworkID, field.TypeUUID, value)
-	}
-	if _u.mutation.NetworkIDCleared() {
-		_spec.ClearField(workflowscopereference.FieldNetworkID, field.TypeUUID)
-	}
 	if _u.mutation.WorkflowCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -472,6 +512,35 @@ func (_u *WorkflowScopeReferenceUpdateOne) sqlSave(ctx context.Context) (_node *
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(unit.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.NetworkCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   workflowscopereference.NetworkTable,
+			Columns: []string{workflowscopereference.NetworkColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(network.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.NetworkIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   workflowscopereference.NetworkTable,
+			Columns: []string{workflowscopereference.NetworkColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(network.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {

@@ -1,8 +1,10 @@
 package platform
 
 import (
+	"context"
 	"errors"
 	"log/slog"
+	"net/http"
 )
 
 // ErrorCode is the stable, locale-independent identifier of a failure class
@@ -12,8 +14,15 @@ type ErrorCode string
 // Platform error codes. CodeCommitUncertain means a commit may or may not have
 // taken effect, so callers must look the operation up by its identifier rather
 // than blindly retrying; CodeInternalError is the fallback for unknown codes and
-// for errors that are not a *Failure.
+// for errors that are not a *Failure. CodeLoginRequired, CodeForbidden,
+// CodeNotFound and CodeIdempotencyConflict are the domain outcomes whose
+// sentinel errors are Failure values, so the code survives a transaction
+// boundary instead of being reported as a storage outage.
 const (
+	CodeLoginRequired        ErrorCode = "LOGIN_REQUIRED"
+	CodeForbidden            ErrorCode = "FORBIDDEN"
+	CodeNotFound             ErrorCode = "NOT_FOUND"
+	CodeIdempotencyConflict  ErrorCode = "IDEMPOTENCY_CONFLICT"
 	CodeInvalidInput         ErrorCode = "INVALID_INPUT"
 	CodeRevisionConflict     ErrorCode = "REVISION_CONFLICT"
 	CodeIncompatibleVersion  ErrorCode = "INCOMPATIBLE_VERSION"
@@ -25,6 +34,10 @@ const (
 )
 
 var englishFallbacks = map[ErrorCode]string{
+	CodeLoginRequired:        "Sign in to continue.",
+	CodeForbidden:            "This action is not permitted.",
+	CodeNotFound:             "The requested item is not available.",
+	CodeIdempotencyConflict:  "This operation identifier was already used differently.",
 	CodeInvalidInput:         "Check the supplied values.",
 	CodeRevisionConflict:     "This item changed. Reload before saving.",
 	CodeIncompatibleVersion:  "This version is not compatible.",
@@ -43,6 +56,9 @@ var englishFallbacks = map[ErrorCode]string{
 type Failure struct {
 	code  ErrorCode
 	cause error
+	// permanent marks a failure whose code is normally transient but which a
+	// repeat of the same request cannot resolve.
+	permanent bool
 }
 
 // NewFailure returns a Failure with the given code and cause. An unknown code is
@@ -52,6 +68,15 @@ func NewFailure(code ErrorCode, cause error) *Failure {
 		code = CodeInternalError
 	}
 	return &Failure{code: code, cause: cause}
+}
+
+// NewPermanentFailure is NewFailure for a failure that Retryable must report as
+// false although its code is normally retryable, for example a unique-constraint
+// conflict: resending the same request hits the same constraint again.
+func NewPermanentFailure(code ErrorCode, cause error) *Failure {
+	failure := NewFailure(code, cause)
+	failure.permanent = true
+	return failure
 }
 
 // Error returns the generic English fallback text for the failure's code; it
@@ -97,11 +122,53 @@ func FailureCode(err error) ErrorCode {
 func (f *Failure) TextKey() string { return "error." + string(f.Code()) }
 
 // Retryable reports proven transient failures; uncertain commits require receipt lookup.
+// A failure created with NewPermanentFailure is never retryable. For
+// CodeRevisionConflict, retryable means "reload the current state, then repeat
+// with a fresh expected revision", not a blind resend.
 func (f *Failure) Retryable() bool {
+	if f == nil || f.permanent {
+		return false
+	}
 	return f.Code() == CodeStorageUnavailable || f.Code() == CodeAuthorityUnavailable || f.Code() == CodeRevisionConflict
 }
 
 // LogValue prevents structured logging from serializing a private wrapped cause.
 func (f *Failure) LogValue() slog.Value {
 	return slog.GroupValue(slog.String("code", string(f.Code())), slog.String("fallback", f.Error()))
+}
+
+// HTTPStatus returns the HTTP status the API uses for a platform error code; unknown
+// codes, including CodeInternalError, map to 500. Keeping the table here prevents the
+// transport layers from drifting apart.
+func HTTPStatus(code ErrorCode) int {
+	switch code {
+	case CodeInvalidInput:
+		return http.StatusBadRequest
+	case CodeLoginRequired:
+		return http.StatusUnauthorized
+	case CodeForbidden:
+		return http.StatusForbidden
+	case CodeNotFound:
+		return http.StatusNotFound
+	case CodeRevisionConflict, CodeIncompatibleVersion, CodeIdempotencyConflict:
+		return http.StatusConflict
+	case CodeResourceLimit:
+		return http.StatusRequestEntityTooLarge
+	case CodeAuthorityUnavailable, CodeStorageUnavailable, CodeCommitUncertain:
+		return http.StatusServiceUnavailable
+	}
+	return http.StatusInternalServerError
+}
+
+// LogErrorResponse records that an error response with the given public code,
+// HTTP status and requestId was sent, so an operator can find the server-side
+// record for a client's requestId. Server errors (5xx) log at error level, client
+// errors at info level. Only these three non-secret values are logged: never the
+// request, its body or the private cause.
+func LogErrorResponse(code string, status int, requestID string) {
+	level := slog.LevelInfo
+	if status >= http.StatusInternalServerError {
+		level = slog.LevelError
+	}
+	slog.Log(context.Background(), level, "API error response", "code", code, "status", status, "requestId", requestID)
 }

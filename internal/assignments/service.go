@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/events"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/protocols"
+	"github.com/gopager/gopager/internal/units"
 )
 
 // Service implements authorized Address-rule, suppression and correction
@@ -54,26 +54,9 @@ func NewService(transactions identity.Transactions, resolver *identity.Resolver,
 }
 
 // within resolves current authority before the Assignment lock, using one primary transaction.
-func (s *Service) within(ctx context.Context, proof identity.Proof, mutation bool, check func(identity.Authentication) error, operation func(platform.TransactionContext, authz.Authority, time.Time) error) error {
-	if mutation && check == nil {
-		return authz.ErrInvalidInput
-	}
-	return s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-		authentication, err := s.resolver.Resolve(tx.Context(), tx, proof)
-		if err != nil {
-			return err
-		}
-		if check != nil {
-			if err := check(authentication); err != nil {
-				return err
-			}
-		}
-		now, err := s.clock.Now(tx.Context(), tx)
-		if err != nil {
-			return err
-		}
-		return operation(tx, authentication.Authority, now)
-	})
+func (s *Service) within(ctx context.Context, proof identity.Proof, mutation bool, check func(identity.Authentication) error,
+	operation func(platform.TransactionContext, authz.Authority, time.Time) error) error {
+	return identity.WithAuthority(ctx, s.transactions, s.clock, s.resolver, proof, mutation, check, operation)
 }
 
 // canonicalInput validates before hashing and preserves set semantics for Function filters.
@@ -94,19 +77,20 @@ func canonicalInput(input RuleInput) (RuleInput, error) {
 	return input, nil
 }
 
-// networkProtocol never substitutes a default Protocol when the owning domain is unavailable.
-func (s *Service) networkProtocol(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (protocols.Protocol, error) {
+// network reads a Radio network's Protocol and Agency through the owning domain; it never
+// substitutes defaults when the owner is unavailable or the Protocol is invalid.
+func (s *Service) network(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (protocols.Protocol, uuid.UUID, error) {
 	if s.networks == nil {
-		return "", platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Network owner is not wired"))
+		return "", uuid.Nil, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("network owner is not wired"))
 	}
-	value, err := s.networks.ReadNetworkProtocol(ctx, tx, id)
+	protocol, agency, err := s.networks.ReadNetwork(ctx, tx, id)
 	if err != nil {
-		return "", err
+		return "", uuid.Nil, err
 	}
-	if !value.Valid() {
-		return "", platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("invalid current Network Protocol"))
+	if !protocol.Valid() {
+		return "", uuid.Nil, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("invalid current Network Protocol"))
 	}
-	return value, nil
+	return protocol, agency, nil
 }
 
 // authorizeCandidate derives current owner references without exposing configuration from hidden uses.
@@ -121,22 +105,39 @@ func (s *Service) authorizeCandidate(ctx context.Context, tx platform.Transactio
 	if unit.Deleted {
 		return authz.ErrForbidden
 	}
-	if err := authz.Authorize(authority, action, nil, authz.Target{
-		NetworkID: candidate.NetworkID, UnitID: unit.ID, UnitCollections: unit.CollectionIDs,
-	}, now); err != nil {
-		return err
-	}
-	protocol, err := s.networkProtocol(ctx, tx, candidate.NetworkID)
+	protocol, agency, err := s.network(ctx, tx, candidate.NetworkID)
 	if errors.Is(err, authz.ErrNotFound) {
 		return authz.ErrForbidden
 	}
 	if err != nil {
 		return err
 	}
+	if err := authz.Authorize(authority, action, nil, authz.Target{
+		AgencyID: agency, UnitID: unit.ID, UnitCollections: unit.CollectionIDs,
+	}, now); err != nil {
+		return err
+	}
+	if err := authz.Authorize(authority, action, nil, authz.Target{AgencyID: agency}, now); err != nil {
+		return err
+	}
 	if protocol != candidate.Protocol {
 		return ErrInvalidRule
 	}
 	return nil
+}
+
+// authorizeNetworkAgency requires authority over the Agency owning the rule's Network. A Unit or
+// collection grant alone matches on the Unit and would let the holder write rules on, and claim
+// addresses of, another Agency's Network.
+func (s *Service) authorizeNetworkAgency(ctx context.Context, tx platform.TransactionContext, authority authz.Authority, action string, network uuid.UUID, now time.Time) error {
+	_, agency, err := s.network(ctx, tx, network)
+	if errors.Is(err, authz.ErrNotFound) {
+		return authz.ErrForbidden
+	}
+	if err != nil {
+		return err
+	}
+	return authz.Authorize(authority, action, nil, authz.Target{AgencyID: agency}, now)
 }
 
 // validateCandidate checks all current rules, including conflicts hidden from management reads.
@@ -209,7 +210,7 @@ func (s *Service) Preview(ctx context.Context, proof identity.Proof, id uuid.UUI
 		return authz.ErrInvalidInput
 	}
 	return s.within(ctx, proof, false, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		if _, err := s.repository.LockRevision(tx.Context(), tx); err != nil {
+		if _, err := s.repository.LockRevisionForChange(tx.Context(), tx); err != nil {
 			return err
 		}
 		action := "address-rule.create"
@@ -241,7 +242,7 @@ func (s *Service) CreateRule(ctx context.Context, proof identity.Proof, command 
 	}
 	var result commands.Result
 	err = s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		if _, err := s.repository.LockRevision(tx.Context(), tx); err != nil {
+		if _, err := s.repository.LockRevisionForChange(tx.Context(), tx); err != nil {
 			return err
 		}
 		actor, err := uuid.Parse(authority.PrincipalID)
@@ -273,7 +274,7 @@ func (s *Service) CreateRule(ctx context.Context, proof identity.Proof, command 
 		if err := s.repository.SaveRule(tx.Context(), tx, authority, value, 0, now); err != nil {
 			return err
 		}
-		if _, err := s.repository.MarkPending(tx.Context(), tx, []uuid.UUID{value.NetworkID}, nil, "rule-change"); err != nil {
+		if _, err := s.repository.MarkPending(tx.Context(), tx, []CorrectionScope{RuleScope(value)}, "rule-change"); err != nil {
 			return err
 		}
 		if err := s.record(tx.Context(), tx, authority, value, "created", "address-rule.create", &command, now); err != nil {
@@ -297,11 +298,14 @@ func (s *Service) UpdateRule(ctx context.Context, proof identity.Proof, id uuid.
 	}
 	var result commands.Result
 	err = s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		if _, err := s.repository.LockRevision(tx.Context(), tx); err != nil {
+		if _, err := s.repository.LockRevisionForChange(tx.Context(), tx); err != nil {
 			return err
 		}
 		before, err := s.repository.ReadRule(tx.Context(), tx, authority, "address-rule.update", id, now)
 		if err != nil {
+			return err
+		}
+		if err := s.authorizeNetworkAgency(tx.Context(), tx, authority, "address-rule.update", before.NetworkID, now); err != nil {
 			return err
 		}
 		next, err := commands.NextRevision(before.Revision, expected)
@@ -315,7 +319,7 @@ func (s *Service) UpdateRule(ctx context.Context, proof identity.Proof, id uuid.
 		if err := s.repository.SaveRule(tx.Context(), tx, authority, value, expected, now); err != nil {
 			return err
 		}
-		if _, err := s.repository.MarkPending(tx.Context(), tx, []uuid.UUID{before.NetworkID, value.NetworkID}, nil, "rule-change"); err != nil {
+		if _, err := s.repository.MarkPending(tx.Context(), tx, []CorrectionScope{RuleScope(before), RuleScope(value)}, "rule-change"); err != nil {
 			return err
 		}
 		if err := s.record(tx.Context(), tx, authority, value, "updated", "address-rule.update", nil, now); err != nil {
@@ -337,11 +341,14 @@ func (s *Service) DeleteRule(ctx context.Context, proof identity.Proof, id uuid.
 	}
 	var result commands.Result
 	err := s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		if _, err := s.repository.LockRevision(tx.Context(), tx); err != nil {
+		if _, err := s.repository.LockRevisionForChange(tx.Context(), tx); err != nil {
 			return err
 		}
 		value, err := s.repository.ReadRule(tx.Context(), tx, authority, "address-rule.delete", id, now)
 		if err != nil {
+			return err
+		}
+		if err := s.authorizeNetworkAgency(tx.Context(), tx, authority, "address-rule.delete", value.NetworkID, now); err != nil {
 			return err
 		}
 		next, err := commands.NextRevision(value.Revision, expected)
@@ -351,7 +358,7 @@ func (s *Service) DeleteRule(ctx context.Context, proof identity.Proof, id uuid.
 		if err := s.repository.DeleteRule(tx.Context(), tx, authority, value, now); err != nil {
 			return err
 		}
-		if _, err := s.repository.MarkPending(tx.Context(), tx, []uuid.UUID{value.NetworkID}, nil, "rule-change"); err != nil {
+		if _, err := s.repository.MarkPending(tx.Context(), tx, []CorrectionScope{RuleScope(value)}, "rule-change"); err != nil {
 			return err
 		}
 		value.Revision = next
@@ -369,7 +376,7 @@ func (s *Service) DeleteRule(ctx context.Context, proof identity.Proof, id uuid.
 
 // resolve loads only winning current Unit contexts; missing/deleted owners are never unassigned.
 func (s *Service) resolve(ctx context.Context, tx platform.TransactionContext, network uuid.UUID, protocol protocols.Protocol, observed time.Time, targets []protocols.Target, rules []Rule, revision int64) (MatchResult, error) {
-	actual, err := s.networkProtocol(ctx, tx, network)
+	actual, _, err := s.network(ctx, tx, network)
 	if err != nil {
 		return MatchResult{}, err
 	}
@@ -400,6 +407,13 @@ func (s *Service) resolve(ctx context.Context, tx platform.TransactionContext, n
 	return result, nil
 }
 
+// HoldRevision takes the shared Assignment-control lock in the caller's transaction and
+// returns the current Assignment revision. The Processing worker calls it before locking a
+// Transmission row so that control rows are always locked first.
+func (s *Service) HoldRevision(ctx context.Context, tx platform.TransactionContext) (int64, error) {
+	return s.repository.LockRevision(ctx, tx)
+}
+
 // MatchTargets participates in authenticated ingest's transaction and preserves every original position.
 func (s *Service) MatchTargets(ctx context.Context, tx platform.TransactionContext, network uuid.UUID, protocol protocols.Protocol, observed time.Time, targets []protocols.Target) (MatchResult, error) {
 	revision, err := s.repository.LockRevision(ctx, tx)
@@ -411,45 +425,4 @@ func (s *Service) MatchTargets(ctx context.Context, tx platform.TransactionConte
 		return MatchResult{}, err
 	}
 	return s.resolve(ctx, tx, network, protocol, observed, targets, rules, revision)
-}
-
-// NetworksWithMatches evaluates only the server-derived Gateway Network set at one captured revision.
-func (s *Service) NetworksWithMatches(ctx context.Context, tx platform.TransactionContext, allowed []uuid.UUID, protocol protocols.Protocol, observed time.Time, targets []protocols.Target) (NetworkCandidates, error) {
-	if len(allowed) > 1024 {
-		return NetworkCandidates{}, authz.ErrInvalidInput
-	}
-	if err := validateTargets(ctx, protocol, observed, targets); err != nil {
-		return NetworkCandidates{}, err
-	}
-	revision, err := s.repository.LockRevision(ctx, tx)
-	if err != nil {
-		return NetworkCandidates{}, err
-	}
-	rules, err := s.repository.CurrentRules(ctx, tx, allowed)
-	if err != nil {
-		return NetworkCandidates{}, err
-	}
-	result := NetworkCandidates{Revision: revision, Networks: []uuid.UUID{}}
-	seen := make(map[uuid.UUID]bool, len(allowed))
-	for _, network := range allowed {
-		if seen[network] {
-			continue
-		}
-		seen[network] = true
-		actual, err := s.networkProtocol(ctx, tx, network)
-		if err != nil {
-			return NetworkCandidates{}, err
-		}
-		if actual != protocol {
-			continue
-		}
-		resolved, err := s.resolve(ctx, tx, network, protocol, observed, targets, rules, revision)
-		if err != nil {
-			return NetworkCandidates{}, err
-		}
-		if len(resolved.UnitContext) > 0 {
-			result.Networks = append(result.Networks, network)
-		}
-	}
-	return result, nil
 }

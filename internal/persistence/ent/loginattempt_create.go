@@ -27,6 +27,12 @@ func (_c *LoginAttemptCreate) SetAccountKey(v []byte) *LoginAttemptCreate {
 	return _c
 }
 
+// SetSourceKey sets the "source_key" field.
+func (_c *LoginAttemptCreate) SetSourceKey(v []byte) *LoginAttemptCreate {
+	_c.mutation.SetSourceKey(v)
+	return _c
+}
+
 // SetAttemptedAt sets the "attempted_at" field.
 func (_c *LoginAttemptCreate) SetAttemptedAt(v time.Time) *LoginAttemptCreate {
 	_c.mutation.SetAttemptedAt(v)
@@ -99,6 +105,9 @@ func (_c *LoginAttemptCreate) check() error {
 	if _, ok := _c.mutation.AccountKey(); !ok {
 		return &ValidationError{Name: "account_key", err: errors.New(`ent: missing required field "LoginAttempt.account_key"`)}
 	}
+	if _, ok := _c.mutation.SourceKey(); !ok {
+		return &ValidationError{Name: "source_key", err: errors.New(`ent: missing required field "LoginAttempt.source_key"`)}
+	}
 	if _, ok := _c.mutation.AttemptedAt(); !ok {
 		return &ValidationError{Name: "attempted_at", err: errors.New(`ent: missing required field "LoginAttempt.attempted_at"`)}
 	}
@@ -140,6 +149,10 @@ func (_c *LoginAttemptCreate) createSpec() (*LoginAttempt, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.AccountKey(); ok {
 		_spec.SetField(loginattempt.FieldAccountKey, field.TypeBytes, value)
 		_node.AccountKey = value
+	}
+	if value, ok := _c.mutation.SourceKey(); ok {
+		_spec.SetField(loginattempt.FieldSourceKey, field.TypeBytes, value)
+		_node.SourceKey = value
 	}
 	if value, ok := _c.mutation.AttemptedAt(); ok {
 		_spec.SetField(loginattempt.FieldAttemptedAt, field.TypeTime, value)

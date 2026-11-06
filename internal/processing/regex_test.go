@@ -12,6 +12,7 @@ import (
 )
 
 func TestCoreRegexSemanticsAndBoundaries(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	regex := CoreRegex{}
 	pattern := `(?P<unit>A)(?P<number>[0-9]+)?`
@@ -81,6 +82,7 @@ func captureExpansionCounterexample() string {
 }
 
 func TestCoreRegexRejectsCaptureExpansionBeforeCompilation(t *testing.T) {
+	t.Parallel()
 	pattern := captureExpansionCounterexample()
 	if len(pattern) != 4085 {
 		t.Fatalf("counterexample drifted: %d bytes", len(pattern))
@@ -103,7 +105,7 @@ func TestCoreRegexRejectsCaptureExpansionBeforeCompilation(t *testing.T) {
 	}
 }
 
-func TestCoreRegexAdmittedWorstCaseStaysBoundedAndCancellable(t *testing.T) {
+func TestCoreRegexAdmittedWorstCaseStaysBoundedAndCancellable(t *testing.T) { //nolint:paralleltest // asserts elapsed wall-clock time, which CPU contention from parallel tests inflates
 	// Close to the instruction bound with captures: admitted, and the full 1 MiB scan still terminates.
 	pattern := `(?P<a>x?){1000}(?P<b>x?){1000}y`
 	text := strings.Repeat("x", maxRegexTextBytes)
@@ -111,13 +113,45 @@ func TestCoreRegexAdmittedWorstCaseStaysBoundedAndCancellable(t *testing.T) {
 	if err != nil || len(result.Names) != 3 {
 		t.Fatalf("near-bound pattern rejected: %+v %v", result, err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-	defer cancel()
+	// The scan without a caller deadline runs until the call's own budget ends it, which is the
+	// cost of running the scan to completion on this machine and under this load. The cancelled
+	// scan is compared with that measurement instead of a fixed bound, because the race detector
+	// and a loaded machine slow both by the same factor.
 	start := time.Now()
+	if _, err := (CoreRegex{}).Regex(context.Background(), pattern, &text); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("uncancelled scan did not run into the call budget: %v", err)
+	}
+	uncancelled := time.Since(start)
+	const deadline = 20 * time.Millisecond
+	if uncancelled < 10*deadline {
+		t.Fatalf("scan finished in %s, too fast to show cancellation", uncancelled)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), deadline)
+	defer cancel()
+	start = time.Now()
 	if _, err := (CoreRegex{}).Regex(ctx, pattern, &text); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expired scan was not reported as failure: %v", err)
 	}
-	if elapsed := time.Since(start); elapsed > time.Second {
-		t.Fatalf("cancellation was not cooperative: %s", elapsed)
+	if elapsed := time.Since(start); elapsed > uncancelled/2 {
+		t.Fatalf("cancellation was not cooperative: cancelled scan took %s, uncancelled %s", elapsed, uncancelled)
+	}
+}
+
+// TestCancellableReaderStopsWithinOneInterval pins cooperative cancellation by counting runes, which
+// does not depend on how fast the machine is.
+func TestCancellableReaderStopsWithinOneInterval(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	reader := &cancellableReader{ctx: ctx, source: strings.NewReader(strings.Repeat("x", 10*regexCancelInterval))}
+	cancel()
+	reads := 0
+	for {
+		if _, _, err := reader.ReadRune(); err != nil {
+			break
+		}
+		reads++
+	}
+	if reads >= regexCancelInterval {
+		t.Fatalf("read %d runes after cancellation, want fewer than %d", reads, regexCancelInterval)
 	}
 }

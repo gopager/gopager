@@ -10,10 +10,10 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/persistence/ent/organization"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
 	"github.com/gopager/gopager/internal/persistence/ent/unittemplate"
+	"github.com/gopager/gopager/internal/units"
 )
 
 // OrganizationCreate is the builder for creating a Organization entity.

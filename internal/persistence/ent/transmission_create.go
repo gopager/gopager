@@ -4,7 +4,7 @@ package ent
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"time"
@@ -59,14 +59,8 @@ func (_c *TransmissionCreate) SetProtocol(v transmission.Protocol) *Transmission
 }
 
 // SetPayload sets the "payload" field.
-func (_c *TransmissionCreate) SetPayload(v json.RawMessage) *TransmissionCreate {
+func (_c *TransmissionCreate) SetPayload(v jsontext.Value) *TransmissionCreate {
 	_c.mutation.SetPayload(v)
-	return _c
-}
-
-// SetTargets sets the "targets" field.
-func (_c *TransmissionCreate) SetTargets(v json.RawMessage) *TransmissionCreate {
-	_c.mutation.SetTargets(v)
 	return _c
 }
 
@@ -109,7 +103,7 @@ func (_c *TransmissionCreate) SetNillableIncomplete(v *bool) *TransmissionCreate
 }
 
 // SetQualityMetrics sets the "quality_metrics" field.
-func (_c *TransmissionCreate) SetQualityMetrics(v json.RawMessage) *TransmissionCreate {
+func (_c *TransmissionCreate) SetQualityMetrics(v jsontext.Value) *TransmissionCreate {
 	_c.mutation.SetQualityMetrics(v)
 	return _c
 }
@@ -130,20 +124,6 @@ func (_c *TransmissionCreate) SetProcessingStatus(v transmission.ProcessingStatu
 func (_c *TransmissionCreate) SetNillableProcessingStatus(v *transmission.ProcessingStatus) *TransmissionCreate {
 	if v != nil {
 		_c.SetProcessingStatus(*v)
-	}
-	return _c
-}
-
-// SetPublicationStatus sets the "publication_status" field.
-func (_c *TransmissionCreate) SetPublicationStatus(v transmission.PublicationStatus) *TransmissionCreate {
-	_c.mutation.SetPublicationStatus(v)
-	return _c
-}
-
-// SetNillablePublicationStatus sets the "publication_status" field if the given value is not nil.
-func (_c *TransmissionCreate) SetNillablePublicationStatus(v *transmission.PublicationStatus) *TransmissionCreate {
-	if v != nil {
-		_c.SetPublicationStatus(*v)
 	}
 	return _c
 }
@@ -199,10 +179,6 @@ func (_c *TransmissionCreate) defaults() error {
 		v := transmission.DefaultProcessingStatus
 		_c.mutation.SetProcessingStatus(v)
 	}
-	if _, ok := _c.mutation.PublicationStatus(); !ok {
-		v := transmission.DefaultPublicationStatus
-		_c.mutation.SetPublicationStatus(v)
-	}
 	return nil
 }
 
@@ -244,9 +220,6 @@ func (_c *TransmissionCreate) check() error {
 	if _, ok := _c.mutation.Payload(); !ok {
 		return &ValidationError{Name: "payload", err: errors.New(`ent: missing required field "Transmission.payload"`)}
 	}
-	if _, ok := _c.mutation.Targets(); !ok {
-		return &ValidationError{Name: "targets", err: errors.New(`ent: missing required field "Transmission.targets"`)}
-	}
 	if _, ok := _c.mutation.ObservedAt(); !ok {
 		return &ValidationError{Name: "observed_at", err: errors.New(`ent: missing required field "Transmission.observed_at"`)}
 	}
@@ -276,14 +249,6 @@ func (_c *TransmissionCreate) check() error {
 	if v, ok := _c.mutation.ProcessingStatus(); ok {
 		if err := transmission.ProcessingStatusValidator(v); err != nil {
 			return &ValidationError{Name: "processing_status", err: fmt.Errorf(`ent: validator failed for field "Transmission.processing_status": %w`, err)}
-		}
-	}
-	if _, ok := _c.mutation.PublicationStatus(); !ok {
-		return &ValidationError{Name: "publication_status", err: errors.New(`ent: missing required field "Transmission.publication_status"`)}
-	}
-	if v, ok := _c.mutation.PublicationStatus(); ok {
-		if err := transmission.PublicationStatusValidator(v); err != nil {
-			return &ValidationError{Name: "publication_status", err: fmt.Errorf(`ent: validator failed for field "Transmission.publication_status": %w`, err)}
 		}
 	}
 	return nil
@@ -349,10 +314,6 @@ func (_c *TransmissionCreate) createSpec() (*Transmission, *sqlgraph.CreateSpec)
 		_spec.SetField(transmission.FieldPayload, field.TypeJSON, value)
 		_node.Payload = value
 	}
-	if value, ok := _c.mutation.Targets(); ok {
-		_spec.SetField(transmission.FieldTargets, field.TypeJSON, value)
-		_node.Targets = value
-	}
 	if value, ok := _c.mutation.ObservedAt(); ok {
 		_spec.SetField(transmission.FieldObservedAt, field.TypeTime, value)
 		_node.ObservedAt = value
@@ -384,10 +345,6 @@ func (_c *TransmissionCreate) createSpec() (*Transmission, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.ProcessingStatus(); ok {
 		_spec.SetField(transmission.FieldProcessingStatus, field.TypeEnum, value)
 		_node.ProcessingStatus = value
-	}
-	if value, ok := _c.mutation.PublicationStatus(); ok {
-		_spec.SetField(transmission.FieldPublicationStatus, field.TypeEnum, value)
-		_node.PublicationStatus = value
 	}
 	return _node, _spec
 }

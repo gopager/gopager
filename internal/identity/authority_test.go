@@ -20,7 +20,11 @@ type authorityFixture struct {
 	fieldFailure error
 	exists       bool
 	touched      bool
-	failure      error
+	scopeCalls   int
+	grantCalls   int
+
+	credentialErr error
+	failure       error
 }
 
 func (f *authorityFixture) Now(context.Context, platform.TransactionContext) (time.Time, error) {
@@ -28,6 +32,10 @@ func (f *authorityFixture) Now(context.Context, platform.TransactionContext) (ti
 }
 
 func (f *authorityFixture) LockAccess(context.Context, platform.TransactionContext) (int64, error) {
+	return 7, f.failure
+}
+
+func (f *authorityFixture) LockAccessForChange(context.Context, platform.TransactionContext) (int64, error) {
 	return 7, f.failure
 }
 
@@ -40,10 +48,11 @@ func (f *authorityFixture) Guest(context.Context, platform.TransactionContext) (
 }
 
 func (f *authorityFixture) Credential(context.Context, platform.TransactionContext, [32]byte) (CredentialRecord, error) {
-	return f.credential, nil
+	return f.credential, f.credentialErr
 }
 
 func (f *authorityFixture) Grants(context.Context, platform.TransactionContext, uuid.UUID) ([]authz.Grant, error) {
+	f.grantCalls++
 	return f.grants, nil
 }
 
@@ -56,8 +65,13 @@ func (f *authorityFixture) TouchCredential(context.Context, platform.Transaction
 	return nil
 }
 
-func (f *authorityFixture) ScopeExists(context.Context, platform.TransactionContext, authz.Scope) (bool, error) {
-	return f.exists, nil
+func (f *authorityFixture) ScopesExist(_ context.Context, _ platform.TransactionContext, scopes []authz.Scope) ([]bool, error) {
+	f.scopeCalls++
+	result := make([]bool, len(scopes))
+	for i := range result {
+		result[i] = f.exists
+	}
+	return result, nil
 }
 
 func newAuthorityFixture(t *testing.T) (*authorityFixture, Proof) {
@@ -73,13 +87,14 @@ func newAuthorityFixture(t *testing.T) (*authorityFixture, Proof) {
 		now: now, exists: true,
 		account: AccountRecord{ID: principal, Kind: "human", State: "active"},
 		credential: CredentialRecord{ID: uuid.New(), AccountID: principal, Kind: SessionProof,
-			CreatedAt: now.Add(-time.Hour), LastUsedAt: now.Add(-time.Minute), ExpiresAt: &expires},
+			CreatedAt: now.Add(-time.Hour), LastUsedAt: now.Add(-10 * time.Minute), ExpiresAt: &expires},
 		grants: []authz.Grant{{SubjectID: principal.String(), SubjectKind: "principal",
 			Actions: []string{"account.read"}, Scope: authz.Scope{Kind: "all"}}},
 	}, Proof{Kind: SessionProof, Secret: secret}
 }
 
 func TestResolverSessionBoundariesAndAccountState(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name   string
 		change func(*authorityFixture)
@@ -109,6 +124,7 @@ func TestResolverSessionBoundariesAndAccountState(t *testing.T) {
 		{"guest cannot use session", func(f *authorityFixture) { f.account.Kind = "guest" }, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			fixture, proof := newAuthorityFixture(t)
 			test.change(fixture)
 			resolver, err := NewResolver(fixture, fixture, fixture)
@@ -128,6 +144,7 @@ func TestResolverSessionBoundariesAndAccountState(t *testing.T) {
 }
 
 func TestResolverDisablesMissingGrantScopeAndRejectsBrokenKey(t *testing.T) {
+	t.Parallel()
 	fixture, proof := newAuthorityFixture(t)
 	fixture.exists = false
 	resolver, err := NewResolver(fixture, fixture, fixture)
@@ -163,6 +180,7 @@ func TestResolverDisablesMissingGrantScopeAndRejectsBrokenKey(t *testing.T) {
 }
 
 func TestResolverRejectsBrokenGlobalFieldAuthorityWithoutFallback(t *testing.T) {
+	t.Parallel()
 	fixture, proof := newAuthorityFixture(t)
 	resolver, err := NewResolver(fixture, fixture, fixture)
 	if err != nil {
@@ -177,5 +195,62 @@ func TestResolverRejectsBrokenGlobalFieldAuthorityWithoutFallback(t *testing.T) 
 		SubjectID: fixture.account.ID.String(), SubjectKind: "principal", Fields: []string{"*"}}}
 	if _, err := resolver.Resolve(t.Context(), nil, proof); platform.FailureCode(err) != platform.CodeAuthorityUnavailable || fixture.touched {
 		t.Fatalf("invalid global field state became usable authority: %v", err)
+	}
+}
+
+func TestResolverBatchesScopeExistenceChecks(t *testing.T) {
+	t.Parallel()
+	fixture, proof := newAuthorityFixture(t)
+	for i := 0; i < 25; i++ {
+		fixture.grants = append(fixture.grants, authz.Grant{SubjectID: fixture.account.ID.String(),
+			SubjectKind: "principal", Actions: []string{"unit.read"},
+			Scope: authz.Scope{Kind: "unit", References: []string{uuid.NewString()}}})
+	}
+	resolver, err := NewResolver(fixture, fixture, fixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := resolver.Resolve(t.Context(), nil, proof)
+	if err != nil || len(result.Authority.Grants) != 26 || fixture.scopeCalls != 1 {
+		t.Fatalf("session resolution grants=%d calls=%d err=%v, want 26 grants in one batched call",
+			len(result.Authority.Grants), fixture.scopeCalls, err)
+	}
+	fixture.scopeCalls = 0
+	proof.Kind = AccessKeyProof
+	fixture.credential.Kind = AccessKeyProof
+	fixture.credential.Restrictions = &authz.Restrictions{Actions: []string{"unit.read"}}
+	for i := 0; i < 10; i++ {
+		fixture.credential.Restrictions.Scopes = append(fixture.credential.Restrictions.Scopes,
+			authz.Scope{Kind: "unit", References: []string{uuid.NewString()}})
+	}
+	if _, err := resolver.Resolve(t.Context(), nil, proof); err != nil || fixture.scopeCalls != 2 {
+		t.Fatalf("key resolution calls=%d err=%v, want one call for grants and one for key scopes", fixture.scopeCalls, err)
+	}
+}
+
+func TestResolverThrottlesLastUsedWrites(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name string
+		idle time.Duration
+		want bool
+	}{
+		{"just used", time.Minute, false},
+		{"one microsecond short", touchInterval - time.Microsecond, false},
+		{"at interval", touchInterval, true},
+		{"long idle", time.Hour, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			fixture, proof := newAuthorityFixture(t)
+			fixture.credential.LastUsedAt = fixture.now.Add(-test.idle)
+			resolver, err := NewResolver(fixture, fixture, fixture)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := resolver.Resolve(t.Context(), nil, proof); err != nil || fixture.touched != test.want {
+				t.Fatalf("touched=%t want %t err=%v", fixture.touched, test.want, err)
+			}
+		})
 	}
 }

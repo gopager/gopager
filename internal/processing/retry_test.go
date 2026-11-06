@@ -8,6 +8,7 @@ import (
 )
 
 func TestProcessingRetryExactSymmetricBoundsPrimaryPrecisionAndExhaustion(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 11, 1, 12, 0, 0, 123000, time.FixedZone("source-offset", 2*60*60))
 	bounds := [][2]time.Duration{{24 * time.Second, 36 * time.Second},
 		{96 * time.Second, 144 * time.Second}, {8 * time.Minute, 12 * time.Minute},
@@ -47,6 +48,7 @@ func TestProcessingRetryExactSymmetricBoundsPrimaryPrecisionAndExhaustion(t *tes
 }
 
 func TestProcessingRetryRejectsInvalidAttemptsClockAndJitter(t *testing.T) {
+	t.Parallel()
 	now := time.Unix(100, 0)
 	for _, attempts := range []int{-1, 0, MaxAutomaticAttempts + 1} {
 		if _, _, err := NextAutomaticRetry(attempts, now); platform.FailureCode(err) != platform.CodeInvalidInput {

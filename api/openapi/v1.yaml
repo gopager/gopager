@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: GoPager API
-  version: 1.0.0
+  version: 1.1.0
   description: |
     GoPager application API. Human guide: docs/http-api.md.
 
@@ -14,17 +14,16 @@ info:
       are wrapped as `{"schemaVersion": 1, "data": ...}`. Exceptions: `/auth/*` and
       `/gateways/*` return unwrapped bodies that carry `schemaVersion` directly. 204 responses
       have no body.
-    - Body limits: login 16 KiB; master-data, assignment, correction and Gateway administration
-      64 KiB; workflow, instance and preview routes 1 MiB; POST /transmissions 1 MiB;
-      POST /gateway/state 4 KiB. Overflow is 413 `RESOURCE_LIMIT`.
+    - Body size limits per route group are listed in docs/http-api.md (Request size limits).
+      Overflow is 413 `RESOURCE_LIMIT`.
     - Revisions are positive decimal strings. Updates and deletes send `expectedRevision` in the
       JSON body (no ETag/If-Match); DELETE requests carry a body.
     - Creating operations take a client-generated `commandId` (UUID). Re-sending the same input
       with the same `commandId` returns the original result without a second change; a different
       operation or input is 409 `IDEMPOTENCY_CONFLICT` (not retryable). Revision-based updates and the preview routes must not
       send a `commandId`.
-    - Lists use `offset` (default 0) and `limit` (default 50, 1–200). Any other, repeated or
-      non-integer query parameter is 400. Responses are `{"items": [...], "total": N}` where
+    - Lists use `offset` and `limit` (defaults and range: docs/http-api.md, Pagination). Any
+      other, repeated or non-integer query parameter is 400. Responses are `{"items": [...], "total": N}` where
       `total` counts only caller-visible rows.
     - Timestamps are RFC 3339 in UTC, possibly with fractional seconds. IDs are UUIDs; the nil
       UUID is always invalid.
@@ -44,6 +43,7 @@ tags:
   description: Standalone templates copied into new Units.
 - name: Units
   description: Units, including bulk changes.
+- name: Agencies
 - name: Unit collections
   description: Named Unit collections.
 - name: Address rules
@@ -202,6 +202,190 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /agencies:
+    get:
+      operationId: listAgencies
+      tags:
+      - Agencies
+      summary: List Agencies
+      description: Requires `agency.read`. Offset paging; any other query parameter is 400.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      parameters:
+      - $ref: '#/components/parameters/Offset'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Caller-visible page; `total` counts only rows the caller may read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgencyPageResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    post:
+      operationId: createAgency
+      tags:
+      - Agencies
+      summary: Create an Agency
+      description: 'Requires `agency.create`. Idempotent per (caller, `commandId`): an identical replay
+        returns the original result; reusing the `commandId` with different input is 409 `IDEMPOTENCY_CONFLICT`.'
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAgencyRequest'
+      responses:
+        '201':
+          description: Agency created (or replayed).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /agencies/{id}:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    get:
+      operationId: readAgency
+      tags:
+      - Agencies
+      summary: Read an Agency
+      description: Requires `agency.read`. Absent, deleted and invisible items are all 404.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      responses:
+        '200':
+          description: The resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgencyResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    put:
+      operationId: renameAgency
+      tags:
+      - Agencies
+      summary: Rename an Agency
+      description: Requires `agency.update`. Optimistic concurrency via `expectedRevision`; a stale value
+        is 409 `REVISION_CONFLICT`.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAgencyRequest'
+      responses:
+        '200':
+          description: New revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    delete:
+      operationId: deleteAgency
+      tags:
+      - Agencies
+      summary: Delete an Agency
+      description: Requires `agency.delete` (scope `all`). Optimistic concurrency via `expectedRevision`; a stale
+        value, or an Agency that still owns Units or Networks, is 409 `REVISION_CONFLICT`.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteRequest'
+      responses:
+        '200':
+          description: Deleted; final revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
         '500':
           $ref: '#/components/responses/InternalError'
         '503':
@@ -1347,11 +1531,11 @@ paths:
       - Suppressions
       summary: Suppress one transmission target
       description: Requires `suppression.create` on the target's Network and Unit. Idempotent per caller and
-        `commandId`; the command receipt is checked before `expectedAssignmentRevision` and the active-suppression
-        rule, so re-sending an identical request (for example after `COMMIT_UNCERTAIN`) returns the original result
-        even though the create advanced the assignment revision; reusing the `commandId` with different input is 409
-        `IDEMPOTENCY_CONFLICT`. A stale `expectedAssignmentRevision` or an already suppressed target is 409
-        `REVISION_CONFLICT`.
+        `commandId`; the command receipt is checked before the active-suppression rule, so re-sending an identical
+        request (for example after `COMMIT_UNCERTAIN`) returns the original result even though the create advanced
+        the assignment revision; reusing the `commandId` with different input is 409 `IDEMPOTENCY_CONFLICT`. An
+        already suppressed target is 409 `REVISION_CONFLICT`. No assignment revision token is required, because
+        the suppression only concerns its own target.
       security:
       - sessionCookie: []
         csrfToken: []
@@ -1423,7 +1607,7 @@ paths:
       tags:
       - Suppressions
       summary: Lift a suppression
-      description: Requires `suppression.delete`. Checks both `expectedRevision` and `expectedAssignmentRevision`.
+      description: Requires `suppression.delete`. Checks the suppression's `expectedRevision`.
       security:
       - sessionCookie: []
         csrfToken: []
@@ -1545,10 +1729,15 @@ paths:
         limited to 1 MiB. Idempotency is keyed on (Gateway, `submissionId`): an identical
         re-submission returns the stored receipt; different content under the same ID is 409
         `IDEMPOTENCY_CONFLICT`. Rejected submissions (400, 409, 413) create no transmission.
-        Network resolution uses only the Gateway's Networks, in order: the declared
-        `gatewayNetworkIdentifier`, the only Network for the protocol, the only Network with a
-        matching Address rule, the protocol's default Network; if none applies, 400 `INVALID_INPUT`.
-        The status is 200 only when the receipt's `processingStatus` is `completed`, else 202.
+        Network resolution uses only the Gateway's Networks of the submission's protocol, in order:
+        the declared `gatewayNetworkIdentifier` (unknown: 400 `INVALID_INPUT`), the only Network of
+        the protocol, the only Network with an Address rule matching the targets at the observation
+        time, the highest-priority of several matching Networks (this also appends the intake fact
+        `operation.network-ambiguous`), and, when none matches (including targetless submissions),
+        the highest-priority Network of the protocol. A Gateway without a Network of the protocol is
+        400 `INVALID_INPUT`.
+        The status is 202 while the receipt's `processingStatus` is `pending`, else 200. Accepted evidence
+        is visible to readers in every case; Workflow results attach to the Message when they complete.
       security:
       - gatewayCredential: []
       requestBody:
@@ -1559,14 +1748,15 @@ paths:
               $ref: '#/components/schemas/Submission'
       responses:
         '202':
-          description: Accepted; intake committed and `processingStatus` is `pending` (grouping, assignment and
-            Processing may still be running).
+          description: Accepted; intake committed and `processingStatus` is `pending` (at least one Workflow
+            candidate is open).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReceiptResponse'
         '200':
-          description: Replay of an earlier submission whose `processingStatus` is `completed`.
+          description: Intake committed with `processingStatus` `none` (no Workflow selected), or a replay of
+            an earlier submission whose `processingStatus` is `none`, `completed` or `failed`.
           content:
             application/json:
               schema:
@@ -1620,8 +1810,9 @@ paths:
       - Gateways
       summary: Replace the Gateway's Network assignments
       description: Requires `gateway.update` on every current and every proposed Network. 1–1024 entries with unique
-        identifiers and Network IDs; every protocol in the set needs exactly one `default`. An unknown Network is
-        400. Optimistic concurrency via `expectedRevision`; a stale value is 409 `REVISION_CONFLICT`. Authorized
+        identifiers and Network IDs. Each entry carries an explicit `priority`; the priorities of the set must be
+        exactly 0..n-1 (unique, contiguous, 0 is the highest), otherwise 400 `INVALID_INPUT`. The priority breaks ties
+        between Networks of one protocol at intake. An unknown Network is 400. Optimistic concurrency via `expectedRevision`; a stale value is 409 `REVISION_CONFLICT`. Authorized
         against every Network currently assigned to the Gateway; a Gateway without Networks needs an `all` grant.
         The response is not wrapped in `data`.
       security:
@@ -1798,7 +1989,7 @@ paths:
       tags:
       - Workflows
       summary: List Workflows
-      description: Requires `rule.read`. Offset paging; any other query parameter is 400.
+      description: Requires `workflow.read`. Offset paging; any other query parameter is 400.
       security:
       - sessionCookie: []
       - accessKey: []
@@ -1828,7 +2019,7 @@ paths:
       tags:
       - Workflows
       summary: Create a Workflow
-      description: 'Requires `rule.create` within the requested scope. Idempotent per (caller, `commandId`): an
+      description: 'Requires `workflow.create` within the requested scope. Idempotent per (caller, `commandId`): an
         identical replay returns the original result; reusing the `commandId` with different input is 409 `IDEMPOTENCY_CONFLICT`.
         The body is limited to 1 MiB and is decoded strictly: unknown fields, duplicate object keys and trailing
         data are 400.'
@@ -1874,7 +2065,7 @@ paths:
       tags:
       - Workflows
       summary: Read a Workflow
-      description: Requires `rule.read`. Absent, deleted and invisible items are all 404.
+      description: Requires `workflow.read`. Absent, deleted and invisible items are all 404.
       security:
       - sessionCookie: []
       - accessKey: []
@@ -1903,7 +2094,7 @@ paths:
       tags:
       - Workflows
       summary: Update Workflow metadata
-      description: 'Requires `rule.update` within both the current and the requested scope. Never changes the active
+      description: 'Requires `workflow.update` within both the current and the requested scope. Never changes the active
         version. Optimistic concurrency via `expectedRevision`; a stale value is 409 `REVISION_CONFLICT`. The body
         is limited to 1 MiB and is decoded strictly: unknown fields, duplicate object keys and trailing data are
         400.'
@@ -1946,7 +2137,7 @@ paths:
       tags:
       - Workflows
       summary: Delete a Workflow
-      description: 'Requires `rule.delete`. Disables the Workflow and clears its active version; saved versions
+      description: 'Requires `workflow.delete`. Disables the Workflow and clears its active version; saved versions
         are retained. Optimistic concurrency via `expectedRevision`; a stale value is 409 `REVISION_CONFLICT`. The
         body is limited to 1 MiB and is decoded strictly: unknown fields, duplicate object keys and trailing data
         are 400.'
@@ -1992,7 +2183,7 @@ paths:
       tags:
       - Workflows
       summary: List saved definitions
-      description: Requires `rule.read` on the Workflow.
+      description: Requires `workflow.read` on the Workflow.
       security:
       - sessionCookie: []
       - accessKey: []
@@ -2024,7 +2215,7 @@ paths:
       tags:
       - Workflows
       summary: Save an immutable definition
-      description: 'Requires `rule.update`. Compiles the definition (including installed plugin steps) and stores
+      description: 'Requires `workflow.update`. Compiles the definition (including installed plugin steps) and stores
         it; does not activate it. Advances the Workflow revision. The result `id` is the new version ID and `revision`
         is the new Workflow revision. A manifest with an unsupported schema or SDK is 409 `INCOMPATIBLE_VERSION`.
         Idempotent per (caller, `commandId`): an identical replay returns the original result; reusing the `commandId`
@@ -2073,7 +2264,7 @@ paths:
       tags:
       - Workflows
       summary: Read a saved definition
-      description: Requires `rule.read`. Absent, deleted and invisible items are all 404.
+      description: Requires `workflow.read`. Absent, deleted and invisible items are all 404.
       security:
       - sessionCookie: []
       - accessKey: []
@@ -2106,7 +2297,7 @@ paths:
       tags:
       - Workflows
       summary: Activate a saved definition
-      description: 'Requires `rule.activate`. Recompiles the version before activating it. `expectedRevision` is
+      description: 'Requires `workflow.activate`. Recompiles the version before activating it. `expectedRevision` is
         the Workflow revision. Optimistic concurrency via `expectedRevision`; a stale value is 409 `REVISION_CONFLICT`.
         The body is limited to 1 MiB and is decoded strictly: unknown fields, duplicate object keys and trailing
         data are 400.'
@@ -2153,13 +2344,15 @@ paths:
       - Workflows
       summary: Evaluate a definition without publishing
       description: |
-        Requires `rule.preview`. Exactly one of `versionId` / `definition` and exactly one of
+        Requires `workflow.preview`. Exactly one of `versionId` / `definition` and exactly one of
         `syntheticJson` / `storedTransmissionId`. Nothing is persisted. The result contains only
         fields the caller may read. If the Workflow changes during evaluation the request fails with
         409 `REVISION_CONFLICT`. A `syntheticJson` input is evaluated against the current Network named
         by its `networkId`: an unknown Network is 404 `NOT_FOUND`; a deleted Network, or one whose
         Protocol differs from the input, is 503 `AUTHORITY_UNAVAILABLE`. `storedTransmissionId` is not
         supported and returns 503 `AUTHORITY_UNAVAILABLE` after validation and authorization.
+        An `installed` step is called in preview mode; a plugin whose manifest does not declare
+        `supportsPreview` is not called and the request is 503 `AUTHORITY_UNAVAILABLE`.
          The body is limited to 1 MiB and is decoded strictly: unknown fields, duplicate object keys and trailing data are 400.
       security:
       - sessionCookie: []
@@ -2203,7 +2396,7 @@ paths:
       tags:
       - Workflows
       summary: List Processing candidate states
-      description: Requires `rule.read` on the Workflow.
+      description: Requires `workflow.read` on the Workflow.
       security:
       - sessionCookie: []
       - accessKey: []
@@ -2239,7 +2432,7 @@ paths:
       tags:
       - Workflows
       summary: Read one candidate state
-      description: Requires `rule.read`. Absent, deleted and invisible items are all 404.
+      description: Requires `workflow.read`. Absent, deleted and invisible items are all 404.
       security:
       - sessionCookie: []
       - accessKey: []
@@ -2272,7 +2465,7 @@ paths:
       tags:
       - Workflows
       summary: Read result metadata of a candidate
-      description: Requires `rule.read`. Absent, deleted and invisible items are all 404. Returns identifiers and
+      description: Requires `workflow.read`. Absent, deleted and invisible items are all 404. Returns identifiers and
         timing only, never evaluated fields.
       security:
       - sessionCookie: []
@@ -2307,7 +2500,7 @@ paths:
       - Workflows
       summary: Retry a failed candidate
       description: |
-        Requires `rule.reprocess`. Only a `failed` candidate of an unpublished Transmission can be
+        Requires `workflow.reprocess`. Only a `failed` candidate of an unpublished Transmission can be
         retried; it becomes `pending` and due immediately. `expectedRevision` is the candidate
         revision; a mismatch is 409 `REVISION_CONFLICT`. The candidate must also still be current: the
         Transmission's targets, source and context revisions, the Workflow's active version and
@@ -3261,6 +3454,101 @@ components:
               - unit
               - organization
               - unset
+    Agency:
+      type: object
+      description: The operating authority of one alerting domain (for example a county fire dispatch centre). It owns Units and Networks; every Unit and every Network belongs to exactly one Agency.
+      required:
+      - id
+      - revision
+      - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        revision:
+          $ref: '#/components/schemas/Revision'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+          pattern: \S
+          description: Valid UTF-8, not blank, at most 256 characters; not trimmed.
+    AgencyResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          $ref: '#/components/schemas/Agency'
+    AgencyPageResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          type: object
+          required:
+          - items
+          - total
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Agency'
+            total:
+              type: integer
+              minimum: 0
+              description: Number of rows the caller may read, independent of paging.
+    CreateAgencyRequest:
+      type: object
+      required:
+      - schemaVersion
+      - commandId
+      - name
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        commandId:
+          type: string
+          format: uuid
+          description: Client-generated idempotency key (not the nil UUID). Receipts are stored per (caller principal,
+            commandId) and never expire.
+        expectedRevision:
+          type: string
+          enum:
+          - '0'
+          description: Optional on create; only "0" is accepted.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+          pattern: \S
+          description: Valid UTF-8, not blank, at most 256 characters; not trimmed.
+      additionalProperties: false
+    UpdateAgencyRequest:
+      type: object
+      required:
+      - schemaVersion
+      - expectedRevision
+      - name
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        expectedRevision:
+          $ref: '#/components/schemas/Revision'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+          pattern: \S
+          description: Valid UTF-8, not blank, at most 256 characters; not trimmed.
+      additionalProperties: false
     Organization:
       type: object
       required:
@@ -3323,6 +3611,7 @@ components:
       - id
       - revision
       - name
+      - agencyId
       - organizationId
       - collectionIds
       - settings
@@ -3340,6 +3629,10 @@ components:
           maxLength: 256
           pattern: \S
           description: Valid UTF-8, not blank, at most 256 characters; not trimmed.
+        agencyId:
+          type: string
+          format: uuid
+          description: The Agency that owns the Unit.
         organizationId:
           type: string
           format: uuid
@@ -3635,6 +3928,7 @@ components:
       required:
       - schemaVersion
       - commandId
+      - agencyId
       - name
       - collectionIds
       - settings
@@ -3651,6 +3945,10 @@ components:
           enum:
           - '0'
           description: Optional on create; only "0" is accepted.
+        agencyId:
+          type: string
+          format: uuid
+          description: The Agency that owns the Unit; the caller needs the Unit action on that Agency.
         name:
           type: string
           minLength: 1
@@ -3682,6 +3980,7 @@ components:
       required:
       - schemaVersion
       - expectedRevision
+      - agencyId
       - name
       - organizationId
       - collectionIds
@@ -3691,6 +3990,10 @@ components:
           $ref: '#/components/schemas/SchemaVersion'
         expectedRevision:
           $ref: '#/components/schemas/Revision'
+        agencyId:
+          type: string
+          format: uuid
+          description: The Agency that owns the Unit; the caller needs the Unit action on that Agency.
         name:
           type: string
           minLength: 1
@@ -3717,6 +4020,7 @@ components:
       - schemaVersion
       - commandId
       - templateId
+      - agencyId
       - name
       - collectionIds
       properties:
@@ -3730,6 +4034,10 @@ components:
         templateId:
           type: string
           format: uuid
+        agencyId:
+          type: string
+          format: uuid
+          description: The Agency that owns the Unit; the caller needs the Unit action on that Agency.
         name:
           type: string
           minLength: 1
@@ -4339,12 +4647,9 @@ components:
               description: Number of rows the caller may read, independent of paging.
     CreateSuppressionRequest:
       type: object
-      description: '`expectedAssignmentRevision` is the current global assignment revision (see `assignmentRevision`
-        in suppression and correction responses).'
       required:
       - schemaVersion
       - commandId
-      - expectedAssignmentRevision
       - transmissionId
       - targetPosition
       properties:
@@ -4355,8 +4660,6 @@ components:
           format: uuid
           description: Client-generated idempotency key (not the nil UUID). Receipts are stored per (caller principal,
             commandId) and never expire.
-        expectedAssignmentRevision:
-          $ref: '#/components/schemas/Revision'
         transmissionId:
           type: string
           format: uuid
@@ -4369,13 +4672,10 @@ components:
       required:
       - schemaVersion
       - expectedRevision
-      - expectedAssignmentRevision
       properties:
         schemaVersion:
           $ref: '#/components/schemas/SchemaVersion'
         expectedRevision:
-          $ref: '#/components/schemas/Revision'
-        expectedAssignmentRevision:
           $ref: '#/components/schemas/Revision'
       additionalProperties: false
     SuppressionCommandResponse:
@@ -4416,8 +4716,7 @@ components:
       - id
       - assignmentRevision
       - state
-      - networkCount
-      - unitCount
+      - scope
       - processed
       - remaining
       properties:
@@ -4434,21 +4733,61 @@ components:
           - completed
           - failed
           - superseded
-        networkCount:
-          type: integer
-          minimum: 0
-        unitCount:
-          type: integer
-          minimum: 0
+        scope:
+          $ref: '#/components/schemas/CorrectionScope'
         processed:
           type: integer
           minimum: 0
+          description: Transmissions with a target inside the scope that already carry the scope's revision or a newer one.
         remaining:
           type: integer
           minimum: 0
+          description: Transmissions with a target inside the scope that still await re-resolution.
         failureCode:
           type: string
           description: Platform error code of the last failure. Omitted when there is none.
+    CorrectionScope:
+      type: object
+      description: The targets a correction re-resolves. Kind `address-rules` carries `networkId`, `protocol`
+        and either an address range (`addressFrom`, `addressTo`) or an `addressText`, with an optional
+        validity window; kind `unit` carries `unitId`; kind `target` carries `transmissionId` and `targetPosition`.
+      required:
+      - kind
+      properties:
+        kind:
+          type: string
+          enum:
+          - address-rules
+          - unit
+          - target
+        networkId:
+          type: string
+          format: uuid
+        protocol:
+          type: string
+        addressFrom:
+          type: integer
+          minimum: 0
+        addressTo:
+          type: integer
+          minimum: 0
+        addressText:
+          type: string
+        validFrom:
+          type: string
+          format: date-time
+        validUntil:
+          type: string
+          format: date-time
+        unitId:
+          type: string
+          format: uuid
+        transmissionId:
+          type: string
+          format: uuid
+        targetPosition:
+          type: integer
+          minimum: 0
     CorrectionResponse:
       type: object
       required:
@@ -4681,9 +5020,13 @@ components:
           format: date-time
         processingStatus:
           type: string
+          description: none when no Workflow was selected, pending while Workflow candidates are open, else
+            completed or failed (derived from the candidates of the currently selected Workflows).
           enum:
+          - none
           - pending
           - completed
+          - failed
         messageId:
           type: string
           format: uuid
@@ -4742,6 +5085,7 @@ components:
       required:
       - gatewayNetworkIdentifier
       - networkId
+      - priority
       properties:
         gatewayNetworkIdentifier:
           type: string
@@ -4752,10 +5096,11 @@ components:
         networkId:
           type: string
           format: uuid
-        default:
-          type: boolean
-          default: false
-          description: Default Network for its protocol; exactly one per protocol in the set.
+        priority:
+          type: integer
+          minimum: 0
+          description: Position in the Gateway's resolution order, 0 is the highest priority. Across the set the
+            values are exactly 0..n-1 without duplicates.
       additionalProperties: false
     ReplaceGatewayNetworksRequest:
       type: object
@@ -5418,17 +5763,15 @@ components:
           description: Field groups the value depends on.
     FieldValue:
       type: object
-      description: '`value` is present only when `state` is `present`.'
+      description: '`value` is present only when `state` is `present`. `dependencies` is the owner classification of a captured source field and is omitted on derived values: a definition is classified once, not per value (see docs/workflows.md).'
       required:
       - state
-      - dependencies
       properties:
         state:
           type: string
           enum:
           - present
           - absent
-          - hidden
         value:
           $ref: '#/components/schemas/TypedValue'
         dependencies:
@@ -5633,8 +5976,8 @@ components:
       additionalProperties: false
     CreateInstanceRequest:
       type: object
-      description: '`preview` is optional and must match `main` in plugin, version and capability. `configuration`
-        must be valid against the manifest''s configuration schema.'
+      description: '`configuration` must be valid against the manifest''s configuration schema. A preview of
+        a Workflow calls `main` in preview mode and requires its manifest to declare `supportsPreview`.'
       required:
       - schemaVersion
       - commandId
@@ -5662,8 +6005,6 @@ components:
           format: uuid
           description: Principal the plugin runs as; must currently resolve.
         main:
-          $ref: '#/components/schemas/ProvisionedArtifact'
-        preview:
           $ref: '#/components/schemas/ProvisionedArtifact'
         configuration:
           $ref: '#/components/schemas/TypedValue'
@@ -5695,8 +6036,6 @@ components:
           format: uuid
           description: Principal the plugin runs as; must currently resolve.
         main:
-          $ref: '#/components/schemas/ProvisionedArtifact'
-        preview:
           $ref: '#/components/schemas/ProvisionedArtifact'
         configuration:
           $ref: '#/components/schemas/TypedValue'
@@ -5736,8 +6075,6 @@ components:
           type: string
           format: uuid
         main:
-          $ref: '#/components/schemas/InstanceArtifact'
-        preview:
           $ref: '#/components/schemas/InstanceArtifact'
         createdAt:
           type: string
@@ -5794,8 +6131,6 @@ components:
           type: string
           format: uuid
         main:
-          $ref: '#/components/schemas/InstanceArtifact'
-        preview:
           $ref: '#/components/schemas/InstanceArtifact'
         createdAt:
           type: string

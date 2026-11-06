@@ -4,8 +4,10 @@ CREATE TABLE networks (
     revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
     name varchar(256) NOT NULL CHECK (name <> ''),
     protocol varchar NOT NULL CHECK (protocol IN ('pocsag', 'flex', 'zvei', 'eas')),
+    agency_id uuid NOT NULL REFERENCES agencies(id),
     deleted boolean NOT NULL DEFAULT false
 );
+CREATE INDEX networks_agency_id ON networks (agency_id);
 CREATE TABLE gateways (
     id uuid PRIMARY KEY,
     revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
@@ -20,36 +22,13 @@ CREATE TABLE gateway_networks (
     gateway_id uuid NOT NULL REFERENCES gateways(id),
     gateway_network_identifier varchar(128) NOT NULL CHECK (gateway_network_identifier <> ''),
     network_id uuid NOT NULL REFERENCES networks(id),
-    is_default boolean NOT NULL DEFAULT false,
+    -- Resolution order among the Gateway's Networks: a lower number is a higher priority.
+    priority integer NOT NULL CHECK (priority >= 0),
     UNIQUE (gateway_id, gateway_network_identifier),
-    UNIQUE (gateway_id, network_id)
+    UNIQUE (gateway_id, network_id),
+    UNIQUE (gateway_id, priority)
 );
 CREATE INDEX gateway_networks_network_id ON gateway_networks (network_id, gateway_id);
--- +goose StatementBegin
-CREATE FUNCTION check_gateway_network_defaults() RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE
-    affected_gateway uuid;
-BEGIN
-    affected_gateway := COALESCE(NEW.gateway_id, OLD.gateway_id);
-    IF EXISTS (
-        SELECT 1
-        FROM gateway_networks assignments
-        JOIN networks ON networks.id = assignments.network_id
-        WHERE assignments.gateway_id = affected_gateway
-        GROUP BY networks.protocol
-        HAVING count(*) FILTER (WHERE assignments.is_default) <> 1
-    ) THEN
-        RAISE EXCEPTION 'Gateway must have exactly one default Network per assigned Protocol'
-            USING ERRCODE = '23514';
-    END IF;
-    RETURN NULL;
-END;
-$$;
--- +goose StatementEnd
-CREATE CONSTRAINT TRIGGER gateway_network_defaults
-    AFTER INSERT OR UPDATE OR DELETE ON gateway_networks
-    DEFERRABLE INITIALLY DEFERRED
-    FOR EACH ROW EXECUTE FUNCTION check_gateway_network_defaults();
 CREATE TABLE gateway_credentials (
     id uuid PRIMARY KEY,
     gateway_id uuid NOT NULL REFERENCES gateways(id),
@@ -76,21 +55,21 @@ CREATE TABLE messages (
     identity_subtype varchar NOT NULL DEFAULT '',
     identity_value bytea NOT NULL,
     first_observed_at timestamptz NOT NULL,
-    last_observed_at timestamptz NOT NULL,
-    publication_status varchar NOT NULL DEFAULT 'pending'
-        CHECK (publication_status IN ('pending', 'ready', 'failed'))
+    last_observed_at timestamptz NOT NULL
 );
-CREATE INDEX messages_identity ON messages (identity_form, identity_subtype, identity_value);
+CREATE INDEX messages_identity ON messages (identity_form, identity_subtype, identity_value, last_observed_at);
+-- Published Processing results belong to the Message of their Transmission; a merge moves them.
+ALTER TABLE processing_results ADD CONSTRAINT processing_results_message
+    FOREIGN KEY (message_id) REFERENCES messages(id);
 CREATE TABLE transmissions (
     id uuid PRIMARY KEY,
     gateway_id uuid NOT NULL REFERENCES gateways(id),
     network_id uuid NOT NULL REFERENCES networks(id),
     submission_id varchar(128) NOT NULL CHECK (submission_id <> ''),
     submission_fingerprint bytea NOT NULL CHECK (octet_length(submission_fingerprint) = 32),
-    network_resolution varchar NOT NULL CHECK (network_resolution IN ('declared', 'inferred-single', 'inferred-address', 'default')),
+    network_resolution varchar NOT NULL CHECK (network_resolution IN ('declared', 'inferred-single', 'inferred-address', 'address-priority', 'priority')),
     protocol varchar NOT NULL CHECK (protocol IN ('pocsag', 'flex', 'zvei', 'eas')),
     payload json NOT NULL,
-    targets json NOT NULL,
     observed_at timestamptz NOT NULL,
     observation_offset_seconds integer NOT NULL CHECK (observation_offset_seconds BETWEEN -86400 AND 86400),
     accepted_at timestamptz NOT NULL,
@@ -99,58 +78,56 @@ CREATE TABLE transmissions (
     quality_metrics json,
     message_id uuid NOT NULL REFERENCES messages(id),
     processing_status varchar NOT NULL DEFAULT 'pending'
-        CHECK (processing_status IN ('pending', 'completed', 'failed')),
-    publication_status varchar NOT NULL DEFAULT 'pending'
-        CHECK (publication_status IN ('pending', 'ready', 'failed')),
+        CHECK (processing_status IN ('none', 'pending', 'completed', 'failed')),
     UNIQUE (gateway_id, submission_id)
 );
 CREATE INDEX transmissions_protocol_observed ON transmissions (protocol, observed_at, id);
 CREATE INDEX transmissions_message_observed ON transmissions (message_id, observed_at, id);
--- Supports the post-correction publication re-entry sweep over unpublished Transmissions.
-CREATE INDEX transmissions_unpublished
-    ON transmissions (accepted_at, id)
-    WHERE processing_status = 'pending' AND publication_status = 'pending';
+-- Each target carries its Network, Protocol, observation time and typed address so that a
+-- selector-scoped correction and the Unit history are index lookups; original stays the evidence.
 CREATE TABLE transmission_targets (
     transmission_id uuid NOT NULL REFERENCES transmissions(id) ON DELETE CASCADE,
     position integer NOT NULL CHECK (position >= 0),
     original json NOT NULL,
+    network_id uuid NOT NULL REFERENCES networks(id),
+    protocol varchar NOT NULL CHECK (protocol IN ('pocsag', 'flex', 'zvei', 'eas')),
+    observed_at timestamptz NOT NULL,
+    accepted_at timestamptz NOT NULL,
+    address_number bigint,
+    address_text varchar,
+    function smallint CHECK (function BETWEEN 0 AND 255),
     resolution_status varchar NOT NULL CHECK (resolution_status IN ('unresolved', 'unassigned', 'assigned', 'pending', 'failed')),
     unit_id uuid REFERENCES units(id),
     matched_rule_id uuid,
     assignment_revision bigint NOT NULL CHECK (assignment_revision > 0),
-    PRIMARY KEY (transmission_id, position)
+    PRIMARY KEY (transmission_id, position),
+    CHECK ((address_number IS NULL) <> (address_text IS NULL))
 );
-CREATE INDEX transmission_targets_unit ON transmission_targets (unit_id, transmission_id);
-CREATE TABLE message_contributions (
-    id uuid PRIMARY KEY,
+CREATE INDEX transmission_targets_numeric_address ON transmission_targets (network_id, protocol, address_number, observed_at)
+    WHERE address_number IS NOT NULL;
+CREATE INDEX transmission_targets_text_address ON transmission_targets (network_id, protocol, address_text, observed_at)
+    WHERE address_text IS NOT NULL;
+CREATE INDEX transmission_targets_unit ON transmission_targets (unit_id, observed_at);
+-- message_units is the rebuildable cache of which Units a Message alerts: one row per Message and
+-- Unit (with the Unit's Agency) and one Unit-less row per Message and Network Agency for
+-- targetless Transmissions. Intake upserts it, a correction rebuilds it per affected Message.
+CREATE TABLE message_units (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     message_id uuid NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
     unit_id uuid REFERENCES units(id),
-    contribution_time timestamptz NOT NULL,
+    agency_id uuid NOT NULL REFERENCES agencies(id),
+    first_observed_at timestamptz NOT NULL,
     age_anchor timestamptz NOT NULL,
-    ready boolean NOT NULL DEFAULT false
+    correction_status varchar NOT NULL DEFAULT 'current' CHECK (correction_status IN ('current', 'correcting'))
 );
-CREATE UNIQUE INDEX message_contributions_message_unit
-    ON message_contributions (message_id, unit_id) WHERE unit_id IS NOT NULL;
-CREATE UNIQUE INDEX message_contributions_message_targetless
-    ON message_contributions (message_id) WHERE unit_id IS NULL;
-CREATE INDEX message_contributions_unit_age ON message_contributions (unit_id, age_anchor);
-CREATE TABLE contribution_supports (
-    id uuid PRIMARY KEY,
-    contribution_id uuid NOT NULL REFERENCES message_contributions(id) ON DELETE CASCADE,
-    transmission_id uuid NOT NULL REFERENCES transmissions(id) ON DELETE CASCADE,
-    target_position integer CHECK (target_position >= 0),
-    observed_at timestamptz NOT NULL,
-    accepted_at timestamptz NOT NULL
-);
-CREATE UNIQUE INDEX contribution_support_original_target
-    ON contribution_supports (transmission_id, target_position) WHERE target_position IS NOT NULL;
-CREATE UNIQUE INDEX contribution_support_targetless_transmission
-    ON contribution_supports (transmission_id) WHERE target_position IS NULL;
-CREATE INDEX contribution_supports_contribution ON contribution_supports (contribution_id);
+CREATE UNIQUE INDEX message_units_message_unit ON message_units (message_id, unit_id) WHERE unit_id IS NOT NULL;
+CREATE UNIQUE INDEX message_units_message_targetless ON message_units (message_id, agency_id) WHERE unit_id IS NULL;
+CREATE INDEX message_units_unit_age ON message_units (unit_id, age_anchor);
+CREATE INDEX message_units_agency_time ON message_units (agency_id, first_observed_at);
 
 -- +goose Down
-DROP TABLE contribution_supports;
-DROP TABLE message_contributions;
+ALTER TABLE processing_results DROP CONSTRAINT processing_results_message;
+DROP TABLE message_units;
 DROP TABLE transmission_targets;
 DROP TABLE transmissions;
 DROP TABLE messages;

@@ -1,0 +1,61 @@
+# golangci-lint v2 configuration (version pinned in the Makefile).
+# A conservative set: correctness findings only, no style linters. Migrated from the
+# v1 config with `golangci-lint migrate`; the exclusion presets reproduce the v1
+# default exclusions. The path rules below cover pre-existing findings in processing
+# code: remove an entry when its finding is fixed.
+version: "2"
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - misspell
+    - staticcheck
+    - unused
+    # Tests run in parallel by default (see "Tests" in docs/development.md). paralleltest
+    # requires t.Parallel() in every top-level test and in every subtest; tparallel rejects
+    # a parallel parent whose subtests are not parallel. An exception needs
+    # `//nolint:paralleltest // <concrete reason>` (add tparallel when its subtests are sequential).
+    - paralleltest
+    - tparallel
+  settings:
+    paralleltest:
+      # Strict on purpose: subtests must be parallel too, so that a subtest that shares mutable
+      # state with its siblings has to say so explicitly instead of silently running in order.
+      ignore-missing: false
+      ignore-missing-subtests: false
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - ineffassign
+          - staticcheck
+        path: cmd/gopager/processing_worker\.go
+        text: ineffectual assignment to ctx|SA4006
+      - linters:
+          - ineffassign
+          - staticcheck
+        path: internal/processing/workflow_test\.go
+        text: ineffectual assignment to source|SA4006
+      - linters:
+          - staticcheck
+        path: internal/processing/workflow\.go
+        text: SA4009
+    paths:
+      - internal/persistence/ent/enttest
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

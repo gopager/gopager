@@ -19,8 +19,8 @@ const (
 	FieldGatewayNetworkIdentifier = "gateway_network_identifier"
 	// FieldNetworkID holds the string denoting the network_id field in the database.
 	FieldNetworkID = "network_id"
-	// FieldDefault holds the string denoting the default field in the database.
-	FieldDefault = "default"
+	// FieldPriority holds the string denoting the priority field in the database.
+	FieldPriority = "priority"
 	// Table holds the table name of the gatewaynetwork in the database.
 	Table = "gateway_networks"
 )
@@ -31,7 +31,7 @@ var Columns = []string{
 	FieldGatewayID,
 	FieldGatewayNetworkIdentifier,
 	FieldNetworkID,
-	FieldDefault,
+	FieldPriority,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -54,6 +54,8 @@ var (
 	Policy ent.Policy
 	// GatewayNetworkIdentifierValidator is a validator for the "gateway_network_identifier" field. It is called by the builders before save.
 	GatewayNetworkIdentifierValidator func(string) error
+	// PriorityValidator is a validator for the "priority" field. It is called by the builders before save.
+	PriorityValidator func(int) error
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -81,7 +83,7 @@ func ByNetworkID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldNetworkID, opts...).ToFunc()
 }
 
-// ByDefault orders the results by the default field.
-func ByDefault(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldDefault, opts...).ToFunc()
+// ByPriority orders the results by the priority field.
+func ByPriority(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPriority, opts...).ToFunc()
 }

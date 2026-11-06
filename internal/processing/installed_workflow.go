@@ -22,44 +22,18 @@ type InstalledArtifacts interface {
 	PrepareInstalled(context.Context, uuid.UUID, int64) (*InstalledArtifact, error)
 }
 
-// InstalledPreviewArtifacts resolves an independently pinned optional preview implementation.
-// False explicitly means unconfigured; an invalid configured artifact returns an error.
-type InstalledPreviewArtifacts interface {
-	PrepareInstalledPreview(context.Context, uuid.UUID, int64) (*InstalledArtifact, bool, error)
+// InstalledArtifactLoader loads the artifact of an instance configuration the caller has already
+// read and validated in its own primary transaction. It touches no storage, so a source owner
+// can call it inside that transaction without nesting another one.
+type InstalledArtifactLoader interface {
+	LoadInstalled(context.Context, InstanceConfiguration) (*InstalledArtifact, error)
 }
 
-func validatePreviewArtifact(main, preview *InstalledArtifact) error {
-	if preview == nil || preview == main {
-		return capabilityUnavailable(errors.New("dedicated preview artifact unavailable"))
-	}
-	primary, err := main.Manifest()
-	if err != nil {
-		return err
-	}
-	declaration, err := preview.Manifest()
-	if err != nil {
-		return err
-	}
-	if !declaration.Pure || !declaration.PurePreview || declaration.PluginID != primary.PluginID ||
-		declaration.Version != primary.Version || declaration.CapabilityID != primary.CapabilityID ||
-		!sameOutputSchema(primary.InputSchema, declaration.InputSchema) ||
-		!sameOutputSchema(primary.ResultSchema, declaration.ResultSchema) ||
-		!sameOutputSchema(map[string]FieldSchema{"config": primary.ConfigurationSchema},
-			map[string]FieldSchema{"config": declaration.ConfigurationSchema}) {
-		return capabilityUnavailable(errors.New("dedicated preview declaration differs from processing capability"))
-	}
-	left, err := json.Marshal(primary.ConfigurationPolicy)
-	if err != nil {
-		return invalid(err)
-	}
-	right, err := json.Marshal(declaration.ConfigurationPolicy)
-	if err != nil {
-		return invalid(err)
-	}
-	if !bytes.Equal(left, right) {
-		return capabilityUnavailable(errors.New("dedicated preview configuration classification differs"))
-	}
-	return nil
+// InstalledArtifactOwner serves both the worker's out-of-transaction preparation and the
+// source owner's in-transaction validation of installed steps.
+type InstalledArtifactOwner interface {
+	InstalledArtifacts
+	InstalledArtifactLoader
 }
 
 // InvocationContext binds a call to the actual captured source and optional original body target.
@@ -97,6 +71,12 @@ func executeInstalled(ctx context.Context, step compiledStep, frame *executionFr
 	if err != nil {
 		return nil, err
 	}
+	// The plugin is authorized for the whole definition's classification, not per input value:
+	// derived values carry no classification of their own.
+	for name, field := range input {
+		field.Dependencies = frame.dependencies
+		input[name] = field
+	}
 	if err := frame.budget.consume(input); err != nil {
 		return nil, err
 	}
@@ -113,11 +93,19 @@ func executeInstalled(ctx context.Context, step compiledStep, frame *executionFr
 		position := *call.TargetPosition
 		call.TargetPosition = &position
 	}
-	envelope, configurationDependencies, preview, err := frame.invocations.AuthorizeInstalled(ctx,
-		step.definition.Installed.InstanceID, step.definition.Installed.ConfigurationRevision, call, detached)
-	if err != nil {
+	// Authorization is a database transaction, not built-in compute: its latency under load must
+	// not be charged to the compute allowance, whose expiry would surface as STORAGE_UNAVAILABLE.
+	var envelope InvocationEnvelope
+	var configurationDependencies []Dependency
+	var preview bool
+	if err := frame.budget.guestWait(func(parent context.Context) (err error) {
+		envelope, configurationDependencies, preview, err = frame.invocations.AuthorizeInstalled(parent,
+			step.definition.Installed.InstanceID, step.definition.Installed.ConfigurationRevision, call, detached)
+		return err
+	}); err != nil {
 		return nil, err
 	}
+	ctx = frame.budget.computeContext() // the pause replaced the allowance's context
 	if envelope.ConfigurationRevision != step.definition.Installed.ConfigurationRevision {
 		return nil, capabilityUnavailable(errors.New("installed configuration revision changed"))
 	}
@@ -145,20 +133,21 @@ func executeInstalled(ctx context.Context, step compiledStep, frame *executionFr
 	if err := frame.budget.consume(envelope); err != nil {
 		return nil, err
 	}
-	artifact := step.installed
+	mode := InvocationModeLive
 	if preview {
-		if step.preview == nil {
-			return nil, capabilityUnavailable(errors.New("dedicated preview implementation unavailable"))
-		}
-		artifact = step.preview
+		mode = InvocationModePreview
 	}
-	output, err := artifact.invokeProjectedBudget(ctx, envelope, preview, frame.budget)
+	if envelope.Mode != "" && envelope.Mode != mode {
+		return nil, capabilityUnavailable(errors.New("authorized installed mode differs from the run"))
+	}
+	envelope.Mode = mode
+	output, err := step.installed.invokeProjectedBudget(ctx, envelope, frame.budget)
 	if err != nil {
 		return nil, err
 	}
 	fields := make(map[string]FieldValue, len(manifest.ResultSchema))
 	for _, name := range sortedNames(manifest.ResultSchema) {
-		field := FieldValue{State: FieldAbsent, Dependencies: dependencies}
+		field := FieldValue{State: FieldAbsent}
 		if value, present := output[name]; present {
 			field.State, field.Value = FieldPresent, &value
 		}

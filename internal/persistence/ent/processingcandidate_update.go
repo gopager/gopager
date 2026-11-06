@@ -382,26 +382,6 @@ func (_u *ProcessingCandidateUpdate) ClearFailureStep() *ProcessingCandidateUpda
 	return _u
 }
 
-// SetBarrierAppliedAt sets the "barrier_applied_at" field.
-func (_u *ProcessingCandidateUpdate) SetBarrierAppliedAt(v time.Time) *ProcessingCandidateUpdate {
-	_u.mutation.SetBarrierAppliedAt(v)
-	return _u
-}
-
-// SetNillableBarrierAppliedAt sets the "barrier_applied_at" field if the given value is not nil.
-func (_u *ProcessingCandidateUpdate) SetNillableBarrierAppliedAt(v *time.Time) *ProcessingCandidateUpdate {
-	if v != nil {
-		_u.SetBarrierAppliedAt(*v)
-	}
-	return _u
-}
-
-// ClearBarrierAppliedAt clears the value of the "barrier_applied_at" field.
-func (_u *ProcessingCandidateUpdate) ClearBarrierAppliedAt() *ProcessingCandidateUpdate {
-	_u.mutation.ClearBarrierAppliedAt()
-	return _u
-}
-
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *ProcessingCandidateUpdate) SetUpdatedAt(v time.Time) *ProcessingCandidateUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -611,12 +591,6 @@ func (_u *ProcessingCandidateUpdate) sqlSave(ctx context.Context) (_node int, er
 	}
 	if _u.mutation.FailureStepCleared() {
 		_spec.ClearField(processingcandidate.FieldFailureStep, field.TypeString)
-	}
-	if value, ok := _u.mutation.BarrierAppliedAt(); ok {
-		_spec.SetField(processingcandidate.FieldBarrierAppliedAt, field.TypeTime, value)
-	}
-	if _u.mutation.BarrierAppliedAtCleared() {
-		_spec.ClearField(processingcandidate.FieldBarrierAppliedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(processingcandidate.FieldUpdatedAt, field.TypeTime, value)
@@ -995,26 +969,6 @@ func (_u *ProcessingCandidateUpdateOne) ClearFailureStep() *ProcessingCandidateU
 	return _u
 }
 
-// SetBarrierAppliedAt sets the "barrier_applied_at" field.
-func (_u *ProcessingCandidateUpdateOne) SetBarrierAppliedAt(v time.Time) *ProcessingCandidateUpdateOne {
-	_u.mutation.SetBarrierAppliedAt(v)
-	return _u
-}
-
-// SetNillableBarrierAppliedAt sets the "barrier_applied_at" field if the given value is not nil.
-func (_u *ProcessingCandidateUpdateOne) SetNillableBarrierAppliedAt(v *time.Time) *ProcessingCandidateUpdateOne {
-	if v != nil {
-		_u.SetBarrierAppliedAt(*v)
-	}
-	return _u
-}
-
-// ClearBarrierAppliedAt clears the value of the "barrier_applied_at" field.
-func (_u *ProcessingCandidateUpdateOne) ClearBarrierAppliedAt() *ProcessingCandidateUpdateOne {
-	_u.mutation.ClearBarrierAppliedAt()
-	return _u
-}
-
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *ProcessingCandidateUpdateOne) SetUpdatedAt(v time.Time) *ProcessingCandidateUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -1254,12 +1208,6 @@ func (_u *ProcessingCandidateUpdateOne) sqlSave(ctx context.Context) (_node *Pro
 	}
 	if _u.mutation.FailureStepCleared() {
 		_spec.ClearField(processingcandidate.FieldFailureStep, field.TypeString)
-	}
-	if value, ok := _u.mutation.BarrierAppliedAt(); ok {
-		_spec.SetField(processingcandidate.FieldBarrierAppliedAt, field.TypeTime, value)
-	}
-	if _u.mutation.BarrierAppliedAtCleared() {
-		_spec.ClearField(processingcandidate.FieldBarrierAppliedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(processingcandidate.FieldUpdatedAt, field.TypeTime, value)

@@ -12,8 +12,14 @@ const (
 	Label = "domain_event"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldSeq holds the string denoting the seq field in the database.
+	FieldSeq = "seq"
 	// FieldEnvelope holds the string denoting the envelope field in the database.
 	FieldEnvelope = "envelope"
+	// FieldType holds the string denoting the type field in the database.
+	FieldType = "type"
+	// FieldOccurredAt holds the string denoting the occurred_at field in the database.
+	FieldOccurredAt = "occurred_at"
 	// Table holds the table name of the domainevent in the database.
 	Table = "domain_events"
 )
@@ -21,7 +27,10 @@ const (
 // Columns holds all SQL columns for domainevent fields.
 var Columns = []string{
 	FieldID,
+	FieldSeq,
 	FieldEnvelope,
+	FieldType,
+	FieldOccurredAt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -50,4 +59,19 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// BySeq orders the results by the seq field.
+func BySeq(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSeq, opts...).ToFunc()
+}
+
+// ByType orders the results by the type field.
+func ByType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldType, opts...).ToFunc()
+}
+
+// ByOccurredAt orders the results by the occurred_at field.
+func ByOccurredAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOccurredAt, opts...).ToFunc()
 }

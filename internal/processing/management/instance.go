@@ -44,11 +44,10 @@ func NewInstances(management *Service, repository processing.InstanceRepository,
 
 // InstanceInput excludes all server-owned identity/revision/audit fields.
 type InstanceInput struct {
-	Enabled              *bool                           `json:"enabled"`
-	ExecutionPrincipalID uuid.UUID                       `json:"executionPrincipalId"`
-	Main                 processing.ProvisionedArtifact  `json:"main"`
-	Preview              *processing.ProvisionedArtifact `json:"preview,omitempty"`
-	Configuration        processing.Value                `json:"configuration"`
+	Enabled              *bool                          `json:"enabled"`
+	ExecutionPrincipalID uuid.UUID                      `json:"executionPrincipalId"`
+	Main                 processing.ProvisionedArtifact `json:"main"`
+	Configuration        processing.Value               `json:"configuration"`
 }
 
 // SaveInstance performs actor-bound creation or expected-revision update with two-phase reauthorization.
@@ -101,7 +100,7 @@ func (s *InstanceService) SaveInstance(ctx context.Context, proof identity.Proof
 		if _, err := s.management.resolver.ResolvePrincipalAuthority(tx.Context(), tx, detached.ExecutionPrincipalID); err != nil {
 			return err
 		}
-		control, err = s.management.repository.LockRevision(tx.Context(), tx)
+		control, err = s.management.repository.LockRevisionForChange(tx.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -118,7 +117,7 @@ func (s *InstanceService) SaveInstance(ctx context.Context, proof identity.Proof
 		}
 		configuration = processing.InstanceConfiguration{ID: instanceID, Revision: revision,
 			Enabled: *detached.Enabled, ExecutionPrincipalID: detached.ExecutionPrincipalID,
-			Main: detached.Main, Preview: detached.Preview, Configuration: detached.Configuration,
+			Main: detached.Main, Configuration: detached.Configuration,
 			CreatedAt: now, CreatedBy: actor}
 		return configuration.Validate()
 	}
@@ -145,7 +144,7 @@ func (s *InstanceService) SaveInstance(ctx context.Context, proof identity.Proof
 		if err := authz.Authorize(authority, "plugin.configure", nil, authz.Target{}, now); err != nil {
 			return err
 		}
-		current, err := s.management.repository.LockRevision(tx.Context(), tx)
+		current, err := s.management.repository.LockRevisionForChange(tx.Context(), tx)
 		if err != nil {
 			return err
 		}

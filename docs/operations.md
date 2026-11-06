@@ -2,19 +2,49 @@
 
 GoPager is a single executable, `gopager`, backed by one PostgreSQL primary. It runs in two modes:
 
-- **Server mode** (`gopager --profile=full --roles=…`): runs the `api` and/or `worker` roles until it receives a signal.
+- **Server mode** (`gopager --roles=…`): runs the `api` and/or `worker` roles until it receives a signal.
 - **Bootstrap** (`gopager bootstrap …`): creates the initial administrator account and exits.
 
 ## Requirements
 
 | Component | Requirement |
 | --- | --- |
-| Go | The version in [go.mod](../go.mod) (`go 1.26.2`), only for building |
+| Go | The version in [go.mod](../go.mod) (`go 1.27.3`), only for building |
 | PostgreSQL | A writable primary. The test suite runs against PostgreSQL 18. Read replicas and hot standbys are rejected as not writable. |
 | Database privileges | `apply` mode needs privileges to create tables, indexes and functions in the connection's current schema |
 | Plugins (optional) | A local directory with plugin executables and manifests; see [Plugins](plugins.md) |
 
 GoPager does not terminate TLS for HTTP. Put a TLS-terminating reverse proxy in front of the API listener for any exposed deployment.
+
+## Topology
+
+GoPager always runs against PostgreSQL; there is no SQLite and no embedded database. "Lite" and "Full" are deployment profiles, not binary modes: the binary and its flags are identical.
+
+| Profile | Layout | Use |
+| --- | --- | --- |
+| Lite | One host, one `gopager --roles=api,worker` process, PostgreSQL as a compose sidecar on the same host | Small installations, trials, constrained hosts |
+| Full | `api` and `worker` processes split across hosts ([Roles](#roles)), against an external PostgreSQL primary | Larger installations, separate scaling and failure domains |
+
+### Lite with Docker Compose
+
+[deploy/compose/](../deploy/compose/) holds `compose.yaml`, a `Dockerfile` (multi-stage, Go version from `go.mod`, non-root runtime user) and `.env.example`.
+
+```sh
+cd deploy/compose
+cp .env.example .env          # set POSTGRES_PASSWORD (URL-safe) and GOPAGER_PUBLIC_ORIGIN
+docker compose up --build -d
+curl -fsS http://localhost:8080/health/ready
+printf '%s\n' 'a long initial password' | docker compose run --rm -T gopager bootstrap \
+  --username=admin --actions=password.local,session.manage-own,account.read,account.create,account.update,grant.manage \
+  --allow-insecure-db
+```
+
+The `gopager` service waits for the PostgreSQL healthcheck (`pg_isready`), then starts with `--migration-mode=apply`. The database host `postgres` is not loopback, so the compose file passes `--allow-insecure-db`; the private compose network is the trust boundary (see [Database TLS](#database-tls)). Data lives in the named volume `pgdata`; `docker compose down -v` deletes it. TLS for browsers still needs a reverse proxy.
+
+- **Upgrade:** take a backup (below), `git pull` (or fetch the new release), `docker compose up --build -d`. The new container applies migrations at start. See [Upgrade](#upgrade).
+- **Backup:** `docker compose exec -T postgres pg_dump -U gopager -Fc gopager > gopager.dump`.
+- **Restore:** into an empty database, with GoPager stopped: `docker compose stop gopager`, then `docker compose exec -T postgres pg_restore -U gopager -d gopager --clean --if-exists < gopager.dump`, then `docker compose start gopager`.
+- **Moving a Lite installation** to a Full one is a `pg_dump` / `pg_restore` into the external PostgreSQL, then starting the roles there. The former SQLite transfer path no longer exists.
 
 ## Build
 
@@ -26,21 +56,23 @@ The binary embeds all SQL migrations. It needs no other files at runtime except 
 
 ## Configuration Reference
 
-Flags use Go `flag` syntax (`--name=value` or `-name value`). Positional arguments are rejected. Any configuration error ends the process with `INVALID_INPUT` (see [Exit Status and Logging](#exit-status-and-logging)).
+Flags use Go `flag` syntax (`--name=value` or `-name value`). Positional arguments are rejected. Any configuration error ends the process with `INVALID_INPUT` (see [Exit Status and Logging](#exit-status-and-logging)). The former `--profile` flag was removed (deployment profiles are topologies, see [Topology](#topology)); passing it fails with `INVALID_INPUT` (unknown flag).
 
 ### Server mode
 
 | Flag / variable | Default | Required | Meaning |
 | --- | --- | --- | --- |
-| `--profile` | — | always | Operating profile. Only `full` is accepted. |
 | `--roles` | — | always | Comma-separated, non-empty, no duplicates: `api`, `worker` or `api,worker`. |
 | `GOPAGER_DATABASE_URL` (env) | — | always | PostgreSQL connection string (URL or keyword/value form understood by pgx). Read only from the environment so it does not appear in process listings or logs. |
 | `--listen-address` | — | with `api` | HTTP listen address `host:port`. Host must be non-empty (use `0.0.0.0` or `[::]` to listen on all interfaces); port 1–65535. |
 | `--public-origin` | — | with `api` | Public origin browsers use to reach GoPager, `http://` or `https://` scheme, host, optional port, no path other than `/`, no query/fragment/userinfo. Validated whenever set, even for `worker`. See [Security](#security). |
 | `--migration-mode` | `check` | — | `check`: start only if the schema is exactly current. `apply`: run pending migrations first. See [Database Migrations](#database-migrations). |
+| `--processing-concurrency` | `2` | — | Processing candidates evaluated in parallel per worker process. Must be > 0. |
+| `--processing-poll-interval` | `5s` | — | Fallback interval at which a worker looks for due work, as a Go duration (`500ms`, `5s`, `1m`). Must be > 0. New work normally starts immediately through a PostgreSQL notification (channel `gopager_processing_due`, sent by intake and by Processing readmission after a correction); the poll covers lost notifications and work that becomes due by time. |
 | `--processing-artifact-root` | — | — | Plugin directory. Must exist and be openable; leading/trailing whitespace and an explicitly empty value are rejected. |
 | `GOPAGER_PROCESSING_ARTIFACT_ROOT` (env) | — | — | Plugin directory, used only when `--processing-artifact-root` is not given. Same validation. |
 | `--login-attempts-per-account` | `10` | — | Login attempts per minute per normalized username. Must be > 0. |
+| `--login-attempts-per-source` | `30` | — | Login attempts per minute per client source, across all usernames. The source is the host part of the connection's remote address. Must be > 0. See [Security](#security). |
 | `--login-attempts-per-instance` | `300` | — | Login attempts per minute across the whole instance. Must be > 0. |
 | `--allow-insecure-db` | `false` | — | Permit a non-local database connection without certificate-verified TLS. See [Database TLS](#database-tls). |
 
@@ -48,12 +80,14 @@ Fixed values (not configurable):
 
 | Setting | Value |
 | --- | --- |
-| Worker dispatch concurrency | 2 processing items in flight per worker process |
-| Worker poll interval | 5 s (in addition to immediate in-process wake-ups) |
 | Database pool | 10 open, 5 idle connections, 30 min connection lifetime |
 | Per-call / per-transaction timeout | 30 s |
 | Readiness re-check interval | 5 s |
 | HTTP `ReadHeaderTimeout` | 5 s |
+| HTTP `ReadTimeout` (whole request including body) | 30 s |
+| HTTP `WriteTimeout` (whole response) | 60 s |
+| HTTP `IdleTimeout` (keep-alive connection) | 120 s |
+| HTTP `MaxHeaderBytes` | 64 KiB |
 | Shutdown deadline | 30 s |
 
 ### Bootstrap
@@ -81,7 +115,7 @@ Both roles load the plugin directory, if configured, because workflow management
 Topologies:
 
 - **Combined**: one process with `--roles=api,worker`.
-- **Split**: any number of `--roles=api` and `--roles=worker` processes against the same database. Workers coordinate through the database; additional workers pick up work on their 5 s poll.
+- **Split**: any number of `--roles=api` and `--roles=worker` processes against the same database. Workers coordinate through the database (selected rows are locked with `SKIP LOCKED`, claims are revision-checked); additional workers wake through the same notifications and otherwise pick up work on their poll (`--processing-poll-interval`, default 5 s). Each worker process holds one extra dedicated database connection for the notification listener, outside the pool.
 
 All processes of one deployment must run the same release (see [Upgrade](#upgrade)).
 
@@ -99,7 +133,7 @@ Migrations are embedded in the binary and tracked in the table `platform_schema_
 
 Each migration and its ledger row commit in one transaction; a failing migration rolls back and leaves earlier ones applied. Down migrations are never executed. If a commit outcome cannot be determined, the result is `COMMIT_UNCERTAIN`; restart with `apply` to re-check.
 
-Every transaction at runtime re-checks the schema. A running process stops accepting work (`INCOMPATIBLE_VERSION`, not ready) as soon as another process applies migrations it does not know.
+Every transaction compares the applied schema version with the version the process started with (one query, no lock). A running process therefore stops accepting work (`INCOMPATIBLE_VERSION`, not ready) as soon as another process applies migrations it does not know.
 
 ### Upgrade
 
@@ -109,6 +143,10 @@ Every transaction at runtime re-checks the schema. A running process stops accep
 4. Start the remaining processes with the default `--migration-mode=check`.
 
 Rolling upgrades with mixed releases are not supported. Downgrading the binary after a schema change fails with `INCOMPATIBLE_VERSION`; restore the backup instead.
+
+## Event Log Retention
+
+`domain_events` (the sequenced fact log) and `consumer_offsets` (one read position per consumer) grow without bound until a retention job prunes them; no such job is implemented yet. Both tables belong in the planned retention configuration. The rule the job must follow: a `domain_events` row is prunable only when its `(tx_id, seq)` is at or below the lowest `(last_tx_id, last_seq)` of every registered consumer **and** it is older than the replay window, so no consumer can be left with a gap and late-registered consumers still find recent history. A `consumer_offsets` row is removed only when its consumer is decommissioned.
 
 ## First Start and Bootstrap
 
@@ -141,7 +179,7 @@ Bootstrap opens no listener, completes within 30 s, and can succeed only once pe
 | Gateways | `gateway.*`, `network.*` (each `read`, `create`, `update`, `delete`), `grouping.configure` |
 | Accounts | `account.read`, `account.create`, `account.update`, `account.delete`, `account.delete-own`, `grant.manage`, `password.local`, `recovery.request`, `recovery.issue`, `recovery.consume`, `session.manage-own`, `key.create-own`, `key.manage-own`, `key.manage-technical` |
 | Subscriptions and delivery | `subscription.manage-own`, `subscription.manage-global`, `delivery.read`, `delivery.retry`, `delivery.redeliver` |
-| Processing | `rule.read`, `rule.create`, `rule.update`, `rule.delete`, `rule.preview`, `rule.activate`, `rule.reprocess`, `presentation.manage`, `plugin.configure`, `plugin.internal-read` |
+| Processing | `workflow.read`, `workflow.create`, `workflow.update`, `workflow.delete`, `workflow.preview`, `workflow.activate`, `workflow.reprocess`, `presentation.manage`, `plugin.configure` |
 | Other | `notice.manage`, `operations.manage`, `audit.read` |
 
 The `*` notation above is shorthand for this table only; `--actions` requires each action spelled out.
@@ -153,7 +191,6 @@ Minimal combined deployment behind a TLS-terminating proxy:
 ```sh
 export GOPAGER_DATABASE_URL='postgres://gopager:…@db.internal:5432/gopager?sslmode=verify-full'
 gopager \
-  --profile=full \
   --roles=api,worker \
   --listen-address=127.0.0.1:8080 \
   --public-origin=https://pager.example.org \
@@ -164,11 +201,15 @@ Local development against a loopback database:
 
 ```sh
 GOPAGER_DATABASE_URL='postgres://gopager:secret@127.0.0.1:5432/gopager?sslmode=disable' \
-  gopager --profile=full --roles=api,worker --migration-mode=apply \
+  gopager --roles=api,worker --migration-mode=apply \
   --listen-address=127.0.0.1:8080 --public-origin=http://127.0.0.1:8080
 ```
 
 Startup order: parse and validate configuration → open the database (TLS rule) → compose roles → ping, check write authority (`pg_is_in_recovery()` false and `transaction_read_only` off), check/apply migrations → open the listener and start workers → log `platform started`. Any failure before the last step ends the process with exit 1.
+
+### Backup and restore responsibility
+
+Backup, restore, secure disposal of copies and the handling of keys, secrets and plugin artifacts belong to the operator; GoPager has no backup or restore feature and no detection of a restored copy. An older database copy can bring back revoked credentials, deleted accounts, or work whose external effect happened after the copy was taken, and the application cannot know that later state existed. Account for these risks outside GoPager before starting a restored installation. Normal start-up still enforces schema compatibility, current stored rights and job leases, and honours the uncertainty recorded for attempts that had started. An upgrade never rolls back data written in between.
 
 ## Health Endpoints
 
@@ -183,7 +224,7 @@ The process is ready when the database is reachable, is a writable primary, the 
 
 While not ready, every non-health route returns `503` with error code `AUTHORITY_UNAVAILABLE` and `retryable: true` (error envelope: [HTTP API](http-api.md)).
 
-The responses contain no other details. Profile, roles, migration state (`current` / `incompatible`) and failure code are kept in-process; failure codes appear in logs.
+The responses contain no other details. Roles, migration state (`current` / `incompatible`) and failure code are kept in-process; failure codes appear in logs.
 
 ## Failure Handling
 
@@ -203,7 +244,9 @@ A `worker`-only process has no health endpoint. Monitor its log for `platform ro
 | 0 | Normal shutdown after `SIGINT`/`SIGTERM`, or successful bootstrap |
 | 1 | Startup failure, failed role, or shutdown failure |
 
-Logs are written to stderr by Go's default `log/slog` handler (`2026/11/05 23:54:28 INFO platform started profile=full roles=[api worker]`). Errors are logged by code only; connection strings, credentials, causes and payloads are never logged. On exit 1 the last line is `ERROR GoPager exited code=<CODE>`.
+Logs are written to stderr by Go's default `log/slog` handler (`2026/11/05 23:54:28 INFO platform started roles="[api worker]"`). Errors are logged by code only; connection strings, credentials, causes and payloads are never logged. On exit 1 the last line is `ERROR GoPager exited code=<CODE>`.
+
+**Correlating a client error with the log.** Every API error response carries a fresh `requestId` (see [HTTP API](http-api.md#errors)). The same response writes one log line, `API error response code=<CODE> status=<HTTP status> requestId=<UUID>`, at `ERROR` level for 5xx and `INFO` level for 4xx. To find out what happened to a failed request, search the log for the `requestId` the client reports. The line carries only these three values: no request, body, credential or private cause. The cause itself is deliberately not logged (see above), so the `code` is the diagnosis; for `STORAGE_UNAVAILABLE` and `AUTHORITY_UNAVAILABLE` also check the platform readiness lines.
 
 | Code | Typical operational cause |
 | --- | --- |
@@ -216,7 +259,7 @@ Logs are written to stderr by Go's default `log/slog` handler (`2026/11/05 23:54
 | `COMMIT_UNCERTAIN` | Connection lost during commit; outcome unknown |
 | `INTERNAL_ERROR` | Any other failure, including listener bind errors |
 
-Log lines in use: `platform started`, `platform readiness check failed`, `platform role stopped`, `GoPager exited`, the worker retry warnings `Processing dispatch selection failed; retrying` and `correction runner storage failure; retrying` with their recovery lines `Processing dispatch selection recovered` and `correction runner recovered`, and the warning `operator approved a remote database connection without certificate-verified TLS`.
+Log lines in use: `platform started`, `API error response`, `platform readiness check failed`, `platform role stopped`, `GoPager exited`, the worker retry warnings `Processing dispatch selection failed; retrying` and `correction runner storage failure; retrying` with their recovery lines `Processing dispatch selection recovered` and `correction runner recovered`, and the warning `operator approved a remote database connection without certificate-verified TLS`.
 
 ## Database TLS
 
@@ -229,7 +272,7 @@ Log lines in use: `platform started`, `platform readiness check failed`, `platfo
 
 ## Plugin Directory
 
-`--processing-artifact-root` (or `GOPAGER_PROCESSING_ARTIFACT_ROOT`) names a local directory of plugin manifests and executables. All file access is confined to this directory. Executables must be regular files with an executable bit, at most 256 MiB, and match the SHA-256 digest in their manifest. Plugin processes are started on demand and receive only `PATH`, `HOME`, `LANG`, `LC_ALL`, `TZ` and `TMPDIR` from GoPager's environment — never `GOPAGER_DATABASE_URL`.
+`--processing-artifact-root` (or `GOPAGER_PROCESSING_ARTIFACT_ROOT`) names a local directory of plugin manifests and executables. All file access is confined to this directory. Executables must be regular files with an executable bit, at most 256 MiB, and match the SHA-256 digest in their manifest. Plugin processes are started on demand (verified against the pinned digest at every start), reused by later runs of the same instance revision, stopped after 5 minutes without calls, and receive only `PATH`, `HOME`, `LANG`, `LC_ALL`, `TZ` and `TMPDIR` from GoPager's environment — never `GOPAGER_DATABASE_URL`.
 
 Without a plugin directory GoPager runs normally; creating, inspecting or executing plugin instances fails with `AUTHORITY_UNAVAILABLE`. Configure the same directory contents on every `api` and `worker` process. Manifest format and installation: [Plugins](plugins.md); configuring instances: [Workflows](workflows.md).
 
@@ -248,7 +291,10 @@ The total deadline is 30 s. Exceeding it, or any role failure during the run, yi
 - **Public origin.** `--public-origin` is the single source for cookie and CSRF origin policy. `Host` and `X-Forwarded-*` headers are ignored. Set it to the exact origin users type into the browser (e.g. `https://pager.example.org`); default ports `80`/`443` are normalized away.
 - **Session cookie.** `gopager_session`, host-only, `Path=/`, `HttpOnly`, `SameSite=Lax`, `Secure` when the public origin is `https://`. Behind an HTTPS proxy, use the `https://` origin even though GoPager itself listens on HTTP.
 - **Browser requests.** Login and cookie-authenticated state-changing requests require a single `Origin` header equal to the public origin; state-changing requests also require `X-CSRF-Token`. API keys use `Authorization: Bearer …` and are not subject to origin checks. Details: [HTTP API](http-api.md).
-- **Login rate limits.** Per normalized username and per instance, per minute (`--login-attempts-per-account`, `--login-attempts-per-instance`). Limits are not keyed by client IP. Rejections return a retry interval.
+- **Login rate limits.** Three per-minute buckets, checked in this order: per instance (`--login-attempts-per-instance`), per client source (`--login-attempts-per-source`) and per normalized username (`--login-attempts-per-account`). The source bucket stops one client from trying many usernames and from exhausting the instance bucket, which would lock every operator out. The account bucket is not keyed by address, so an attacker cannot block a user's login from the user's own address by guessing from another. Rejections return `RATE_LIMITED` with a retry interval; rejected attempts are not counted again. Only hashes of usernames and source addresses are stored.
+- **Client source behind a reverse proxy.** The source is the host part of the TCP peer address; `X-Forwarded-For` and similar headers are ignored because a client can set them to pick its own bucket. Behind a proxy that terminates the connection, every client therefore shares the proxy's address and one source bucket. Either configure the proxy to preserve the client address at connection level, or raise `--login-attempts-per-source` (up to the instance limit) to what all users behind the proxy need. Trusted-proxy header parsing is not implemented.
+- **HTTP timeouts.** The server bounds header reading (5 s), the whole request (30 s), the whole response (60 s) and idle keep-alive connections (120 s), and rejects headers over 64 KiB. Slow clients are disconnected. A future streaming response (server-sent events) must extend its own write deadline per request instead of raising the global value.
+- **Authentication before body.** Gateway intake (`POST /api/v1/transmissions`, `POST /api/v1/gateway/state`) verifies the bearer credential before it reads the request body, so unauthenticated clients cannot make the server buffer payloads.
 - **Transport.** GoPager serves plain HTTP. Restrict `--listen-address` to loopback or a private interface and terminate TLS at a proxy.
 - **Secrets.** Provide `GOPAGER_DATABASE_URL` from a secret store; never pass passwords as arguments. Bootstrap reads the password from stdin only.
 - **Database role.** Day-to-day processes can use `check` mode; reserve DDL privileges for the process or job that runs `apply`, if your setup separates roles.

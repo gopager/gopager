@@ -17,20 +17,32 @@ const (
 	FieldID = "id"
 	// FieldAssignmentRevision holds the string denoting the assignment_revision field in the database.
 	FieldAssignmentRevision = "assignment_revision"
-	// FieldNetworkIds holds the string denoting the network_ids field in the database.
-	FieldNetworkIds = "network_ids"
-	// FieldUnitID holds the string denoting the unit_id field in the database.
-	FieldUnitID = "unit_id"
 	// FieldReason holds the string denoting the reason field in the database.
 	FieldReason = "reason"
+	// FieldNetworkID holds the string denoting the network_id field in the database.
+	FieldNetworkID = "network_id"
+	// FieldProtocol holds the string denoting the protocol field in the database.
+	FieldProtocol = "protocol"
+	// FieldAddressFrom holds the string denoting the address_from field in the database.
+	FieldAddressFrom = "address_from"
+	// FieldAddressTo holds the string denoting the address_to field in the database.
+	FieldAddressTo = "address_to"
+	// FieldAddressText holds the string denoting the address_text field in the database.
+	FieldAddressText = "address_text"
+	// FieldValidFrom holds the string denoting the valid_from field in the database.
+	FieldValidFrom = "valid_from"
+	// FieldValidUntil holds the string denoting the valid_until field in the database.
+	FieldValidUntil = "valid_until"
+	// FieldUnitID holds the string denoting the unit_id field in the database.
+	FieldUnitID = "unit_id"
+	// FieldTransmissionID holds the string denoting the transmission_id field in the database.
+	FieldTransmissionID = "transmission_id"
+	// FieldTargetPosition holds the string denoting the target_position field in the database.
+	FieldTargetPosition = "target_position"
 	// FieldRecordedAt holds the string denoting the recorded_at field in the database.
 	FieldRecordedAt = "recorded_at"
 	// FieldState holds the string denoting the state field in the database.
 	FieldState = "state"
-	// FieldHighWaterAcceptedAt holds the string denoting the high_water_accepted_at field in the database.
-	FieldHighWaterAcceptedAt = "high_water_accepted_at"
-	// FieldHighWaterTransmissionID holds the string denoting the high_water_transmission_id field in the database.
-	FieldHighWaterTransmissionID = "high_water_transmission_id"
 	// FieldCursorAcceptedAt holds the string denoting the cursor_accepted_at field in the database.
 	FieldCursorAcceptedAt = "cursor_accepted_at"
 	// FieldCursorTransmissionID holds the string denoting the cursor_transmission_id field in the database.
@@ -41,8 +53,6 @@ const (
 	FieldLeaseUntil = "lease_until"
 	// FieldFencingToken holds the string denoting the fencing_token field in the database.
 	FieldFencingToken = "fencing_token"
-	// FieldAccessRevision holds the string denoting the access_revision field in the database.
-	FieldAccessRevision = "access_revision"
 	// FieldFailureCode holds the string denoting the failure_code field in the database.
 	FieldFailureCode = "failure_code"
 	// Table holds the table name of the pendingassignmentscope in the database.
@@ -53,19 +63,24 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldAssignmentRevision,
-	FieldNetworkIds,
-	FieldUnitID,
 	FieldReason,
+	FieldNetworkID,
+	FieldProtocol,
+	FieldAddressFrom,
+	FieldAddressTo,
+	FieldAddressText,
+	FieldValidFrom,
+	FieldValidUntil,
+	FieldUnitID,
+	FieldTransmissionID,
+	FieldTargetPosition,
 	FieldRecordedAt,
 	FieldState,
-	FieldHighWaterAcceptedAt,
-	FieldHighWaterTransmissionID,
 	FieldCursorAcceptedAt,
 	FieldCursorTransmissionID,
 	FieldAttempts,
 	FieldLeaseUntil,
 	FieldFencingToken,
-	FieldAccessRevision,
 	FieldFailureCode,
 }
 
@@ -89,6 +104,8 @@ var (
 	Policy ent.Policy
 	// AssignmentRevisionValidator is a validator for the "assignment_revision" field. It is called by the builders before save.
 	AssignmentRevisionValidator func(int64) error
+	// TargetPositionValidator is a validator for the "target_position" field. It is called by the builders before save.
+	TargetPositionValidator func(int) error
 	// DefaultAttempts holds the default value on creation for the "attempts" field.
 	DefaultAttempts int
 	// AttemptsValidator is a validator for the "attempts" field. It is called by the builders before save.
@@ -97,10 +114,6 @@ var (
 	DefaultFencingToken int64
 	// FencingTokenValidator is a validator for the "fencing_token" field. It is called by the builders before save.
 	FencingTokenValidator func(int64) error
-	// DefaultAccessRevision holds the default value on creation for the "access_revision" field.
-	DefaultAccessRevision int64
-	// AccessRevisionValidator is a validator for the "access_revision" field. It is called by the builders before save.
-	AccessRevisionValidator func(int64) error
 	// FailureCodeValidator is a validator for the "failure_code" field. It is called by the builders before save.
 	FailureCodeValidator func(string) error
 	// DefaultID holds the default value on creation for the "id" field.
@@ -128,6 +141,31 @@ func ReasonValidator(r Reason) error {
 		return nil
 	default:
 		return fmt.Errorf("pendingassignmentscope: invalid enum value for reason field: %q", r)
+	}
+}
+
+// Protocol defines the type for the "protocol" enum field.
+type Protocol string
+
+// Protocol values.
+const (
+	ProtocolPocsag Protocol = "pocsag"
+	ProtocolFlex   Protocol = "flex"
+	ProtocolZvei   Protocol = "zvei"
+	ProtocolEas    Protocol = "eas"
+)
+
+func (pr Protocol) String() string {
+	return string(pr)
+}
+
+// ProtocolValidator is a validator for the "protocol" field enum values. It is called by the builders before save.
+func ProtocolValidator(pr Protocol) error {
+	switch pr {
+	case ProtocolPocsag, ProtocolFlex, ProtocolZvei, ProtocolEas:
+		return nil
+	default:
+		return fmt.Errorf("pendingassignmentscope: invalid enum value for protocol field: %q", pr)
 	}
 }
 
@@ -173,14 +211,59 @@ func ByAssignmentRevision(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAssignmentRevision, opts...).ToFunc()
 }
 
+// ByReason orders the results by the reason field.
+func ByReason(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReason, opts...).ToFunc()
+}
+
+// ByNetworkID orders the results by the network_id field.
+func ByNetworkID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldNetworkID, opts...).ToFunc()
+}
+
+// ByProtocol orders the results by the protocol field.
+func ByProtocol(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProtocol, opts...).ToFunc()
+}
+
+// ByAddressFrom orders the results by the address_from field.
+func ByAddressFrom(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAddressFrom, opts...).ToFunc()
+}
+
+// ByAddressTo orders the results by the address_to field.
+func ByAddressTo(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAddressTo, opts...).ToFunc()
+}
+
+// ByAddressText orders the results by the address_text field.
+func ByAddressText(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAddressText, opts...).ToFunc()
+}
+
+// ByValidFrom orders the results by the valid_from field.
+func ByValidFrom(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldValidFrom, opts...).ToFunc()
+}
+
+// ByValidUntil orders the results by the valid_until field.
+func ByValidUntil(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldValidUntil, opts...).ToFunc()
+}
+
 // ByUnitID orders the results by the unit_id field.
 func ByUnitID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUnitID, opts...).ToFunc()
 }
 
-// ByReason orders the results by the reason field.
-func ByReason(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldReason, opts...).ToFunc()
+// ByTransmissionID orders the results by the transmission_id field.
+func ByTransmissionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTransmissionID, opts...).ToFunc()
+}
+
+// ByTargetPosition orders the results by the target_position field.
+func ByTargetPosition(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTargetPosition, opts...).ToFunc()
 }
 
 // ByRecordedAt orders the results by the recorded_at field.
@@ -191,16 +274,6 @@ func ByRecordedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByState orders the results by the state field.
 func ByState(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldState, opts...).ToFunc()
-}
-
-// ByHighWaterAcceptedAt orders the results by the high_water_accepted_at field.
-func ByHighWaterAcceptedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldHighWaterAcceptedAt, opts...).ToFunc()
-}
-
-// ByHighWaterTransmissionID orders the results by the high_water_transmission_id field.
-func ByHighWaterTransmissionID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldHighWaterTransmissionID, opts...).ToFunc()
 }
 
 // ByCursorAcceptedAt orders the results by the cursor_accepted_at field.
@@ -226,11 +299,6 @@ func ByLeaseUntil(opts ...sql.OrderTermOption) OrderOption {
 // ByFencingToken orders the results by the fencing_token field.
 func ByFencingToken(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldFencingToken, opts...).ToFunc()
-}
-
-// ByAccessRevision orders the results by the access_revision field.
-func ByAccessRevision(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldAccessRevision, opts...).ToFunc()
 }
 
 // ByFailureCode orders the results by the failure_code field.

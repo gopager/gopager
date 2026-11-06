@@ -4,6 +4,7 @@ package ent
 
 import (
 	"encoding/json"
+	"encoding/json/jsontext"
 	"fmt"
 	"strings"
 	"time"
@@ -30,7 +31,7 @@ type Gateway struct {
 	// LastTransmissionAt holds the value of the "last_transmission_at" field.
 	LastTransmissionAt *time.Time `json:"last_transmission_at,omitempty"`
 	// LastReport holds the value of the "last_report" field.
-	LastReport   json.RawMessage `json:"-"`
+	LastReport   jsontext.Value `json:"-"`
 	selectValues sql.SelectValues
 }
 

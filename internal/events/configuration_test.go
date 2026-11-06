@@ -11,6 +11,7 @@ import (
 )
 
 func TestConfigurationFactsKeepSeparateTypedProducerAndNonsecretEnvelope(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 10, 28, 12, 0, 0, 123000, time.UTC)
 	for _, aggregate := range []string{"unit", "unitCollection", "addressRule"} {
 		fact := ConfigurationFact{ID: uuid.New(), Aggregate: EntityRef{Type: aggregate, ID: uuid.New()},

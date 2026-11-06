@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/assignments"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
 	"github.com/gopager/gopager/internal/protocols"
+	"github.com/gopager/gopager/internal/units"
 )
 
 type testTx struct{ ctx context.Context }
@@ -122,6 +122,7 @@ func findField(fields []processing.CapturedField, path ...string) (processing.Ca
 }
 
 func TestSyntheticOwnerCapturesEveryFrozenForm(t *testing.T) {
+	t.Parallel()
 	unit := uuid.New()
 	allowed := testAuthority("payload", "gateway", "address", "unit")
 	cases := []struct {
@@ -143,6 +144,7 @@ func TestSyntheticOwnerCapturesEveryFrozenForm(t *testing.T) {
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			protocol := protocols.Protocol("pocsag")
 			switch test.name[:4] {
 			case "flex":
@@ -176,6 +178,7 @@ func TestSyntheticOwnerCapturesEveryFrozenForm(t *testing.T) {
 }
 
 func TestSyntheticOwnerUsesMatcherAndWorkflowUnitScope(t *testing.T) {
+	t.Parallel()
 	unit := uuid.New()
 	owner, network, tx := testOwner(protocols.POCSAG, &unit)
 	authority := testAuthority("payload", "gateway", "address", "unit")
@@ -196,15 +199,16 @@ func TestSyntheticOwnerUsesMatcherAndWorkflowUnitScope(t *testing.T) {
 	}
 }
 
-func TestSyntheticOwnerMasksMissingFieldRightsAndFailsClosedWithoutNetwork(t *testing.T) {
+func TestSyntheticOwnerCapturesEveryFieldRegardlessOfEditorRightsAndFailsClosedWithoutNetwork(t *testing.T) {
+	t.Parallel()
 	owner, network, tx := testOwner(protocols.POCSAG, nil)
 	authority := testAuthority("payload")
 	raw := replaceNetworkID(`{"schemaVersion":1,"protocol":"pocsag","form":"text","networkId":"NETWORK","payload":{"value":"x"},"targets":[]}`, network.ID)
 	projection, _ := capture(t, owner, network, tx, authority, testWorkflow(authz.Scope{Kind: "all"}), raw)
 	name, ok := findField(projection.Fields, "network", "name")
 	text, textOK := findField(projection.Fields, "payload", "text", "value")
-	if !ok || name.Field.State != processing.FieldHidden || !textOK || text.Field.State != processing.FieldPresent {
-		t.Fatalf("field rights were not applied independently: %+v %+v", name, text)
+	if !ok || name.Field.State != processing.FieldPresent || !textOK || text.Field.State != processing.FieldPresent {
+		t.Fatalf("capture depended on the editor's field rights: %+v %+v", name, text)
 	}
 	missing, err := NewOwner(testMatcher{}, nil, testClock{now: time.Now()}, nil)
 	if err != nil {
@@ -223,6 +227,7 @@ func TestSyntheticOwnerMasksMissingFieldRightsAndFailsClosedWithoutNetwork(t *te
 }
 
 func TestSyntheticOwnerRejectsUnfrozenInputAndOutOfScopeNetwork(t *testing.T) {
+	t.Parallel()
 	owner, network, tx := testOwner(protocols.POCSAG, nil)
 	authority := testAuthority("payload", "gateway", "address", "unit")
 	workflow := testWorkflow(authz.Scope{Kind: "network", References: []string{uuid.NewString()}})
@@ -260,6 +265,7 @@ func (m *fixedMatcher) MatchTargets(context.Context, platform.TransactionContext
 }
 
 func TestSyntheticUnionDeclarationsRemainAvailableAcrossForms(t *testing.T) {
+	t.Parallel()
 	owner, network, tx := testOwner(protocols.POCSAG, nil)
 	projection, _ := capture(t, owner, network, tx, testAuthority("payload", "gateway"),
 		testWorkflow(authz.Scope{Kind: "all"}),
@@ -311,6 +317,7 @@ func TestSyntheticUnionDeclarationsRemainAvailableAcrossForms(t *testing.T) {
 }
 
 func TestSyntheticRecheckRejectsNetworkUnitAndFieldChanges(t *testing.T) {
+	t.Parallel()
 	owner, network, tx := testOwner(protocols.POCSAG, nil)
 	unit := uuid.New()
 	matcher := &fixedMatcher{result: assignments.MatchResult{Revision: 7,
@@ -368,6 +375,7 @@ func TestSyntheticRecheckRejectsNetworkUnitAndFieldChanges(t *testing.T) {
 }
 
 func TestSyntheticUnitScopeDoesNotReturnSiblingTargetContext(t *testing.T) {
+	t.Parallel()
 	owner, network, tx := testOwner(protocols.POCSAG, nil)
 	unit, sibling := uuid.New(), uuid.New()
 	owner.matcher = &fixedMatcher{result: assignments.MatchResult{Revision: 7,

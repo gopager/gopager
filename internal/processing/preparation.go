@@ -69,10 +69,6 @@ type preparationArtifactTracker struct {
 	artifacts []*InstalledArtifact
 }
 
-type preparationPreviewArtifactTracker struct {
-	*preparationArtifactTracker
-}
-
 func (t *preparationArtifactTracker) PrepareInstalled(ctx context.Context, id uuid.UUID, revision int64) (*InstalledArtifact, error) {
 	artifact, err := t.owner.PrepareInstalled(ctx, id, revision)
 	if artifact != nil {
@@ -81,21 +77,6 @@ func (t *preparationArtifactTracker) PrepareInstalled(ctx context.Context, id uu
 		t.mu.Unlock()
 	}
 	return artifact, err
-}
-
-func (t preparationPreviewArtifactTracker) PrepareInstalledPreview(ctx context.Context, id uuid.UUID,
-	revision int64) (*InstalledArtifact, bool, error) {
-	owner, ok := t.owner.(InstalledPreviewArtifacts)
-	if !ok {
-		return nil, false, capabilityUnavailable(errors.New("dedicated preview artifact owner unavailable"))
-	}
-	artifact, configured, err := owner.PrepareInstalledPreview(ctx, id, revision)
-	if artifact != nil {
-		t.mu.Lock()
-		t.artifacts = append(t.artifacts, artifact)
-		t.mu.Unlock()
-	}
-	return artifact, configured, err
 }
 
 func (t *preparationArtifactTracker) close(ctx context.Context) error {
@@ -124,11 +105,7 @@ func (p *WorkflowDefinitionPreparer) PrepareWorkflow(ctx context.Context, defini
 		return p.CompileWorkflow(ctx, definition, nil)
 	}
 	tracker := &preparationArtifactTracker{owner: p.artifacts}
-	var artifacts InstalledArtifacts = tracker
-	if _, ok := p.artifacts.(InstalledPreviewArtifacts); ok {
-		artifacts = preparationPreviewArtifactTracker{tracker}
-	}
-	program, err := p.CompileWorkflow(ctx, definition, artifacts)
+	program, err := p.CompileWorkflow(ctx, definition, tracker)
 	if err != nil {
 		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
 		defer cancel()

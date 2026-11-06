@@ -28,6 +28,20 @@ const (
 	FieldMatchedRuleID = "matched_rule_id"
 	// FieldAssignmentRevision holds the string denoting the assignment_revision field in the database.
 	FieldAssignmentRevision = "assignment_revision"
+	// FieldNetworkID holds the string denoting the network_id field in the database.
+	FieldNetworkID = "network_id"
+	// FieldProtocol holds the string denoting the protocol field in the database.
+	FieldProtocol = "protocol"
+	// FieldObservedAt holds the string denoting the observed_at field in the database.
+	FieldObservedAt = "observed_at"
+	// FieldAcceptedAt holds the string denoting the accepted_at field in the database.
+	FieldAcceptedAt = "accepted_at"
+	// FieldAddressNumber holds the string denoting the address_number field in the database.
+	FieldAddressNumber = "address_number"
+	// FieldAddressText holds the string denoting the address_text field in the database.
+	FieldAddressText = "address_text"
+	// FieldFunction holds the string denoting the function field in the database.
+	FieldFunction = "function"
 	// Table holds the table name of the transmissiontarget in the database.
 	Table = "transmission_targets"
 )
@@ -42,6 +56,13 @@ var Columns = []string{
 	FieldUnitID,
 	FieldMatchedRuleID,
 	FieldAssignmentRevision,
+	FieldNetworkID,
+	FieldProtocol,
+	FieldObservedAt,
+	FieldAcceptedAt,
+	FieldAddressNumber,
+	FieldAddressText,
+	FieldFunction,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -94,6 +115,31 @@ func ResolutionStatusValidator(rs ResolutionStatus) error {
 	}
 }
 
+// Protocol defines the type for the "protocol" enum field.
+type Protocol string
+
+// Protocol values.
+const (
+	ProtocolPocsag Protocol = "pocsag"
+	ProtocolFlex   Protocol = "flex"
+	ProtocolZvei   Protocol = "zvei"
+	ProtocolEas    Protocol = "eas"
+)
+
+func (pr Protocol) String() string {
+	return string(pr)
+}
+
+// ProtocolValidator is a validator for the "protocol" field enum values. It is called by the builders before save.
+func ProtocolValidator(pr Protocol) error {
+	switch pr {
+	case ProtocolPocsag, ProtocolFlex, ProtocolZvei, ProtocolEas:
+		return nil
+	default:
+		return fmt.Errorf("transmissiontarget: invalid enum value for protocol field: %q", pr)
+	}
+}
+
 // OrderOption defines the ordering options for the TransmissionTarget queries.
 type OrderOption func(*sql.Selector)
 
@@ -130,4 +176,39 @@ func ByMatchedRuleID(opts ...sql.OrderTermOption) OrderOption {
 // ByAssignmentRevision orders the results by the assignment_revision field.
 func ByAssignmentRevision(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAssignmentRevision, opts...).ToFunc()
+}
+
+// ByNetworkID orders the results by the network_id field.
+func ByNetworkID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldNetworkID, opts...).ToFunc()
+}
+
+// ByProtocol orders the results by the protocol field.
+func ByProtocol(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProtocol, opts...).ToFunc()
+}
+
+// ByObservedAt orders the results by the observed_at field.
+func ByObservedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldObservedAt, opts...).ToFunc()
+}
+
+// ByAcceptedAt orders the results by the accepted_at field.
+func ByAcceptedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAcceptedAt, opts...).ToFunc()
+}
+
+// ByAddressNumber orders the results by the address_number field.
+func ByAddressNumber(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAddressNumber, opts...).ToFunc()
+}
+
+// ByAddressText orders the results by the address_text field.
+func ByAddressText(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAddressText, opts...).ToFunc()
+}
+
+// ByFunction orders the results by the function field.
+func ByFunction(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldFunction, opts...).ToFunc()
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/gopager/gopager/internal/testutil/passwords"
 	"math"
 	"reflect"
 	"slices"
@@ -15,7 +16,6 @@ import (
 
 	"entgo.io/ent/entql"
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/assignments"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/commands"
@@ -36,41 +36,51 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
 	"github.com/gopager/gopager/internal/protocols"
+	"github.com/gopager/gopager/internal/units"
 )
+
+// fixtureNetwork is one declared standalone Network: its Protocol and its Agency.
+type fixtureNetwork struct {
+	protocol protocols.Protocol
+	agency   uuid.UUID
+}
 
 // matcherOwners supplies declared standalone fixture Networks, not production Intake composition.
 type matcherOwners struct {
 	identity *identitystore.Store
 	units    *unitstore.Store
-	networks map[uuid.UUID]protocols.Protocol
+	networks map[uuid.UUID]fixtureNetwork
 }
 
-func (o matcherOwners) ReadNetworkProtocol(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (protocols.Protocol, error) {
+func (o matcherOwners) ReadNetwork(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (protocols.Protocol, uuid.UUID, error) {
 	value, found := o.networks[id]
 	if !found {
-		return "", authz.ErrNotFound
+		return "", uuid.Nil, authz.ErrNotFound
 	}
-	return value, ctx.Err()
+	return value.protocol, value.agency, ctx.Err()
 }
 
-func (o matcherOwners) ScopeExists(ctx context.Context, tx platform.TransactionContext, scope authz.Scope) (bool, error) {
-	switch scope.Kind {
-	case "unit", "unitCollection":
-		return o.units.ScopeExists(ctx, tx, scope)
-	case "network":
-		for _, reference := range scope.References {
-			id, err := uuid.Parse(reference)
-			if err != nil {
-				return false, err
-			}
-			if _, found := o.networks[id]; !found {
-				return false, nil
-			}
+func (o matcherOwners) ReadUnitContext(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (units.Context, error) {
+	return o.units.ReadUnitContext(ctx, tx, id)
+}
+
+func (o matcherOwners) ScopesExist(ctx context.Context, tx platform.TransactionContext, scopes []authz.Scope) ([]bool, error) {
+	result := make([]bool, len(scopes))
+	for i, scope := range scopes {
+		var existing []bool
+		var err error
+		switch scope.Kind {
+		case "unit", "unitCollection", "agency":
+			existing, err = o.units.ScopesExist(ctx, tx, []authz.Scope{scope})
+		default:
+			existing, err = o.identity.ScopesExist(ctx, tx, []authz.Scope{scope})
 		}
-		return true, ctx.Err()
-	default:
-		return o.identity.ScopeExists(ctx, tx, scope)
+		if err != nil {
+			return nil, err
+		}
+		result[i] = existing[0]
 	}
+	return result, nil
 }
 
 type matcherFixture struct {
@@ -86,6 +96,9 @@ type matcherFixture struct {
 	proof     identity.Proof
 	principal uuid.UUID
 	networks  []uuid.UUID
+	// agencies[0] owns networks[0]; agencies[1] owns networks[1] and networks[2]; agency is agencies[0].
+	agencies [2]uuid.UUID
+	agency   uuid.UUID
 }
 
 type staleUnitSaveRepository struct {
@@ -135,22 +148,42 @@ func newMatcherFixture(t *testing.T) matcherFixture {
 		t.Fatal(err)
 	}
 	networks := []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}
+	agencies := [2]uuid.UUID{uuid.New(), uuid.New()}
+	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO agencies(id,name) VALUES($1,'Fixture agency A'),($2,'Fixture agency B')`,
+			agencies[0], agencies[1]); err != nil {
+			return err
+		}
+		// Rule scoping resolves a Network's Agency through the networks table, so the fixture
+		// Networks exist as rows and not only in the fake owner.
+		_, err = executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol,agency_id) VALUES
+			($1,'Fixture POCSAG A','pocsag',$4),($2,'Fixture POCSAG B','pocsag',$5),($3,'Fixture FLEX B','flex',$5)`,
+			networks[0], networks[1], networks[2], agencies[0], agencies[1])
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
 	owners := matcherOwners{identity: repository, units: unitRepository,
-		networks: map[uuid.UUID]protocols.Protocol{networks[0]: protocols.POCSAG, networks[1]: protocols.POCSAG, networks[2]: protocols.FLEX}}
+		networks: map[uuid.UUID]fixtureNetwork{networks[0]: {protocols.POCSAG, agencies[0]},
+			networks[1]: {protocols.POCSAG, agencies[1]}, networks[2]: {protocols.FLEX, agencies[1]}}}
 	resolver, err := identity.NewResolver(repository, store, owners)
 	if err != nil {
 		t.Fatal(err)
 	}
 	principal, err := identity.Bootstrap(t.Context(), store, repository, store, facts, "Operator", "initial-password",
-		identity.BootstrapPermissions{Actions: authz.Actions(), Fields: []string{"unit", "address"}})
+		identity.BootstrapPermissions{Actions: authz.Actions(), Fields: []string{"unit", "address"}}, passwords.Option())
 	if err != nil {
 		t.Fatal(err)
 	}
-	login, err := identity.NewLoginService(store, resolver, repository, facts, identity.DefaultLoginRateLimits())
+	login, err := identity.NewLoginService(store, resolver, repository, facts, identity.DefaultLoginRateLimits(), passwords.Option())
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := login.AuthenticateLocal(t.Context(), "operator", "initial-password")
+	session, err := login.AuthenticateLocal(t.Context(), "test-source", "operator", "initial-password")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +197,8 @@ func newMatcherFixture(t *testing.T) matcherFixture {
 	}
 	return matcherFixture{store: store, units: unitService, rules: ruleService, unitStore: unitRepository,
 		ruleStore: ruleRepository, resolver: resolver, owners: owners, facts: facts, receipts: receipts,
-		proof: identity.Proof{Kind: identity.SessionProof, Secret: session.Secret}, principal: principal, networks: networks}
+		proof: identity.Proof{Kind: identity.SessionProof, Secret: session.Secret}, principal: principal, networks: networks,
+		agencies: agencies, agency: agencies[0]}
 }
 
 // checkedMutation represents successful fixture-only transport validation, not a production bypass.
@@ -209,9 +243,10 @@ func (f failingConfigurationFacts) AppendMasterDataFact(context.Context, platfor
 }
 
 func TestCurrentMatcherAtomicCreationRetryPreviewAndRollback(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	command := uuid.New()
-	input := units.UnitInput{Name: "Station", CollectionIDs: []uuid.UUID{}}
+	input := units.UnitInput{AgencyID: f.agency, Name: "Station", CollectionIDs: []uuid.UUID{}}
 	unit, err := f.units.CreateUnit(t.Context(), f.proof, command, input, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
@@ -255,8 +290,9 @@ func TestCurrentMatcherAtomicCreationRetryPreviewAndRollback(t *testing.T) {
 }
 
 func TestCurrentMatcherSelectionCandidatesAndDeletionInvalidation(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
-	unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{Name: "Station"}, checkedMutation)
+	unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{AgencyID: f.agency, Name: "Station"}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,13 +317,6 @@ func TestCurrentMatcherSelectionCandidatesAndDeletionInvalidation(t *testing.T) 
 			result.Resolutions[2].UnitID != nil || result.UnitContext[unit.ID].ID != unit.ID {
 			t.Fatal("positions, captured revision or explicit unassigned context changed")
 		}
-		candidates, err := f.rules.NetworksWithMatches(tx.Context(), tx, []uuid.UUID{f.networks[0], f.networks[2]}, protocols.POCSAG, observed, targets)
-		if err != nil {
-			return err
-		}
-		if !reflect.DeepEqual(candidates.Networks, []uuid.UUID{f.networks[0]}) || candidates.Revision != result.Revision {
-			t.Fatalf("candidate search widened Gateway Network set: %+v", candidates)
-		}
 		return nil
 	})
 	if err != nil {
@@ -298,11 +327,11 @@ func TestCurrentMatcherSelectionCandidatesAndDeletionInvalidation(t *testing.T) 
 		t.Fatalf("Unit deletion did not retain pending correction: %v", err)
 	}
 	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		exists, err := f.unitStore.ScopeExists(tx.Context(), tx, authz.Scope{Kind: "unit", References: []string{unit.ID.String()}})
+		existing, err := f.unitStore.ScopesExist(tx.Context(), tx, []authz.Scope{{Kind: "unit", References: []string{unit.ID.String()}}})
 		if err != nil {
 			return err
 		}
-		if exists {
+		if existing[0] {
 			t.Fatal("deleted Unit still authorizes a restricting scope")
 		}
 		result, err := f.rules.MatchTargets(tx.Context(), tx, f.networks[0], protocols.POCSAG, observed, targets)
@@ -334,13 +363,14 @@ func TestCurrentMatcherSelectionCandidatesAndDeletionInvalidation(t *testing.T) 
 }
 
 func TestCurrentMatcherConcurrentConflictsAndCollectionDetach(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	collection, err := f.units.CreateCollection(t.Context(), f.proof, uuid.New(), "Stations", checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
 	unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
-		units.UnitInput{Name: "Station", CollectionIDs: []uuid.UUID{collection.ID}}, checkedMutation)
+		units.UnitInput{AgencyID: f.agency, Name: "Station", CollectionIDs: []uuid.UUID{collection.ID}}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -410,16 +440,18 @@ func replaceManagementGrants(t *testing.T, f matcherFixture, grants []authz.Gran
 }
 
 func TestCurrentMatcherNativeFilteringAndAllUseChecks(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	collection, err := f.units.CreateCollection(t.Context(), f.proof, uuid.New(), "Shared", checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
-	shared, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{Name: "Shared", CollectionIDs: []uuid.UUID{collection.ID}}, checkedMutation)
+	shared, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{AgencyID: f.agency, Name: "Shared", CollectionIDs: []uuid.UUID{collection.ID}}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
-	hidden, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{Name: "Hidden"}, checkedMutation)
+	hidden, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
+		units.UnitInput{AgencyID: f.agencies[1], Name: "Hidden", CollectionIDs: []uuid.UUID{collection.ID}}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -434,7 +466,7 @@ func TestCurrentMatcherNativeFilteringAndAllUseChecks(t *testing.T) {
 	}
 	replaceManagementGrants(t, f, []authz.Grant{{
 		Actions: []string{"unit.read", "unit.update", "unit-collection.read", "unit-collection.update", "unit-collection.delete", "address-rule.read", "address-rule.create"},
-		Scope:   authz.Scope{Kind: "network", References: []string{f.networks[0].String()}},
+		Scope:   authz.Scope{Kind: "agency", References: []string{f.agencies[0].String()}},
 	}})
 	page, err := f.units.ListUnits(t.Context(), f.proof, units.PageInput{Offset: 1, Limit: 1})
 	if err != nil || page.Total != 1 || len(page.Items) != 0 {
@@ -447,11 +479,12 @@ func TestCurrentMatcherNativeFilteringAndAllUseChecks(t *testing.T) {
 	if _, err := f.units.ReadUnit(t.Context(), f.proof, hidden.ID); !errors.Is(err, authz.ErrNotFound) {
 		t.Fatalf("hidden Unit existence exposed: %v", err)
 	}
-	before := configurationCounts(t, f)
+	// A Unit alerted through another Agency's Network is still governed by its own Agency alone.
 	if _, err := f.units.ChangeUnit(t.Context(), f.proof, shared.ID, shared.Revision,
-		units.UnitInput{Name: "unauthorized shared rename", CollectionIDs: []uuid.UUID{collection.ID}}, checkedMutation); !errors.Is(err, authz.ErrForbidden) {
-		t.Fatalf("shared hidden Network use permitted rename: %v", err)
+		units.UnitInput{AgencyID: f.agency, Name: "Shared renamed", CollectionIDs: []uuid.UUID{collection.ID}}, checkedMutation); err != nil {
+		t.Fatalf("own-Agency Unit rename refused because of a foreign Network use: %v", err)
 	}
+	before := configurationCounts(t, f)
 	if _, err := f.units.DeleteCollection(t.Context(), f.proof, collection.ID, collection.Revision, checkedMutation); !errors.Is(err, authz.ErrForbidden) {
 		t.Fatalf("collection deletion skipped hidden member use: %v", err)
 	}
@@ -493,6 +526,7 @@ func restrictingManagementKey(t *testing.T, f matcherFixture, restrictions *auth
 }
 
 func TestCurrentMatcherNativeMixedScopesAndRestrictingKeysMatchPointDecisions(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	collection, err := f.units.CreateCollection(t.Context(), f.proof, uuid.New(), "Shared", checkedMutation)
 	if err != nil {
@@ -505,15 +539,15 @@ func TestCurrentMatcherNativeMixedScopesAndRestrictingKeysMatchPointDecisions(t 
 		if i != 1 {
 			memberships = append(memberships, collection.ID)
 		}
-		unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{Name: "Station", CollectionIDs: memberships}, checkedMutation)
+		network, agency := f.networks[1], f.agencies[1]
+		if i == 0 {
+			network, agency = f.networks[0], f.agencies[0]
+		}
+		unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{AgencyID: agency, Name: "Station", CollectionIDs: memberships}, checkedMutation)
 		if err != nil {
 			t.Fatal(err)
 		}
 		ids[i] = unit.ID
-		network := f.networks[1]
-		if i == 0 {
-			network = f.networks[0]
-		}
 		input := ruleInput(network, unit.ID, uint64(10+i*10), uint64(10+i*10))
 		input.Enabled = i != 0
 		rule, err := f.rules.CreateRule(t.Context(), f.proof, uuid.New(), input, checkedMutation)
@@ -524,12 +558,12 @@ func TestCurrentMatcherNativeMixedScopesAndRestrictingKeysMatchPointDecisions(t 
 	}
 	actions := []string{"unit.read", "address-rule.read", "address-rule.create"}
 	replaceManagementGrants(t, f, []authz.Grant{
-		{Actions: actions, Scope: authz.Scope{Kind: "network", References: []string{f.networks[0].String()}}},
+		{Actions: actions, Scope: authz.Scope{Kind: "agency", References: []string{f.agencies[0].String()}}},
 		{Actions: actions, Scope: authz.Scope{Kind: "unit", References: []string{ids[1].String()}}},
 		{Actions: actions, Scope: authz.Scope{Kind: "unitCollection", References: []string{collection.ID.String()}}},
 	})
 	for _, scope := range []authz.Scope{
-		{Kind: "network", References: []string{f.networks[1].String()}},
+		{Kind: "agency", References: []string{f.agencies[1].String()}},
 		{Kind: "unitCollection", References: []string{collection.ID.String()}},
 		{Kind: "unit", References: []string{ids[0].String()}},
 	} {
@@ -549,11 +583,7 @@ func TestCurrentMatcherNativeMixedScopesAndRestrictingKeysMatchPointDecisions(t 
 				if err != nil {
 					return err
 				}
-				networks, err := f.ruleStore.NetworksForUnit(tx.Context(), tx, id)
-				if err != nil {
-					return err
-				}
-				target := authz.Target{NetworkID: networks[0], UnitID: id, UnitCollections: unit.CollectionIDs}
+				target := authz.Target{AgencyID: unit.AgencyID, UnitID: id, UnitCollections: unit.CollectionIDs}
 				if err := authz.Authorize(authentication.Authority, "unit.read", []string{"unit"}, target, now); err == nil {
 					expectedUnits = append(expectedUnits, id)
 				} else if !errors.Is(err, authz.ErrForbidden) {
@@ -585,87 +615,79 @@ func TestCurrentMatcherNativeMixedScopesAndRestrictingKeysMatchPointDecisions(t 
 			}
 		}
 		if scope.Kind == "unit" {
-			if err := f.rules.Preview(t.Context(), proof, uuid.Nil, 0, ruleInput(f.networks[1], ids[0], 20, 20), nil); !errors.Is(err, assignments.ErrRuleConflict) {
-				t.Fatalf("hidden conflicting rule was ignored: %v", err)
+			// A Unit grant alone no longer reaches a Network of another Agency, so the preview is
+			// refused before conflicts are evaluated (see TestRuleWritesNeedAuthorityOverTheNetworkAgency).
+			if err := f.rules.Preview(t.Context(), proof, uuid.Nil, 0, ruleInput(f.networks[1], ids[0], 20, 20), nil); !errors.Is(err, authz.ErrForbidden) {
+				t.Fatalf("Unit-scoped key previewed a rule on another Agency's Network: %v", err)
 			}
 		}
 	}
 }
 
-func TestPendingScopeSupersessionAndRebaseRespectAllScopeAndUnitIntersections(t *testing.T) {
+// TestPendingScopesRunIndependentlyWithoutSupersession expects every recorded correction scope
+// to stay queued at its own revision: a later scope on the same or another selector neither
+// supersedes nor rebases earlier ones, because each scope re-resolves against current rules and
+// skips targets a newer scope already restamped.
+func TestPendingScopesRunIndependentlyWithoutSupersession(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
-	mark := func(networks []uuid.UUID, unit *uuid.UUID) int64 {
+	mark := func(scope assignments.CorrectionScope, reason string) int64 {
 		t.Helper()
 		var revision int64
 		if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 			var err error
-			revision, err = f.ruleStore.MarkPending(tx.Context(), tx, networks, unit, "rule-change")
+			revision, err = f.ruleStore.MarkPending(tx.Context(), tx, []assignments.CorrectionScope{scope}, reason)
 			return err
 		}); err != nil {
 			t.Fatal(err)
 		}
 		return revision
 	}
-	state := func(id uuid.UUID) (string, int64) {
-		t.Helper()
-		var got string
-		var revision int64
-		if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-			executor, err := f.store.Resolve(tx)
-			if err != nil {
+	first := mark(networkScope(f.networks[0]), "rule-change")
+	second := mark(networkScope(f.networks[1]), "rule-change")
+	third := mark(networkScope(f.networks[0]), "rule-change")
+	unit := uuid.New()
+	fourth := mark(assignments.UnitScope(unit), "unit-deleted")
+	if second != first+1 || third != second+1 || fourth != third+1 {
+		t.Fatalf("revisions %d %d %d %d are not consecutive", first, second, third, fourth)
+	}
+	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := f.store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		rows, err := executor.QueryContext(tx.Context(), `SELECT assignment_revision,state FROM assignment_pending_scopes
+			WHERE assignment_revision>=$1 ORDER BY assignment_revision`, first)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		var revisions []int64
+		for rows.Next() {
+			var revision int64
+			var state string
+			if err := rows.Scan(&revision, &state); err != nil {
 				return err
 			}
-			return executor.QueryRowContext(tx.Context(), `SELECT state,assignment_revision
-				FROM assignment_pending_scopes WHERE id=$1`, id).Scan(&got, &revision)
-		}); err != nil {
-			t.Fatal(err)
-		}
-		return got, revision
-	}
-	scopeID := func(revision int64) uuid.UUID {
-		t.Helper()
-		var id uuid.UUID
-		if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-			executor, err := f.store.Resolve(tx)
-			if err != nil {
-				return err
+			if state != "queued" {
+				t.Fatalf("scope at revision %d is %s, want queued", revision, state)
 			}
-			return executor.QueryRowContext(tx.Context(), `SELECT id FROM assignment_pending_scopes
-				WHERE assignment_revision=$1`, revision).Scan(&id)
-		}); err != nil {
-			t.Fatal(err)
+			revisions = append(revisions, revision)
 		}
-		return id
-	}
-
-	firstRevision := mark([]uuid.UUID{f.networks[0]}, nil)
-	firstID := scopeID(firstRevision)
-	allRevision := mark(nil, nil)
-	if got, _ := state(firstID); got != "superseded" {
-		t.Fatalf("all-Network scope did not supersede overlapping scope: %s", got)
-	}
-	allID := scopeID(allRevision)
-
-	unitA, unitB := uuid.New(), uuid.New()
-	unitARevision := mark([]uuid.UUID{f.networks[0]}, &unitA)
-	unitAID := scopeID(unitARevision)
-	unitBRevision := mark([]uuid.UUID{f.networks[0]}, &unitB)
-	unitBID := scopeID(unitBRevision)
-	if got, revision := state(allID); got != "superseded" {
-		t.Fatalf("Network/Unit scope did not supersede all-scope job: %s at %d", got, revision)
-	}
-	if got, revision := state(unitAID); got != "queued" || revision != unitBRevision {
-		t.Fatalf("disjoint Unit job was not rebased: %s at %d, want queued at %d", got, revision, unitBRevision)
-	}
-	if got, revision := state(unitBID); got != "queued" || revision != unitBRevision {
-		t.Fatalf("new Unit job has incorrect state/revision: %s at %d", got, revision)
+		if len(revisions) != 4 {
+			t.Fatalf("queued scopes=%v, want all four", revisions)
+		}
+		return rows.Err()
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
 func TestCorrectionLeaseExpiryReclaimsAndFencesPriorToken(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		_, err := f.ruleStore.MarkPending(tx.Context(), tx, []uuid.UUID{f.networks[0]}, nil, "rule-change")
+		_, err := f.ruleStore.MarkPending(tx.Context(), tx, []assignments.CorrectionScope{networkScope(f.networks[0])}, "rule-change")
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -725,15 +747,16 @@ func TestCorrectionLeaseExpiryReclaimsAndFencesPriorToken(t *testing.T) {
 }
 
 func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidence(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	networkID, gatewayID := f.networks[0], uuid.New()
 	unitA, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
-		units.UnitInput{Name: "Station A", CollectionIDs: []uuid.UUID{}}, checkedMutation)
+		units.UnitInput{AgencyID: f.agency, Name: "Station A", CollectionIDs: []uuid.UUID{}}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
 	unitB, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
-		units.UnitInput{Name: "Station B", CollectionIDs: []uuid.UUID{}}, checkedMutation)
+		units.UnitInput{AgencyID: f.agency, Name: "Station B", CollectionIDs: []uuid.UUID{}}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -742,13 +765,14 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 	if err != nil {
 		t.Fatal(err)
 	}
-	function := uint8(1)
-	target := protocols.Target{Address: protocols.NumericAddress(10), Function: &function}
-	original, err := json.Marshal(target)
+	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, f.ruleStore, f.facts, noProcessingReadmission{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	targets, err := json.Marshal([]protocols.Target{target})
+	drainCorrections(t, runner)
+	function := uint8(1)
+	target := protocols.Target{Address: protocols.NumericAddress(10), Function: &function}
+	original, err := json.Marshal(target)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -777,46 +801,38 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 			Scan(&assignmentRevision); err != nil {
 			return err
 		}
-		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO networks (id,name,protocol) VALUES($1,'Test','pocsag')`, networkID); err != nil {
-			return err
-		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateways (id) VALUES($1)`, gatewayID); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateway_networks
-			(id,gateway_id,gateway_network_identifier,network_id,is_default)
-			VALUES($1,$2,'default',$3,true)`, uuid.New(), gatewayID, networkID); err != nil {
+			(id,gateway_id,gateway_network_identifier,network_id,priority)
+			VALUES($1,$2,'default',$3,0)`, uuid.New(), gatewayID, networkID); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO messages
-			(id,identity_form,identity_subtype,identity_value,first_observed_at,last_observed_at,publication_status)
-			VALUES($1,$2,$3,$4,$5,$5,'ready')`, messageID, identitySubmission.Identity.Form,
+			(id,identity_form,identity_subtype,identity_value,first_observed_at,last_observed_at)
+			VALUES($1,$2,$3,$4,$5,$5)`, messageID, identitySubmission.Identity.Form,
 			identitySubmission.Identity.Subtype, identitySubmission.Identity.Value, observed); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO transmissions
-			(id,gateway_id,network_id,submission_id,submission_fingerprint,network_resolution,protocol,payload,targets,
-			 observed_at,observation_offset_seconds,accepted_at,source_revision,message_id,processing_status,publication_status)
-			VALUES($1,$2,$3,$4,$5,'declared','pocsag','{}',$6,$7,0,$8,1,$9,'completed','ready')`,
-			transmissionID, gatewayID, networkID, uuid.NewString(), make([]byte, 32), string(targets),
+			(id,gateway_id,network_id,submission_id,submission_fingerprint,network_resolution,protocol,payload,
+			 observed_at,observation_offset_seconds,accepted_at,source_revision,message_id,processing_status)
+			VALUES($1,$2,$3,$4,$5,'declared','pocsag','{}',$6,0,$7,1,$8,'none')`,
+			transmissionID, gatewayID, networkID, uuid.NewString(), make([]byte, 32),
 			observed, accepted, messageID); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO transmission_targets
-			(transmission_id,position,original,resolution_status,unit_id,matched_rule_id,assignment_revision)
-			VALUES($1,0,$2,'assigned',$3,$4,$5)`,
-			transmissionID, string(original), unitA.ID, rule.ID, assignmentRevision); err != nil {
+			(transmission_id,position,original,resolution_status,unit_id,matched_rule_id,assignment_revision,
+			 network_id,protocol,observed_at,accepted_at,address_number,function)
+			VALUES($1,0,$2,'assigned',$3,$4,$5,$6,'pocsag',$7,$8,10,1)`,
+			transmissionID, string(original), unitA.ID, rule.ID, assignmentRevision, networkID, observed, accepted); err != nil {
 			return err
 		}
-		var contributionID = uuid.New()
-		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO message_contributions
-			(id,message_id,unit_id,contribution_time,age_anchor,ready) VALUES($1,$2,$3,$4,$4,true)`,
-			contributionID, messageID, unitA.ID, observed); err != nil {
-			return err
-		}
-		_, err = executor.ExecContext(tx.Context(), `INSERT INTO contribution_supports
-			(id,contribution_id,transmission_id,target_position,observed_at,accepted_at)
-			VALUES($1,$2,$3,0,$4,$5)`, uuid.New(), contributionID, transmissionID, observed, accepted)
+		_, err = executor.ExecContext(tx.Context(), `INSERT INTO message_units
+			(message_id,unit_id,agency_id,first_observed_at,age_anchor) VALUES($1,$2,$3,$4,$4)`,
+			messageID, unitA.ID, f.agency, observed)
 		return err
 	})
 	if err != nil {
@@ -869,34 +885,18 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 	if err != nil || !claimed {
 		t.Fatalf("r2 correction was not claimed: claimed=%t err=%v", claimed, err)
 	}
-	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		executor, err := f.store.Resolve(tx)
-		if err != nil {
-			return err
-		}
-		var dirty int
-		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM correction_dirty_transmissions
-			WHERE scope_id=$1 AND transmission_id=$2`, oldLease.ID, lateReceipt.TransmissionID).Scan(&dirty); err != nil {
-			return err
-		}
-		if dirty != 1 {
-			t.Fatalf("concurrent intake dirty capture count=%d, want 1", dirty)
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var dirtyItem assignments.CorrectionBatchItem
+	// The late intake was resolved under the new rules and stamped with the new revision, so the
+	// scope selects only the historical Transmission; no dirty capture is needed.
+	var item assignments.CorrectionBatchItem
 	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		items, err := f.ruleStore.ReadCorrectionBatch(tx.Context(), tx, oldLease, 100)
 		if err != nil {
 			return err
 		}
-		if len(items) != 1 || !items[0].Dirty || items[0].TransmissionID != lateReceipt.TransmissionID {
-			t.Fatalf("correction did not select dirty intake: %+v", items)
+		if len(items) != 1 || items[0].TransmissionID != transmissionID {
+			t.Fatalf("correction selected %+v, want only the historical Transmission %s", items, transmissionID)
 		}
-		dirtyItem = items[0]
+		item = items[0]
 		return nil
 	})
 	if err != nil {
@@ -906,7 +906,7 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		var err error
 		staleMatch, err = f.rules.MatchTargets(tx.Context(), tx, networkID, protocols.POCSAG,
-			dirtyItem.ObservedAt, dirtyItem.Targets)
+			item.ObservedAt, item.Targets)
 		return err
 	})
 	if err != nil {
@@ -923,39 +923,31 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 	}); err != nil {
 		t.Fatal(err)
 	}
+	// Correction is system work: an unrelated configuration change (access revision bump) between
+	// claim and apply must not fail the batch.
 	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		_, err := f.ruleStore.ApplyCorrectionBatch(tx.Context(), tx, oldLease,
-			[]assignments.CorrectionUpdate{{Item: dirtyItem, Match: staleMatch}})
+			[]assignments.CorrectionUpdate{{Item: item, Match: staleMatch}})
 		return err
 	})
-	if !errors.Is(err, authz.ErrRevisionConflict) {
-		t.Fatalf("correction applied under a stale access revision: %v", err)
+	if err != nil {
+		t.Fatalf("correction failed after an unrelated access revision change: %v", err)
 	}
+	// Hand the fenced lease back so the runner can claim the scope again at once.
+	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		_, err := f.ruleStore.FailCorrection(tx.Context(), tx, oldLease, "TEST_FENCE", 0)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// A second rule change records its own scope at a newer revision; the older scope is not
+	// superseded and both run against the current rules.
 	if _, err := f.rules.UpdateRule(t.Context(), f.proof, rule.ID, rule.Revision+1,
 		ruleInput(networkID, unitA.ID, 10, 20, 1), checkedMutation); err != nil {
 		t.Fatal(err)
 	}
-	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		_, err := f.ruleStore.ApplyCorrectionBatch(tx.Context(), tx, oldLease,
-			[]assignments.CorrectionUpdate{{Item: dirtyItem, Match: staleMatch}})
-		return err
-	})
-	if !errors.Is(err, authz.ErrRevisionConflict) {
-		t.Fatalf("superseded r2 worker committed derived changes: %v", err)
-	}
-	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		_, err := f.ruleStore.CompleteCorrection(tx.Context(), tx, oldLease)
-		return err
-	})
-	if !errors.Is(err, authz.ErrRevisionConflict) {
-		t.Fatalf("superseded r2 worker was not fenced: %v", err)
-	}
-	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, f.ruleStore, f.facts, noCorrectionPublication{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
-		t.Fatalf("historical correction did not run: worked=%t err=%v", worked, err)
+	if drainCorrections(t, runner) < 2 {
+		t.Fatal("the older and the newer historical correction scope did not both run")
 	}
 	assertCorrected := func(wantUnit uuid.UUID, wantSupport bool) int64 {
 		t.Helper()
@@ -984,21 +976,20 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 			if lateUnitID != wantUnit || !bytes.Equal(lateOriginal, original) {
 				t.Fatalf("r3 did not rebuild the dirty intake target: unit=%s", lateUnitID)
 			}
-			var supports int
-			if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM contribution_supports
-				WHERE transmission_id=$1 AND target_position=0`, transmissionID).Scan(&supports); err != nil {
+			// The Unit's cache row survives while any unsuppressed target supports it; its first
+			// observation moves to the late intake while the historical target is suppressed.
+			var cached int
+			var firstObserved time.Time
+			if err := executor.QueryRowContext(tx.Context(), `SELECT count(*),MIN(first_observed_at) FROM message_units
+				WHERE message_id=$1 AND unit_id=$2`, messageID, wantUnit).Scan(&cached, &firstObserved); err != nil {
 				return err
 			}
-			if wantSupport && supports != 1 || !wantSupport && supports != 0 {
-				t.Fatalf("unexpected support count %d (wantSupport=%t)", supports, wantSupport)
+			wantFirst := observed
+			if !wantSupport {
+				wantFirst = observed.Add(2 * time.Second)
 			}
-			var lateSupports int
-			if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM contribution_supports
-				WHERE transmission_id=$1 AND target_position=0`, lateReceipt.TransmissionID).Scan(&lateSupports); err != nil {
-				return err
-			}
-			if lateSupports != 1 {
-				t.Fatalf("dirty-intake support count=%d, want 1", lateSupports)
+			if cached != 1 || !firstObserved.Equal(wantFirst) {
+				t.Fatalf("cache row for Unit %s: count=%d first=%s, want 1 at %s", wantUnit, cached, firstObserved, wantFirst)
 			}
 			if err := executor.QueryRowContext(tx.Context(), `SELECT revision FROM assignment_control WHERE id=1`).
 				Scan(&revision); err != nil {
@@ -1021,15 +1012,14 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 	}
 	revision := assertCorrected(unitA.ID, true)
 	suppressionCommand := uuid.New()
-	suppressionInput := assignments.CreateSuppressionInput{TransmissionID: transmissionID, TargetPosition: 0,
-		ExpectedAssignmentRevision: revision}
+	suppressionInput := assignments.CreateSuppressionInput{TransmissionID: transmissionID, TargetPosition: 0}
 	suppressed, err := f.rules.CreateSuppression(t.Context(), f.proof, suppressionCommand,
 		suppressionInput, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// A replay after an uncertain commit carries the now-stale expected revision
-	// for an already active suppression and must still return the stored result.
+	// A replay after an uncertain commit finds the suppression already active and must still
+	// return the stored result.
 	beforeReplay := configurationCounts(t, f)
 	replayed, err := f.rules.CreateSuppression(t.Context(), f.proof, suppressionCommand,
 		suppressionInput, checkedMutation)
@@ -1039,14 +1029,14 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 		t.Fatalf("suppression replay did not return the stored result without new state: %v", err)
 	}
 	changedInput := suppressionInput
-	changedInput.ExpectedAssignmentRevision = beforeReplay[6]
+	changedInput.TransmissionID = lateReceipt.TransmissionID
 	if _, err := f.rules.CreateSuppression(t.Context(), f.proof, suppressionCommand,
 		changedInput, checkedMutation); !errors.Is(err, commands.ErrIdempotencyConflict) ||
 		configurationCounts(t, f) != beforeReplay {
 		t.Fatalf("changed suppression input under a reused command ID was not an idempotency conflict: %v", err)
 	}
-	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
-		t.Fatalf("suppression correction did not run: worked=%t err=%v", worked, err)
+	if drainCorrections(t, runner) == 0 {
+		t.Fatal("suppression correction did not run")
 	}
 	revision = assertCorrected(unitA.ID, false)
 	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
@@ -1056,7 +1046,7 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 		}
 		var contributions int
 		var contributionTime time.Time
-		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*),MIN(contribution_time) FROM message_contributions
+		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*),MIN(first_observed_at) FROM message_units
 			WHERE message_id=$1 AND unit_id=$2`, messageID, unitA.ID).Scan(&contributions, &contributionTime); err != nil {
 			return err
 		}
@@ -1072,19 +1062,15 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 		t.Fatal(err)
 	}
 	if _, err := f.rules.LiftSuppression(t.Context(), f.proof, suppressed.Suppression.ID,
-		suppressed.Suppression.Revision, revision, checkedMutation); err != nil {
+		suppressed.Suppression.Revision, checkedMutation); err != nil {
 		t.Fatal(err)
 	}
-	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
-		t.Fatalf("suppression lift correction did not run: worked=%t err=%v", worked, err)
+	if drainCorrections(t, runner) == 0 {
+		t.Fatal("suppression lift correction did not run")
 	}
 	revision = assertCorrected(unitA.ID, true)
 	unassignedTarget := protocols.Target{Address: protocols.NumericAddress(99), Function: &function}
 	unassignedOriginal, err := json.Marshal(unassignedTarget)
-	if err != nil {
-		t.Fatal(err)
-	}
-	unassignedTargets, err := json.Marshal([]protocols.Target{unassignedTarget})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1107,37 +1093,40 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 				currentRevision, revision)
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO messages
-			(id,identity_form,identity_value,first_observed_at,last_observed_at,publication_status)
-			VALUES($1,'test',$2,$3,$3,'ready')`, unassignedMessageID, []byte{2}, observed.Add(3*time.Second)); err != nil {
+			(id,identity_form,identity_value,first_observed_at,last_observed_at)
+			VALUES($1,'test',$2,$3,$3)`, unassignedMessageID, []byte{2}, observed.Add(3*time.Second)); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO transmissions
-			(id,gateway_id,network_id,submission_id,submission_fingerprint,network_resolution,protocol,payload,targets,
-			 observed_at,observation_offset_seconds,accepted_at,source_revision,message_id,processing_status,publication_status)
-			VALUES($1,$2,$3,$4,$5,'declared','pocsag','{}',$6,$7,0,$8,1,$9,'completed','ready')`,
+			(id,gateway_id,network_id,submission_id,submission_fingerprint,network_resolution,protocol,payload,
+			 observed_at,observation_offset_seconds,accepted_at,source_revision,message_id,processing_status)
+			VALUES($1,$2,$3,$4,$5,'declared','pocsag','{}',$6,0,$7,1,$8,'none')`,
 			unassignedTransmissionID, gatewayID, networkID, uuid.NewString(), unassignedFingerprint,
-			string(unassignedTargets), observed.Add(3*time.Second), accepted.Add(3*time.Second), unassignedMessageID); err != nil {
+			observed.Add(3*time.Second), accepted.Add(3*time.Second), unassignedMessageID); err != nil {
 			return err
 		}
 		_, err = executor.ExecContext(tx.Context(), `INSERT INTO transmission_targets
-			(transmission_id,position,original,resolution_status,unit_id,matched_rule_id,assignment_revision)
-			VALUES($1,0,$2,'unassigned',NULL,NULL,$3)`,
-			unassignedTransmissionID, string(unassignedOriginal), currentRevision)
+			(transmission_id,position,original,resolution_status,unit_id,matched_rule_id,assignment_revision,
+			 network_id,protocol,observed_at,accepted_at,address_number,function)
+			VALUES($1,0,$2,'unassigned',NULL,NULL,$3,$4,'pocsag',$5,$6,99,1)`,
+			unassignedTransmissionID, string(unassignedOriginal), currentRevision, networkID,
+			observed.Add(3*time.Second), accepted.Add(3*time.Second))
 		return err
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	suppressedUnassigned, err := f.rules.CreateSuppression(t.Context(), f.proof, uuid.New(),
-		assignments.CreateSuppressionInput{TransmissionID: unassignedTransmissionID, TargetPosition: 0,
-			ExpectedAssignmentRevision: revision}, checkedMutation)
+		assignments.CreateSuppressionInput{TransmissionID: unassignedTransmissionID, TargetPosition: 0}, checkedMutation)
 	if err != nil {
 		t.Fatalf("unassigned-target suppression failed (%T): %#v", err, err)
 	}
-	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
-		t.Fatalf("unassigned-target suppression correction did not run: worked=%t err=%v", worked, err)
+	if drainCorrections(t, runner) == 0 {
+		t.Fatal("unassigned-target suppression correction did not run")
 	}
-	assertUnassigned := func() {
+	// assertUnassigned checks that the target stays unassigned; an unsuppressed unassigned target is
+	// cached as one Unit-less row of its Network's Agency, a suppressed one not at all.
+	assertUnassigned := func(wantRows int) {
 		t.Helper()
 		if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 			executor, err := f.store.Resolve(tx)
@@ -1151,29 +1140,29 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 				WHERE transmission_id=$1 AND position=0`, unassignedTransmissionID).Scan(&resolution, &unitID); err != nil {
 				return err
 			}
-			if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM contribution_supports
-				WHERE transmission_id=$1 AND target_position=0`, unassignedTransmissionID).Scan(&supports); err != nil {
+			if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM message_units
+				WHERE message_id=$1`, unassignedMessageID).Scan(&supports); err != nil {
 				return err
 			}
-			if resolution != "unassigned" || unitID.Valid || supports != 0 {
-				t.Fatalf("unassigned target acquired a Unit/support: resolution=%s unit=%+v supports=%d",
-					resolution, unitID, supports)
+			if resolution != "unassigned" || unitID.Valid || supports != wantRows {
+				t.Fatalf("unassigned target: resolution=%s unit=%+v cache rows=%d, want unassigned without a Unit and %d rows",
+					resolution, unitID, supports, wantRows)
 			}
 			return nil
 		}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	assertUnassigned()
-	currentRevision := assertCorrected(unitA.ID, true)
+	assertUnassigned(0)
+	assertCorrected(unitA.ID, true)
 	if _, err := f.rules.LiftSuppression(t.Context(), f.proof, suppressedUnassigned.Suppression.ID,
-		suppressedUnassigned.Suppression.Revision, currentRevision, checkedMutation); err != nil {
+		suppressedUnassigned.Suppression.Revision, checkedMutation); err != nil {
 		t.Fatal(err)
 	}
-	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
-		t.Fatalf("unassigned-target suppression lift correction did not run: worked=%t err=%v", worked, err)
+	if drainCorrections(t, runner) == 0 {
+		t.Fatal("unassigned-target suppression lift correction did not run")
 	}
-	assertUnassigned()
+	assertUnassigned(1)
 	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		executor, err := f.store.Resolve(tx)
 		if err != nil {
@@ -1206,12 +1195,13 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 }
 
 func TestCurrentMatcherCollectionScopeDeletionAndActualRevisionExhaustion(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	collection, err := f.units.CreateCollection(t.Context(), f.proof, uuid.New(), "Stations", checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
-	unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{Name: "Station", CollectionIDs: []uuid.UUID{collection.ID}}, checkedMutation)
+	unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{AgencyID: f.agency, Name: "Station", CollectionIDs: []uuid.UUID{collection.ID}}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1237,7 +1227,7 @@ func TestCurrentMatcherCollectionScopeDeletionAndActualRevisionExhaustion(t *tes
 		t.Fatal(err)
 	}
 	before = configurationCounts(t, f)
-	if _, err := f.units.ChangeUnit(t.Context(), f.proof, unit.ID, math.MaxInt64, units.UnitInput{Name: "Exhausted"},
+	if _, err := f.units.ChangeUnit(t.Context(), f.proof, unit.ID, math.MaxInt64, units.UnitInput{AgencyID: f.agency, Name: "Exhausted"},
 		checkedMutation); platform.FailureCode(err) != platform.CodeResourceLimit || configurationCounts(t, f) != before {
 		t.Fatalf("actual revision exhaustion did not fail atomically with RESOURCE_LIMIT: %v", err)
 	}
@@ -1297,7 +1287,7 @@ func (o observedTransactions) WithinTransaction(ctx context.Context, operation p
 func verifyCurrentMatcherSerialization(t *testing.T, deleting bool) {
 	t.Helper()
 	f := newMatcherFixture(t)
-	unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{Name: "Station"}, checkedMutation)
+	unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{AgencyID: f.agency, Name: "Station"}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1363,7 +1353,7 @@ func verifyCurrentMatcherSerialization(t *testing.T, deleting bool) {
 		if deleting {
 			_, err = service.DeleteUnit(t.Context(), f.proof, unit.ID, 1, checkedMutation)
 		} else {
-			_, err = service.ChangeUnit(t.Context(), f.proof, unit.ID, 1, units.UnitInput{Name: "Station changed"}, checkedMutation)
+			_, err = service.ChangeUnit(t.Context(), f.proof, unit.ID, 1, units.UnitInput{AgencyID: f.agency, Name: "Station changed"}, checkedMutation)
 		}
 		deleteDone <- err
 	}()
@@ -1373,30 +1363,44 @@ func verifyCurrentMatcherSerialization(t *testing.T, deleting bool) {
 	case err := <-deleteDone:
 		t.Fatalf("deletion failed before coordinated invalidation: %v", err)
 	}
-	waitForAuthorityLock(t, f.store, deleterPID)
-	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		executor, err := f.store.Resolve(tx)
+	if deleting {
+		waitForAuthorityLock(t, f.store, deleterPID)
+		err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+			executor, err := f.store.Resolve(tx)
+			if err != nil {
+				return err
+			}
+			var blocked bool
+			if err := executor.QueryRowContext(tx.Context(), "SELECT $1::integer = ANY(pg_blocking_pids($2::integer))", matcherPID, deleterPID).Scan(&blocked); err != nil {
+				return err
+			}
+			if !blocked {
+				return errors.New("Unit deletion was not blocked by the captured configuration")
+			}
+			return nil
+		})
 		if err != nil {
-			return err
+			t.Fatal(err)
 		}
-		var blocked bool
-		if err := executor.QueryRowContext(tx.Context(), "SELECT $1::integer = ANY(pg_blocking_pids($2::integer))", matcherPID, deleterPID).Scan(&blocked); err != nil {
-			return err
+	} else {
+		// An edit changes nothing the evaluation depends on, so it must not wait for it.
+		select {
+		case err := <-deleteDone:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("Unit edit waited for an in-flight evaluation")
 		}
-		if !blocked {
-			return errors.New("Unit deletion was not blocked by the captured configuration")
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
 	unlock()
 	if err := <-matchDone; err != nil {
 		t.Fatal(err)
 	}
-	if err := <-deleteDone; err != nil {
-		t.Fatal(err)
+	if deleting {
+		if err := <-deleteDone; err != nil {
+			t.Fatal(err)
+		}
 	}
 	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		result, err := f.rules.MatchTargets(tx.Context(), tx, f.networks[0], protocols.POCSAG, observed, targets)
@@ -1417,15 +1421,26 @@ func verifyCurrentMatcherSerialization(t *testing.T, deleting bool) {
 	}
 }
 
-func TestCurrentMatcherEvaluationSerializesWithUnitChanges(t *testing.T) {
-	t.Run("edit", func(t *testing.T) { verifyCurrentMatcherSerialization(t, false) })
-	t.Run("delete", func(t *testing.T) { verifyCurrentMatcherSerialization(t, true) })
+// TestCurrentMatcherEvaluationSerializesWithUnitDeletionNotEdits expects a Unit deletion,
+// which invalidates rules, to wait for an in-flight evaluation under the shared assignment
+// lock, while a Unit edit commits meanwhile; a later evaluation sees the current Unit either way.
+func TestCurrentMatcherEvaluationSerializesWithUnitDeletionNotEdits(t *testing.T) {
+	t.Parallel()
+	t.Run("edit", func(t *testing.T) {
+		t.Parallel()
+		verifyCurrentMatcherSerialization(t, false)
+	})
+	t.Run("delete", func(t *testing.T) {
+		t.Parallel()
+		verifyCurrentMatcherSerialization(t, true)
+	})
 }
 
 func TestCurrentMatcherCreationReceiptsAreActorBound(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	command := uuid.New()
-	values := units.UnitInput{Name: "Station"}
+	values := units.UnitInput{AgencyID: f.agency, Name: "Station"}
 	first, err := f.units.CreateUnit(t.Context(), f.proof, command, values, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
@@ -1433,11 +1448,11 @@ func TestCurrentMatcherCreationReceiptsAreActorBound(t *testing.T) {
 	other := f
 	other.principal = seedLoginAccount(t, f.store, "Other", true)
 	replaceManagementGrants(t, other, []authz.Grant{{Actions: authz.Actions(), Scope: authz.Scope{Kind: "all"}}})
-	login, err := identity.NewLoginService(f.store, f.resolver, f.owners.identity, f.facts, identity.DefaultLoginRateLimits())
+	login, err := identity.NewLoginService(f.store, f.resolver, f.owners.identity, f.facts, identity.DefaultLoginRateLimits(), passwords.Option())
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := login.AuthenticateLocal(t.Context(), "other", "correct-password")
+	session, err := login.AuthenticateLocal(t.Context(), "test-source", "other", "correct-password")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -10,12 +10,13 @@ import (
 )
 
 func TestExplicitActionScopeCatalog(t *testing.T) {
+	t.Parallel()
 	for _, action := range authz.Actions() {
 		if !authz.ValidAction(action) {
 			t.Fatalf("enumerated action %q is invalid", action)
 		}
 	}
-	for _, action := range []string{"*", "account.*", "plugin.install", "unknown.read", "rule.preview/activate/reprocess"} {
+	for _, action := range []string{"*", "account.*", "unknown.read", "workflow.preview/activate/reprocess"} {
 		if authz.ValidAction(action) {
 			t.Fatalf("non-grantable action %q accepted", action)
 		}
@@ -25,7 +26,7 @@ func TestExplicitActionScopeCatalog(t *testing.T) {
 	if slices.Contains(authz.Actions(), "corrupted") {
 		t.Fatal("caller changed the central action catalog")
 	}
-	if authz.ActionAllowsScope("grouping.configure", "network") ||
+	if authz.ActionAllowsScope("grouping.configure", "agency") ||
 		!authz.ActionAllowsScope("grouping.configure", "all") ||
 		authz.ActionAllowsScope("without-unit.read", "unit") ||
 		authz.ActionAllowsScope("unit-template.read", "unit") ||
@@ -36,6 +37,7 @@ func TestExplicitActionScopeCatalog(t *testing.T) {
 }
 
 func TestGrantValidationRejectsMalformedOrImplicitAuthority(t *testing.T) {
+	t.Parallel()
 	valid := authz.Grant{SubjectID: uuid.NewString(), SubjectKind: "principal",
 		Actions: []string{"account.read"}, Scope: authz.Scope{Kind: "account", References: []string{uuid.NewString()}}}
 	if err := authz.ValidateGrant(valid); err != nil {
@@ -56,6 +58,7 @@ func TestGrantValidationRejectsMalformedOrImplicitAuthority(t *testing.T) {
 	}
 	for name, change := range tests {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			grant := valid
 			change(&grant)
 			if err := authz.ValidateGrant(grant); !errors.Is(err, authz.ErrInvalidInput) {

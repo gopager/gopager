@@ -69,8 +69,8 @@ func (f *runnerFixture) ReadCorrectionBatch(context.Context, platform.Transactio
 	return nil, nil
 }
 
-func (f *runnerFixture) ApplyCorrectionBatch(context.Context, platform.TransactionContext, CorrectionLease, []CorrectionUpdate) ([]CorrectionChange, error) {
-	return nil, errors.New("unexpected apply")
+func (f *runnerFixture) ApplyCorrectionBatch(context.Context, platform.TransactionContext, CorrectionLease, []CorrectionUpdate) (CorrectionApplied, error) {
+	return CorrectionApplied{}, errors.New("unexpected apply")
 }
 
 func (f *runnerFixture) CompleteCorrection(context.Context, platform.TransactionContext, CorrectionLease) (bool, error) {
@@ -81,20 +81,16 @@ func (f *runnerFixture) CompleteCorrection(context.Context, platform.Transaction
 	return true, nil
 }
 
-func (f *runnerFixture) FailCorrection(context.Context, platform.TransactionContext, CorrectionLease, string, time.Duration) error {
-	return nil
+func (f *runnerFixture) FailCorrection(context.Context, platform.TransactionContext, CorrectionLease, string, time.Duration) (bool, error) {
+	return false, nil
 }
 
 func (f *runnerFixture) AppendCorrectionFact(context.Context, platform.TransactionContext, events.CorrectionFact) (uuid.UUID, error) {
 	return uuid.Nil, errors.New("unexpected fact")
 }
 
-func (f *runnerFixture) PublicationReentries(context.Context, platform.TransactionContext, int) ([]uuid.UUID, error) {
-	return nil, nil
-}
-
-func (f *runnerFixture) ReenterPublication(context.Context, platform.TransactionContext, uuid.UUID) (bool, error) {
-	return false, nil
+func (f *runnerFixture) ReadmitProcessing(context.Context, platform.TransactionContext, uuid.UUID) error {
+	return errors.New("unexpected readmission")
 }
 
 func newFixtureRunner(t *testing.T, f *runnerFixture) *CorrectionRunner {
@@ -107,9 +103,11 @@ func newFixtureRunner(t *testing.T, f *runnerFixture) *CorrectionRunner {
 }
 
 func TestCorrectionRunnerSurvivesTransientFailures(t *testing.T) {
+	t.Parallel()
 	for _, code := range []platform.ErrorCode{platform.CodeStorageUnavailable,
 		platform.CodeAuthorityUnavailable, platform.CodeCommitUncertain} {
 		t.Run(string(code), func(t *testing.T) {
+			t.Parallel()
 			synctest.Test(t, func(t *testing.T) {
 				f := &runnerFixture{failures: 3, pending: true,
 					err: platform.NewFailure(code, errors.New("database restarting"))}
@@ -153,6 +151,7 @@ func TestCorrectionRunnerSurvivesTransientFailures(t *testing.T) {
 }
 
 func TestCorrectionRunnerBackoffBoundedAndCancellable(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		f := &runnerFixture{failures: 1 << 20,
 			err: platform.NewFailure(platform.CodeStorageUnavailable, errors.New("down"))}
@@ -184,6 +183,7 @@ func TestCorrectionRunnerBackoffBoundedAndCancellable(t *testing.T) {
 }
 
 func TestCorrectionRunnerReturnsNonTransientFailure(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		failure := platform.NewFailure(platform.CodeInternalError, errors.New("invariant broken"))
 		f := &runnerFixture{failures: 1, err: failure}

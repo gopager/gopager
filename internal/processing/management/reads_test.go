@@ -12,6 +12,7 @@ import (
 )
 
 func TestCandidateStatusValidationKeepsOnlySafeFailureVocabulary(t *testing.T) {
+	t.Parallel()
 	now := time.Now().UTC()
 	selected := true
 	status := CandidateStatus{ID: uuid.New(), Revision: 1, State: "completed", Selected: &selected, UpdatedAt: now}
@@ -36,6 +37,7 @@ func TestCandidateStatusValidationKeepsOnlySafeFailureVocabulary(t *testing.T) {
 }
 
 func TestPrivateResultMetadataOmitsPrivateEvaluationAndSourceFields(t *testing.T) {
+	t.Parallel()
 	metadata := PrivateResultMetadata{ID: uuid.New(), Revision: 2, CompletedAt: time.Now().UTC(), CandidateID: uuid.New()}
 	encoded, err := json.Marshal(metadata)
 	if err != nil {
@@ -49,6 +51,7 @@ func TestPrivateResultMetadataOmitsPrivateEvaluationAndSourceFields(t *testing.T
 }
 
 func TestProcessingStatusPageBoundsAndDetachesMutableFields(t *testing.T) {
+	t.Parallel()
 	for _, input := range []processing.PageInput{
 		{Offset: -1, Limit: 1},
 		{Limit: 0},

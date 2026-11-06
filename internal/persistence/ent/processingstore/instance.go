@@ -179,7 +179,7 @@ func (s *Store) SaveInstance(ctx context.Context, tx platform.TransactionContext
 	if err := value.Validate(); err != nil {
 		return err
 	}
-	if _, err := s.LockRevision(ctx, tx); err != nil {
+	if _, err := s.LockRevisionForChange(ctx, tx); err != nil {
 		return err
 	}
 	now, err := s.primary.Now(ctx, tx)

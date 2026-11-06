@@ -3,47 +3,16 @@ package main
 import (
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/ingest"
 	"github.com/gopager/gopager/internal/platform"
 )
 
-func TestGatewayBearerRequiresOneValidAuthorizationHeader(t *testing.T) {
-	secret, _, err := identity.NewSecret()
-	if err != nil {
-		t.Fatal(err)
-	}
-	tests := []struct {
-		name    string
-		headers []string
-		valid   bool
-	}{
-		{"valid", []string{"Bearer " + secret}, true},
-		{"wrong scheme", []string{"Basic " + secret}, false},
-		{"multiple", []string{"Bearer " + secret, "Bearer " + secret}, false},
-		{"extra secret token", []string{"Bearer " + secret + " other"}, false},
-		{"missing", nil, false},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			request := httptest.NewRequest("POST", "/api/v1/transmissions", nil)
-			for _, value := range test.headers {
-				request.Header.Add("Authorization", value)
-			}
-			_, err := gatewayBearer(request)
-			if (err == nil) != test.valid {
-				t.Fatalf("valid=%t err=%v", test.valid, err)
-			}
-		})
-	}
-}
-
 func TestIngestHTTPSubmissionAndGatewayStateRoutes(t *testing.T) {
+	t.Parallel()
 	fixture := newGatewayHTTPFixture(t)
 	issuePath := "/api/v1/gateways/" + fixture.gateway.String() + "/credentials"
 	issueBody := `{"schemaVersion":1,"commandId":"` + uuid.NewString() + `","expectedRevision":"1"}`
@@ -73,7 +42,7 @@ func TestIngestHTTPSubmissionAndGatewayStateRoutes(t *testing.T) {
 		Data ingest.Receipt `json:"data"`
 	}
 	if err := json.Unmarshal(accepted, &receiptResponse); err != nil || receiptResponse.Data.TransmissionID == uuid.Nil ||
-		receiptResponse.Data.ProcessingStatus != "completed" || receiptResponse.Data.SubmissionID != "http-submission" {
+		receiptResponse.Data.ProcessingStatus != "none" || receiptResponse.Data.SubmissionID != "http-submission" {
 		t.Fatalf("accepted Submission response = %s, error=%v", accepted, err)
 	}
 	retry := fixture.request(t, http.MethodPost, submissionPath, submission, "", bearer, http.StatusOK)

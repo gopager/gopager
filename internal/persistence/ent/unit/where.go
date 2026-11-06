@@ -64,6 +64,11 @@ func Name(v string) predicate.Unit {
 	return predicate.Unit(sql.FieldEQ(FieldName, v))
 }
 
+// AgencyID applies equality check predicate on the "agency_id" field. It's identical to AgencyIDEQ.
+func AgencyID(v uuid.UUID) predicate.Unit {
+	return predicate.Unit(sql.FieldEQ(FieldAgencyID, v))
+}
+
 // Deleted applies equality check predicate on the "deleted" field. It's identical to DeletedEQ.
 func Deleted(v bool) predicate.Unit {
 	return predicate.Unit(sql.FieldEQ(FieldDeleted, v))
@@ -179,6 +184,26 @@ func NameContainsFold(v string) predicate.Unit {
 	return predicate.Unit(sql.FieldContainsFold(FieldName, v))
 }
 
+// AgencyIDEQ applies the EQ predicate on the "agency_id" field.
+func AgencyIDEQ(v uuid.UUID) predicate.Unit {
+	return predicate.Unit(sql.FieldEQ(FieldAgencyID, v))
+}
+
+// AgencyIDNEQ applies the NEQ predicate on the "agency_id" field.
+func AgencyIDNEQ(v uuid.UUID) predicate.Unit {
+	return predicate.Unit(sql.FieldNEQ(FieldAgencyID, v))
+}
+
+// AgencyIDIn applies the In predicate on the "agency_id" field.
+func AgencyIDIn(vs ...uuid.UUID) predicate.Unit {
+	return predicate.Unit(sql.FieldIn(FieldAgencyID, vs...))
+}
+
+// AgencyIDNotIn applies the NotIn predicate on the "agency_id" field.
+func AgencyIDNotIn(vs ...uuid.UUID) predicate.Unit {
+	return predicate.Unit(sql.FieldNotIn(FieldAgencyID, vs...))
+}
+
 // DeletedEQ applies the EQ predicate on the "deleted" field.
 func DeletedEQ(v bool) predicate.Unit {
 	return predicate.Unit(sql.FieldEQ(FieldDeleted, v))
@@ -280,6 +305,29 @@ func HasOrganization() predicate.Unit {
 func HasOrganizationWith(preds ...predicate.Organization) predicate.Unit {
 	return predicate.Unit(func(s *sql.Selector) {
 		step := newOrganizationStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasAgency applies the HasEdge predicate on the "agency" edge.
+func HasAgency() predicate.Unit {
+	return predicate.Unit(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, AgencyTable, AgencyColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasAgencyWith applies the HasEdge predicate on the "agency" edge with a given conditions (other predicates).
+func HasAgencyWith(preds ...predicate.Agency) predicate.Unit {
+	return predicate.Unit(func(s *sql.Selector) {
+		step := newAgencyStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

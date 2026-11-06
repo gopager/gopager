@@ -2,27 +2,30 @@
 package authz
 
 import (
-	"errors"
 	"slices"
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/platform"
 )
 
 // Sentinel authorization outcomes, compared with errors.Is. ErrInvalidInput
 // marks malformed requests or persisted grants, ErrForbidden a denied
 // decision, ErrNotFound a target that does not exist or must not be revealed,
 // and ErrRevisionConflict a stale expected revision or otherwise conflicting
-// current state. Their messages are safe to show to end users.
+// current state. They are *platform.Failure values carrying the public code
+// (INVALID_INPUT, FORBIDDEN, NOT_FOUND, REVISION_CONFLICT), so platform.FailureCode
+// stays correct when one crosses a transaction boundary; errors.Is still matches
+// them by identity. Their messages are the safe English fallbacks.
 var (
-	ErrInvalidInput     = errors.New("invalid authorization input")
-	ErrForbidden        = errors.New("this action is not permitted")
-	ErrNotFound         = errors.New("the requested item is not available")
-	ErrRevisionConflict = errors.New("this item changed; reload before saving")
+	ErrInvalidInput     error = platform.NewFailure(platform.CodeInvalidInput, nil)
+	ErrForbidden        error = platform.NewFailure(platform.CodeForbidden, nil)
+	ErrNotFound         error = platform.NewFailure(platform.CodeNotFound, nil)
+	ErrRevisionConflict error = platform.NewFailure(platform.CodeRevisionConflict, nil)
 )
 
 // Scope restricts a grant or key to a data area. Kind is one of "all",
-// "network", "unit", "unitCollection" or "account"; "all" must carry no
+// "agency", "unit", "unitCollection" or "account"; "all" must carry no
 // References, every other kind needs 1..1024 non-nil UUID references (see
 // ValidScope). A reference matches a Target by UUID value.
 type Scope struct {
@@ -76,33 +79,34 @@ func buildActionScopes() map[string][]string {
 			out[name] = scopes
 		}
 	}
-	add("message.read message.detail", "all", "network", "unit", "unitCollection")
-	add("without-unit.read", "all", "network")
+	add("message.read message.detail", "all", "agency", "unit", "unitCollection")
+	add("without-unit.read", "all", "agency")
 	for _, resource := range []string{"unit", "organization", "unit-collection", "address-rule", "suppression"} {
 		for _, action := range []string{"read", "create", "update", "delete"} {
-			add(resource+"."+action, "all", "network", "unit", "unitCollection")
+			add(resource+"."+action, "all", "agency", "unit", "unitCollection")
 		}
 	}
 	for _, action := range []string{"read", "create", "update", "delete"} {
 		add("unit-template."+action, "all")
 	}
-	add("assignment-correction.read assignment-correction.retry", "all", "network", "unit", "unitCollection")
+	add("assignment-correction.read assignment-correction.retry", "all", "agency", "unit", "unitCollection")
 	for _, resource := range []string{"gateway", "network"} {
 		for _, action := range []string{"read", "create", "update", "delete"} {
-			add(resource+"."+action, "all", "network")
+			add(resource+"."+action, "all", "agency")
 		}
 	}
+	add("agency.read agency.update", "all", "agency")
+	add("agency.create agency.delete", "all")
 	add("grouping.configure", "all")
 	add("account.read account.create account.update account.delete account.delete-own grant.manage "+
 		"password.local recovery.request recovery.issue recovery.consume session.manage-own "+
 		"key.create-own key.manage-own key.manage-technical subscription.manage-own subscription.manage-global",
 		"all", "account")
-	add("delivery.read delivery.retry delivery.redeliver", "all", "network", "unit", "unitCollection", "account")
-	add("rule.read rule.create rule.update rule.delete rule.preview rule.activate rule.reprocess presentation.manage",
-		"all", "network", "unit")
+	add("delivery.read delivery.retry delivery.redeliver", "all", "agency", "unit", "unitCollection", "account")
+	add("workflow.read workflow.create workflow.update workflow.delete workflow.preview workflow.activate workflow.reprocess presentation.manage",
+		"all", "agency", "unit")
 	add("notice.manage plugin.configure operations.manage", "all")
-	add("audit.read", "all", "network", "account")
-	add("plugin.internal-read", "all", "network", "unit", "unitCollection")
+	add("audit.read", "all", "agency", "account")
 	return out
 }
 
@@ -157,7 +161,7 @@ func ValidateGrant(grant Grant) error {
 
 // ValidScope rejects empty restrictions and invalid server references.
 func ValidScope(scope Scope) bool {
-	if !slices.Contains([]string{"all", "network", "unit", "unitCollection", "account"}, scope.Kind) {
+	if !slices.Contains([]string{"all", "agency", "unit", "unitCollection", "account"}, scope.Kind) {
 		return false
 	}
 	if scope.Kind == "all" {

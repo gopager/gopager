@@ -11,12 +11,13 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/persistence/ent/addressrule"
+	"github.com/gopager/gopager/internal/persistence/ent/agency"
 	"github.com/gopager/gopager/internal/persistence/ent/organization"
 	"github.com/gopager/gopager/internal/persistence/ent/predicate"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
 	"github.com/gopager/gopager/internal/persistence/ent/unitcollection"
+	"github.com/gopager/gopager/internal/units"
 )
 
 // UnitUpdate is the builder for updating Unit entities.
@@ -64,6 +65,20 @@ func (_u *UnitUpdate) SetName(v string) *UnitUpdate {
 func (_u *UnitUpdate) SetNillableName(v *string) *UnitUpdate {
 	if v != nil {
 		_u.SetName(*v)
+	}
+	return _u
+}
+
+// SetAgencyID sets the "agency_id" field.
+func (_u *UnitUpdate) SetAgencyID(v uuid.UUID) *UnitUpdate {
+	_u.mutation.SetAgencyID(v)
+	return _u
+}
+
+// SetNillableAgencyID sets the "agency_id" field if the given value is not nil.
+func (_u *UnitUpdate) SetNillableAgencyID(v *uuid.UUID) *UnitUpdate {
+	if v != nil {
+		_u.SetAgencyID(*v)
 	}
 	return _u
 }
@@ -151,6 +166,11 @@ func (_u *UnitUpdate) SetOrganization(v *Organization) *UnitUpdate {
 	return _u.SetOrganizationID(v.ID)
 }
 
+// SetAgency sets the "agency" edge to the Agency entity.
+func (_u *UnitUpdate) SetAgency(v *Agency) *UnitUpdate {
+	return _u.SetAgencyID(v.ID)
+}
+
 // Mutation returns the UnitMutation object of the builder.
 func (_u *UnitUpdate) Mutation() *UnitMutation {
 	return _u.mutation
@@ -204,6 +224,12 @@ func (_u *UnitUpdate) ClearOrganization() *UnitUpdate {
 	return _u
 }
 
+// ClearAgency clears the "agency" edge to the Agency entity.
+func (_u *UnitUpdate) ClearAgency() *UnitUpdate {
+	_u.mutation.ClearAgency()
+	return _u
+}
+
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *UnitUpdate) Save(ctx context.Context) (int, error) {
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
@@ -242,6 +268,9 @@ func (_u *UnitUpdate) check() error {
 		if err := unit.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Unit.name": %w`, err)}
 		}
+	}
+	if _u.mutation.AgencyCleared() && len(_u.mutation.AgencyIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "Unit.agency"`)
 	}
 	return nil
 }
@@ -398,6 +427,35 @@ func (_u *UnitUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.AgencyCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   unit.AgencyTable,
+			Columns: []string{unit.AgencyColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(agency.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.AgencyIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   unit.AgencyTable,
+			Columns: []string{unit.AgencyColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(agency.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -451,6 +509,20 @@ func (_u *UnitUpdateOne) SetName(v string) *UnitUpdateOne {
 func (_u *UnitUpdateOne) SetNillableName(v *string) *UnitUpdateOne {
 	if v != nil {
 		_u.SetName(*v)
+	}
+	return _u
+}
+
+// SetAgencyID sets the "agency_id" field.
+func (_u *UnitUpdateOne) SetAgencyID(v uuid.UUID) *UnitUpdateOne {
+	_u.mutation.SetAgencyID(v)
+	return _u
+}
+
+// SetNillableAgencyID sets the "agency_id" field if the given value is not nil.
+func (_u *UnitUpdateOne) SetNillableAgencyID(v *uuid.UUID) *UnitUpdateOne {
+	if v != nil {
+		_u.SetAgencyID(*v)
 	}
 	return _u
 }
@@ -538,6 +610,11 @@ func (_u *UnitUpdateOne) SetOrganization(v *Organization) *UnitUpdateOne {
 	return _u.SetOrganizationID(v.ID)
 }
 
+// SetAgency sets the "agency" edge to the Agency entity.
+func (_u *UnitUpdateOne) SetAgency(v *Agency) *UnitUpdateOne {
+	return _u.SetAgencyID(v.ID)
+}
+
 // Mutation returns the UnitMutation object of the builder.
 func (_u *UnitUpdateOne) Mutation() *UnitMutation {
 	return _u.mutation
@@ -588,6 +665,12 @@ func (_u *UnitUpdateOne) RemoveAddressRules(v ...*AddressRule) *UnitUpdateOne {
 // ClearOrganization clears the "organization" edge to the Organization entity.
 func (_u *UnitUpdateOne) ClearOrganization() *UnitUpdateOne {
 	_u.mutation.ClearOrganization()
+	return _u
+}
+
+// ClearAgency clears the "agency" edge to the Agency entity.
+func (_u *UnitUpdateOne) ClearAgency() *UnitUpdateOne {
+	_u.mutation.ClearAgency()
 	return _u
 }
 
@@ -642,6 +725,9 @@ func (_u *UnitUpdateOne) check() error {
 		if err := unit.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Unit.name": %w`, err)}
 		}
+	}
+	if _u.mutation.AgencyCleared() && len(_u.mutation.AgencyIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "Unit.agency"`)
 	}
 	return nil
 }
@@ -808,6 +894,35 @@ func (_u *UnitUpdateOne) sqlSave(ctx context.Context) (_node *Unit, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(organization.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.AgencyCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   unit.AgencyTable,
+			Columns: []string{unit.AgencyColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(agency.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.AgencyIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   unit.AgencyTable,
+			Columns: []string{unit.AgencyColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(agency.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {

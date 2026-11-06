@@ -25,9 +25,13 @@ const DefaultDispatchPollInterval = 5 * time.Second
 // consecutive transient storage failures.
 const maxDispatchBackoff = 30 * time.Second
 
-// DispatchConfig separates scheduling policy from mechanism without exposing an Operator setting yet.
+// DispatchConfig separates scheduling policy from mechanism; the Operator sets it with
+// --processing-concurrency and --processing-poll-interval.
 type DispatchConfig struct {
-	Concurrency  int
+	// Concurrency is the maximum number of candidates evaluated in parallel.
+	Concurrency int
+	// PollInterval is the fallback interval for discovering due work; notifications wake the
+	// dispatcher earlier.
 	PollInterval time.Duration
 }
 
@@ -56,6 +60,8 @@ type WorkExecutor interface {
 }
 
 // Dispatcher implements the platform runner with bounded in-flight work and coalesced wake-ups.
+// It selects due candidates without claiming them; WorkExecutor.ExecuteWork reconciles and claims
+// each with a revision check, which remains the correctness guard when several dispatchers run.
 type Dispatcher struct {
 	transactions processing.ExecutionTransactions
 	repository   processing.CandidateWorkRepository
@@ -80,7 +86,8 @@ func NewDispatcher(transactions processing.ExecutionTransactions, repository pro
 		logger: logger, wake: make(chan struct{}, 1), config: config}, nil
 }
 
-// Wake coalesces local post-commit hints; fallback polling discovers work from other processes.
+// Wake coalesces hints that new work may be due (a database notification or a local commit); the
+// fallback poll covers a hint that was lost.
 func (d *Dispatcher) Wake() {
 	select {
 	case d.wake <- struct{}{}:
@@ -88,20 +95,33 @@ func (d *Dispatcher) Wake() {
 	}
 }
 
+// slotState is a locally dispatched candidate's phase.
+type slotState int
+
+const (
+	// slotActive is executing in a goroutine of this process.
+	slotActive slotState = iota + 1
+	// slotCooling failed and waits for the next wake or poll before it may run again.
+	slotCooling
+	// slotRetryable failed earlier and may run again once no fresh work is waiting.
+	slotRetryable
+)
+
 type dispatchOutcome struct {
 	id  uuid.UUID
 	err error
 }
 
 // Run dispatches at most the approved concurrency and joins all work before returning.
-// Failed slots cool down until the next wake/poll, avoiding a tight loop on unchanged rejected work.
+// A failed candidate cools down until the next wake/poll and then runs again only behind fresh due work,
+// avoiding both a tight loop on unchanged rejected work and starvation of later work.
 // A transient selection failure (STORAGE_UNAVAILABLE, AUTHORITY_UNAVAILABLE, COMMIT_UNCERTAIN or
 // REVISION_CONFLICT) is logged and retried after a backoff that starts at the poll interval and
 // doubles up to 30 s; wake-ups and polls do not select while backing off. Run returns nil on
 // cancellation and returns any other selection failure.
 func (d *Dispatcher) Run(ctx context.Context) error {
 	if !d.running.CompareAndSwap(false, true) {
-		return platform.NewFailure(platform.CodeRevisionConflict, errors.New("Processing dispatcher already running"))
+		return platform.NewFailure(platform.CodeRevisionConflict, errors.New("processing dispatcher already running"))
 	}
 	defer d.running.Store(false)
 	work, cancel := context.WithCancel(ctx)
@@ -111,70 +131,67 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 	ticker := time.NewTicker(d.config.PollInterval)
 	defer ticker.Stop()
 	done := make(chan dispatchOutcome, d.config.Concurrency)
-	// false retains only a failed slot's cooldown, not an active goroutine.
-	reserved := make(map[uuid.UUID]bool)
-	nextOffset := 0
+	// slots tracks every candidate this process dispatched and that may still be due in storage.
+	slots := make(map[uuid.UUID]slotState)
 	fill := func() error {
-		if len(reserved) == d.config.Concurrency || work.Err() != nil {
+		active, idle := 0, 0
+		for _, state := range slots {
+			if state == slotActive {
+				active++
+			} else {
+				idle++
+			}
+		}
+		if active == d.config.Concurrency || work.Err() != nil {
 			return nil
 		}
-		var selected []processing.Candidate
+		// Locally active and failed rows stay due in storage and sort first by due time. Asking for
+		// that many extra rows keeps rows behind them reachable without paging, so rejected early
+		// candidates cannot starve later work.
+		var due []processing.Candidate
 		if err := d.transactions.WithinTransaction(work, func(tx platform.TransactionContext) error {
-			offset, scanned, total := nextOffset, 0, -1
-			for {
-				page, err := d.repository.ListCandidateWork(tx.Context(), tx,
-					processing.PageInput{Offset: offset, Limit: 200})
-				if err != nil {
-					return err
-				}
-				if total < 0 {
-					total = page.Total
-				}
-				if total == 0 {
-					nextOffset = 0
-					return nil
-				}
-				if offset >= total {
-					offset = 0
-					continue
-				}
-				for _, candidate := range page.Items {
-					scanned++
-					offset++
-					nextOffset = offset % total
-					if _, exists := reserved[candidate.ID]; !exists {
-						selected = append(selected, candidate)
-						if len(selected) == d.config.Concurrency-len(reserved) {
-							return nil
-						}
-					}
-					if scanned == total {
-						return nil
-					}
-				}
-				if len(page.Items) == 0 || scanned >= total {
-					return nil
-				}
-				if offset >= total {
-					offset = 0
-				}
-			}
+			var err error
+			due, err = d.repository.SelectDueWork(tx.Context(), tx, d.config.Concurrency+idle)
+			return err
 		}); err != nil {
 			return err
 		}
-		for _, candidate := range selected {
-			if len(reserved) == d.config.Concurrency || work.Err() != nil {
-				break
+		stillDue := make(map[uuid.UUID]bool, len(due))
+		for _, candidate := range due {
+			stillDue[candidate.ID] = true
+		}
+		for id, state := range slots {
+			if state != slotActive && !stillDue[id] {
+				delete(slots, id)
 			}
-			if _, exists := reserved[candidate.ID]; exists {
-				continue
+		}
+		// Fresh rows first; a failed row is retried only after a wake or poll marked it retryable.
+		for _, retrying := range []bool{false, true} {
+			for _, candidate := range due {
+				if active == d.config.Concurrency || work.Err() != nil {
+					return nil
+				}
+				state, known := slots[candidate.ID]
+				if state == slotActive || state == slotCooling || known == !retrying {
+					continue
+				}
+				slots[candidate.ID] = slotActive
+				active++
+				workers.Go(func() {
+					done <- dispatchOutcome{id: candidate.ID, err: d.executor.ExecuteWork(work, candidate)}
+				})
 			}
-			reserved[candidate.ID] = true
-			workers.Go(func() {
-				done <- dispatchOutcome{id: candidate.ID, err: d.executor.ExecuteWork(work, candidate)}
-			})
 		}
 		return nil
+	}
+	// endCooldowns makes failed rows retryable so unchanged rejected work is retried on the next
+	// wake or poll, not in a tight loop.
+	endCooldowns := func() {
+		for id, state := range slots {
+			if state == slotCooling {
+				slots[id] = slotRetryable
+			}
+		}
 	}
 	failures := 0
 	var retry *time.Timer
@@ -220,28 +237,20 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 			return nil
 		case outcome := <-done:
 			if outcome.err != nil {
-				reserved[outcome.id] = false
+				slots[outcome.id] = slotCooling
 				if work.Err() == nil {
 					d.logger.Warn("Processing candidate dispatch failed",
 						"candidateId", outcome.id, "code", platform.FailureCode(outcome.err))
 				}
 			} else {
-				delete(reserved, outcome.id)
+				delete(slots, outcome.id)
 			}
 		case <-retryC:
 			retryC = nil
 		case <-ticker.C:
-			for id, active := range reserved {
-				if !active {
-					delete(reserved, id)
-				}
-			}
+			endCooldowns()
 		case <-d.wake:
-			for id, active := range reserved {
-				if !active {
-					delete(reserved, id)
-				}
-			}
+			endCooldowns()
 		}
 		if err := attempt(); err != nil {
 			if ctx.Err() != nil {

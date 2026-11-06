@@ -14,6 +14,7 @@ import (
 
 // TestMigrationBehavior runs scenario specifications through the canonical Go runner.
 func TestMigrationBehavior(t *testing.T) {
+	t.Parallel()
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	ginkgo.RunSpecs(t, "PostgreSQL Migration Conformance")
 }

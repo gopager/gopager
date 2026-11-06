@@ -10,6 +10,9 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/persistence/ent/addressrule"
+	"github.com/gopager/gopager/internal/persistence/ent/agency"
 	"github.com/gopager/gopager/internal/persistence/ent/network"
 	"github.com/gopager/gopager/internal/persistence/ent/predicate"
 )
@@ -77,6 +80,20 @@ func (_u *NetworkUpdate) SetNillableProtocol(v *network.Protocol) *NetworkUpdate
 	return _u
 }
 
+// SetAgencyID sets the "agency_id" field.
+func (_u *NetworkUpdate) SetAgencyID(v uuid.UUID) *NetworkUpdate {
+	_u.mutation.SetAgencyID(v)
+	return _u
+}
+
+// SetNillableAgencyID sets the "agency_id" field if the given value is not nil.
+func (_u *NetworkUpdate) SetNillableAgencyID(v *uuid.UUID) *NetworkUpdate {
+	if v != nil {
+		_u.SetAgencyID(*v)
+	}
+	return _u
+}
+
 // SetDeleted sets the "deleted" field.
 func (_u *NetworkUpdate) SetDeleted(v bool) *NetworkUpdate {
 	_u.mutation.SetDeleted(v)
@@ -91,9 +108,56 @@ func (_u *NetworkUpdate) SetNillableDeleted(v *bool) *NetworkUpdate {
 	return _u
 }
 
+// SetAgency sets the "agency" edge to the Agency entity.
+func (_u *NetworkUpdate) SetAgency(v *Agency) *NetworkUpdate {
+	return _u.SetAgencyID(v.ID)
+}
+
+// AddAddressRuleIDs adds the "address_rules" edge to the AddressRule entity by IDs.
+func (_u *NetworkUpdate) AddAddressRuleIDs(ids ...uuid.UUID) *NetworkUpdate {
+	_u.mutation.AddAddressRuleIDs(ids...)
+	return _u
+}
+
+// AddAddressRules adds the "address_rules" edges to the AddressRule entity.
+func (_u *NetworkUpdate) AddAddressRules(v ...*AddressRule) *NetworkUpdate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddAddressRuleIDs(ids...)
+}
+
 // Mutation returns the NetworkMutation object of the builder.
 func (_u *NetworkUpdate) Mutation() *NetworkMutation {
 	return _u.mutation
+}
+
+// ClearAgency clears the "agency" edge to the Agency entity.
+func (_u *NetworkUpdate) ClearAgency() *NetworkUpdate {
+	_u.mutation.ClearAgency()
+	return _u
+}
+
+// ClearAddressRules clears all "address_rules" edges to the AddressRule entity.
+func (_u *NetworkUpdate) ClearAddressRules() *NetworkUpdate {
+	_u.mutation.ClearAddressRules()
+	return _u
+}
+
+// RemoveAddressRuleIDs removes the "address_rules" edge to AddressRule entities by IDs.
+func (_u *NetworkUpdate) RemoveAddressRuleIDs(ids ...uuid.UUID) *NetworkUpdate {
+	_u.mutation.RemoveAddressRuleIDs(ids...)
+	return _u
+}
+
+// RemoveAddressRules removes "address_rules" edges to AddressRule entities.
+func (_u *NetworkUpdate) RemoveAddressRules(v ...*AddressRule) *NetworkUpdate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveAddressRuleIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -140,6 +204,9 @@ func (_u *NetworkUpdate) check() error {
 			return &ValidationError{Name: "protocol", err: fmt.Errorf(`ent: validator failed for field "Network.protocol": %w`, err)}
 		}
 	}
+	if _u.mutation.AgencyCleared() && len(_u.mutation.AgencyIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "Network.agency"`)
+	}
 	return nil
 }
 
@@ -175,6 +242,80 @@ func (_u *NetworkUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Deleted(); ok {
 		_spec.SetField(network.FieldDeleted, field.TypeBool, value)
+	}
+	if _u.mutation.AgencyCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   network.AgencyTable,
+			Columns: []string{network.AgencyColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(agency.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.AgencyIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   network.AgencyTable,
+			Columns: []string{network.AgencyColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(agency.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.AddressRulesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   network.AddressRulesTable,
+			Columns: []string{network.AddressRulesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(addressrule.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedAddressRulesIDs(); len(nodes) > 0 && !_u.mutation.AddressRulesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   network.AddressRulesTable,
+			Columns: []string{network.AddressRulesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(addressrule.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.AddressRulesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   network.AddressRulesTable,
+			Columns: []string{network.AddressRulesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(addressrule.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
@@ -247,6 +388,20 @@ func (_u *NetworkUpdateOne) SetNillableProtocol(v *network.Protocol) *NetworkUpd
 	return _u
 }
 
+// SetAgencyID sets the "agency_id" field.
+func (_u *NetworkUpdateOne) SetAgencyID(v uuid.UUID) *NetworkUpdateOne {
+	_u.mutation.SetAgencyID(v)
+	return _u
+}
+
+// SetNillableAgencyID sets the "agency_id" field if the given value is not nil.
+func (_u *NetworkUpdateOne) SetNillableAgencyID(v *uuid.UUID) *NetworkUpdateOne {
+	if v != nil {
+		_u.SetAgencyID(*v)
+	}
+	return _u
+}
+
 // SetDeleted sets the "deleted" field.
 func (_u *NetworkUpdateOne) SetDeleted(v bool) *NetworkUpdateOne {
 	_u.mutation.SetDeleted(v)
@@ -261,9 +416,56 @@ func (_u *NetworkUpdateOne) SetNillableDeleted(v *bool) *NetworkUpdateOne {
 	return _u
 }
 
+// SetAgency sets the "agency" edge to the Agency entity.
+func (_u *NetworkUpdateOne) SetAgency(v *Agency) *NetworkUpdateOne {
+	return _u.SetAgencyID(v.ID)
+}
+
+// AddAddressRuleIDs adds the "address_rules" edge to the AddressRule entity by IDs.
+func (_u *NetworkUpdateOne) AddAddressRuleIDs(ids ...uuid.UUID) *NetworkUpdateOne {
+	_u.mutation.AddAddressRuleIDs(ids...)
+	return _u
+}
+
+// AddAddressRules adds the "address_rules" edges to the AddressRule entity.
+func (_u *NetworkUpdateOne) AddAddressRules(v ...*AddressRule) *NetworkUpdateOne {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddAddressRuleIDs(ids...)
+}
+
 // Mutation returns the NetworkMutation object of the builder.
 func (_u *NetworkUpdateOne) Mutation() *NetworkMutation {
 	return _u.mutation
+}
+
+// ClearAgency clears the "agency" edge to the Agency entity.
+func (_u *NetworkUpdateOne) ClearAgency() *NetworkUpdateOne {
+	_u.mutation.ClearAgency()
+	return _u
+}
+
+// ClearAddressRules clears all "address_rules" edges to the AddressRule entity.
+func (_u *NetworkUpdateOne) ClearAddressRules() *NetworkUpdateOne {
+	_u.mutation.ClearAddressRules()
+	return _u
+}
+
+// RemoveAddressRuleIDs removes the "address_rules" edge to AddressRule entities by IDs.
+func (_u *NetworkUpdateOne) RemoveAddressRuleIDs(ids ...uuid.UUID) *NetworkUpdateOne {
+	_u.mutation.RemoveAddressRuleIDs(ids...)
+	return _u
+}
+
+// RemoveAddressRules removes "address_rules" edges to AddressRule entities.
+func (_u *NetworkUpdateOne) RemoveAddressRules(v ...*AddressRule) *NetworkUpdateOne {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveAddressRuleIDs(ids...)
 }
 
 // Where appends a list predicates to the NetworkUpdate builder.
@@ -323,6 +525,9 @@ func (_u *NetworkUpdateOne) check() error {
 			return &ValidationError{Name: "protocol", err: fmt.Errorf(`ent: validator failed for field "Network.protocol": %w`, err)}
 		}
 	}
+	if _u.mutation.AgencyCleared() && len(_u.mutation.AgencyIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "Network.agency"`)
+	}
 	return nil
 }
 
@@ -375,6 +580,80 @@ func (_u *NetworkUpdateOne) sqlSave(ctx context.Context) (_node *Network, err er
 	}
 	if value, ok := _u.mutation.Deleted(); ok {
 		_spec.SetField(network.FieldDeleted, field.TypeBool, value)
+	}
+	if _u.mutation.AgencyCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   network.AgencyTable,
+			Columns: []string{network.AgencyColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(agency.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.AgencyIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   network.AgencyTable,
+			Columns: []string{network.AgencyColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(agency.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.AddressRulesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   network.AddressRulesTable,
+			Columns: []string{network.AddressRulesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(addressrule.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedAddressRulesIDs(); len(nodes) > 0 && !_u.mutation.AddressRulesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   network.AddressRulesTable,
+			Columns: []string{network.AddressRulesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(addressrule.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.AddressRulesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   network.AddressRulesTable,
+			Columns: []string{network.AddressRulesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(addressrule.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	_node = &Network{config: _u.config}

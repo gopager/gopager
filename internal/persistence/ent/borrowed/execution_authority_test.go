@@ -15,6 +15,7 @@ import (
 )
 
 func TestExecutionPrincipalHoldsPrimaryAuthorityLockAndRejectsSuspension(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -49,7 +50,7 @@ func TestExecutionPrincipalHoldsPrimaryAuthorityLockAndRejectsSuspension(t *test
 				return err
 			}
 			pids <- pid
-			if _, err := f.owners.identity.LockAccess(tx.Context(), tx); err != nil {
+			if _, err := f.owners.identity.LockAccessForChange(tx.Context(), tx); err != nil {
 				return err
 			}
 			driver, err := borrowed.New(f.store, tx)

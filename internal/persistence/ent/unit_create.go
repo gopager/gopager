@@ -10,11 +10,12 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/persistence/ent/addressrule"
+	"github.com/gopager/gopager/internal/persistence/ent/agency"
 	"github.com/gopager/gopager/internal/persistence/ent/organization"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
 	"github.com/gopager/gopager/internal/persistence/ent/unitcollection"
+	"github.com/gopager/gopager/internal/units"
 )
 
 // UnitCreate is the builder for creating a Unit entity.
@@ -41,6 +42,12 @@ func (_c *UnitCreate) SetNillableRevision(v *int64) *UnitCreate {
 // SetName sets the "name" field.
 func (_c *UnitCreate) SetName(v string) *UnitCreate {
 	_c.mutation.SetName(v)
+	return _c
+}
+
+// SetAgencyID sets the "agency_id" field.
+func (_c *UnitCreate) SetAgencyID(v uuid.UUID) *UnitCreate {
+	_c.mutation.SetAgencyID(v)
 	return _c
 }
 
@@ -127,6 +134,11 @@ func (_c *UnitCreate) SetOrganization(v *Organization) *UnitCreate {
 	return _c.SetOrganizationID(v.ID)
 }
 
+// SetAgency sets the "agency" edge to the Agency entity.
+func (_c *UnitCreate) SetAgency(v *Agency) *UnitCreate {
+	return _c.SetAgencyID(v.ID)
+}
+
 // Mutation returns the UnitMutation object of the builder.
 func (_c *UnitCreate) Mutation() *UnitMutation {
 	return _c.mutation
@@ -200,11 +212,17 @@ func (_c *UnitCreate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Unit.name": %w`, err)}
 		}
 	}
+	if _, ok := _c.mutation.AgencyID(); !ok {
+		return &ValidationError{Name: "agency_id", err: errors.New(`ent: missing required field "Unit.agency_id"`)}
+	}
 	if _, ok := _c.mutation.Deleted(); !ok {
 		return &ValidationError{Name: "deleted", err: errors.New(`ent: missing required field "Unit.deleted"`)}
 	}
 	if _, ok := _c.mutation.Settings(); !ok {
 		return &ValidationError{Name: "settings", err: errors.New(`ent: missing required field "Unit.settings"`)}
+	}
+	if len(_c.mutation.AgencyIDs()) == 0 {
+		return &ValidationError{Name: "agency", err: errors.New(`ent: missing required edge "Unit.agency"`)}
 	}
 	return nil
 }
@@ -304,6 +322,23 @@ func (_c *UnitCreate) createSpec() (*Unit, *sqlgraph.CreateSpec) {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.OrganizationID = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.AgencyIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   unit.AgencyTable,
+			Columns: []string{unit.AgencyColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(agency.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.AgencyID = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

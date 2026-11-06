@@ -145,11 +145,6 @@ func FailureStep(v string) predicate.ProcessingCandidate {
 	return predicate.ProcessingCandidate(sql.FieldEQ(FieldFailureStep, v))
 }
 
-// BarrierAppliedAt applies equality check predicate on the "barrier_applied_at" field. It's identical to BarrierAppliedAtEQ.
-func BarrierAppliedAt(v time.Time) predicate.ProcessingCandidate {
-	return predicate.ProcessingCandidate(sql.FieldEQ(FieldBarrierAppliedAt, v))
-}
-
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.ProcessingCandidate {
 	return predicate.ProcessingCandidate(sql.FieldEQ(FieldCreatedAt, v))
@@ -938,56 +933,6 @@ func FailureStepEqualFold(v string) predicate.ProcessingCandidate {
 // FailureStepContainsFold applies the ContainsFold predicate on the "failure_step" field.
 func FailureStepContainsFold(v string) predicate.ProcessingCandidate {
 	return predicate.ProcessingCandidate(sql.FieldContainsFold(FieldFailureStep, v))
-}
-
-// BarrierAppliedAtEQ applies the EQ predicate on the "barrier_applied_at" field.
-func BarrierAppliedAtEQ(v time.Time) predicate.ProcessingCandidate {
-	return predicate.ProcessingCandidate(sql.FieldEQ(FieldBarrierAppliedAt, v))
-}
-
-// BarrierAppliedAtNEQ applies the NEQ predicate on the "barrier_applied_at" field.
-func BarrierAppliedAtNEQ(v time.Time) predicate.ProcessingCandidate {
-	return predicate.ProcessingCandidate(sql.FieldNEQ(FieldBarrierAppliedAt, v))
-}
-
-// BarrierAppliedAtIn applies the In predicate on the "barrier_applied_at" field.
-func BarrierAppliedAtIn(vs ...time.Time) predicate.ProcessingCandidate {
-	return predicate.ProcessingCandidate(sql.FieldIn(FieldBarrierAppliedAt, vs...))
-}
-
-// BarrierAppliedAtNotIn applies the NotIn predicate on the "barrier_applied_at" field.
-func BarrierAppliedAtNotIn(vs ...time.Time) predicate.ProcessingCandidate {
-	return predicate.ProcessingCandidate(sql.FieldNotIn(FieldBarrierAppliedAt, vs...))
-}
-
-// BarrierAppliedAtGT applies the GT predicate on the "barrier_applied_at" field.
-func BarrierAppliedAtGT(v time.Time) predicate.ProcessingCandidate {
-	return predicate.ProcessingCandidate(sql.FieldGT(FieldBarrierAppliedAt, v))
-}
-
-// BarrierAppliedAtGTE applies the GTE predicate on the "barrier_applied_at" field.
-func BarrierAppliedAtGTE(v time.Time) predicate.ProcessingCandidate {
-	return predicate.ProcessingCandidate(sql.FieldGTE(FieldBarrierAppliedAt, v))
-}
-
-// BarrierAppliedAtLT applies the LT predicate on the "barrier_applied_at" field.
-func BarrierAppliedAtLT(v time.Time) predicate.ProcessingCandidate {
-	return predicate.ProcessingCandidate(sql.FieldLT(FieldBarrierAppliedAt, v))
-}
-
-// BarrierAppliedAtLTE applies the LTE predicate on the "barrier_applied_at" field.
-func BarrierAppliedAtLTE(v time.Time) predicate.ProcessingCandidate {
-	return predicate.ProcessingCandidate(sql.FieldLTE(FieldBarrierAppliedAt, v))
-}
-
-// BarrierAppliedAtIsNil applies the IsNil predicate on the "barrier_applied_at" field.
-func BarrierAppliedAtIsNil() predicate.ProcessingCandidate {
-	return predicate.ProcessingCandidate(sql.FieldIsNull(FieldBarrierAppliedAt))
-}
-
-// BarrierAppliedAtNotNil applies the NotNil predicate on the "barrier_applied_at" field.
-func BarrierAppliedAtNotNil() predicate.ProcessingCandidate {
-	return predicate.ProcessingCandidate(sql.FieldNotNull(FieldBarrierAppliedAt))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

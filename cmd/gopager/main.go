@@ -2,7 +2,7 @@
 //
 // Usage:
 //
-//	gopager -profile full -roles api,worker -listen-address HOST:PORT [flags]
+//	gopager -roles api,worker -listen-address HOST:PORT [flags]
 //	gopager bootstrap -username NAME -actions A,B,... [flags] < password-file
 //
 // Server mode composes the requested roles on one PostgreSQL primary:
@@ -13,11 +13,13 @@
 //   - worker runs the background Processing dispatcher and the assignment
 //     correction runner.
 //
-// Server flags: -profile (must be "full"), -roles (comma-separated, required),
+// Server flags: -roles (comma-separated, required),
 // -listen-address (required with the api role), -migration-mode (check, the
 // default, refuses to start unless the schema is exactly current; apply runs
 // pending migrations first), -public-origin (the HTTP(S) origin used for
 // cookie and Origin checks; required with the api role),
+// -processing-concurrency (default 2) and -processing-poll-interval (default 5s)
+// bound parallel Processing evaluation and the fallback poll for due work;
 // -processing-artifact-root (directory of operator-provisioned plugin
 // executables; falls back to $GOPAGER_PROCESSING_ARTIFACT_ROOT),
 // -login-attempts-per-account and -login-attempts-per-instance (per-minute
@@ -52,16 +54,10 @@ import (
 	"strings"
 	"syscall"
 
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/assignments"
+	"github.com/gopager/gopager/internal/httpapi"
 	"github.com/gopager/gopager/internal/identity"
 	ingestdomain "github.com/gopager/gopager/internal/ingest"
-	"github.com/gopager/gopager/internal/persistence/ent/assignmentstore"
-	"github.com/gopager/gopager/internal/persistence/ent/commandstore"
-	"github.com/gopager/gopager/internal/persistence/ent/eventstore"
-	"github.com/gopager/gopager/internal/persistence/ent/identitystore"
-	"github.com/gopager/gopager/internal/persistence/ent/ingeststore"
-	"github.com/gopager/gopager/internal/persistence/ent/unitstore"
 	"github.com/gopager/gopager/internal/persistence/migrations"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
@@ -108,8 +104,13 @@ func run() (result error) {
 	defer stop()
 	var runners []platform.Runner
 	var processingRuntime *processingAPIRuntime
+	var shared *core
 	if slices.Contains(config.Roles, platform.RoleAPI) || slices.Contains(config.Roles, platform.RoleWorker) {
-		processingRuntime, err = composeProcessingAPIRuntime(ctx, store, nil, config.ProcessingArtifactRoot)
+		shared, err = composeCore(store)
+		if err != nil {
+			return errors.Join(err, store.Close())
+		}
+		processingRuntime, err = composeProcessingAPIRuntime(ctx, shared, config.ProcessingArtifactRoot)
 		if err != nil {
 			return errors.Join(err, store.Close())
 		}
@@ -118,7 +119,7 @@ func run() (result error) {
 		}()
 	}
 	if slices.Contains(config.Roles, platform.RoleWorker) {
-		runtime, err := composeProcessingWorker(ctx, store, processingRuntime.workerSource,
+		runtime, err := composeProcessingWorker(ctx, shared, processingRuntime.workerSource,
 			processingRuntime.workerPublisher, config.ProcessingDispatch)
 		if err != nil {
 			return errors.Join(err, store.Close())
@@ -127,7 +128,7 @@ func run() (result error) {
 			result = errors.Join(result, runtime.Close(context.Background()))
 		}()
 		runners = append(runners, runtime.dispatcher)
-		correctionRunner, err := composeCorrectionRunner(store, processingRuntime.correctionPublication)
+		correctionRunner, err := composeCorrectionRunner(shared, processingRuntime.correctionReadmission)
 		if err != nil {
 			return errors.Join(err, store.Close())
 		}
@@ -135,7 +136,7 @@ func run() (result error) {
 	}
 	var api http.Handler
 	if slices.Contains(config.Roles, platform.RoleAPI) {
-		api, err = composeApplicationAPI(config.PublicOrigin, config.LoginLimits, store, nil, nil, processingRuntime.routes)
+		api, err = composeApplicationAPI(config.PublicOrigin, config.LoginLimits, shared, nil, processingRuntime.routes)
 		if err != nil {
 			return errors.Join(err, store.Close())
 		}
@@ -144,56 +145,21 @@ func run() (result error) {
 	if err != nil {
 		return errors.Join(err, store.Close())
 	}
-	slog.Info("platform started", "profile", config.Profile, "roles", config.Roles)
+	slog.Info("platform started", "roles", config.Roles)
 	<-ctx.Done()
 	return handle.Shutdown(context.Background())
 }
 
-func composeCorrectionRunner(store *postgres.Store, publication assignments.CorrectionPublication,
+// composeCorrectionRunner binds the historical correction runner to the shared matcher.
+func composeCorrectionRunner(c *core, readmission assignments.ProcessingReadmission,
 ) (*assignments.CorrectionRunner, error) {
-	identityRepository, err := identitystore.New(store)
-	if err != nil {
-		return nil, err
-	}
-	unitRepository, err := unitstore.New(store)
-	if err != nil {
-		return nil, err
-	}
-	assignmentRepository, err := assignmentstore.New(store)
-	if err != nil {
-		return nil, err
-	}
-	receipts, err := commandstore.New(store)
-	if err != nil {
-		return nil, err
-	}
-	facts, err := eventstore.New(store)
-	if err != nil {
-		return nil, err
-	}
-	intakeRepository, err := ingeststore.New(store, facts, facts)
-	if err != nil {
-		return nil, err
-	}
-	resolver, err := identity.NewResolver(identityRepository, store, applicationScopeOwners{
-		identity: identityRepository, units: unitRepository, networks: intakeRepository,
-	})
-	if err != nil {
-		return nil, err
-	}
-	matcher, err := assignments.NewService(store, resolver, store, assignmentRepository,
-		unitRepository, intakeRepository, receipts, facts, facts)
-	if err != nil {
-		return nil, err
-	}
-	return assignments.NewCorrectionRunner(store, store, matcher, assignmentRepository, facts, publication)
+	return assignments.NewCorrectionRunner(c.store, c.store, c.rules, c.assignments, c.facts, readmission)
 }
 
 // parseConfig binds only the platform's explicit flags and secret environment input.
 func parseConfig(args []string, getenv func(string) string) (startupConfig, error) {
 	flags := flag.NewFlagSet("gopager", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	profile := flags.String("profile", "", "Full operating profile")
 	rolesValue := flags.String("roles", "", "Comma-separated roles: api,worker")
 	mode := flags.String("migration-mode", string(platform.MigrationCheck), "Migration mode: check or apply")
 	address := flags.String("listen-address", "", "Explicit API listen address")
@@ -201,7 +167,10 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 	processingArtifactRoot := flags.String("processing-artifact-root", "", "Optional operator-provisioned plugin directory (or GOPAGER_PROCESSING_ARTIFACT_ROOT)")
 	defaultLimits := identity.DefaultLoginRateLimits()
 	loginAccount := flags.Int("login-attempts-per-account", defaultLimits.AccountAttempts, "Per-minute login attempt limit per normalized username")
+	loginSource := flags.Int("login-attempts-per-source", defaultLimits.SourceAttempts, "Per-minute login attempt limit per client source (remote address host)")
 	loginInstance := flags.Int("login-attempts-per-instance", defaultLimits.InstanceAttempts, "Per-minute instance login attempt limit")
+	processingConcurrency := flags.Int("processing-concurrency", worker.DefaultDispatchConcurrency, "Maximum Processing candidates evaluated in parallel")
+	processingPoll := flags.Duration("processing-poll-interval", worker.DefaultDispatchPollInterval, "Fallback interval for discovering due Processing work (wake-ups arrive through notifications)")
 	allowInsecure := flags.Bool("allow-insecure-db", false, "Operator approval for unverified remote database TLS")
 	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
 		return startupConfig{}, platform.NewFailure(platform.CodeInvalidInput, err)
@@ -224,7 +193,7 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 		return startupConfig{}, platform.NewFailure(platform.CodeInvalidInput, err)
 	}
 	config := platform.Config{
-		Profile: *profile, Roles: roles, MigrationMode: platform.MigrationMode(*mode),
+		Roles: roles, MigrationMode: platform.MigrationMode(*mode),
 		ListenAddress: *address, DatabaseURL: getenv("GOPAGER_DATABASE_URL"),
 		AllowInsecureDBTLS: *allowInsecure,
 	}
@@ -236,7 +205,7 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 			return startupConfig{}, platform.NewFailure(platform.CodeInvalidInput, err)
 		}
 	}
-	if *loginAccount <= 0 || *loginInstance <= 0 {
+	if *loginAccount <= 0 || *loginSource <= 0 || *loginInstance <= 0 {
 		return startupConfig{}, platform.NewFailure(platform.CodeInvalidInput, identity.ErrInvalidInput)
 	}
 	if *processingArtifactRoot != "" {
@@ -251,62 +220,30 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 			return startupConfig{}, platform.NewFailure(platform.CodeInvalidInput, errors.New("invalid Processing artifact root"))
 		}
 	}
+	// Not WithDefaults: an explicit zero must be rejected, not silently replaced.
+	dispatch := worker.DispatchConfig{Concurrency: *processingConcurrency, PollInterval: *processingPoll}
+	if err := dispatch.Validate(); err != nil {
+		return startupConfig{}, err
+	}
 	return startupConfig{Config: config, PublicOrigin: *publicOrigin,
 		ProcessingArtifactRoot: *processingArtifactRoot,
-		LoginLimits:            identity.LoginRateLimits{AccountAttempts: *loginAccount, InstanceAttempts: *loginInstance},
-		ProcessingDispatch:     (worker.DispatchConfig{}).WithDefaults()}, nil
+		LoginLimits:            identity.LoginRateLimits{AccountAttempts: *loginAccount, SourceAttempts: *loginSource, InstanceAttempts: *loginInstance},
+		ProcessingDispatch:     dispatch}, nil
 }
 
-// composeApplicationAPI binds domain services to the existing primary store and HTTP listener.
-func composeApplicationAPI(publicOrigin string, limits identity.LoginRateLimits, store *postgres.Store, networkOwner assignments.NetworkOwner,
-	networkScopes identity.ScopeReferences, processingRoutes ...processingAPIRoutes) (http.Handler, error) {
+// composeApplicationAPI binds the shared services to the HTTP listener. A non-nil networkOwner
+// replaces the production Network owner for address-rule management (tests only); production
+// passes nil and uses the shared rule service.
+func composeApplicationAPI(publicOrigin string, limits identity.LoginRateLimits, c *core, networkOwner assignments.NetworkOwner,
+	processingRoutes ...httpapi.ProcessingRoutes) (http.Handler, error) {
 	if len(processingRoutes) > 1 {
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("multiple Processing API route sets"))
-	}
-	if (networkOwner == nil) != (networkScopes == nil) {
-		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("incomplete Network owner registration"))
 	}
 	transport, err := identity.NewHTTPTransport(publicOrigin)
 	if err != nil {
 		return nil, err
 	}
-	repository, err := identitystore.New(store)
-	if err != nil {
-		return nil, err
-	}
-	unitRepository, err := unitstore.New(store)
-	if err != nil {
-		return nil, err
-	}
-	ruleRepository, err := assignmentstore.New(store)
-	if err != nil {
-		return nil, err
-	}
-	receipts, err := commandstore.New(store)
-	if err != nil {
-		return nil, err
-	}
-	facts, err := eventstore.New(store)
-	if err != nil {
-		return nil, err
-	}
-	intakeRepository, err := ingeststore.New(store, facts, facts)
-	if err != nil {
-		return nil, err
-	}
-	if networkOwner == nil {
-		networkOwner = intakeRepository
-	}
-	if networkScopes == nil {
-		networkScopes = intakeRepository
-	}
-	resolver, err := identity.NewResolver(repository, store, applicationScopeOwners{
-		identity: repository, units: unitRepository, networks: networkScopes,
-	})
-	if err != nil {
-		return nil, err
-	}
-	login, err := identity.NewLoginService(store, resolver, repository, facts, limits)
+	login, err := identity.NewLoginService(c.store, c.resolver, c.identity, c.facts, limits)
 	if err != nil {
 		return nil, err
 	}
@@ -314,31 +251,32 @@ func composeApplicationAPI(publicOrigin string, limits identity.LoginRateLimits,
 	if err != nil {
 		return nil, err
 	}
-	unitService, err := units.NewService(store, resolver, store, unitRepository, ruleRepository, receipts, facts)
+	ruleService := c.rules
+	if networkOwner != nil {
+		if ruleService, err = c.newRuleService(networkOwner); err != nil {
+			return nil, err
+		}
+	}
+	intakeService, err := ingestdomain.NewService(c.store, c.store, c.intake, ruleService)
 	if err != nil {
 		return nil, err
 	}
-	ruleService, err := assignments.NewService(store, resolver, store, ruleRepository, unitRepository,
-		networkOwner, receipts, facts, facts)
+	gatewayAdministration, err := ingestdomain.NewGatewayAdministration(c.store, c.resolver, c.store,
+		c.intake, c.receipts, c.facts)
 	if err != nil {
 		return nil, err
 	}
-	intakeService, err := ingestdomain.NewService(store, store, intakeRepository, ruleService)
-	if err != nil {
-		return nil, err
-	}
-	gatewayAdministration, err := ingestdomain.NewGatewayAdministration(store, resolver, store,
-		intakeRepository, receipts, facts)
+	preauthenticator, err := identity.NewPreauthenticator(c.store, c.resolver)
 	if err != nil {
 		return nil, err
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/auth/", authHandler)
-	registerManagementRoutes(mux, transport, unitService, ruleService)
-	registerIngestRoutes(mux, intakeService)
-	registerGatewayManagementRoutes(mux, transport, gatewayAdministration)
+	httpapi.RegisterManagementRoutes(mux, transport, preauthenticator, c.unitService, ruleService)
+	httpapi.RegisterIngestRoutes(mux, intakeService)
+	httpapi.RegisterGatewayManagementRoutes(mux, transport, preauthenticator, gatewayAdministration)
 	if len(processingRoutes) == 1 {
-		registerProcessingRoutes(mux, transport, processingRoutes[0])
+		httpapi.RegisterProcessingRoutes(mux, transport, preauthenticator, processingRoutes[0])
 	}
 	return mux, nil
 }

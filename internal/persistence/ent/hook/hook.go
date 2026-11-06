@@ -33,6 +33,18 @@ func (f AddressRuleFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AddressRuleMutation", m)
 }
 
+// The AgencyFunc type is an adapter to allow the use of ordinary
+// function as Agency mutator.
+type AgencyFunc func(context.Context, *ent.AgencyMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AgencyFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AgencyMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AgencyMutation", m)
+}
+
 // The AssignmentControlFunc type is an adapter to allow the use of ordinary
 // function as AssignmentControl mutator.
 type AssignmentControlFunc func(context.Context, *ent.AssignmentControlMutation) (ent.Value, error)
@@ -69,28 +81,16 @@ func (f CommandReceiptFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Val
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CommandReceiptMutation", m)
 }
 
-// The ContributionSupportFunc type is an adapter to allow the use of ordinary
-// function as ContributionSupport mutator.
-type ContributionSupportFunc func(context.Context, *ent.ContributionSupportMutation) (ent.Value, error)
+// The ConsumerOffsetFunc type is an adapter to allow the use of ordinary
+// function as ConsumerOffset mutator.
+type ConsumerOffsetFunc func(context.Context, *ent.ConsumerOffsetMutation) (ent.Value, error)
 
 // Mutate calls f(ctx, m).
-func (f ContributionSupportFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.ContributionSupportMutation); ok {
+func (f ConsumerOffsetFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ConsumerOffsetMutation); ok {
 		return f(ctx, mv)
 	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ContributionSupportMutation", m)
-}
-
-// The CorrectionDirtyTransmissionFunc type is an adapter to allow the use of ordinary
-// function as CorrectionDirtyTransmission mutator.
-type CorrectionDirtyTransmissionFunc func(context.Context, *ent.CorrectionDirtyTransmissionMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f CorrectionDirtyTransmissionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.CorrectionDirtyTransmissionMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CorrectionDirtyTransmissionMutation", m)
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ConsumerOffsetMutation", m)
 }
 
 // The CredentialFunc type is an adapter to allow the use of ordinary
@@ -237,16 +237,16 @@ func (f MessageFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, err
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MessageMutation", m)
 }
 
-// The MessageContributionFunc type is an adapter to allow the use of ordinary
-// function as MessageContribution mutator.
-type MessageContributionFunc func(context.Context, *ent.MessageContributionMutation) (ent.Value, error)
+// The MessageUnitFunc type is an adapter to allow the use of ordinary
+// function as MessageUnit mutator.
+type MessageUnitFunc func(context.Context, *ent.MessageUnitMutation) (ent.Value, error)
 
 // Mutate calls f(ctx, m).
-func (f MessageContributionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.MessageContributionMutation); ok {
+func (f MessageUnitFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.MessageUnitMutation); ok {
 		return f(ctx, mv)
 	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MessageContributionMutation", m)
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MessageUnitMutation", m)
 }
 
 // The NetworkFunc type is an adapter to allow the use of ordinary

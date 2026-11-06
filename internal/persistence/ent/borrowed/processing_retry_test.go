@@ -19,9 +19,16 @@ import (
 )
 
 type processingRetrySourceFixture struct {
-	binding processing.CandidateBinding
-	failure error
-	calls   int
+	binding   processing.CandidateBinding
+	failure   error
+	calls     int
+	published int
+}
+
+// Publish records the status refresh request; the fixture owns no Transmission row.
+func (f *processingRetrySourceFixture) Publish(context.Context, platform.TransactionContext, uuid.UUID) error {
+	f.published++
+	return nil
 }
 
 // CheckRetrySource is explicit synthetic eligibility, not a production source/publication owner.
@@ -34,6 +41,7 @@ func (f *processingRetrySourceFixture) CheckRetrySource(_ context.Context, _ pla
 }
 
 func TestProcessingRetryRechecksProofAndRequiresCurrentSourceOwner(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	service, _ := newProcessingManagementFixture(t, f, &processingPreparationFixture{}, f.facts)
 	created, err := service.CreateWorkflow(t.Context(), f.proof, uuid.New(),
@@ -88,12 +96,12 @@ func TestProcessingRetryRechecksProofAndRequiresCurrentSourceOwner(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	replaceManagementGrants(t, f, []authz.Grant{{Scope: authz.Scope{Kind: "all"}, Actions: []string{"rule.read", "rule.update"}}})
+	replaceManagementGrants(t, f, []authz.Grant{{Scope: authz.Scope{Kind: "all"}, Actions: []string{"workflow.read", "workflow.update"}}})
 	if _, err := retries.RetryFailed(t.Context(), f.proof, created.ID, candidate.ID, candidate.Revision,
 		checkedMutation); !errors.Is(err, authz.ErrForbidden) || source.calls != 0 {
 		t.Fatalf("current CRUD proof bypassed retry action: %v calls=%d", err, source.calls)
 	}
-	replaceManagementGrants(t, f, []authz.Grant{{Scope: authz.Scope{Kind: "all"}, Actions: []string{"rule.reprocess"}}})
+	replaceManagementGrants(t, f, []authz.Grant{{Scope: authz.Scope{Kind: "all"}, Actions: []string{"workflow.reprocess"}}})
 	if _, err := retries.RetryFailed(t.Context(), f.proof, created.ID, candidate.ID, candidate.Revision,
 		nil); err == nil || source.calls != 0 {
 		t.Fatalf("missing mutation/CSRF participant accepted: %v calls=%d", err, source.calls)

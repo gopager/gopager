@@ -7,6 +7,7 @@ import (
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema"
+	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	"github.com/google/uuid"
@@ -32,8 +33,22 @@ func (Network) Fields() []ent.Field {
 		field.Int64("revision").Default(1).Positive(),
 		field.String("name").NotEmpty().MaxRuneLen(256),
 		field.Enum("protocol").Values("pocsag", "flex", "zvei", "eas"),
+		field.UUID("agency_id", uuid.UUID{}),
 		field.Bool("deleted").Default(false),
 	}
+}
+
+// Edges returns the relations of the Network schema: its home Agency and the Address rules in it.
+func (Network) Edges() []ent.Edge {
+	return []ent.Edge{
+		edge.From("agency", Agency.Type).Ref("networks").Field("agency_id").Unique().Required(),
+		edge.To("address_rules", AddressRule.Type),
+	}
+}
+
+// Indexes returns the indexes of the Network schema.
+func (Network) Indexes() []ent.Index {
+	return []ent.Index{index.Fields("agency_id")}
 }
 
 // Gateway defines the gateways table: an ingest gateway with its health state and last
@@ -62,7 +77,7 @@ func (Gateway) Fields() []ent.Field {
 }
 
 // GatewayNetwork defines the gateway_networks table: the mapping from a gateway's own network
-// identifier to a Network; identifiers and Networks are each unique per gateway.
+// identifier to a Network; identifiers, Networks and priorities (lower number first) are each unique per gateway.
 type GatewayNetwork struct{ ent.Schema }
 
 // Policy returns the privacy policy that guards queries and mutations of the GatewayNetwork schema.
@@ -80,7 +95,7 @@ func (GatewayNetwork) Fields() []ent.Field {
 		field.UUID("gateway_id", uuid.UUID{}),
 		field.String("gateway_network_identifier").NotEmpty().MaxRuneLen(128),
 		field.UUID("network_id", uuid.UUID{}),
-		field.Bool("default"),
+		field.Int("priority").NonNegative(),
 	}
 }
 
@@ -89,6 +104,7 @@ func (GatewayNetwork) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("gateway_id", "gateway_network_identifier").Unique(),
 		index.Fields("gateway_id", "network_id").Unique(),
+		index.Fields("gateway_id", "priority").Unique(),
 	}
 }
 
@@ -150,7 +166,6 @@ func (Transmission) Fields() []ent.Field {
 		field.String("network_resolution").NotEmpty(),
 		field.Enum("protocol").Values("pocsag", "flex", "zvei", "eas"),
 		field.JSON("payload", json.RawMessage{}).SchemaType(map[string]string{dialect.Postgres: "json"}).Sensitive(),
-		field.JSON("targets", json.RawMessage{}).SchemaType(map[string]string{dialect.Postgres: "json"}).Sensitive(),
 		field.Time("observed_at"),
 		field.Int("observation_offset_seconds"),
 		field.Time("accepted_at"),
@@ -158,8 +173,7 @@ func (Transmission) Fields() []ent.Field {
 		field.Bool("incomplete").Default(false),
 		field.JSON("quality_metrics", json.RawMessage{}).SchemaType(map[string]string{dialect.Postgres: "json"}).Optional().Sensitive(),
 		field.UUID("message_id", uuid.UUID{}),
-		field.Enum("processing_status").Values("pending", "completed", "failed").Default("pending"),
-		field.Enum("publication_status").Values("pending", "ready", "failed").Default("pending"),
+		field.Enum("processing_status").Values("none", "pending", "completed", "failed").Default("pending"),
 	}
 }
 
@@ -169,14 +183,11 @@ func (Transmission) Indexes() []ent.Index {
 		index.Fields("gateway_id", "submission_id").Unique(),
 		index.Fields("protocol", "observed_at", "id"),
 		index.Fields("message_id", "observed_at", "id"),
-		// Supports the post-correction publication re-entry sweep over unpublished Transmissions.
-		index.Fields("accepted_at", "id").StorageKey("transmissions_unpublished").
-			Annotations(entsql.IndexWhere("processing_status = 'pending' AND publication_status = 'pending'")),
 	}
 }
 
 // Message defines the messages table: the logical Message that groups Transmissions with the
-// same identity within the grouping window, with its publication status.
+// same identity within the grouping window.
 type Message struct{ ent.Schema }
 
 // Policy returns the privacy policy that guards queries and mutations of the Message schema.
@@ -197,13 +208,12 @@ func (Message) Fields() []ent.Field {
 		field.Bytes("identity_value").Sensitive(),
 		field.Time("first_observed_at"),
 		field.Time("last_observed_at"),
-		field.Enum("publication_status").Values("pending", "ready", "failed").Default("pending"),
 	}
 }
 
 // Indexes returns the indexes and unique constraints of the Message schema.
 func (Message) Indexes() []ent.Index {
-	return []ent.Index{index.Fields("identity_form", "identity_subtype", "identity_value")}
+	return []ent.Index{index.Fields("identity_form", "identity_subtype", "identity_value", "last_observed_at")}
 }
 
 // GroupingControl defines the single-row grouping_control table holding the Message grouping
@@ -246,72 +256,60 @@ func (TransmissionTarget) Fields() []ent.Field {
 		field.UUID("unit_id", uuid.UUID{}).Optional().Nillable(),
 		field.UUID("matched_rule_id", uuid.UUID{}).Optional().Nillable(),
 		field.Int64("assignment_revision").Positive(),
-	}
-}
-
-// Indexes returns the indexes and unique constraints of the TransmissionTarget schema.
-func (TransmissionTarget) Indexes() []ent.Index {
-	return []ent.Index{index.Fields("transmission_id", "position").Unique(), index.Fields("unit_id")}
-}
-
-// MessageContribution defines the message_contributions table: a Message's contribution to one
-// Unit, or the single Unit-less contribution, with its readiness for publication.
-type MessageContribution struct{ ent.Schema }
-
-// Policy returns the privacy policy that guards queries and mutations of the MessageContribution schema.
-func (MessageContribution) Policy() ent.Policy { return guard.Policy("MessageContribution") }
-
-// Annotations returns the table name and code-generation annotations of the MessageContribution schema.
-func (MessageContribution) Annotations() []schema.Annotation {
-	return []schema.Annotation{entsql.Annotation{Table: "message_contributions"}}
-}
-
-// Fields returns the columns of the MessageContribution schema.
-func (MessageContribution) Fields() []ent.Field {
-	return []ent.Field{
-		field.UUID("id", uuid.UUID{}),
-		field.UUID("message_id", uuid.UUID{}),
-		field.UUID("unit_id", uuid.UUID{}).Optional().Nillable(),
-		field.Time("contribution_time"),
-		field.Time("age_anchor"),
-		field.Bool("ready").Default(false),
-	}
-}
-
-// Indexes returns the indexes and unique constraints of the MessageContribution schema.
-func (MessageContribution) Indexes() []ent.Index {
-	return []ent.Index{
-		index.Fields("message_id", "unit_id").Unique().Annotations(entsql.IndexWhere("unit_id IS NOT NULL")),
-		index.Fields("message_id").Unique().Annotations(entsql.IndexWhere("unit_id IS NULL")),
-		index.Fields("unit_id", "age_anchor"),
-	}
-}
-
-// ContributionSupport defines the contribution_supports table: links a Transmission target
-// (unique per Transmission and position) to the Message contribution it supports.
-type ContributionSupport struct{ ent.Schema }
-
-// Policy returns the privacy policy that guards queries and mutations of the ContributionSupport schema.
-func (ContributionSupport) Policy() ent.Policy { return guard.Policy("ContributionSupport") }
-
-// Annotations returns the table name and code-generation annotations of the ContributionSupport schema.
-func (ContributionSupport) Annotations() []schema.Annotation {
-	return []schema.Annotation{entsql.Annotation{Table: "contribution_supports"}}
-}
-
-// Fields returns the columns of the ContributionSupport schema.
-func (ContributionSupport) Fields() []ent.Field {
-	return []ent.Field{
-		field.UUID("id", uuid.UUID{}),
-		field.UUID("contribution_id", uuid.UUID{}),
-		field.UUID("transmission_id", uuid.UUID{}),
-		field.Int("target_position").Optional().Nillable().NonNegative(),
+		field.UUID("network_id", uuid.UUID{}),
+		field.Enum("protocol").Values("pocsag", "flex", "zvei", "eas"),
 		field.Time("observed_at"),
 		field.Time("accepted_at"),
+		field.Int64("address_number").Optional().Nillable(),
+		field.String("address_text").Optional().Nillable(),
+		field.Int16("function").Optional().Nillable(),
 	}
 }
 
-// Indexes returns the indexes and unique constraints of the ContributionSupport schema.
-func (ContributionSupport) Indexes() []ent.Index {
-	return []ent.Index{index.Fields("transmission_id", "target_position").Unique(), index.Fields("contribution_id")}
+// Indexes returns the indexes and unique constraints of the TransmissionTarget schema: the typed
+// address columns serve selector-scoped correction, the Unit index serves Unit history.
+func (TransmissionTarget) Indexes() []ent.Index {
+	return []ent.Index{
+		index.Fields("transmission_id", "position").Unique(),
+		index.Fields("network_id", "protocol", "address_number", "observed_at").Annotations(entsql.IndexWhere("address_number IS NOT NULL")),
+		index.Fields("network_id", "protocol", "address_text", "observed_at").Annotations(entsql.IndexWhere("address_text IS NOT NULL")),
+		index.Fields("unit_id", "observed_at"),
+	}
+}
+
+// MessageUnit defines the message_units table: the rebuildable cache of which Units a Message
+// alerts, one row per Message and Unit (with the Unit's Agency) or one Unit-less row per Message
+// and Network Agency for targetless Transmissions, with the earliest observation, the age anchor
+// and the correction status that feeds and authorization predicates read directly.
+type MessageUnit struct{ ent.Schema }
+
+// Policy returns the privacy policy that guards queries and mutations of the MessageUnit schema.
+func (MessageUnit) Policy() ent.Policy { return guard.Policy("MessageUnit") }
+
+// Annotations returns the table name and code-generation annotations of the MessageUnit schema.
+func (MessageUnit) Annotations() []schema.Annotation {
+	return []schema.Annotation{entsql.Annotation{Table: "message_units"}}
+}
+
+// Fields returns the columns of the MessageUnit schema.
+func (MessageUnit) Fields() []ent.Field {
+	return []ent.Field{
+		field.UUID("id", uuid.UUID{}).Default(uuid.New),
+		field.UUID("message_id", uuid.UUID{}),
+		field.UUID("unit_id", uuid.UUID{}).Optional().Nillable(),
+		field.UUID("agency_id", uuid.UUID{}),
+		field.Time("first_observed_at"),
+		field.Time("age_anchor"),
+		field.Enum("correction_status").Values("current", "correcting").Default("current"),
+	}
+}
+
+// Indexes returns the indexes and unique constraints of the MessageUnit schema.
+func (MessageUnit) Indexes() []ent.Index {
+	return []ent.Index{
+		index.Fields("message_id", "unit_id").Unique().Annotations(entsql.IndexWhere("unit_id IS NOT NULL")),
+		index.Fields("message_id", "agency_id").Unique().Annotations(entsql.IndexWhere("unit_id IS NULL")),
+		index.Fields("unit_id", "age_anchor"),
+		index.Fields("agency_id", "first_observed_at"),
+	}
 }

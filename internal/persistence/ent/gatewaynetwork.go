@@ -23,8 +23,8 @@ type GatewayNetwork struct {
 	GatewayNetworkIdentifier string `json:"gateway_network_identifier,omitempty"`
 	// NetworkID holds the value of the "network_id" field.
 	NetworkID uuid.UUID `json:"network_id,omitempty"`
-	// Default holds the value of the "default" field.
-	Default      bool `json:"default,omitempty"`
+	// Priority holds the value of the "priority" field.
+	Priority     int `json:"priority,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -33,8 +33,8 @@ func (*GatewayNetwork) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case gatewaynetwork.FieldDefault:
-			values[i] = new(sql.NullBool)
+		case gatewaynetwork.FieldPriority:
+			values[i] = new(sql.NullInt64)
 		case gatewaynetwork.FieldGatewayNetworkIdentifier:
 			values[i] = new(sql.NullString)
 		case gatewaynetwork.FieldID, gatewaynetwork.FieldGatewayID, gatewaynetwork.FieldNetworkID:
@@ -78,11 +78,11 @@ func (_m *GatewayNetwork) assignValues(columns []string, values []any) error {
 			} else if value != nil {
 				_m.NetworkID = *value
 			}
-		case gatewaynetwork.FieldDefault:
-			if value, ok := values[i].(*sql.NullBool); !ok {
-				return fmt.Errorf("unexpected type %T for field default", values[i])
+		case gatewaynetwork.FieldPriority:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field priority", values[i])
 			} else if value.Valid {
-				_m.Default = value.Bool
+				_m.Priority = int(value.Int64)
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -129,8 +129,8 @@ func (_m *GatewayNetwork) String() string {
 	builder.WriteString("network_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.NetworkID))
 	builder.WriteString(", ")
-	builder.WriteString("default=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Default))
+	builder.WriteString("priority=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Priority))
 	builder.WriteByte(')')
 	return builder.String()
 }

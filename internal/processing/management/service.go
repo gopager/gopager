@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
+	"github.com/gopager/gopager/internal/protocols"
+	"github.com/gopager/gopager/internal/units"
 )
 
 // DefinitionPreparer compiles against trusted source declarations/artifacts outside primary transactions.
@@ -23,9 +26,11 @@ type DefinitionPreparer interface {
 	PrepareWorkflow(context.Context, processing.Definition) (*processing.WorkflowProgram, error)
 }
 
-// UnitNetworks reads every current Network use through the existing Assignment owner.
-type UnitNetworks interface {
-	NetworksForUnit(context.Context, platform.TransactionContext, uuid.UUID) ([]uuid.UUID, error)
+// ScopeContext resolves the Agency of a Radio network or a Unit, so Workflow scope references can
+// be checked for existence and authorized by Agency.
+type ScopeContext interface {
+	ReadNetwork(context.Context, platform.TransactionContext, uuid.UUID) (protocols.Protocol, uuid.UUID, error)
+	ReadUnitContext(context.Context, platform.TransactionContext, uuid.UUID) (units.Context, error)
 }
 
 // Service manages Workflow configuration: reads, saves and versioning. Every operation
@@ -38,8 +43,7 @@ type Service struct {
 	resolver     *identity.Resolver
 	clock        platform.Clock
 	repository   processing.ConfigurationRepository
-	references   identity.ScopeReferences
-	units        UnitNetworks
+	scopes       ScopeContext
 	preparer     DefinitionPreparer
 	receipts     commands.Repository
 	facts        events.ProcessingAppender
@@ -47,88 +51,80 @@ type Service struct {
 
 // New composes existing transaction/proof/owner participants; missing dependencies fail explicitly.
 func New(transactions identity.Transactions, resolver *identity.Resolver, clock platform.Clock,
-	repository processing.ConfigurationRepository, references identity.ScopeReferences, units UnitNetworks,
+	repository processing.ConfigurationRepository, scopes ScopeContext,
 	preparer DefinitionPreparer, receipts commands.Repository, facts events.ProcessingAppender) (*Service, error) {
-	if transactions == nil || resolver == nil || clock == nil || repository == nil || references == nil ||
-		units == nil || preparer == nil || receipts == nil || facts == nil {
+	if transactions == nil || resolver == nil || clock == nil || repository == nil || scopes == nil ||
+		preparer == nil || receipts == nil || facts == nil {
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing Processing management dependency"))
 	}
 	return &Service{transactions: transactions, resolver: resolver, clock: clock, repository: repository,
-		references: references, units: units, preparer: preparer, receipts: receipts, facts: facts}, nil
+		scopes: scopes, preparer: preparer, receipts: receipts, facts: facts}, nil
 }
 
-// within keeps current proofs, primary time and protected configuration operations in one transaction.
-func (s *Service) within(ctx context.Context, proof identity.Proof, mutation bool,
-	check func(identity.Authentication) error, operation func(platform.TransactionContext, authz.Authority, time.Time) error) error {
-	if mutation && check == nil {
-		return authz.ErrInvalidInput
-	}
-	return s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-		authentication, err := s.resolver.Resolve(tx.Context(), tx, proof)
-		if err != nil {
+// within keeps current proofs, primary time and protected configuration operations in one
+// transaction. Unlike the master-data services it serializes mutations behind the Processing
+// revision.
+func (s *Service) within(ctx context.Context, proof identity.Proof, mutation bool, check func(identity.Authentication) error,
+	operation func(platform.TransactionContext, authz.Authority, time.Time) error) error {
+	return identity.WithAuthority(ctx, s.transactions, s.clock, s.resolver, proof, mutation, check, operation,
+		identity.LockMutations(func(ctx context.Context, tx platform.TransactionContext) error {
+			_, err := s.repository.LockRevisionForChange(ctx, tx)
 			return err
-		}
-		if _, err := s.repository.LockRevision(tx.Context(), tx); err != nil {
-			return err
-		}
-		now, err := s.clock.Now(tx.Context(), tx)
-		if err != nil {
-			return err
-		}
-		if authentication.ExpiresAt != nil && !now.Before(*authentication.ExpiresAt) {
-			return identity.ErrLoginRequired
-		}
-		if check != nil {
-			if err := check(authentication); err != nil {
-				return err
-			}
-		}
-		return operation(tx, authentication.Authority, now)
-	})
+		}))
 }
 
-// authorizeScope validates reference existence and every affected current use, not a first matching Network.
+// authorizeScope checks that every Workflow scope reference exists and that the caller holds
+// action on each reference's Agency (and Unit); an unknown reference is invalid input.
 func (s *Service) authorizeScope(ctx context.Context, tx platform.TransactionContext, authority authz.Authority,
 	action string, scope authz.Scope, now time.Time) error {
-	exists, err := s.references.ScopeExists(ctx, tx, scope)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return authz.ErrInvalidInput
-	}
-	if scope.Kind == "all" {
+	switch scope.Kind {
+	case "all":
 		return authz.Authorize(authority, action, nil, authz.Target{}, now)
+	case "network", "unit":
+	default:
+		return authz.ErrInvalidInput
 	}
 	for _, reference := range scope.References {
 		id, err := uuid.Parse(reference)
 		if err != nil {
 			return authz.ErrInvalidInput
 		}
-		if scope.Kind == "network" {
-			if err := authz.Authorize(authority, action, nil, authz.Target{NetworkID: id}, now); err != nil {
-				return err
-			}
-			continue
-		}
-		networks, err := s.units.NetworksForUnit(ctx, tx, id)
+		target, err := s.scopeTarget(ctx, tx, scope.Kind, id)
 		if err != nil {
 			return err
 		}
-		target := authz.Target{UnitID: id}
-		if len(networks) == 0 {
-			if err := authz.Authorize(authority, action, nil, target, now); err != nil {
-				return err
-			}
-		}
-		for _, network := range networks {
-			target.NetworkID = network
-			if err := authz.Authorize(authority, action, nil, target, now); err != nil {
-				return err
-			}
+		if err := authz.Authorize(authority, action, nil, target, now); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// scopeTarget resolves one Workflow scope reference to its authorization target: a Radio network
+// to its Agency, a Unit to its Agency, identity and collections. Unknown or deleted references are
+// invalid input, not a hidden-item hint.
+func (s *Service) scopeTarget(ctx context.Context, tx platform.TransactionContext, kind string, id uuid.UUID) (authz.Target, error) {
+	if kind == "network" {
+		_, agency, err := s.scopes.ReadNetwork(ctx, tx, id)
+		if errors.Is(err, authz.ErrNotFound) {
+			return authz.Target{}, authz.ErrInvalidInput
+		}
+		if err != nil {
+			return authz.Target{}, err
+		}
+		return authz.Target{AgencyID: agency}, nil
+	}
+	unit, err := s.scopes.ReadUnitContext(ctx, tx, id)
+	if errors.Is(err, authz.ErrNotFound) {
+		return authz.Target{}, authz.ErrInvalidInput
+	}
+	if err != nil {
+		return authz.Target{}, err
+	}
+	if unit.Deleted {
+		return authz.Target{}, authz.ErrInvalidInput
+	}
+	return authz.Target{AgencyID: unit.AgencyID, UnitID: id, UnitCollections: unit.CollectionIDs}, nil
 }
 
 // CheckSyntheticPreviewScope rechecks the editor's current preview authority for one captured context.
@@ -137,14 +133,17 @@ func (s *Service) CheckSyntheticPreviewScope(ctx context.Context, tx platform.Tr
 	if s == nil || ctx == nil || tx == nil || workflowID == uuid.Nil || networkID == uuid.Nil || now.IsZero() {
 		return platform.NewFailure(platform.CodeInvalidInput, errors.New("invalid synthetic preview scope check"))
 	}
-	workflow, err := s.repository.ReadWorkflow(ctx, tx, authority, "rule.preview", workflowID, now)
+	workflow, err := s.repository.ReadWorkflow(ctx, tx, authority, "workflow.preview", workflowID, now)
 	if err != nil {
 		return err
 	}
-	if err := s.authorizeScope(ctx, tx, authority, "rule.preview", workflow.Scope, now); err != nil {
+	if err := s.authorizeScope(ctx, tx, authority, "workflow.preview", workflow.Scope, now); err != nil {
 		return err
 	}
-	target := authz.Target{NetworkID: networkID}
+	target, err := s.scopeTarget(ctx, tx, "network", networkID)
+	if err != nil {
+		return err
+	}
 	switch workflow.Scope.Kind {
 	case "all":
 	case "network":
@@ -155,18 +154,15 @@ func (s *Service) CheckSyntheticPreviewScope(ctx context.Context, tx platform.Tr
 		if unitID == uuid.Nil || !slices.Contains(workflow.Scope.References, unitID.String()) {
 			return authz.ErrForbidden
 		}
-		networks, err := s.units.NetworksForUnit(ctx, tx, unitID)
+		unit, err := s.scopes.ReadUnitContext(ctx, tx, unitID)
 		if err != nil {
 			return err
 		}
-		if !slices.Contains(networks, networkID) {
-			return authz.ErrForbidden
-		}
-		target.UnitID = unitID
+		target.UnitID, target.UnitCollections = unitID, unit.CollectionIDs
 	default:
 		return authz.ErrInvalidInput
 	}
-	return authz.Authorize(authority, "rule.preview", nil, target, now)
+	return authz.Authorize(authority, "workflow.preview", nil, target, now)
 }
 
 // MetadataInput excludes active-version changes, which require the independent activation action.
@@ -234,7 +230,7 @@ func (s *Service) ReadWorkflow(ctx context.Context, proof identity.Proof, id uui
 	var result processing.WorkflowConfiguration
 	err := s.within(ctx, proof, false, nil, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
 		var err error
-		result, err = s.repository.ReadWorkflow(tx.Context(), tx, authority, "rule.read", id, now)
+		result, err = s.repository.ReadWorkflow(tx.Context(), tx, authority, "workflow.read", id, now)
 		return err
 	})
 	if err != nil {
@@ -307,7 +303,7 @@ func (s *Service) CreateWorkflow(ctx context.Context, proof identity.Proof, comm
 	}
 	var result commands.Result
 	err = s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		if err := s.authorizeScope(tx.Context(), tx, authority, "rule.create", input.Scope, now); err != nil {
+		if err := s.authorizeScope(tx.Context(), tx, authority, "workflow.create", input.Scope, now); err != nil {
 			return err
 		}
 		actor, err := uuid.Parse(authority.PrincipalID)
@@ -324,10 +320,10 @@ func (s *Service) CreateWorkflow(ctx context.Context, proof identity.Proof, comm
 		}
 		value := processing.WorkflowConfiguration{ID: uuid.New(), Revision: 1,
 			Name: input.Name, Scope: input.Scope, Enabled: *input.Enabled}
-		if err := s.repository.SaveWorkflow(tx.Context(), tx, authority, "rule.create", value, 0, now); err != nil {
+		if err := s.repository.SaveWorkflow(tx.Context(), tx, authority, "workflow.create", value, 0, now); err != nil {
 			return err
 		}
-		if err := s.record(tx, authority, value, "rule.create", "created", &command, now); err != nil {
+		if err := s.record(tx, authority, value, "workflow.create", "created", &command, now); err != nil {
 			return err
 		}
 		result = commands.Result{ID: value.ID, Revision: value.Revision}
@@ -352,18 +348,18 @@ func (s *Service) UpdateWorkflow(ctx context.Context, proof identity.Proof, id u
 	}
 	var result commands.Result
 	err = s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		current, err := s.current(tx, authority, "rule.update", id, expected, now)
+		current, err := s.current(tx, authority, "workflow.update", id, expected, now)
 		if err != nil {
 			return err
 		}
-		if err := s.authorizeScope(tx.Context(), tx, authority, "rule.update", input.Scope, now); err != nil {
+		if err := s.authorizeScope(tx.Context(), tx, authority, "workflow.update", input.Scope, now); err != nil {
 			return err
 		}
 		current.Name, current.Scope, current.Enabled = input.Name, input.Scope, *input.Enabled
-		if err := s.repository.SaveWorkflow(tx.Context(), tx, authority, "rule.update", current, expected, now); err != nil {
+		if err := s.repository.SaveWorkflow(tx.Context(), tx, authority, "workflow.update", current, expected, now); err != nil {
 			return err
 		}
-		if err := s.record(tx, authority, current, "rule.update", "updated", nil, now); err != nil {
+		if err := s.record(tx, authority, current, "workflow.update", "updated", nil, now); err != nil {
 			return err
 		}
 		result = commands.Result{ID: current.ID, Revision: current.Revision}
@@ -397,15 +393,15 @@ func (s *Service) DeleteWorkflow(ctx context.Context, proof identity.Proof, id u
 	}
 	var result commands.Result
 	err := s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		current, err := s.current(tx, authority, "rule.delete", id, expected, now)
+		current, err := s.current(tx, authority, "workflow.delete", id, expected, now)
 		if err != nil {
 			return err
 		}
 		current.Deleted, current.Enabled, current.ActiveVersionID = true, false, nil
-		if err := s.repository.SaveWorkflow(tx.Context(), tx, authority, "rule.delete", current, expected, now); err != nil {
+		if err := s.repository.SaveWorkflow(tx.Context(), tx, authority, "workflow.delete", current, expected, now); err != nil {
 			return err
 		}
-		if err := s.record(tx, authority, current, "rule.delete", "deleted", nil, now); err != nil {
+		if err := s.record(tx, authority, current, "workflow.delete", "deleted", nil, now); err != nil {
 			return err
 		}
 		result = commands.Result{ID: current.ID, Revision: current.Revision}
@@ -418,22 +414,30 @@ func (s *Service) DeleteWorkflow(ctx context.Context, proof identity.Proof, id u
 }
 
 // prepare compiles a detached definition and rejects substitution by a trusted preparation adapter.
-func (s *Service) prepare(ctx context.Context, definition processing.Definition) (result processing.Definition, err error) {
+func (s *Service) prepare(ctx context.Context, definition processing.Definition) (processing.Definition, error) {
+	checked, _, err := s.prepareReferenced(ctx, definition)
+	return checked, err
+}
+
+// prepareReferenced is prepare that also returns the source fields the definition reads, for
+// save-time field validation.
+func (s *Service) prepareReferenced(ctx context.Context, definition processing.Definition) (result processing.Definition,
+	references []processing.SourceReference, err error) {
 	encoded, err := json.Marshal(definition)
 	if err != nil {
-		return processing.Definition{}, err
+		return processing.Definition{}, nil, err
 	}
 	var detached processing.Definition
 	if err := processing.Decode(encoded, &detached); err != nil {
-		return processing.Definition{}, err
+		return processing.Definition{}, nil, err
 	}
 	program, err := s.preparer.PrepareWorkflow(ctx, detached)
 	if err != nil {
-		return processing.Definition{}, err
+		return processing.Definition{}, nil, err
 	}
 	if program == nil {
-		return processing.Definition{}, platform.NewFailure(platform.CodeAuthorityUnavailable,
-			errors.New("Workflow preparation owner returned no program"))
+		return processing.Definition{}, nil, platform.NewFailure(platform.CodeAuthorityUnavailable,
+			errors.New("workflow preparation owner returned no program"))
 	}
 	if closer, ok := s.preparer.(interface {
 		ClosePreparedWorkflow(context.Context, *processing.WorkflowProgram) error
@@ -444,17 +448,17 @@ func (s *Service) prepare(ctx context.Context, definition processing.Definition)
 	}
 	checked, err := program.CheckedDefinition()
 	if err != nil {
-		return processing.Definition{}, err
+		return processing.Definition{}, nil, err
 	}
 	actual, err := json.Marshal(checked)
 	if err != nil {
-		return processing.Definition{}, err
+		return processing.Definition{}, nil, err
 	}
 	if !bytes.Equal(encoded, actual) {
-		return processing.Definition{}, platform.NewFailure(platform.CodeAuthorityUnavailable,
-			errors.New("Workflow preparation substituted the definition"))
+		return processing.Definition{}, nil, platform.NewFailure(platform.CodeAuthorityUnavailable,
+			errors.New("workflow preparation substituted the definition"))
 	}
-	return checked, ctx.Err()
+	return checked, program.SourceReferences(), ctx.Err()
 }
 
 // SaveVersion preauthorizes, compiles without a transaction, then reauthorizes/CAS-writes all participants.
@@ -483,11 +487,11 @@ func (s *Service) SaveVersion(ctx context.Context, proof identity.Proof, command
 	var replay bool
 	var preparationRevision int64
 	err = s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		current, err := s.repository.ReadWorkflow(tx.Context(), tx, authority, "rule.update", parent, now)
+		current, err := s.repository.ReadWorkflow(tx.Context(), tx, authority, "workflow.update", parent, now)
 		if err != nil {
 			return err
 		}
-		if err := s.authorizeScope(tx.Context(), tx, authority, "rule.update", current.Scope, now); err != nil {
+		if err := s.authorizeScope(tx.Context(), tx, authority, "workflow.update", current.Scope, now); err != nil {
 			return err
 		}
 		actor, err := uuid.Parse(authority.PrincipalID)
@@ -513,16 +517,16 @@ func (s *Service) SaveVersion(ctx context.Context, proof identity.Proof, command
 	if replay {
 		return result, nil
 	}
-	detached, err = s.prepare(ctx, detached)
+	detached, references, err := s.prepareReferenced(ctx, detached)
 	if err != nil {
 		return commands.Result{}, err
 	}
 	err = s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		current, err := s.repository.ReadWorkflow(tx.Context(), tx, authority, "rule.update", parent, now)
+		current, err := s.repository.ReadWorkflow(tx.Context(), tx, authority, "workflow.update", parent, now)
 		if err != nil {
 			return err
 		}
-		if err := s.authorizeScope(tx.Context(), tx, authority, "rule.update", current.Scope, now); err != nil {
+		if err := s.authorizeScope(tx.Context(), tx, authority, "workflow.update", current.Scope, now); err != nil {
 			return err
 		}
 		actor, err := uuid.Parse(authority.PrincipalID)
@@ -540,6 +544,9 @@ func (s *Service) SaveVersion(ctx context.Context, proof identity.Proof, command
 		if authority.Revision != preparationRevision {
 			return authz.ErrRevisionConflict
 		}
+		if err := authorizeReferences(authority, references); err != nil {
+			return err
+		}
 		current.Revision, err = commands.NextRevision(current.Revision, expected)
 		if err != nil {
 			return err
@@ -549,10 +556,10 @@ func (s *Service) SaveVersion(ctx context.Context, proof identity.Proof, command
 		if err := s.repository.SaveVersion(tx.Context(), tx, version); err != nil {
 			return err
 		}
-		if err := s.repository.SaveWorkflow(tx.Context(), tx, authority, "rule.update", current, expected, now); err != nil {
+		if err := s.repository.SaveWorkflow(tx.Context(), tx, authority, "workflow.update", current, expected, now); err != nil {
 			return err
 		}
-		if err := s.record(tx, authority, current, "rule.update", "version-saved", &command, now); err != nil {
+		if err := s.record(tx, authority, current, "workflow.update", "version-saved", &command, now); err != nil {
 			return err
 		}
 		result = commands.Result{ID: version.ID, Revision: current.Revision}
@@ -565,7 +572,9 @@ func (s *Service) SaveVersion(ctx context.Context, proof identity.Proof, command
 	return result, nil
 }
 
-// ActivateVersion explicitly selects any retained version using activate alone, never an implied CRUD action.
+// ActivateVersion explicitly selects any retained version using activate alone, never an implied
+// CRUD action. The version's field references are judged by the activator's current field rights
+// exactly as on save, so a retained version cannot carry a reference past save-time validation.
 func (s *Service) ActivateVersion(ctx context.Context, proof identity.Proof, parent, version uuid.UUID,
 	expected int64, check func(identity.Authentication) error) (commands.Result, error) {
 	if parent == uuid.Nil || version == uuid.Nil || expected <= 0 {
@@ -574,10 +583,10 @@ func (s *Service) ActivateVersion(ctx context.Context, proof identity.Proof, par
 	var definition processing.Definition
 	var preparationRevision int64
 	err := s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		if _, err := s.current(tx, authority, "rule.activate", parent, expected, now); err != nil {
+		if _, err := s.current(tx, authority, "workflow.activate", parent, expected, now); err != nil {
 			return err
 		}
-		selected, err := s.repository.ReadVersionForAction(tx.Context(), tx, authority, "rule.activate", parent, version, now)
+		selected, err := s.repository.ReadVersionForAction(tx.Context(), tx, authority, "workflow.activate", parent, version, now)
 		definition = selected.Definition
 		preparationRevision = authority.Revision
 		return err
@@ -585,26 +594,30 @@ func (s *Service) ActivateVersion(ctx context.Context, proof identity.Proof, par
 	if err != nil {
 		return commands.Result{}, err
 	}
-	if _, err := s.prepare(ctx, definition); err != nil {
+	_, references, err := s.prepareReferenced(ctx, definition)
+	if err != nil {
 		return commands.Result{}, err
 	}
 	var result commands.Result
 	err = s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		current, err := s.current(tx, authority, "rule.activate", parent, expected, now)
+		current, err := s.current(tx, authority, "workflow.activate", parent, expected, now)
 		if err != nil {
 			return err
 		}
 		if authority.Revision != preparationRevision {
 			return authz.ErrRevisionConflict
 		}
-		if _, err := s.repository.ReadVersionForAction(tx.Context(), tx, authority, "rule.activate", parent, version, now); err != nil {
+		if _, err := s.repository.ReadVersionForAction(tx.Context(), tx, authority, "workflow.activate", parent, version, now); err != nil {
+			return err
+		}
+		if err := authorizeReferences(authority, references); err != nil {
 			return err
 		}
 		current.ActiveVersionID = &version
-		if err := s.repository.SaveWorkflow(tx.Context(), tx, authority, "rule.activate", current, expected, now); err != nil {
+		if err := s.repository.SaveWorkflow(tx.Context(), tx, authority, "workflow.activate", current, expected, now); err != nil {
 			return err
 		}
-		if err := s.record(tx, authority, current, "rule.activate", "activated", nil, now); err != nil {
+		if err := s.record(tx, authority, current, "workflow.activate", "activated", nil, now); err != nil {
 			return err
 		}
 		result = commands.Result{ID: current.ID, Revision: current.Revision}
@@ -614,4 +627,33 @@ func (s *Service) ActivateVersion(ctx context.Context, proof identity.Proof, par
 		return commands.Result{}, err
 	}
 	return result, nil
+}
+
+// authorizeReferences rejects a definition that reads a source or target field whose field
+// group the author may not read. Evaluation runs as the system and never consults a human
+// reader's rights, so this save-time check is what keeps an author from deriving and then
+// viewing data of groups they cannot read. A reference whose owner declared no group cannot
+// be proven readable and is rejected as well.
+//
+// authority is the author's current authority; references come from
+// processing.WorkflowProgram.SourceReferences. The error is INVALID_INPUT and names the
+// offending reference.
+func authorizeReferences(authority authz.Authority, references []processing.SourceReference) error {
+	for _, reference := range references {
+		if len(reference.Groups) == 0 {
+			return platform.NewFailure(platform.CodeInvalidInput,
+				fmt.Errorf("field reference %s declares no field group", reference.Field))
+		}
+		for _, group := range reference.Groups {
+			err := authz.AuthorizeFields(authority, []string{group})
+			if errors.Is(err, authz.ErrForbidden) {
+				return platform.NewFailure(platform.CodeInvalidInput,
+					fmt.Errorf("field reference %s requires field group %q, which the author may not read", reference.Field, group))
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

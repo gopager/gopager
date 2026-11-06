@@ -56,8 +56,6 @@ type ProcessingCandidate struct {
 	FailureCode *string `json:"failure_code,omitempty"`
 	// FailureStep holds the value of the "failure_step" field.
 	FailureStep *string `json:"failure_step,omitempty"`
-	// BarrierAppliedAt holds the value of the "barrier_applied_at" field.
-	BarrierAppliedAt *time.Time `json:"barrier_applied_at,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -78,7 +76,7 @@ func (*ProcessingCandidate) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullInt64)
 		case processingcandidate.FieldState, processingcandidate.FieldFailureCode, processingcandidate.FieldFailureStep:
 			values[i] = new(sql.NullString)
-		case processingcandidate.FieldLeaseUntil, processingcandidate.FieldDueAt, processingcandidate.FieldBarrierAppliedAt, processingcandidate.FieldCreatedAt, processingcandidate.FieldUpdatedAt:
+		case processingcandidate.FieldLeaseUntil, processingcandidate.FieldDueAt, processingcandidate.FieldCreatedAt, processingcandidate.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		case processingcandidate.FieldID, processingcandidate.FieldTransmissionID, processingcandidate.FieldWorkflowID, processingcandidate.FieldDefinitionVersionID:
 			values[i] = new(uuid.UUID)
@@ -222,13 +220,6 @@ func (_m *ProcessingCandidate) assignValues(columns []string, values []any) erro
 				_m.FailureStep = new(string)
 				*_m.FailureStep = value.String
 			}
-		case processingcandidate.FieldBarrierAppliedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field barrier_applied_at", values[i])
-			} else if value.Valid {
-				_m.BarrierAppliedAt = new(time.Time)
-				*_m.BarrierAppliedAt = value.Time
-			}
 		case processingcandidate.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -342,11 +333,6 @@ func (_m *ProcessingCandidate) String() string {
 	if v := _m.FailureStep; v != nil {
 		builder.WriteString("failure_step=")
 		builder.WriteString(*v)
-	}
-	builder.WriteString(", ")
-	if v := _m.BarrierAppliedAt; v != nil {
-		builder.WriteString("barrier_applied_at=")
-		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")

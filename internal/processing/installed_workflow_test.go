@@ -21,7 +21,6 @@ type installedOwnerFixture struct {
 	alter       bool
 	contexts    []InvocationContext
 	inputs      [][]byte
-	preview     *InstalledArtifact
 	previewMode bool
 }
 
@@ -30,13 +29,6 @@ func (o *installedOwnerFixture) PrepareInstalled(_ context.Context, id uuid.UUID
 		return nil, capabilityUnavailable(errors.New("fixture instance revision unavailable"))
 	}
 	return o.artifact, nil
-}
-
-func (o *installedOwnerFixture) PrepareInstalledPreview(ctx context.Context, id uuid.UUID, revision int64) (*InstalledArtifact, bool, error) {
-	if _, err := o.PrepareInstalled(ctx, id, revision); err != nil {
-		return nil, false, err
-	}
-	return o.preview, o.preview != nil, nil
 }
 
 func (o *installedOwnerFixture) AuthorizeInstalled(ctx context.Context, id uuid.UUID, revision int64, call InvocationContext, input map[string]FieldValue) (InvocationEnvelope, []Dependency, bool, error) {
@@ -49,7 +41,14 @@ func (o *installedOwnerFixture) AuthorizeInstalled(ctx context.Context, id uuid.
 		return InvocationEnvelope{}, nil, true, capabilityUnavailable(errors.New("fixture source context unavailable"))
 	}
 	o.contexts = append(o.contexts, call)
-	encoded, err := json.Marshal(input)
+	// Only the mapped values are compared across contexts: the definition-level classification
+	// stamped on each input legitimately differs by original target position.
+	mapped := make(map[string]FieldValue, len(input))
+	for name, field := range input {
+		field.Dependencies = nil
+		mapped[name] = field
+	}
+	encoded, err := json.Marshal(mapped)
 	if err != nil {
 		return InvocationEnvelope{}, nil, true, err
 	}
@@ -58,9 +57,6 @@ func (o *installedOwnerFixture) AuthorizeInstalled(ctx context.Context, id uuid.
 		return InvocationEnvelope{}, nil, true, capabilityUnavailable(errors.New("fixture current authorization revoked"))
 	}
 	envelope := o.envelope
-	if o.previewMode && o.preview != nil {
-		envelope.ArtifactDigest = o.preview.manifest.Artifact.Digest
-	}
 	envelope.InvocationID = uuid.New()
 	envelope.Input = make(map[string]Value)
 	for name, field := range input {
@@ -107,29 +103,8 @@ func newInstalledOwnerFixture(t *testing.T) *installedOwnerFixture {
 		CapabilityID: pin.CapabilityID, Configuration: configuration}}
 }
 
-func supplyInstalledPreviewFixture(t *testing.T, owner *installedOwnerFixture) {
-	t.Helper()
-	_, root, manifest, pin := artifactFixture(t, pluginfixture.Binary(t, "preview"))
-	primary, err := owner.artifact.Manifest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	manifest.InputSchema, manifest.ResultSchema = primary.InputSchema, primary.ResultSchema
-	manifest.ConfigurationSchema, manifest.ConfigurationPolicy = primary.ConfigurationSchema, primary.ConfigurationPolicy
-	writeManifest(t, root, manifest)
-	preview, err := owner.artifact.host.LoadInstalled(t.Context(), root, "manifest.json", pin)
-	if err != nil {
-		t.Fatal(err)
-	}
-	owner.preview = preview
-	t.Cleanup(func() {
-		if err := preview.Close(context.Background()); err != nil {
-			t.Error(err)
-		}
-	})
-}
-
-func TestInstalledWorkflowUsesDedicatedPreviewWithoutMainArtifactFallback(t *testing.T) {
+func TestInstalledWorkflowPreviewModeRunsOnlyPluginsThatSupportIt(t *testing.T) {
+	t.Parallel()
 	owner := newInstalledOwnerFixture(t)
 	_, source := sourceFixture(t)
 	definition := installedDefinition(owner, "ok", FieldRef{Namespace: "source", Path: []string{"text"}})
@@ -138,42 +113,20 @@ func TestInstalledWorkflowUsesDedicatedPreviewWithoutMainArtifactFallback(t *tes
 		t.Fatal(err)
 	}
 	owner.previewMode = true
+	owner.artifact.manifest.SupportsPreview = false
 	result, err := program.EvaluateInstalled(t.Context(), source, owner)
 	if platform.FailureCode(err) != platform.CodeAuthorityUnavailable || result.Selected {
-		t.Fatalf("main artifact substituted for absent preview: %+v %v", result, err)
+		t.Fatalf("live behaviour substituted for a plugin without preview support: %+v %v", result, err)
 	}
-	supplyInstalledPreviewFixture(t, owner)
-	program, err = CompileWorkflowInstalled(t.Context(), definition, source, nil, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
+	owner.artifact.manifest.SupportsPreview = true
 	result, err = program.EvaluateInstalled(t.Context(), source, owner)
 	if err != nil || result.Fields["text"].Value == nil || string(result.Fields["text"].Value.Value) != `"PREVIEW:LEVEL=7"` {
-		t.Fatalf("dedicated preview did not actually run: %+v %v", result, err)
+		t.Fatalf("preview mode did not reach the plugin: %+v %v", result, err)
 	}
 	owner.previewMode = false
 	result, err = program.EvaluateInstalled(t.Context(), source, owner)
 	if err != nil || result.Fields["text"].Value == nil || string(result.Fields["text"].Value.Value) != `"LEVEL=7"` {
 		t.Fatalf("preview replaced ordinary processing: %+v %v", result, err)
-	}
-	owner.preview.manifest.PurePreview = false
-	if _, err := CompileWorkflowInstalled(t.Context(), definition, source, nil, owner); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
-		t.Fatalf("undeclared dedicated preview accepted: %v", err)
-	}
-	owner.preview.manifest.PurePreview = true
-	owner.preview.manifest.InputSchema["mode"] = FieldSchema{Kind: BooleanValue}
-	if _, err := CompileWorkflowInstalled(t.Context(), definition, source, nil, owner); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
-		t.Fatalf("incompatible dedicated preview input accepted: %v", err)
-	}
-	owner.preview.manifest.InputSchema["mode"] = FieldSchema{Kind: StringValue}
-	secret := true
-	owner.preview.manifest.ConfigurationPolicy.Secret = &secret
-	if _, err := CompileWorkflowInstalled(t.Context(), definition, source, nil, owner); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
-		t.Fatalf("preview altered configuration classification: %v", err)
-	}
-	owner.preview = owner.artifact
-	if _, err := CompileWorkflowInstalled(t.Context(), definition, source, nil, owner); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
-		t.Fatalf("same prepared artifact masqueraded as dedicated preview: %v", err)
 	}
 }
 
@@ -190,6 +143,7 @@ func installedDefinition(owner *installedOwnerFixture, mode string, input FieldR
 }
 
 func TestInstalledWorkflowIdenticalInputsStillCarryDistinctOriginalContexts(t *testing.T) {
+	t.Parallel()
 	owner := newInstalledOwnerFixture(t)
 	projection, source := sourceFixture(t, "111", "222")
 	definition := installedDefinition(owner, "ok", FieldRef{Namespace: "source", Path: []string{"text"}})
@@ -231,6 +185,7 @@ func TestInstalledWorkflowIdenticalInputsStillCarryDistinctOriginalContexts(t *t
 }
 
 func TestInstalledWorkflowActuallyWaitsBeyondBuiltinBudgetWithoutDetachingCaller(t *testing.T) {
+	t.Parallel()
 	owner := newInstalledOwnerFixture(t)
 	_, source := sourceFixture(t)
 	definition := installedDefinition(owner, "loop", FieldRef{Namespace: "source", Path: []string{"text"}})
@@ -257,12 +212,13 @@ func TestInstalledWorkflowActuallyWaitsBeyondBuiltinBudgetWithoutDetachingCaller
 		string(result.Fields["text"].Value.Value) != `"LEVEL=7"` {
 		t.Fatalf("host mapping after installed call or prior deadline failed: %+v, %v", result, err)
 	}
-	if len(result.Fields["text"].Dependencies) != 1 || result.Fields["text"].Dependencies[0].Groups[0] != "payload" {
-		t.Fatalf("installed output lost input/selector classification: %+v", result)
+	dependencies, err := result.Dependencies()
+	if err != nil || len(result.Fields["text"].Dependencies) != 0 || len(dependencies) != 1 || dependencies[0].Groups[0] != "payload" {
+		t.Fatalf("installed output is not classified once per definition: %+v, %v", result, err)
 	}
 }
 
-func TestInstalledWorkflowPluginOwnDeadlineIsResourceLimit(t *testing.T) {
+func TestInstalledWorkflowPluginOwnDeadlineIsResourceLimit(t *testing.T) { //nolint:paralleltest // swaps the package variable installedInvocationTimeout
 	owner := newInstalledOwnerFixture(t)
 	_, source := sourceFixture(t)
 	definition := installedDefinition(owner, "loop", FieldRef{Namespace: "source", Path: []string{"text"}})
@@ -280,6 +236,7 @@ func TestInstalledWorkflowPluginOwnDeadlineIsResourceLimit(t *testing.T) {
 }
 
 func TestInstalledWorkflowRechecksEveryTargetAndRejectsInputSubstitution(t *testing.T) {
+	t.Parallel()
 	owner := newInstalledOwnerFixture(t)
 	_, source := sourceFixture(t, "111", "222")
 	definition := installedDefinition(owner, "ok", FieldRef{Namespace: "target", Path: []string{"address"}})

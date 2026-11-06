@@ -37,7 +37,8 @@ type WorkSourceOwner interface {
 	ReconcileCandidate(context.Context, platform.TransactionContext, processing.Candidate) (processing.Candidate, error)
 }
 
-// Publisher applies completed private evidence and source readiness in the same primary transaction.
+// Publisher attaches completed private evidence to the Message and refreshes the Transmission's
+// processing status in the same primary transaction as the candidate transition.
 type Publisher interface {
 	Publish(context.Context, platform.TransactionContext, uuid.UUID) error
 }
@@ -57,6 +58,28 @@ type Service struct {
 	regex        processing.RegexEvaluator
 	id           uuid.UUID
 	publisher    Publisher
+	// renewEvery is the lease renewal period; zero selects processing.CandidateRenewInterval.
+	renewEvery time.Duration
+}
+
+// WithRenewInterval overrides how often a held candidate lease is renewed. Production uses
+// processing.CandidateRenewInterval; shorter values let tests observe periodic renewal without
+// waiting. The interval must be positive and leave room for two missed renewals before
+// processing.CandidateLeaseDuration expires. It must be called before the Service is shared.
+func (s *Service) WithRenewInterval(interval time.Duration) error {
+	if interval <= 0 || 3*interval > processing.CandidateLeaseDuration {
+		return platform.NewFailure(platform.CodeInvalidInput, errors.New("candidate renew interval must be positive and at most a third of the lease duration"))
+	}
+	s.renewEvery = interval
+	return nil
+}
+
+// renewInterval returns the effective lease renewal period.
+func (s *Service) renewInterval() time.Duration {
+	if s.renewEvery == 0 {
+		return processing.CandidateRenewInterval
+	}
+	return s.renewEvery
 }
 
 // New requires real owner participants; an absent source cannot be treated as eligible work.
@@ -94,6 +117,8 @@ func (s *Service) ExecuteWork(ctx context.Context, selected processing.Candidate
 	var current processing.Candidate
 	var recovered bool
 	err := s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
+		// A rerun transaction must not inherit state captured by the previous attempt.
+		recovered = false
 		var err error
 		current, err = owner.ReconcileCandidate(tx.Context(), tx, selected)
 		if err != nil {
@@ -147,17 +172,27 @@ type MissingSourceOwner struct{}
 
 // CaptureCandidate does not substitute a synthetic source for an unavailable Original.
 func (MissingSourceOwner) CaptureCandidate(context.Context, platform.TransactionContext, processing.Candidate) (Capture, error) {
-	return Capture{}, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Processing source owner unavailable"))
+	return Capture{}, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("processing source owner unavailable"))
 }
 
 // CheckCandidate rejects completion/renewal without actual current source authority.
 func (MissingSourceOwner) CheckCandidate(context.Context, platform.TransactionContext, processing.Candidate, Capture) error {
-	return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Processing source owner unavailable"))
+	return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("processing source owner unavailable"))
 }
 
 // ReconcileCandidate rejects recovery/reselection without the real source owner.
 func (MissingSourceOwner) ReconcileCandidate(context.Context, platform.TransactionContext, processing.Candidate) (processing.Candidate, error) {
-	return processing.Candidate{}, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Processing source owner unavailable"))
+	return processing.Candidate{}, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("processing source owner unavailable"))
+}
+
+// releaseCapture releases a held capture once and clears it, so a later call is a no-op.
+func releaseCapture(captured *Capture) error {
+	release := captured.Release
+	*captured = Capture{}
+	if release == nil {
+		return nil
+	}
+	return release()
 }
 
 type outcome struct {
@@ -181,7 +216,15 @@ func (s *Service) run(ctx context.Context, pending processing.Candidate, publish
 	}
 	var captured Capture
 	var current processing.Candidate
+	// Taken before the claim so the local lease deadline never exceeds the primary-clock lease.
+	leaseStart := time.Now()
 	err := s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
+		// A rerun after a serialization failure starts over; the previous attempt's capture is
+		// still registered with the owner and would otherwise never be released.
+		if err := releaseCapture(&captured); err != nil {
+			return err
+		}
+		current = processing.Candidate{}
 		var err error
 		captured, err = s.source.CaptureCandidate(tx.Context(), tx, pending)
 		if err != nil {
@@ -202,16 +245,9 @@ func (s *Service) run(ctx context.Context, pending processing.Candidate, publish
 		return err
 	})
 	if err != nil {
-		if captured.Release != nil {
-			err = errors.Join(err, captured.Release())
-		}
-		return processing.Candidate{}, nil, err
+		return processing.Candidate{}, nil, errors.Join(err, releaseCapture(&captured))
 	}
-	defer func() {
-		if captured.Release != nil {
-			resultErr = errors.Join(resultErr, captured.Release())
-		}
-	}()
+	defer func() { resultErr = errors.Join(resultErr, releaseCapture(&captured)) }()
 	compute, cancel := context.WithCancel(ctx)
 	defer cancel()
 	results := make(chan outcome, 1)
@@ -230,7 +266,7 @@ func (s *Service) run(ctx context.Context, pending processing.Candidate, publish
 		evaluation, err := program.EvaluateScoped(compute, captured.Source, captured.Scope, captured.Invocations)
 		results <- outcome{evaluation: evaluation, err: err}
 	}()
-	ticker := time.NewTicker(processing.CandidateRenewInterval)
+	ticker := time.NewTicker(s.renewInterval())
 	defer ticker.Stop()
 	for {
 		select {
@@ -239,29 +275,49 @@ func (s *Service) run(ctx context.Context, pending processing.Candidate, publish
 			<-results
 			return processing.Candidate{}, nil, ctx.Err()
 		case <-ticker.C:
-			lease, err := current.Lease()
+			attemptStart := time.Now()
+			renewed, err := s.renew(ctx, current, captured)
 			if err == nil {
-				err = s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-					if err := s.source.CheckCandidate(tx.Context(), tx, current, captured); err != nil {
-						return err
-					}
-					var err error
-					current, err = s.repository.RenewCandidate(tx.Context(), tx, lease)
-					return err
-				})
+				current, leaseStart = renewed, attemptStart
+				continue
 			}
-			if err != nil {
-				cancel()
-				<-results
-				return processing.Candidate{}, nil, err
+			// A transient failure is retried at the next tick while the lease still outlives it;
+			// anything else, or a lease that would lapse first, ends the claim.
+			if transientFailure(err) && platform.FailureCode(err) != platform.CodeRevisionConflict &&
+				attemptStart.Add(s.renewInterval()).Before(leaseStart.Add(processing.CandidateLeaseDuration)) {
+				continue
 			}
+			cancel()
+			<-results
+			return processing.Candidate{}, nil, err
 		case result := <-results:
 			return s.finish(ctx, current, captured, result, publish)
 		}
 	}
 }
 
-// finish revalidates current source authority before a fenced completion or classified failure.
+// renew rechecks current source authority and extends the lease in one transaction. The renewed
+// candidate is returned only after the transaction committed, so an uncertain commit leaves the
+// previous lease reference in place.
+func (s *Service) renew(ctx context.Context, current processing.Candidate, captured Capture) (processing.Candidate, error) {
+	lease, err := current.Lease()
+	if err != nil {
+		return processing.Candidate{}, err
+	}
+	var renewed processing.Candidate
+	err = s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
+		if err := s.source.CheckCandidate(tx.Context(), tx, current, captured); err != nil {
+			return err
+		}
+		var err error
+		renewed, err = s.repository.RenewCandidate(tx.Context(), tx, lease)
+		return err
+	})
+	return renewed, err
+}
+
+// finish revalidates current source authority before a fenced completion or classified failure;
+// with a publisher, either outcome also refreshes the Transmission's processing status.
 func (s *Service) finish(ctx context.Context, current processing.Candidate, captured Capture,
 	result outcome, publish bool) (processing.Candidate, *processing.PrivateResult, error) {
 	lease, err := current.Lease()
@@ -278,18 +334,24 @@ func (s *Service) finish(ctx context.Context, current processing.Candidate, capt
 			code, retryable := classifyFailure(result.err)
 			var err error
 			completed, err = s.repository.FailCandidate(tx.Context(), tx, lease, code, retryable)
-			return err
+			if err != nil {
+				return err
+			}
+		} else {
+			source, err := captured.Source.Identity()
+			if err != nil {
+				return err
+			}
+			completed, evidence, err = s.repository.CompleteCandidate(tx.Context(), tx, lease, source.OriginalTargetCount, result.evaluation)
+			if err != nil {
+				return err
+			}
 		}
-		source, err := captured.Source.Identity()
-		if err != nil {
-			return err
-		}
-		completed, evidence, err = s.repository.CompleteCandidate(tx.Context(), tx, lease, source.OriginalTargetCount, result.evaluation)
-		if err != nil || !publish {
-			return err
+		if !publish {
+			return nil
 		}
 		if s.publisher == nil {
-			return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Processing publication owner unavailable"))
+			return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("processing publication owner unavailable"))
 		}
 		return s.publisher.Publish(tx.Context(), tx, completed.TransmissionID)
 	})

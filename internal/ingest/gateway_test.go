@@ -7,6 +7,7 @@ import (
 )
 
 func TestGatewayStateReportValidatesClosedOperationFields(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input string
@@ -24,6 +25,7 @@ func TestGatewayStateReportValidatesClosedOperationFields(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			var report GatewayStateReport
 			err := json.Unmarshal([]byte(test.input), &report)
 			if (err == nil) != test.valid {
@@ -37,6 +39,7 @@ func TestGatewayStateReportValidatesClosedOperationFields(t *testing.T) {
 }
 
 func TestSubmissionRejectsDuplicateTopLevelFields(t *testing.T) {
+	t.Parallel()
 	var submission Submission
 	err := json.Unmarshal([]byte(`{"schemaVersion":1,"schemaVersion":1,"submissionId":"id",
 		"protocol":"pocsag","observationTime":"2026-01-01T00:00:00Z","payload":{"form":"tone-only"},

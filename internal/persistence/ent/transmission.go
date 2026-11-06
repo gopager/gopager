@@ -4,6 +4,7 @@ package ent
 
 import (
 	"encoding/json"
+	"encoding/json/jsontext"
 	"fmt"
 	"strings"
 	"time"
@@ -32,9 +33,7 @@ type Transmission struct {
 	// Protocol holds the value of the "protocol" field.
 	Protocol transmission.Protocol `json:"protocol,omitempty"`
 	// Payload holds the value of the "payload" field.
-	Payload json.RawMessage `json:"-"`
-	// Targets holds the value of the "targets" field.
-	Targets json.RawMessage `json:"-"`
+	Payload jsontext.Value `json:"-"`
 	// ObservedAt holds the value of the "observed_at" field.
 	ObservedAt time.Time `json:"observed_at,omitempty"`
 	// ObservationOffsetSeconds holds the value of the "observation_offset_seconds" field.
@@ -46,14 +45,12 @@ type Transmission struct {
 	// Incomplete holds the value of the "incomplete" field.
 	Incomplete bool `json:"incomplete,omitempty"`
 	// QualityMetrics holds the value of the "quality_metrics" field.
-	QualityMetrics json.RawMessage `json:"-"`
+	QualityMetrics jsontext.Value `json:"-"`
 	// MessageID holds the value of the "message_id" field.
 	MessageID uuid.UUID `json:"message_id,omitempty"`
 	// ProcessingStatus holds the value of the "processing_status" field.
 	ProcessingStatus transmission.ProcessingStatus `json:"processing_status,omitempty"`
-	// PublicationStatus holds the value of the "publication_status" field.
-	PublicationStatus transmission.PublicationStatus `json:"publication_status,omitempty"`
-	selectValues      sql.SelectValues
+	selectValues     sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -61,13 +58,13 @@ func (*Transmission) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case transmission.FieldSubmissionFingerprint, transmission.FieldPayload, transmission.FieldTargets, transmission.FieldQualityMetrics:
+		case transmission.FieldSubmissionFingerprint, transmission.FieldPayload, transmission.FieldQualityMetrics:
 			values[i] = new([]byte)
 		case transmission.FieldIncomplete:
 			values[i] = new(sql.NullBool)
 		case transmission.FieldObservationOffsetSeconds, transmission.FieldSourceRevision:
 			values[i] = new(sql.NullInt64)
-		case transmission.FieldSubmissionID, transmission.FieldNetworkResolution, transmission.FieldProtocol, transmission.FieldProcessingStatus, transmission.FieldPublicationStatus:
+		case transmission.FieldSubmissionID, transmission.FieldNetworkResolution, transmission.FieldProtocol, transmission.FieldProcessingStatus:
 			values[i] = new(sql.NullString)
 		case transmission.FieldObservedAt, transmission.FieldAcceptedAt:
 			values[i] = new(sql.NullTime)
@@ -138,14 +135,6 @@ func (_m *Transmission) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field payload: %w", err)
 				}
 			}
-		case transmission.FieldTargets:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field targets", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &_m.Targets); err != nil {
-					return fmt.Errorf("unmarshal field targets: %w", err)
-				}
-			}
 		case transmission.FieldObservedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field observed_at", values[i])
@@ -195,12 +184,6 @@ func (_m *Transmission) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field processing_status", values[i])
 			} else if value.Valid {
 				_m.ProcessingStatus = transmission.ProcessingStatus(value.String)
-			}
-		case transmission.FieldPublicationStatus:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field publication_status", values[i])
-			} else if value.Valid {
-				_m.PublicationStatus = transmission.PublicationStatus(value.String)
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -257,8 +240,6 @@ func (_m *Transmission) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("payload=<sensitive>")
 	builder.WriteString(", ")
-	builder.WriteString("targets=<sensitive>")
-	builder.WriteString(", ")
 	builder.WriteString("observed_at=")
 	builder.WriteString(_m.ObservedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
@@ -281,9 +262,6 @@ func (_m *Transmission) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("processing_status=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ProcessingStatus))
-	builder.WriteString(", ")
-	builder.WriteString("publication_status=")
-	builder.WriteString(fmt.Sprintf("%v", _m.PublicationStatus))
 	builder.WriteByte(')')
 	return builder.String()
 }

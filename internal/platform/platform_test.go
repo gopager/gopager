@@ -12,6 +12,7 @@ import (
 )
 
 func TestConfigValidation(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		cfg  Config
@@ -20,7 +21,6 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "full api and worker",
 			cfg: Config{
-				Profile:       "full",
 				Roles:         []Role{RoleAPI, RoleWorker},
 				MigrationMode: MigrationCheck,
 				DatabaseURL:   "postgres://user:secret@localhost/db",
@@ -31,7 +31,6 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "worker only",
 			cfg: Config{
-				Profile:       "full",
 				Roles:         []Role{RoleWorker},
 				MigrationMode: MigrationApply,
 				DatabaseURL:   "postgres://user:secret@localhost/db",
@@ -41,25 +40,14 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "migration check defaults",
 			cfg: Config{
-				Profile:     "full",
 				Roles:       []Role{RoleWorker},
 				DatabaseURL: "postgres://user:secret@localhost/db",
 			},
 			ok: true,
 		},
 		{
-			name: "lite rejected",
-			cfg: Config{
-				Profile:       "lite",
-				Roles:         []Role{RoleWorker},
-				MigrationMode: MigrationCheck,
-				DatabaseURL:   "postgres://user:secret@localhost/db",
-			},
-		},
-		{
 			name: "duplicate role rejected",
 			cfg: Config{
-				Profile:       "full",
 				Roles:         []Role{RoleAPI, RoleAPI},
 				MigrationMode: MigrationCheck,
 				DatabaseURL:   "postgres://user:secret@localhost/db",
@@ -69,7 +57,6 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "api requires address",
 			cfg: Config{
-				Profile:       "full",
 				Roles:         []Role{RoleAPI},
 				MigrationMode: MigrationCheck,
 				DatabaseURL:   "postgres://user:secret@localhost/db",
@@ -78,7 +65,6 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "connection required",
 			cfg: Config{
-				Profile:       "full",
 				Roles:         []Role{RoleWorker},
 				MigrationMode: MigrationCheck,
 			},
@@ -86,6 +72,7 @@ func TestConfigValidation(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			cfg := test.cfg.WithDefaults()
 			err := cfg.Validate()
 			if (err == nil) != test.ok {
@@ -102,6 +89,7 @@ func TestConfigValidation(t *testing.T) {
 }
 
 func TestHealthHandlerHasBooleanOnlyBodies(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		path       string
@@ -115,6 +103,7 @@ func TestHealthHandlerHasBooleanOnlyBodies(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			recorder := httptest.NewRecorder()
 			HealthHandler(func() Status { return test.status }).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, test.path, nil))
 			if recorder.Code != test.wantStatus || recorder.Body.String() != test.wantBody {
@@ -125,6 +114,7 @@ func TestHealthHandlerHasBooleanOnlyBodies(t *testing.T) {
 }
 
 func TestHealthHandlerRejectsOtherMethods(t *testing.T) {
+	t.Parallel()
 	recorder := httptest.NewRecorder()
 	HealthHandler(func() Status { return Status{Live: true} }).ServeHTTP(
 		recorder,
@@ -136,6 +126,7 @@ func TestHealthHandlerRejectsOtherMethods(t *testing.T) {
 }
 
 func TestNextFencingToken(t *testing.T) {
+	t.Parallel()
 	next, err := NextFencingToken(7)
 	if err != nil || next != 8 {
 		t.Fatalf("NextFencingToken(7) = %d, %v; want 8, nil", next, err)
@@ -148,10 +139,10 @@ func TestNextFencingToken(t *testing.T) {
 }
 
 func TestStartWorkerOnlyAndShutdown(t *testing.T) {
+	t.Parallel()
 	store := &fakeStore{}
 	worker := &blockingRunner{done: make(chan struct{})}
 	handle, err := Start(context.Background(), Config{
-		Profile:       "full",
 		Roles:         []Role{RoleWorker},
 		MigrationMode: MigrationCheck,
 		DatabaseURL:   "postgres://localhost/gopager",
@@ -204,6 +195,7 @@ func (r *blockingRunner) Run(ctx context.Context) error {
 }
 
 func TestFailureCodeAndEnglishFallbackAreStable(t *testing.T) {
+	t.Parallel()
 	err := NewFailure(CodeStorageUnavailable, fmt.Errorf("DSN=secret-marker"))
 	if err.Error() != englishFallbacks[CodeStorageUnavailable] || strings.Contains(err.Error(), "secret-marker") {
 		t.Fatalf("unsafe fallback: %q", err)
