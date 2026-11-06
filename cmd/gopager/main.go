@@ -2,7 +2,7 @@
 //
 // Usage:
 //
-//	gopager -profile full -roles api,worker -listen-address HOST:PORT [flags]
+//	gopager -roles api,worker -listen-address HOST:PORT [flags]
 //	gopager bootstrap -username NAME -actions A,B,... [flags] < password-file
 //
 // Server mode composes the requested roles on one PostgreSQL primary:
@@ -13,7 +13,7 @@
 //   - worker runs the background Processing dispatcher and the assignment
 //     correction runner.
 //
-// Server flags: -profile (must be "full"), -roles (comma-separated, required),
+// Server flags: -roles (comma-separated, required),
 // -listen-address (required with the api role), -migration-mode (check, the
 // default, refuses to start unless the schema is exactly current; apply runs
 // pending migrations first), -public-origin (the HTTP(S) origin used for
@@ -145,7 +145,7 @@ func run() (result error) {
 	if err != nil {
 		return errors.Join(err, store.Close())
 	}
-	slog.Info("platform started", "profile", config.Profile, "roles", config.Roles)
+	slog.Info("platform started", "roles", config.Roles)
 	<-ctx.Done()
 	return handle.Shutdown(context.Background())
 }
@@ -160,7 +160,6 @@ func composeCorrectionRunner(c *core, readmission assignments.ProcessingReadmiss
 func parseConfig(args []string, getenv func(string) string) (startupConfig, error) {
 	flags := flag.NewFlagSet("gopager", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	profile := flags.String("profile", "", "Full operating profile")
 	rolesValue := flags.String("roles", "", "Comma-separated roles: api,worker")
 	mode := flags.String("migration-mode", string(platform.MigrationCheck), "Migration mode: check or apply")
 	address := flags.String("listen-address", "", "Explicit API listen address")
@@ -194,7 +193,7 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 		return startupConfig{}, platform.NewFailure(platform.CodeInvalidInput, err)
 	}
 	config := platform.Config{
-		Profile: *profile, Roles: roles, MigrationMode: platform.MigrationMode(*mode),
+		Roles: roles, MigrationMode: platform.MigrationMode(*mode),
 		ListenAddress: *address, DatabaseURL: getenv("GOPAGER_DATABASE_URL"),
 		AllowInsecureDBTLS: *allowInsecure,
 	}

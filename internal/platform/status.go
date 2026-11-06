@@ -69,7 +69,6 @@ type Runner interface {
 type Status struct {
 	Live           bool
 	Ready          bool
-	Profile        string
 	Roles          []Role
 	MigrationState string
 	FailureCode    ErrorCode
@@ -129,7 +128,7 @@ func StartWithAPI(ctx context.Context, config Config, migrations fs.FS, store St
 	root, cancel := context.WithCancel(ctx)
 	handle := &RunningHandle{
 		status: Status{
-			Live: true, Ready: true, Profile: config.Profile,
+			Live: true, Ready: true,
 			Roles: append([]Role(nil), config.Roles...), MigrationState: "current",
 		},
 		migrations: migrations,

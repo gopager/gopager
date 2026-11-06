@@ -2,7 +2,7 @@
 
 GoPager is a single executable, `gopager`, backed by one PostgreSQL primary. It runs in two modes:
 
-- **Server mode** (`gopager --profile=full --roles=…`): runs the `api` and/or `worker` roles until it receives a signal.
+- **Server mode** (`gopager --roles=…`): runs the `api` and/or `worker` roles until it receives a signal.
 - **Bootstrap** (`gopager bootstrap …`): creates the initial administrator account and exits.
 
 ## Requirements
@@ -16,6 +16,36 @@ GoPager is a single executable, `gopager`, backed by one PostgreSQL primary. It 
 
 GoPager does not terminate TLS for HTTP. Put a TLS-terminating reverse proxy in front of the API listener for any exposed deployment.
 
+## Topology
+
+GoPager always runs against PostgreSQL; there is no SQLite and no embedded database. "Lite" and "Full" are deployment profiles, not binary modes: the binary and its flags are identical.
+
+| Profile | Layout | Use |
+| --- | --- | --- |
+| Lite | One host, one `gopager --roles=api,worker` process, PostgreSQL as a compose sidecar on the same host | Small installations, trials, constrained hosts |
+| Full | `api` and `worker` processes split across hosts ([Roles](#roles)), against an external PostgreSQL primary | Larger installations, separate scaling and failure domains |
+
+### Lite with Docker Compose
+
+[deploy/compose/](../deploy/compose/) holds `compose.yaml`, a `Dockerfile` (multi-stage, Go version from `go.mod`, non-root runtime user) and `.env.example`.
+
+```sh
+cd deploy/compose
+cp .env.example .env          # set POSTGRES_PASSWORD (URL-safe) and GOPAGER_PUBLIC_ORIGIN
+docker compose up --build -d
+curl -fsS http://localhost:8080/health/ready
+printf '%s\n' 'a long initial password' | docker compose run --rm -T gopager bootstrap \
+  --username=admin --actions=password.local,session.manage-own,account.read,account.create,account.update,grant.manage \
+  --allow-insecure-db
+```
+
+The `gopager` service waits for the PostgreSQL healthcheck (`pg_isready`), then starts with `--migration-mode=apply`. The database host `postgres` is not loopback, so the compose file passes `--allow-insecure-db`; the private compose network is the trust boundary (see [Database TLS](#database-tls)). Data lives in the named volume `pgdata`; `docker compose down -v` deletes it. TLS for browsers still needs a reverse proxy.
+
+- **Upgrade:** take a backup (below), `git pull` (or fetch the new release), `docker compose up --build -d`. The new container applies migrations at start. See [Upgrade](#upgrade).
+- **Backup:** `docker compose exec -T postgres pg_dump -U gopager -Fc gopager > gopager.dump`.
+- **Restore:** into an empty database, with GoPager stopped: `docker compose stop gopager`, then `docker compose exec -T postgres pg_restore -U gopager -d gopager --clean --if-exists < gopager.dump`, then `docker compose start gopager`.
+- **Moving a Lite installation** to a Full one is a `pg_dump` / `pg_restore` into the external PostgreSQL, then starting the roles there. The former SQLite transfer path no longer exists.
+
 ## Build
 
 ```sh
@@ -26,13 +56,12 @@ The binary embeds all SQL migrations. It needs no other files at runtime except 
 
 ## Configuration Reference
 
-Flags use Go `flag` syntax (`--name=value` or `-name value`). Positional arguments are rejected. Any configuration error ends the process with `INVALID_INPUT` (see [Exit Status and Logging](#exit-status-and-logging)).
+Flags use Go `flag` syntax (`--name=value` or `-name value`). Positional arguments are rejected. Any configuration error ends the process with `INVALID_INPUT` (see [Exit Status and Logging](#exit-status-and-logging)). The former `--profile` flag was removed (deployment profiles are topologies, see [Topology](#topology)); passing it fails with `INVALID_INPUT` (unknown flag).
 
 ### Server mode
 
 | Flag / variable | Default | Required | Meaning |
 | --- | --- | --- | --- |
-| `--profile` | — | always | Operating profile. Only `full` is accepted. |
 | `--roles` | — | always | Comma-separated, non-empty, no duplicates: `api`, `worker` or `api,worker`. |
 | `GOPAGER_DATABASE_URL` (env) | — | always | PostgreSQL connection string (URL or keyword/value form understood by pgx). Read only from the environment so it does not appear in process listings or logs. |
 | `--listen-address` | — | with `api` | HTTP listen address `host:port`. Host must be non-empty (use `0.0.0.0` or `[::]` to listen on all interfaces); port 1–65535. |
@@ -162,7 +191,6 @@ Minimal combined deployment behind a TLS-terminating proxy:
 ```sh
 export GOPAGER_DATABASE_URL='postgres://gopager:…@db.internal:5432/gopager?sslmode=verify-full'
 gopager \
-  --profile=full \
   --roles=api,worker \
   --listen-address=127.0.0.1:8080 \
   --public-origin=https://pager.example.org \
@@ -173,7 +201,7 @@ Local development against a loopback database:
 
 ```sh
 GOPAGER_DATABASE_URL='postgres://gopager:secret@127.0.0.1:5432/gopager?sslmode=disable' \
-  gopager --profile=full --roles=api,worker --migration-mode=apply \
+  gopager --roles=api,worker --migration-mode=apply \
   --listen-address=127.0.0.1:8080 --public-origin=http://127.0.0.1:8080
 ```
 
@@ -192,7 +220,7 @@ The process is ready when the database is reachable, is a writable primary, the 
 
 While not ready, every non-health route returns `503` with error code `AUTHORITY_UNAVAILABLE` and `retryable: true` (error envelope: [HTTP API](http-api.md)).
 
-The responses contain no other details. Profile, roles, migration state (`current` / `incompatible`) and failure code are kept in-process; failure codes appear in logs.
+The responses contain no other details. Roles, migration state (`current` / `incompatible`) and failure code are kept in-process; failure codes appear in logs.
 
 ## Failure Handling
 
@@ -212,7 +240,7 @@ A `worker`-only process has no health endpoint. Monitor its log for `platform ro
 | 0 | Normal shutdown after `SIGINT`/`SIGTERM`, or successful bootstrap |
 | 1 | Startup failure, failed role, or shutdown failure |
 
-Logs are written to stderr by Go's default `log/slog` handler (`2026/11/05 23:54:28 INFO platform started profile=full roles=[api worker]`). Errors are logged by code only; connection strings, credentials, causes and payloads are never logged. On exit 1 the last line is `ERROR GoPager exited code=<CODE>`.
+Logs are written to stderr by Go's default `log/slog` handler (`2026/11/05 23:54:28 INFO platform started roles="[api worker]"`). Errors are logged by code only; connection strings, credentials, causes and payloads are never logged. On exit 1 the last line is `ERROR GoPager exited code=<CODE>`.
 
 **Correlating a client error with the log.** Every API error response carries a fresh `requestId` (see [HTTP API](http-api.md#errors)). The same response writes one log line, `API error response code=<CODE> status=<HTTP status> requestId=<UUID>`, at `ERROR` level for 5xx and `INFO` level for 4xx. To find out what happened to a failed request, search the log for the `requestId` the client reports. The line carries only these three values: no request, body, credential or private cause. The cause itself is deliberately not logged (see above), so the `code` is the diagnosis; for `STORAGE_UNAVAILABLE` and `AUTHORITY_UNAVAILABLE` also check the platform readiness lines.
 
