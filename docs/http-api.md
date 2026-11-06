@@ -216,7 +216,7 @@ Scope evaluation per resource:
 | Unit | The Unit's Agency, the Unit, and its collections. One matching grant suffices. |
 | Organization | Every member Unit. An Organization without members needs an `all` grant. |
 | Unit template | Only `all` scope. Referencing an Organization also requires `organization.read` on it. |
-| Address rule | The Agency of the rule's Network, and the rule's Unit with its collections. |
+| Address rule | Writes need authority over the Agency of the rule's Network and, additionally, over the rule's Unit or its collections (for an update, also over the existing rule's Network Agency); a Unit or collection grant alone never reaches another Agency's Network. Reads keep their existing predicate. |
 | Suppression / correction | The Agency of the affected transmission target's Network, and the target's Unit. |
 | Gateway administration | The Agency of every Network currently assigned to the Gateway, and for network replacement of every newly proposed Network. A Gateway without Networks needs an `all` grant. |
 | Workflow | The workflow's own selection scope (`all`, `network` or `unit`), with each Network resolved to its Agency and each Unit to its Agency and collections. |

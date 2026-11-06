@@ -654,7 +654,7 @@ func (s *Store) SaveUnit(ctx context.Context, tx platform.TransactionContext, au
 	if err != nil {
 		return err
 	}
-	current, err := currentClient.Unit.Query().Select(unit.FieldOrganizationID).Only(currentScope)
+	current, err := currentClient.Unit.Query().Select(unit.FieldOrganizationID, unit.FieldAgencyID).Only(currentScope)
 	if ent.IsNotFound(err) {
 		return authz.ErrNotFound
 	}
@@ -678,7 +678,22 @@ func (s *Store) SaveUnit(ctx context.Context, tx platform.TransactionContext, au
 	if updated != 1 {
 		return authz.ErrRevisionConflict
 	}
-	return nil
+	if current.AgencyID == value.AgencyID {
+		return nil
+	}
+	return s.moveMessageUnits(tx, value.ID, value.AgencyID)
+}
+
+// moveMessageUnits rewrites the Unit's message_units rows to its new Agency in the Unit's own
+// transaction, so the old Agency does not keep the Unit's history and the new Agency is not
+// left without it. Unit-less rows belong to a Network Agency and are not touched.
+func (s *Store) moveMessageUnits(tx platform.TransactionContext, unitID, agencyID uuid.UUID) error {
+	executor, err := s.primary.Resolve(tx)
+	if err != nil {
+		return err
+	}
+	_, err = executor.ExecContext(tx.Context(), `UPDATE message_units SET agency_id=$1 WHERE unit_id=$2`, agencyID, unitID)
+	return err
 }
 
 // ReadCollection protects the named configuration without revealing hidden members.

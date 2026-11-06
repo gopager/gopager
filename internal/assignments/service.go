@@ -117,10 +117,27 @@ func (s *Service) authorizeCandidate(ctx context.Context, tx platform.Transactio
 	}, now); err != nil {
 		return err
 	}
+	if err := authz.Authorize(authority, action, nil, authz.Target{AgencyID: agency}, now); err != nil {
+		return err
+	}
 	if protocol != candidate.Protocol {
 		return ErrInvalidRule
 	}
 	return nil
+}
+
+// authorizeNetworkAgency requires authority over the Agency owning the rule's Network. A Unit or
+// collection grant alone matches on the Unit and would let the holder write rules on, and claim
+// addresses of, another Agency's Network.
+func (s *Service) authorizeNetworkAgency(ctx context.Context, tx platform.TransactionContext, authority authz.Authority, action string, network uuid.UUID, now time.Time) error {
+	_, agency, err := s.network(ctx, tx, network)
+	if errors.Is(err, authz.ErrNotFound) {
+		return authz.ErrForbidden
+	}
+	if err != nil {
+		return err
+	}
+	return authz.Authorize(authority, action, nil, authz.Target{AgencyID: agency}, now)
 }
 
 // validateCandidate checks all current rules, including conflicts hidden from management reads.
@@ -288,6 +305,9 @@ func (s *Service) UpdateRule(ctx context.Context, proof identity.Proof, id uuid.
 		if err != nil {
 			return err
 		}
+		if err := s.authorizeNetworkAgency(tx.Context(), tx, authority, "address-rule.update", before.NetworkID, now); err != nil {
+			return err
+		}
 		next, err := commands.NextRevision(before.Revision, expected)
 		if err != nil {
 			return err
@@ -326,6 +346,9 @@ func (s *Service) DeleteRule(ctx context.Context, proof identity.Proof, id uuid.
 		}
 		value, err := s.repository.ReadRule(tx.Context(), tx, authority, "address-rule.delete", id, now)
 		if err != nil {
+			return err
+		}
+		if err := s.authorizeNetworkAgency(tx.Context(), tx, authority, "address-rule.delete", value.NetworkID, now); err != nil {
 			return err
 		}
 		next, err := commands.NextRevision(value.Revision, expected)
