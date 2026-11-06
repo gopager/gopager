@@ -8,10 +8,10 @@ Contribution and documentation rules: [CONTRIBUTING.md](../CONTRIBUTING.md). Run
 | --- | --- |
 | Go, version from [go.mod](../go.mod) (`go 1.27.3`) | everything |
 | Make | all `make` targets below |
-| Network access | `make lint` and `make vuln` look up their pinned tools through `go run` on every run; the first test run downloads the `go.mod` tools |
+| Network access | the first run of a tool downloads its pinned module; `make vuln` also queries the vulnerability database |
 | Docker (running daemon, pull access to `postgres:18.0-alpine`) | integration tests, unless an external test database is supplied |
 
-All other tools are pinned and run through `go tool` / `go run`; nothing needs a global install: the Ent code generator, the Ginkgo CLI and gotestsum via `go.mod` (`go tool`, works offline once downloaded), golangci-lint (`v2.15.0`) and govulncheck (`v1.9.0`) via the version variables at the top of the [Makefile](../Makefile). Change a pin there only.
+All other tools are pinned and run through `go tool`, offline once downloaded; nothing needs a global install. The Ent code generator, the Ginkgo CLI and gotestsum are `tool` entries in [go.mod](../go.mod). golangci-lint (`v2.15.0`) and govulncheck (`v1.9.0`) each have a dedicated module file ([golangci-lint.mod](../golangci-lint.mod), [govulncheck.mod](../govulncheck.mod)), as golangci-lint's install docs advise, so their dependencies cannot change the application's. Bump one with `go get -tool -modfile=<tool>.mod <module>@<version>`; never edit the dependencies in those files by hand.
 
 ## Repository Layout
 

@@ -1,16 +1,13 @@
 .DEFAULT_GOAL := lint
 
-# Tool versions are pinned here and run through "go run", so no global install is
-# needed and local runs match CI. Bump deliberately; golangci-lint v2 is required
-# for Go 1.27 (v1 cannot read its export data).
-GOLANGCI_LINT_VERSION := v2.15.0
-GOVULNCHECK_VERSION := v1.9.0
-GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
-GOVULNCHECK := go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
-
-# gotestsum runs on every test run, so it is pinned as a go.mod tool dependency: "go tool"
-# resolves it from go.sum and the module cache and needs no network, unlike "go run pkg@version",
-# which looks up deprecation on the module proxy each time.
+# Tools are pinned as "go tool" dependencies, so no global install is needed, local runs
+# match CI, and runs work offline once the modules are downloaded ("go run pkg@version"
+# would query the module proxy on every run). gotestsum lives in go.mod. golangci-lint and
+# govulncheck each have a dedicated module file, as golangci-lint's install docs advise, so
+# their large dependency trees cannot change the versions the application builds with.
+# Bump a pin with: go get -tool -modfile=<tool>.mod <module>@<version>
+GOLANGCI_LINT := go tool -modfile=golangci-lint.mod golangci-lint
+GOVULNCHECK := go tool -modfile=govulncheck.mod govulncheck
 GOTESTSUM := go tool gotestsum
 
 # Test reports (JUnit XML and the go test JSON stream) written by test-integration and
