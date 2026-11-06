@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -16,9 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
-	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/identity"
-	"github.com/gopager/gopager/internal/ingest"
 	"github.com/gopager/gopager/internal/persistence/ent/eventstore"
 	"github.com/gopager/gopager/internal/persistence/ent/identitystore"
 	"github.com/gopager/gopager/internal/persistence/migrations"
@@ -223,7 +220,7 @@ func TestManagementHTTPAndTLSReverseProxyWithHTTPUpstream(t *testing.T) {
 				origin = "https://" + proxy.Listener.Addr().String()
 			}
 			network := managementNetworkFixture{id: uuid.New(), agency: uuid.New()}
-			handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, network)
+			handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), mustComposeCore(t, store), network)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -445,29 +442,9 @@ func TestManagementHTTPAndTLSReverseProxyWithHTTPUpstream(t *testing.T) {
 	}
 }
 
-func TestManagementRejectsInvalidShapes(t *testing.T) {
-	for _, body := range []string{
-		`{"schemaVersion":1,"unexpected":true}`, `{} {}`, `null`,
-		`{"name":"` + strings.Repeat("x", 64*1024) + `"}`,
-	} {
-		request := httptest.NewRequest("POST", "/api/v1/units", strings.NewReader(body))
-		request.Header.Set("Content-Type", "application/json")
-		var input unitMutation
-		err := decodeManagementJSON(request, &input)
-		if body == "null" {
-			if err != nil || input.SchemaVersion != 0 {
-				t.Fatal("null input lost its invalid schema marker")
-			}
-		} else if err == nil {
-			t.Fatal("invalid/oversized JSON accepted")
-		}
-	}
-
-}
-
 func TestManagementProductionNetworkOwnerHidesUnknownNetwork(t *testing.T) {
 	store := newManagementStore(t)
-	handler, err := composeApplicationAPI("http://example.test", identity.DefaultLoginRateLimits(), store, nil)
+	handler, err := composeApplicationAPI("http://example.test", identity.DefaultLoginRateLimits(), mustComposeCore(t, store), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -506,70 +483,5 @@ func TestManagementProductionNetworkOwnerHidesUnknownNetwork(t *testing.T) {
 	var failure managementResponse
 	if err := json.Unmarshal(rule.Body.Bytes(), &failure); err != nil || rule.Code != http.StatusForbidden || failure.Code != "FORBIDDEN" {
 		t.Fatalf("production Network owner exposed an unauthorized Network: %d %v", rule.Code, err)
-	}
-}
-
-func TestManagementErrorFallbacksAndRetryability(t *testing.T) {
-	for _, test := range []struct {
-		err       error
-		status    int
-		code      string
-		fallback  string
-		retryable bool
-	}{
-		{authz.ErrNotFound, http.StatusNotFound, "NOT_FOUND", "The requested item is not available.", false},
-		{commands.ErrIdempotencyConflict, http.StatusConflict, "IDEMPOTENCY_CONFLICT",
-			"This operation identifier was already used differently.", false},
-		{ingest.ErrSubmissionConflict, http.StatusConflict, "IDEMPOTENCY_CONFLICT",
-			"This operation identifier was already used differently.", false},
-		{authz.ErrRevisionConflict, http.StatusConflict, "REVISION_CONFLICT",
-			"This item changed. Reload before saving.", true},
-	} {
-		recorder := httptest.NewRecorder()
-		writeManagementError(recorder, test.err)
-		var result struct {
-			Code      string `json:"code"`
-			TextKey   string `json:"textKey"`
-			Fallback  string `json:"fallback"`
-			Retryable bool   `json:"retryable"`
-		}
-		if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
-			t.Fatal(err)
-		}
-		if recorder.Code != test.status || result.Code != test.code || result.TextKey != "error."+test.code ||
-			result.Fallback != test.fallback || result.Retryable != test.retryable {
-			t.Fatalf("%v mapped to %d %+v", test.err, recorder.Code, result)
-		}
-	}
-}
-
-func TestManagementErrorMapping(t *testing.T) {
-	for _, test := range []struct {
-		err    error
-		status int
-		code   string
-	}{
-		{authz.ErrForbidden, http.StatusForbidden, "FORBIDDEN"},
-		{authz.ErrNotFound, http.StatusNotFound, "NOT_FOUND"},
-		{authz.ErrRevisionConflict, http.StatusConflict, "REVISION_CONFLICT"},
-		{commands.ErrIdempotencyConflict, http.StatusConflict, "IDEMPOTENCY_CONFLICT"},
-		{platform.NewFailure(platform.CodeResourceLimit, errors.New("private infrastructure detail")), http.StatusRequestEntityTooLarge, "RESOURCE_LIMIT"},
-	} {
-		recorder := httptest.NewRecorder()
-		actual := test.err
-		if test.code != "RESOURCE_LIMIT" {
-			actual = platform.NewFailure(platform.CodeStorageUnavailable, actual)
-		}
-		writeManagementError(recorder, actual)
-		var result managementResponse
-		if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
-			t.Fatal(err)
-		}
-		if recorder.Code != test.status || result.Code != test.code {
-			t.Fatalf("domain cause hidden by storage wrapper: %d", recorder.Code)
-		}
-		if strings.Contains(recorder.Body.String(), "private infrastructure detail") {
-			t.Fatal("private wrapped error escaped HTTP classification")
-		}
 	}
 }

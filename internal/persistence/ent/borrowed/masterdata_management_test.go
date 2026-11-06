@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/authz"
+	"github.com/gopager/gopager/internal/units"
 )
 
 func TestOrganizationDefaultsTemplateSnapshotAndAtomicBulkUnits(t *testing.T) {

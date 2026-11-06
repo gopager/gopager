@@ -15,7 +15,6 @@ import (
 
 	"entgo.io/ent/entql"
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/assignments"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/commands"
@@ -36,6 +35,7 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
 	"github.com/gopager/gopager/internal/protocols"
+	"github.com/gopager/gopager/internal/units"
 )
 
 // fixtureNetwork is one declared standalone Network: its Protocol and its Agency.

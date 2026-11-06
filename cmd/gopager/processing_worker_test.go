@@ -46,7 +46,8 @@ func TestInstalledWorkflowRunsOnProductionWiring(t *testing.T) {
 		t.Fatal(err)
 	}
 	artifactRoot, mainArtifact, _ := installedPreviewArtifacts(t)
-	runtime, err := composeProcessingAPIRuntime(t.Context(), store, artifactRoot)
+	shared := mustComposeCore(t, store)
+	runtime, err := composeProcessingAPIRuntime(t.Context(), shared, artifactRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +59,7 @@ func TestInstalledWorkflowRunsOnProductionWiring(t *testing.T) {
 	backend := httptest.NewUnstartedServer(nil)
 	t.Cleanup(backend.Close)
 	origin := "http://" + backend.Listener.Addr().String()
-	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, nil, runtime.routes)
+	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), shared, nil, runtime.routes)
 	if err != nil {
 		t.Fatal(err)
 	}

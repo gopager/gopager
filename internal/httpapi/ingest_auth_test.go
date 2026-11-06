@@ -1,4 +1,4 @@
-package main
+package httpapi
 
 import (
 	"context"
@@ -45,7 +45,7 @@ func TestIngestAuthenticatesBeforeReadingTheBody(t *testing.T) {
 		t.Run(path, func(t *testing.T) {
 			intake := &fakeIntake{}
 			mux := http.NewServeMux()
-			registerIngestRoutes(mux, intake)
+			RegisterIngestRoutes(mux, intake)
 			request := httptest.NewRequest(http.MethodPost, path, nil)
 			request.Body = explodingBody{t}
 			request.Header.Set("Content-Type", "application/json")

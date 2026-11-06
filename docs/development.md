@@ -19,7 +19,8 @@ One Go module, `github.com/gopager/gopager`.
 
 | Path | Contents |
 | --- | --- |
-| `cmd/gopager/` | Executable: flag parsing (`main.go`), `bootstrap` subcommand, composition of stores and services, HTTP route registration per domain (`management.go`, `ingest.go`, `gateway_credentials.go`, `processing_management.go`) |
+| `cmd/gopager/` | Executable: flag parsing (`main.go`), `bootstrap` subcommand, composition of stores and services (`compose.go` builds the shared set once; `processing_runtime.go`, `processing_worker.go`, `processing_adapters.go`, `processing_preparation.go`, `scopes.go` compose Processing and its ports) |
+| `internal/httpapi/` | HTTP adapters for the application routes: `management_*.go` (one file per resource), `ingest.go`, `gateway_credentials.go`, `processing*.go`, and the shared `json.go`, `request.go`, `errors.go` |
 | `api/openapi/v1.yaml` | HTTP API schema |
 | `api/plugin/v2/plugin.proto` | Plugin gRPC service definition |
 | `pluginsdk/` | Public Go SDK for plugin executables (handshake, `Serve`, gRPC client/server) |
@@ -28,7 +29,7 @@ One Go module, `github.com/gopager/gopager`.
 | `internal/platform/postgres/` | PostgreSQL implementation of `platform.Store` and `platform.Clock`: pgx pool, TLS rule, Goose migration runner, transactions, SQLSTATE → error code mapping |
 | `internal/authz/` | Action catalog, grants, scopes, field permissions, authorization decisions |
 | `internal/identity/` | Accounts, credentials, password hashing (Argon2id), sessions, login rate limits, bootstrap, HTTP auth transport (cookie/origin/CSRF) and `/api/v1/auth/` handler |
-| `internal/Units/` (package `units`) | Units, organizations, Unit collections, Unit templates |
+| `internal/units/` (package `units`) | Units, organizations, Unit collections, Unit templates |
 | `internal/assignments/` | Address rules, Unit assignment of transmission targets, historical correction runner |
 | `internal/ingest/` | Gateway transmission intake, Gateway/Network administration and credentials |
 | `internal/protocols/` | Protocol and transmission payload validation |
@@ -79,7 +80,7 @@ make vuln               # govulncheck ./... (pinned version, needs network)
 
 `gofmt` covers `cmd/` and `internal/` (including generated Ent code and tests). Only `test-integration` needs Docker.
 
-[.golangci.yml](../.golangci.yml) enables a conservative set: `govet`, `staticcheck`, `errcheck`, `ineffassign`, `unused`, `misspell`. Generated code is skipped by golangci-lint's generated-file detection. Four known findings in processing code are excluded by path and text (an unused `unavailableInstanceLifecycle` type, two ineffectual assignments in `cmd/gopager/processing.go` and `internal/processing/workflow_test.go`, and an overwritten argument in `internal/processing/workflow.go`); delete the matching `exclude-rules` entry when you fix one. Do not add new exclusions to hide findings in code you change.
+[.golangci.yml](../.golangci.yml) enables a conservative set: `govet`, `staticcheck`, `errcheck`, `ineffassign`, `unused`, `misspell`. Generated code is skipped by golangci-lint's generated-file detection. Three known findings in processing code are excluded by path and text (two ineffectual assignments in `cmd/gopager/processing_worker.go` and `internal/processing/workflow_test.go`, and an overwritten argument in `internal/processing/workflow.go`); delete the matching `exclude-rules` entry when you fix one. Do not add new exclusions to hide findings in code you change.
 
 `make generate-check` compares only the Ent output (`internal/persistence/ent`, not its hand-written `schema/`) with git, so commit or stage regenerated files before expecting it to pass locally; it also fails on generated files that git does not track.
 
@@ -204,9 +205,11 @@ Runtime check/apply semantics: [Operations](operations.md#database-migrations).
 
 ### Package boundaries
 
-- Domain packages (`authz`, `identity`, `Units`, `assignments`, `ingest`, `protocols`, `messages`, `commands`, `events`, `processing/...`) depend only on `internal/platform` and other domain packages, never on `internal/persistence/...`, `internal/platform/postgres`, pgx or Ent. They declare the repository interfaces they need.
+- Domain packages (`authz`, `identity`, `units`, `assignments`, `ingest`, `protocols`, `messages`, `commands`, `events`, `processing/...`) depend only on `internal/platform` and other domain packages, never on `internal/persistence/...`, `internal/platform/postgres`, pgx or Ent. They declare the repository interfaces they need.
 - Persistence adapters in `internal/persistence/ent/*store` implement those interfaces. All Ent queries go through the guard privacy policy; adapters bind an access decision with `guard.Bind`. Privacy overrides (`privacy.DecisionContext`) are rejected by the borrowed driver.
-- `cmd/gopager` composes stores and services and owns HTTP route registration; it contains no domain rules.
+- `cmd/gopager` composes stores and services once (`composeCore`) and registers the routes of `internal/httpapi`; it contains no domain rules and no HTTP handlers.
+- `internal/httpapi` holds all HTTP adapters for `/api/v1` application routes (the auth handler stays in `internal/identity`). It imports domain packages only, never a store.
+- Services that run work under a caller's authority share `identity.WithAuthority`; a service that needs a different step order passes `identity.LockMutations` or `identity.RejectExpiredAuthentication` instead of copying the transaction wrapper.
 - Configuration is parsed only in `cmd/gopager`; library packages never read flags or environment variables.
 - `internal/testutil/...` is imported only from tests.
 - Test-only inputs live in the owning package's `testdata/`; there is no global test tree.

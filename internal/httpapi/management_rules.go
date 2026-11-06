@@ -1,15 +1,15 @@
-package main
+package httpapi
 
 import (
 	"net/http"
 	"time"
 
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/assignments"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/protocols"
+	"github.com/gopager/gopager/internal/units"
 )
 
 type ruleMutation struct {

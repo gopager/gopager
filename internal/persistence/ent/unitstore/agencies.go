@@ -6,7 +6,6 @@ import (
 
 	"entgo.io/ent/entql"
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/persistence/ent"
@@ -15,6 +14,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/permissions"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
 	"github.com/gopager/gopager/internal/platform"
+	"github.com/gopager/gopager/internal/units"
 )
 
 func agencyDTO(row *ent.Agency) units.Agency {

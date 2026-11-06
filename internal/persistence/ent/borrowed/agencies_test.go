@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/platform"
+	"github.com/gopager/gopager/internal/units"
 )
 
 // TestAgencyLifecycleAndScope expects Agencies to be created, read, listed, renamed and deleted

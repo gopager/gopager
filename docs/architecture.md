@@ -62,7 +62,7 @@ flowchart TD
 
 | Step | What happens | Package |
 | --- | --- | --- |
-| HTTP decoding | Bearer extraction, `application/json`, size limit, JSON decoding | `cmd/gopager` ([ingest.go](../cmd/gopager/ingest.go)) |
+| HTTP decoding | Bearer extraction, `application/json`, size limit, JSON decoding | `internal/httpapi` ([ingest.go](../internal/httpapi/ingest.go)) |
 | Gateway authentication | The bearer secret hash identifies exactly one gateway. A pending replacement credential takes over on first use. | `identity.GatewayAuthenticator`, `ingeststore` |
 | Validation | Submission shape, observation time, payload form per protocol, target address/function ranges | `ingest` (`Submission.Validate`), `protocols` |
 | Submission idempotency | `(gateway, submissionId)` plus an input fingerprint. A matching retry returns the original receipt; a different input is rejected. | `ingest`, `ingeststore` |
@@ -133,7 +133,7 @@ flowchart BT
     processing --> authz & commands & platform & protocols & pluginsdk
     events --> platform & processing
     identity --> authz & events & platform
-    units[Units] --> identity & commands & events
+    units --> identity & commands & events
     assignments --> units & identity & protocols
     ingest --> assignments & identity & protocols
     pexec[processing/execution] --> identity & authz
@@ -142,23 +142,26 @@ flowchart BT
     pmgmt[processing/management] --> processing & pexec & identity & events
     psyn[processing/synthetic] --> pmgmt & assignments & units
     stores[persistence/ent/*store] --> postgres & ingest & assignments & units & pworker & ppub & pmgmt
-    cmd[cmd/gopager] --> stores & ingest & pmgmt & psyn
+    httpapi --> identity & units & assignments & ingest & pmgmt
+    cmd[cmd/gopager] --> stores & httpapi & ingest & pmgmt & psyn
 ```
 
 The layering rules that the code follows:
 
-- Domain and application packages (`authz`, `protocols`, `messages`, `commands`, `events`, `identity`, `Units`, `assignments`, `ingest`, `processing/...`) never import `platform/postgres`, Ent, or any store package. They declare small consumer interfaces (`Repository`, `Clock`, `Transactions`, owner ports) and receive `platform.TransactionContext`.
+- Domain and application packages (`authz`, `protocols`, `messages`, `commands`, `events`, `identity`, `units`, `assignments`, `ingest`, `processing/...`) never import `platform/postgres`, Ent, or any store package. They declare small consumer interfaces (`Repository`, `Clock`, `Transactions`, owner ports) and receive `platform.TransactionContext`.
 - `authz`, `protocols`, `platform` and `pluginsdk` are leaves with no internal imports.
 - Store adapters under `internal/persistence/ent/` implement those interfaces and are the only importers of `platform/postgres` besides `cmd/gopager`.
-- `cmd/gopager` is the composition root. It constructs stores, wires them into services, and registers HTTP routes.
+- `cmd/gopager` is the composition root. `composeCore` ([compose.go](../cmd/gopager/compose.go)) constructs every store and the shared services once per process; the API, worker and correction-runner compositions take that set instead of building their own.
+- HTTP adapters live in `internal/httpapi`, never in `cmd/gopager`: they map requests to domain service calls and domain errors to the shared error body, hold no business rules and import no store. `cmd/gopager` registers them on the mux with `httpapi.Register*Routes`.
 - `events` imports `processing` to validate `processing.completed` result payloads, so `processing` cannot import `events`.
-- The generated Ent package and its `schema` import domain types (`Units`, `assignments`, `authz`, `commands`, `processing`) for typed JSON columns.
+- The generated Ent package and its `schema` import domain types (`units`, `assignments`, `authz`, `commands`, `processing`) for typed JSON columns.
 
 ### Packages
 
 | Package | Responsibility |
 | --- | --- |
-| `cmd/gopager` | Flag/env configuration, role composition, HTTP route registration and JSON mapping for management, intake, gateway and processing routes, `bootstrap` subcommand |
+| `cmd/gopager` | Flag/env configuration, composition of stores and services (`composeCore`, API, worker, correction runner, Processing runtime), wiring of `httpapi` routes, `bootstrap` subcommand |
+| `internal/httpapi` | HTTP adapters of the application routes: management (one file per resource), Gateway intake and credentials, Processing; shared JSON decoding, paging and error mapping. Exported surface: `RegisterManagementRoutes`, `RegisterIngestRoutes`, `RegisterGatewayManagementRoutes`, `RegisterProcessingRoutes`, `GatewayIntake`, `ProcessingRoutes` |
 | `internal/platform` | Store-neutral runtime: `Config`/roles, `Store` and `Runner` interfaces, `TransactionContext`, `Clock`, `Failure` error codes, readiness/health handlers, graceful shutdown (`StartWithAPI`, `RunningHandle`) |
 | `internal/platform/postgres` | PostgreSQL `Store`: connection/TLS policy, primary-only transactions, failure classification, database clock, goose migration check/apply under an advisory lock |
 | `internal/authz` | Grant/scope/action catalog, field permissions, access-key restrictions, `Authorize` point decisions, age cutoffs |
@@ -167,7 +170,7 @@ The layering rules that the code follows:
 | `internal/events` | Domain event fact types, envelope construction and validation, appender interfaces |
 | `internal/protocols` | Protocol enum, address/target model and ranges, payload forms, payload identity |
 | `internal/messages` | Grouping decision type and the pure grouping function `Decide` |
-| `internal/Units` (package `units`) | Agencies, Units, Unit collections, Organizations with setting defaults, Unit templates, bulk Unit operations, setting inheritance |
+| `internal/units` (package `units`) | Agencies, Units, Unit collections, Organizations with setting defaults, Unit templates, bulk Unit operations, setting inheritance |
 | `internal/assignments` | Address rules (selectors, validity intervals, conflict validation), target matching, suppressions, correction status/retry, `CorrectionRunner` |
 | `internal/ingest` | Submission validation, Network resolution, intake service, gateway state reports, gateway administration (network assignment, credentials) |
 | `internal/processing` | Workflow definition model and compiler, CEL predicates, Core regex, value/schema codec, candidate state machine, retry schedule, source capture, plugin host (process pool, verified-artifact cache) and installed-step execution, processing instances |

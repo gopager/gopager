@@ -1,13 +1,13 @@
-package main
+package httpapi
 
 import (
 	"encoding/json"
 	"net/http"
 
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/identity"
+	"github.com/gopager/gopager/internal/units"
 )
 
 type templateMutation struct {

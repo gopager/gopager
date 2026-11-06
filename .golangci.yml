@@ -18,10 +18,7 @@ issues:
   # an entry when its finding is fixed; new findings in these files of any other
   # linter still fail.
   exclude-rules:
-    - path: cmd/gopager/processing_management\.go
-      linters: [unused]
-      text: unavailableInstanceLifecycle
-    - path: cmd/gopager/processing\.go
+    - path: cmd/gopager/processing_worker\.go
       linters: [ineffassign, staticcheck]
       text: ineffectual assignment to ctx|SA4006
     - path: internal/processing/workflow_test\.go

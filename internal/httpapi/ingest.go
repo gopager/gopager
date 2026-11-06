@@ -1,4 +1,4 @@
-package main
+package httpapi
 
 import (
 	"context"
@@ -14,21 +14,21 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
-// gatewayIntake is the intake service surface the HTTP routes need; *ingest.Service
+// GatewayIntake is the intake service surface the HTTP routes need; *ingest.Service
 // implements it. Authenticate is separate so that a request is rejected before its
 // body is read.
-type gatewayIntake interface {
+type GatewayIntake interface {
 	Authenticate(ctx context.Context, bearer string) error
 	Submit(ctx context.Context, bearer string, request ingest.Submission, encodedSize int) (ingest.Receipt, error)
 	ReportState(ctx context.Context, bearer string, report ingest.GatewayStateReport) error
 }
 
 type ingestAPI struct {
-	service gatewayIntake
+	service GatewayIntake
 }
 
-// registerIngestRoutes adds the Gateway-authenticated intake routes to mux.
-func registerIngestRoutes(mux *http.ServeMux, service gatewayIntake) {
+// RegisterIngestRoutes adds the Gateway-authenticated intake routes to mux.
+func RegisterIngestRoutes(mux *http.ServeMux, service GatewayIntake) {
 	api := ingestAPI{service: service}
 	mux.HandleFunc("POST /api/v1/transmissions", api.submitTransmission)
 	mux.HandleFunc("POST /api/v1/gateway/state", api.reportGatewayState)

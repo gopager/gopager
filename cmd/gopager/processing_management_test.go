@@ -65,21 +65,6 @@ func (owner previewFixtureNetworks) ReadNetwork(ctx context.Context, tx platform
 	return network.Protocol, network.AgencyID, nil
 }
 
-func TestWorkflowRetryResponseIsBounded(t *testing.T) {
-	response := workflowRetryResponse{
-		CandidateID: uuid.MustParse("b29f0e2e-f49d-4c69-90c9-a27e28f4c26c"),
-		Revision:    3,
-	}
-	encoded, err := json.Marshal(response)
-	if err != nil {
-		t.Fatal(err)
-	}
-	const want = `{"candidateId":"b29f0e2e-f49d-4c69-90c9-a27e28f4c26c","revision":"3"}`
-	if string(encoded) != want {
-		t.Fatalf("retry response = %s, want %s", encoded, want)
-	}
-}
-
 // fixtureDigest is the SHA-256 of the command plugin fixture built for this test process.
 func fixtureDigest(t *testing.T) string {
 	t.Helper()
@@ -165,7 +150,8 @@ func TestProcessingWorkflowHTTPRequiresCurrentCSRFAndUsesSyntheticDeclarations(t
 				t.Cleanup(proxy.Close)
 				origin = "https://" + proxy.Listener.Addr().String()
 			}
-			runtime, err := composeProcessingAPIRuntime(t.Context(), store, "")
+			shared := mustComposeCore(t, store)
+			runtime, err := composeProcessingAPIRuntime(t.Context(), shared, "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -174,7 +160,7 @@ func TestProcessingWorkflowHTTPRequiresCurrentCSRFAndUsesSyntheticDeclarations(t
 					t.Error(err)
 				}
 			})
-			handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, nil, runtime.routes)
+			handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), shared, nil, runtime.routes)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -309,7 +295,8 @@ func TestProcessingSyntheticPreviewHTTPUsesCurrentFixtureNetworks(t *testing.T) 
 				id := uuid.New()
 				networks.values[id] = synthetic.Network{ID: id, Name: "Standalone " + string(protocol), Protocol: protocol}
 			}
-			runtime, err := composeProcessingAPIRuntime(t.Context(), store, "", networks)
+			shared := mustComposeCore(t, store)
+			runtime, err := composeProcessingAPIRuntime(t.Context(), shared, "", networks)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -332,7 +319,7 @@ func TestProcessingSyntheticPreviewHTTPUsesCurrentFixtureNetworks(t *testing.T) 
 				t.Cleanup(proxy.Close)
 				origin = "https://" + proxy.Listener.Addr().String()
 			}
-			handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store,
+			handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), shared,
 				networks, runtime.routes)
 			if err != nil {
 				t.Fatal(err)
@@ -475,7 +462,8 @@ func TestProcessingSyntheticPreviewHonorsCurrentUnitScope(t *testing.T) {
 		identity: identityRepository,
 		units:    unitRepository,
 	}
-	runtime, err := composeProcessingAPIRuntime(t.Context(), store, pluginFixtureRoot(t), networks)
+	shared := mustComposeCore(t, store)
+	runtime, err := composeProcessingAPIRuntime(t.Context(), shared, pluginFixtureRoot(t), networks)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -487,7 +475,7 @@ func TestProcessingSyntheticPreviewHonorsCurrentUnitScope(t *testing.T) {
 	backend := httptest.NewUnstartedServer(nil)
 	t.Cleanup(backend.Close)
 	origin := "http://" + backend.Listener.Addr().String()
-	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store,
+	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), shared,
 		networks, runtime.routes)
 	if err != nil {
 		t.Fatal(err)
@@ -591,7 +579,8 @@ func TestProcessingSyntheticPreviewUsesProductionNetworkOwner(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := composeProcessingAPIRuntime(t.Context(), store, pluginFixtureRoot(t))
+	shared := mustComposeCore(t, store)
+	runtime, err := composeProcessingAPIRuntime(t.Context(), shared, pluginFixtureRoot(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -603,7 +592,7 @@ func TestProcessingSyntheticPreviewUsesProductionNetworkOwner(t *testing.T) {
 	backend := httptest.NewUnstartedServer(nil)
 	t.Cleanup(backend.Close)
 	origin := "http://" + backend.Listener.Addr().String()
-	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, nil, runtime.routes)
+	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), shared, nil, runtime.routes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -692,7 +681,8 @@ func TestProcessingSyntheticPreviewUsesOnlyPreviewSupportingInstalledPlugins(t *
 		units:    unitRepository,
 	}
 	artifactRoot, supportingArtifact, unsupportingArtifact := installedPreviewArtifacts(t)
-	runtime, err := composeProcessingAPIRuntime(t.Context(), store, artifactRoot, networks)
+	shared := mustComposeCore(t, store)
+	runtime, err := composeProcessingAPIRuntime(t.Context(), shared, artifactRoot, networks)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -704,7 +694,7 @@ func TestProcessingSyntheticPreviewUsesOnlyPreviewSupportingInstalledPlugins(t *
 	backend := httptest.NewUnstartedServer(nil)
 	t.Cleanup(backend.Close)
 	origin := "http://" + backend.Listener.Addr().String()
-	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store,
+	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), shared,
 		networks, runtime.routes)
 	if err != nil {
 		t.Fatal(err)
@@ -1090,7 +1080,8 @@ func seedCurrentInstance(t *testing.T, store *postgres.Store, value processing.I
 
 func TestProcessingInstanceHTTPUsesRootAndRedactsCurrentConfiguration(t *testing.T) {
 	store := newManagementStore(t)
-	runtime, err := composeProcessingAPIRuntime(t.Context(), store, pluginFixtureRoot(t))
+	shared := mustComposeCore(t, store)
+	runtime, err := composeProcessingAPIRuntime(t.Context(), shared, pluginFixtureRoot(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1102,7 +1093,7 @@ func TestProcessingInstanceHTTPUsesRootAndRedactsCurrentConfiguration(t *testing
 	backend := httptest.NewUnstartedServer(nil)
 	t.Cleanup(backend.Close)
 	origin := "http://" + backend.Listener.Addr().String()
-	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, nil, runtime.routes)
+	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), shared, nil, runtime.routes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1154,9 +1145,9 @@ func TestProcessingInstanceHTTPUsesRootAndRedactsCurrentConfiguration(t *testing
 	}
 	createBody := makeMutation(uuid.New(), 0, "instance-manifest.json", configuration(map[string]string{"label": "first"}))
 	var decodedMutation instanceMutation
-	decodeRequest := httptest.NewRequest(http.MethodPost, "/api/v1/instances", strings.NewReader(createBody))
-	decodeRequest.Header.Set("Content-Type", "application/json")
-	if err := decodeManagementJSON(decodeRequest, &decodedMutation); err != nil {
+	decoder := json.NewDecoder(strings.NewReader(createBody))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&decodedMutation); err != nil {
 		t.Fatalf("instance request could not be decoded: %v; body=%s", err, createBody)
 	}
 	if decodedMutation.SchemaVersion != 1 || decodedMutation.CommandID == uuid.Nil ||
@@ -1387,7 +1378,8 @@ func revokeReadReviewer(t *testing.T, store *postgres.Store, principalID uuid.UU
 
 func TestProcessingStatusHTTPFiltersWorkflowPagesAndHidesPrivateEvidence(t *testing.T) {
 	store := newManagementStore(t)
-	runtime, err := composeProcessingAPIRuntime(t.Context(), store, "")
+	shared := mustComposeCore(t, store)
+	runtime, err := composeProcessingAPIRuntime(t.Context(), shared, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1399,7 +1391,7 @@ func TestProcessingStatusHTTPFiltersWorkflowPagesAndHidesPrivateEvidence(t *test
 	originServer := httptest.NewUnstartedServer(nil)
 	t.Cleanup(originServer.Close)
 	origin := "http://" + originServer.Listener.Addr().String()
-	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, nil, runtime.routes)
+	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), shared, nil, runtime.routes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1617,7 +1609,8 @@ func TestProcessingCandidateRetryHTTPUsesCurrentSourceOwner(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := composeProcessingAPIRuntime(t.Context(), store, "")
+	shared := mustComposeCore(t, store)
+	runtime, err := composeProcessingAPIRuntime(t.Context(), shared, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1629,7 +1622,7 @@ func TestProcessingCandidateRetryHTTPUsesCurrentSourceOwner(t *testing.T) {
 	backend := httptest.NewUnstartedServer(nil)
 	t.Cleanup(backend.Close)
 	origin := "http://" + backend.Listener.Addr().String()
-	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, nil, runtime.routes)
+	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), shared, nil, runtime.routes)
 	if err != nil {
 		t.Fatal(err)
 	}

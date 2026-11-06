@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/events"
 	"github.com/gopager/gopager/internal/identity"
@@ -16,6 +15,7 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
 	"github.com/gopager/gopager/internal/processing/management"
+	"github.com/gopager/gopager/internal/units"
 )
 
 type processingPreparationFixture struct {
