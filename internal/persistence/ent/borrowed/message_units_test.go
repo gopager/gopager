@@ -67,7 +67,7 @@ func TestMessageUnitCacheFollowsIntakeAndCorrection(t *testing.T) {
 		t.Fatal(err)
 	}
 	unitB, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
-		units.UnitInput{AgencyID: f.agencies[1], Name: "Mutual aid B", CollectionIDs: []uuid.UUID{}}, checkedMutation)
+		units.UnitInput{AgencyID: f.agencies[1], Name: "Station B", CollectionIDs: []uuid.UUID{}}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
