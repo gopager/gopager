@@ -207,6 +207,10 @@ GOPAGER_DATABASE_URL='postgres://gopager:secret@127.0.0.1:5432/gopager?sslmode=d
 
 Startup order: parse and validate configuration → open the database (TLS rule) → compose roles → ping, check write authority (`pg_is_in_recovery()` false and `transaction_read_only` off), check/apply migrations → open the listener and start workers → log `platform started`. Any failure before the last step ends the process with exit 1.
 
+### Backup and restore responsibility
+
+Backup, restore, secure disposal of copies and the handling of keys, secrets and plugin artifacts belong to the operator; GoPager has no backup or restore feature and no detection of a restored copy. An older database copy can bring back revoked credentials, deleted accounts, or work whose external effect happened after the copy was taken, and the application cannot know that later state existed. Account for these risks outside GoPager before starting a restored installation. Normal start-up still enforces schema compatibility, current stored rights and job leases, and honours the uncertainty recorded for attempts that had started. An upgrade never rolls back data written in between.
+
 ## Health Endpoints
 
 Served on the `api` listener only, `GET` only (other methods: `405`, `Allow: GET`), no authentication.

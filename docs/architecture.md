@@ -77,6 +77,15 @@ flowchart TD
 
 The response is `202` when the processing status is `pending` and `200` otherwise. The accepted evidence is visible to readers either way.
 
+### Grouping rules
+
+- **Basis.** Grouping uses the normalized (whole-second) observation instant of each transmission, never the acceptance time, and is independent of Network, Gateway, address and Unit matching. Only exactly equal payload identities group (see [Protocols, targets and payload identity](http-api.md#protocols-targets-and-payload-identity)); a multi-target transmission always belongs to exactly one Message and is never split by target.
+- **Window.** `grouping_control.window_seconds` is a whole number of seconds from `0` to 9007199254740991 (default 30). The comparison is inclusive: instants that differ by at most the window are linked. `0` makes every transmission its own Message. The window is not clamped, and no arithmetic is done on the stored instants.
+- **Chain rule.** Membership does not depend on arrival order: payload-identical transmissions connected by consecutive gaps of at most the window form one Message (0 s, 50 s and then 25 s with a 30 s window end up as one Message, like 0, 25, 50). There is no maximum Message age and no lateness cut-off, so a continuously repeated payload forms one unbounded Message and a late transmission can join any retained Message. A transmission that bridges several Messages merges them into the lowest ID; originals and targets are untouched and no alias or old-to-new ID mapping is kept, so a merged-away Message ID is `NOT_FOUND`.
+- **Configuration.** Changing the window affects only transmissions accepted afterwards; existing Messages are neither split nor merged by the change. Rematching, lifting a suppression and Workflow changes never change membership.
+- **Message time.** `first_observed_at` is the earliest observation time of any member, corrected downward by an older late join or merge; `last_observed_at` is the latest.
+- **Concurrency.** Exact grouping is serialized per payload identity with a transaction advisory lock, and the Message, its facts and the `message_units` rows commit with the transmission.
+
 ### Processing (worker role)
 
 | Step | What happens | Package |
@@ -114,6 +123,16 @@ Creating, updating or deleting a rule, deleting a Unit, or changing a suppressio
 5. On failure, the scope is rescheduled with backoff and a failure code. After five attempts the scope is failed and the runner appends exactly one `correction.failed` fact: either from its own failure handling, or, for a scope whose fifth lease expired, in the claim transaction that marks it failed with `RETRY_LIMIT` (the store reports the exhausted scope, the runner owns the fact). A failed scope can be retried through `POST /api/v1/assignment-corrections/{id}/retry`.
 
 Correction never creates or deletes transmissions or Messages and never changes grouping.
+
+### Address rule semantics
+
+- **Shape.** A rule belongs to exactly one Network (and so to one protocol) and names one Unit, a selector and a validity interval `[validFrom, validUntil)`; a missing bound is open. Validity is evaluated at the transmission's observation time, never at acceptance or Message time. Rule bounds use microsecond timestamps and unsupported precision is rejected, not truncated.
+- **Selectors.** POCSAG: an exact RIC or inclusive range, an optional function filter (absent means all four function bits; empty, duplicate or out-of-range lists are invalid) and a mode `function-bit` or `subaddress`; the mode is never inferred from a Unit name. FLEX: an exact address or range that consists only of supported address classes. ZVEI and EAS: the exact string, with no geographic containment or expansion. Cross-protocol selectors are invalid.
+- **Specificity.** A selector is a set of address/function pairs. When several simultaneously valid rules of one Network match a target, the rule whose set is a proper subset of all others wins. Two simultaneously valid rules with equal selectors, or with overlapping selectors where neither contains the other, are rejected (`409 REVISION_CONFLICT`), even for the same Unit; so are overlapping POCSAG selectors with different modes. Disjoint selectors or disjoint validity intervals never conflict. At the boundary between two adjacent intervals the rule whose `validFrom` equals the instant applies. There is no priority score.
+- **Resolution.** Every target ends as `assigned` (Unit and rule) or proven `unassigned` (both null); there is no default Unit. A targetless transmission gets no synthetic target. Storage, unsupported input or violated invariants are errors, never `unassigned`. A hidden co-target is not relabelled as without-Unit.
+- **Suppression.** A suppression hides exactly one original target `(transmissionId, targetPosition)` from the Message read model and from Delivery input; the original payload, targets and Message membership stay untouched, and a Message keeps its other usable targets. At most one active suppression exists per target. Lifting a suppression re-evaluates the target and never creates a transmission, membership, assignment or Delivery trigger. Targets are referenced by this composite key; no separate target ID exists, and the target list is never sorted, renumbered or deduplicated.
+- **Unit and cache.** `message_units.first_observed_at` is the minimum observation time of the Message's usable targets of that Unit and `age_anchor` the minimum over those targets of the earlier of observation and acceptance time. Repeated receptions never advance either. A Unit deletion, rule change or suppression changes them only through a correction batch.
+- **Concurrency.** A rule or Unit change serializes with intake on the assignment lock, so a decision is never published with an incompatible revision.
 
 ## Package map
 
@@ -325,6 +344,7 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 - `events.Log` (implemented by `eventstore.Store`) is the reader port. The read position is an `events.Position{TxID, Seq}`, ordered by `(tx_id, seq)`. `ReadAfter(tx, after, limit)` is gap-safe: it returns only rows with `(tx_id, seq) > (after.TxID, after.Seq)` and `tx_id < pg_snapshot_xmin(pg_current_snapshot())`, ordered by `(tx_id, seq)`, so no row at or below a returned position can still be uncommitted. A transaction does not read its own appends. `Offset` and `Advance` keep one durable position per named consumer in `consumer_offsets(consumer, last_tx_id, last_seq, updated_at)`; `Advance` never moves backwards in `(tx_id, seq)` order (a stale position is a no-op), and because both run in the caller's transaction a consumer commits its effect and its offset atomically.
 - The `NOTIFY` payload is only a wake-up hint (it can be lost, for example while a listener reconnects). A consumer combines `ReadAfter` with a listener on the channel or a periodic poll and always reads from its `Offset`. The store itself has no `LISTEN` capability; the live-delivery listener is a separate component.
 - No application consumer exists yet; workers still find their work by querying their own tables.
+- **Envelope rules.** `schemaVersion` is 1. Adding an optional field is compatible; new meaning or a new required field needs a new schema version, and a consumer blocks visibly on a version it does not know instead of skipping it as handled. `data` is internal recorded context, never an already-authorized outbound payload. `replayMode` is `normal` or explicit historical reprocessing. Facts carry no username, profile snapshot, credential, proof, name, setting value or original payload. Ordering is per aggregate revision and causation, with no global provider order; the facts of one atomic change may share the final aggregate revision with no order among them. A merge transaction records one `message.merged` (survivor and sorted absorbed references) plus one `message.transmission-joined` for the new member and no `message.created`, so consumers deduplicate each fact and reconcile current authorized state instead of relying on merge-before-join delivery. A recorded type never grants a consumer an unprojected original payload.
 - `producer.domain` names the producing domain:
 
 | `producer.domain` | Domain | Events |
@@ -351,7 +371,7 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 
 | Mechanism | Scope | Behavior |
 | --- | --- | --- |
-| Command receipt (`commands`, `command_receipts`) | Create-style management commands carrying `commandId` | Unique per `(actor, commandId)`. Stores the operation, a SHA-256 fingerprint of the canonical input and the result. A retry with the same input returns the stored result. A different input returns `REVISION_CONFLICT`. |
+| Command receipt (`commands`, `command_receipts`) | Create-style management commands carrying `commandId` | Unique per `(actor, commandId)`. Stores the operation, a SHA-256 fingerprint of the canonical input and the result. A retry with the same input returns the stored result. A different input returns `IDEMPOTENCY_CONFLICT` (not retryable). |
 | Submission receipt | Gateway intake | Unique per `(gateway_id, submission_id)` on `transmissions` with `submission_fingerprint`. A retry returns the original receipt. A conflicting retry is rejected and recorded. |
 | Expected revision | Updates and deletes | `expectedRevision` must equal the stored `revision` |
 
