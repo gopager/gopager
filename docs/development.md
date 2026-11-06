@@ -71,7 +71,8 @@ make fmt                # gofmt -w cmd internal
 make fmt-check          # fail and list files that need gofmt
 make vet                # go vet ./...
 make golangci           # golangci-lint run ./... (pinned version)
-make lint               # fmt-check, vet, golangci
+make docs-check         # Markdown links, heading anchors and D-/REQ-/AP-/E-/C- IDs (tools/doccheck)
+make lint               # fmt-check, vet, golangci, docs-check
 make test               # quick tier: go test ./...
 make test-integration   # GOPAGER_INTEGRATION=1 go test -race -count=1 -timeout=20m ./...
 make generate-check     # go generate ./..., then fail if the Ent output differs from git
@@ -79,6 +80,8 @@ make vuln               # govulncheck ./... (pinned version, needs network)
 ```
 
 `gofmt` covers `cmd/` and `internal/` (including generated Ent code and tests). Only `test-integration` needs Docker.
+
+`make docs-check` runs `go run ./tools/doccheck`. It checks every Markdown file for relative links, heading anchors and references to decisions (`development/decisions/README.md`), requirements, work packages, execution evidence (`AP-nn E-m`, or `source AP-nn E-m` for the archived source records) and contracts. Findings that history must keep, such as old work-package numbers in archived records, are listed with a reason in `tools/doccheck/ignore.txt`; an entry that no longer matches is reported, so the list cannot hide new problems.
 
 [.golangci.yml](../.golangci.yml) enables a conservative set: `govet`, `staticcheck`, `errcheck`, `ineffassign`, `unused`, `misspell`. Generated code is skipped by golangci-lint's generated-file detection. The config uses the golangci-lint v2 format (migrated with `golangci-lint migrate`; the `std-error-handling`, `comments`, `common-false-positives` and `legacy` exclusion presets keep the v1 default exclusions). In v2, `staticcheck` also covers the former `gosimple` and `stylecheck` checks (for example ST1005 lower-case error strings). Three known findings in processing code are excluded by path and text (two ineffectual assignments in `cmd/gopager/processing_worker.go` and `internal/processing/workflow_test.go`, and an overwritten argument in `internal/processing/workflow.go`); delete the matching `linters.exclusions.rules` entry when you fix one. Do not add new exclusions to hide findings in code you change.
 

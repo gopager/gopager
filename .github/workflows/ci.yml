@@ -27,6 +27,8 @@ jobs:
         run: make vet
       - name: golangci-lint
         run: make golangci
+      - name: Documentation links and IDs
+        run: make docs-check
       - name: Quick tests
         run: make test
       - name: Generated code is current

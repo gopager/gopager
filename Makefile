@@ -31,7 +31,7 @@ golangci:
 	$(GOLANGCI_LINT) run ./...
 
 # lint is the full static-analysis tier: formatting, go vet and golangci-lint.
-lint: fmt-check vet golangci
+lint: fmt-check vet golangci docs-check
 
 # test is the quick tier: no Docker, database tests are skipped.
 test:
