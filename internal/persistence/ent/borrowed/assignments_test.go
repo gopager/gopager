@@ -609,8 +609,10 @@ func TestCurrentMatcherNativeMixedScopesAndRestrictingKeysMatchPointDecisions(t 
 			}
 		}
 		if scope.Kind == "unit" {
-			if err := f.rules.Preview(t.Context(), proof, uuid.Nil, 0, ruleInput(f.networks[1], ids[0], 20, 20), nil); !errors.Is(err, assignments.ErrRuleConflict) {
-				t.Fatalf("hidden conflicting rule was ignored: %v", err)
+			// A Unit grant alone no longer reaches a Network of another Agency, so the preview is
+			// refused before conflicts are evaluated (see TestRuleWritesNeedAuthorityOverTheNetworkAgency).
+			if err := f.rules.Preview(t.Context(), proof, uuid.Nil, 0, ruleInput(f.networks[1], ids[0], 20, 20), nil); !errors.Is(err, authz.ErrForbidden) {
+				t.Fatalf("Unit-scoped key previewed a rule on another Agency's Network: %v", err)
 			}
 		}
 	}

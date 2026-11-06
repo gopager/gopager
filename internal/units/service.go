@@ -269,6 +269,13 @@ func (s *Service) ChangeUnit(ctx context.Context, proof identity.Proof, id uuid.
 			return err
 		}
 		if proposed.AgencyID != current.AgencyID {
+			// A move hands the Unit's whole history to the new Agency, so authority over the Unit
+			// alone is not enough: the caller must govern both Agencies.
+			for _, agency := range []uuid.UUID{current.AgencyID, proposed.AgencyID} {
+				if err := authz.Authorize(authority, "unit.update", nil, authz.Target{AgencyID: agency}, now); err != nil {
+					return err
+				}
+			}
 			if err := s.repository.LockAgency(tx.Context(), tx, proposed.AgencyID); err != nil {
 				return err
 			}

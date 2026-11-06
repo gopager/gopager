@@ -95,6 +95,8 @@ func (s *Service) ExecuteWork(ctx context.Context, selected processing.Candidate
 	var current processing.Candidate
 	var recovered bool
 	err := s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
+		// A rerun transaction must not inherit state captured by the previous attempt.
+		recovered = false
 		var err error
 		current, err = owner.ReconcileCandidate(tx.Context(), tx, selected)
 		if err != nil {
@@ -161,6 +163,16 @@ func (MissingSourceOwner) ReconcileCandidate(context.Context, platform.Transacti
 	return processing.Candidate{}, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Processing source owner unavailable"))
 }
 
+// releaseCapture releases a held capture once and clears it, so a later call is a no-op.
+func releaseCapture(captured *Capture) error {
+	release := captured.Release
+	*captured = Capture{}
+	if release == nil {
+		return nil
+	}
+	return release()
+}
+
 type outcome struct {
 	evaluation processing.Evaluation
 	err        error
@@ -185,6 +197,12 @@ func (s *Service) run(ctx context.Context, pending processing.Candidate, publish
 	// Taken before the claim so the local lease deadline never exceeds the primary-clock lease.
 	leaseStart := time.Now()
 	err := s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
+		// A rerun after a serialization failure starts over; the previous attempt's capture is
+		// still registered with the owner and would otherwise never be released.
+		if err := releaseCapture(&captured); err != nil {
+			return err
+		}
+		current = processing.Candidate{}
 		var err error
 		captured, err = s.source.CaptureCandidate(tx.Context(), tx, pending)
 		if err != nil {
@@ -205,16 +223,9 @@ func (s *Service) run(ctx context.Context, pending processing.Candidate, publish
 		return err
 	})
 	if err != nil {
-		if captured.Release != nil {
-			err = errors.Join(err, captured.Release())
-		}
-		return processing.Candidate{}, nil, err
+		return processing.Candidate{}, nil, errors.Join(err, releaseCapture(&captured))
 	}
-	defer func() {
-		if captured.Release != nil {
-			resultErr = errors.Join(resultErr, captured.Release())
-		}
-	}()
+	defer func() { resultErr = errors.Join(resultErr, releaseCapture(&captured)) }()
 	compute, cancel := context.WithCancel(ctx)
 	defer cancel()
 	results := make(chan outcome, 1)

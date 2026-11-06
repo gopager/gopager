@@ -216,7 +216,7 @@ Scope evaluation per resource:
 | Unit | The Unit's Agency, the Unit, and its collections. One matching grant suffices. |
 | Organization | Every member Unit. An Organization without members needs an `all` grant. |
 | Unit template | Only `all` scope. Referencing an Organization also requires `organization.read` on it. |
-| Address rule | The Agency of the rule's Network, and the rule's Unit with its collections. |
+| Address rule | Writes need authority over the Agency of the rule's Network and, additionally, over the rule's Unit or its collections (for an update, also over the existing rule's Network Agency); a Unit or collection grant alone never reaches another Agency's Network. Reads keep their existing predicate. |
 | Suppression / correction | The Agency of the affected transmission target's Network, and the target's Unit. |
 | Gateway administration | The Agency of every Network currently assigned to the Gateway, and for network replacement of every newly proposed Network. A Gateway without Networks needs an `all` grant. |
 | Workflow | The workflow's own selection scope (`all`, `network` or `unit`), with each Network resolved to its Agency and each Unit to its Agency and collections. |
@@ -396,7 +396,7 @@ mutating routes reached via session also require Origin + `X-CSRF-Token`.
 | POST | `/units` | `unit.create` (+ `organization.create` with `newOrganization`) | 201 | Create; `agencyId` required; optionally creates an Organization in the same transaction |
 | POST | `/units/from-template` | `unit.create`, `unit-template.read` | 201 | Create from a snapshot of the template's current values |
 | GET | `/units/{id}` | `unit.read` | 200 | Read |
-| PUT | `/units/{id}` | `unit.update` | 200 | Full replacement; `agencyId` and `organizationId` required (the latter may be `null`); moving a Unit to another Agency needs `unit.update` on both; `newOrganization` not allowed |
+| PUT | `/units/{id}` | `unit.update` | 200 | Full replacement; `agencyId` and `organizationId` required (the latter may be `null`); moving a Unit to another Agency needs `unit.update` with authority over both Agencies (a grant on the Unit alone does not suffice) and takes the Unit's Message history along; `newOrganization` not allowed |
 | DELETE | `/units/{id}` | `unit.delete` | **202** | Unit becomes non-selectable; `data.status` is `"pending"` while assignment correction runs |
 | POST | `/units/bulk/preview` | `unit.update` / `unit.delete` | 200 | Dry run with per-item `valid`/`code`; no `commandId` |
 | POST | `/units/bulk` | `unit.update` / `unit.delete` | 200 | 1–100 items, all or nothing; per-item `status` `updated` or `pending` |
