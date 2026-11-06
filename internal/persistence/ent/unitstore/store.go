@@ -11,7 +11,6 @@ import (
 
 	"entgo.io/ent/entql"
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/persistence/ent"
@@ -25,6 +24,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/unittemplate"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
+	"github.com/gopager/gopager/internal/units"
 )
 
 // Store persists Units, Organizations, Unit templates and Unit collections, filtering rows

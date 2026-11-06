@@ -1,4 +1,4 @@
-package main
+package httpapi
 
 import (
 	"net/http"
@@ -43,7 +43,7 @@ type gatewayCredentialIssueResponse struct {
 	replayed      bool
 }
 
-func registerGatewayManagementRoutes(mux *http.ServeMux, transport *identity.HTTPTransport,
+func RegisterGatewayManagementRoutes(mux *http.ServeMux, transport *identity.HTTPTransport,
 	service *ingest.GatewayAdministration) {
 	api := gatewayManagementAPI{transport: transport, service: service}
 	mux.HandleFunc("PUT /api/v1/gateways/{id}/networks", api.route(func(r *http.Request, proof identity.Proof,

@@ -48,8 +48,8 @@ Run from the Go module root after implementation:
 ```sh
 go generate ./internal/persistence/ent
 go test -race -count=1 -timeout=5m ./internal/identity ./internal/authz ./internal/events ./internal/assignments ./internal/protocols ./internal/messages ./internal/ingest ./internal/processing/worker ./cmd/gopager
-GOPAGER_INTEGRATION=1 go test -race -count=1 -timeout=10m ./cmd/gopager ./internal/protocols ./internal/assignments ./internal/Units ./internal/commands ./internal/authz ./internal/events ./internal/identity ./internal/ingest ./internal/messages ./internal/persistence/ent/... ./internal/platform/postgres
-go vet ./cmd/gopager ./internal/protocols ./internal/assignments ./internal/Units ./internal/commands ./internal/authz ./internal/events ./internal/identity ./internal/ingest ./internal/messages ./internal/persistence/ent/... ./internal/platform/postgres
+GOPAGER_INTEGRATION=1 go test -race -count=1 -timeout=10m ./cmd/gopager ./internal/protocols ./internal/assignments ./internal/units ./internal/commands ./internal/authz ./internal/events ./internal/identity ./internal/ingest ./internal/messages ./internal/persistence/ent/... ./internal/platform/postgres
+go vet ./cmd/gopager ./internal/protocols ./internal/assignments ./internal/units ./internal/commands ./internal/authz ./internal/events ./internal/identity ./internal/ingest ./internal/messages ./internal/persistence/ent/... ./internal/platform/postgres
 git diff --check
 ```
 

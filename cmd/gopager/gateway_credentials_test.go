@@ -95,7 +95,7 @@ func newGatewayHTTPFixture(t *testing.T) gatewayHTTPFixture {
 	backend := httptest.NewUnstartedServer(nil)
 	t.Cleanup(backend.Close)
 	fixture.origin = "http://" + backend.Listener.Addr().String()
-	handler, err := composeApplicationAPI(fixture.origin, identity.DefaultLoginRateLimits(), store, nil)
+	handler, err := composeApplicationAPI(fixture.origin, identity.DefaultLoginRateLimits(), mustComposeCore(t, store), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

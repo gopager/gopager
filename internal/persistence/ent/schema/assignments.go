@@ -15,10 +15,10 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/assignments"
 	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/persistence/ent/guard"
+	"github.com/gopager/gopager/internal/units"
 )
 
 // Unit defines the units table: an alerting Unit with name, settings and optional

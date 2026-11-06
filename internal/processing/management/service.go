@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/events"
@@ -19,6 +18,7 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
 	"github.com/gopager/gopager/internal/protocols"
+	"github.com/gopager/gopager/internal/units"
 )
 
 // DefinitionPreparer compiles against trusted source declarations/artifacts outside primary transactions.
@@ -61,36 +61,17 @@ func New(transactions identity.Transactions, resolver *identity.Resolver, clock 
 		scopes: scopes, preparer: preparer, receipts: receipts, facts: facts}, nil
 }
 
-// within keeps current proofs, primary time and protected configuration operations in one transaction.
-func (s *Service) within(ctx context.Context, proof identity.Proof, mutation bool,
-	check func(identity.Authentication) error, operation func(platform.TransactionContext, authz.Authority, time.Time) error) error {
-	if mutation && check == nil {
-		return authz.ErrInvalidInput
-	}
-	return s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-		authentication, err := s.resolver.Resolve(tx.Context(), tx, proof)
-		if err != nil {
+// within keeps current proofs, primary time and protected configuration operations in one
+// transaction. Unlike the master-data services it serializes mutations behind the Processing
+// revision and rejects an expired authentication before the caller's check.
+func (s *Service) within(ctx context.Context, proof identity.Proof, mutation bool, check func(identity.Authentication) error,
+	operation func(platform.TransactionContext, authz.Authority, time.Time) error) error {
+	return identity.WithAuthority(ctx, s.transactions, s.clock, s.resolver, proof, mutation, check, operation,
+		identity.LockMutations(func(ctx context.Context, tx platform.TransactionContext) error {
+			_, err := s.repository.LockRevisionForChange(ctx, tx)
 			return err
-		}
-		if mutation {
-			if _, err := s.repository.LockRevisionForChange(tx.Context(), tx); err != nil {
-				return err
-			}
-		}
-		now, err := s.clock.Now(tx.Context(), tx)
-		if err != nil {
-			return err
-		}
-		if authentication.ExpiresAt != nil && !now.Before(*authentication.ExpiresAt) {
-			return identity.ErrLoginRequired
-		}
-		if check != nil {
-			if err := check(authentication); err != nil {
-				return err
-			}
-		}
-		return operation(tx, authentication.Authority, now)
-	})
+		}),
+		identity.RejectExpiredAuthentication())
 }
 
 // authorizeScope checks that every Workflow scope reference exists and that the caller holds

@@ -35,7 +35,8 @@ func TestProcessingSaveAndDraftPreviewRejectUnreadableFieldGroups(t *testing.T) 
 	}
 	networkID := uuid.New()
 	networks.values[networkID] = synthetic.Network{ID: networkID, Name: "Standalone", Protocol: protocols.POCSAG}
-	runtime, err := composeProcessingAPIRuntime(t.Context(), store, "", networks)
+	shared := mustComposeCore(t, store)
+	runtime, err := composeProcessingAPIRuntime(t.Context(), shared, "", networks)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +48,7 @@ func TestProcessingSaveAndDraftPreviewRejectUnreadableFieldGroups(t *testing.T) 
 	backend := httptest.NewUnstartedServer(nil)
 	t.Cleanup(backend.Close)
 	origin := "http://" + backend.Listener.Addr().String()
-	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, networks, runtime.routes)
+	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), shared, networks, runtime.routes)
 	if err != nil {
 		t.Fatal(err)
 	}

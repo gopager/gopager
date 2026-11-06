@@ -41,26 +41,9 @@ func NewService(transactions identity.Transactions, resolver *identity.Resolver,
 }
 
 // within resolves current authority and performs DTO construction under the same protected transaction.
-func (s *Service) within(ctx context.Context, proof identity.Proof, mutation bool, check func(identity.Authentication) error, operation func(platform.TransactionContext, authz.Authority, time.Time) error) error {
-	if mutation && check == nil {
-		return authz.ErrInvalidInput
-	}
-	return s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-		authentication, err := s.resolver.Resolve(tx.Context(), tx, proof)
-		if err != nil {
-			return err
-		}
-		if check != nil {
-			if err := check(authentication); err != nil {
-				return err
-			}
-		}
-		now, err := s.clock.Now(tx.Context(), tx)
-		if err != nil {
-			return err
-		}
-		return operation(tx, authentication.Authority, now)
-	})
+func (s *Service) within(ctx context.Context, proof identity.Proof, mutation bool, check func(identity.Authentication) error,
+	operation func(platform.TransactionContext, authz.Authority, time.Time) error) error {
+	return identity.WithAuthority(ctx, s.transactions, s.clock, s.resolver, proof, mutation, check, operation)
 }
 
 // ReadUnit returns only the named current authorized Unit DTO.
