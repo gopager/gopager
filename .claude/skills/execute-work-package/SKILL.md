@@ -18,7 +18,7 @@ Apply the [permanent documentation](../../../development/README.md#permanent-doc
 
 ## Procedure
 
-1. Establish the selected assignment, worktree baseline, current start authority and execution record. Preserve existing changes. The execution unit is the entire assigned AP, not a convenient task or implementation slice, unless the user explicitly narrows it.
+1. Establish the selected assignment, worktree baseline, the user's approval to start this package (the only approval gate; ask for it if it is missing, never re-ask inside the package) and the execution record. Preserve existing changes. The execution unit is the entire assigned AP, not a convenient task or implementation slice, unless the user explicitly narrows it.
 2. Verify every external input against an actual completed earlier producer. Own explicitly assigned planning is work before coding, not an external blocker.
 3. Define the assigned contract/decision slices at their canonical owners before using them. Execution authorizes this in-scope work; do not request additional permission or ask how much to plan.
 4. Implement only current tasks and supporting write paths. Preserve fixed earlier behavior. Later consumers are compatibility context, not unfinished inputs or work to perform early.
@@ -34,11 +34,11 @@ At the canonical decision owner, record:
 
 - Stable ID, date, AP/task, status and accountable owner.
 - Question, user-story context, evidence, alternatives, selected option and rationale.
-- Authorization and exact scope; current-AP planning needs no separate approval.
+- Authorization and exact scope; the package approval covers current-AP planning, so no intermediate approval is requested.
 - Affected contracts/artifacts/consumers and consequences.
 - Supersession reference when explicitly authorized.
 
-Product decisions belong in the plan, technology selections in the architecture, interface behavior in the C-ID contract and terms in the glossary. Link between them; do not maintain parallel definitions.
+Product decisions belong in the [decision records](../../../development/decisions/README.md) (ADR file of the topic plus an index row), delivery scope and the approval rule in the plan, technology selections in the architecture, interface behavior in the C-ID contract and terms in the glossary. Link between them; do not maintain parallel definitions.
 
 ## Clarification and Gaps
 
