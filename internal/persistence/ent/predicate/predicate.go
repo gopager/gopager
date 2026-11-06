@@ -21,6 +21,9 @@ type AuditRecord func(*sql.Selector)
 // CommandReceipt is the predicate function for commandreceipt builders.
 type CommandReceipt func(*sql.Selector)
 
+// ConsumerOffset is the predicate function for consumeroffset builders.
+type ConsumerOffset func(*sql.Selector)
+
 // ContributionSupport is the predicate function for contributionsupport builders.
 type ContributionSupport func(*sql.Selector)
 

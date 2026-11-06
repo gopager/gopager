@@ -48,7 +48,7 @@ One Go module, `github.com/gopager/gopager`.
 | `internal/persistence/ent/guard/` | Ent privacy policy: deny unless an adapter bound an access decision |
 | `internal/persistence/ent/permissions/` | Translation of authz decisions into Ent predicates |
 | `internal/persistence/ent/borrowed/` | Ent driver that runs inside an existing platform transaction; hosts most store integration tests |
-| `internal/persistence/ent/*store/` | Repository adapters per domain: `identitystore`, `unitstore`, `assignmentstore`, `ingeststore`, `processingstore`, `eventstore` (incl. Watermill fact transport), `commandstore` |
+| `internal/persistence/ent/*store/` | Repository adapters per domain: `identitystore`, `unitstore`, `assignmentstore`, `ingeststore`, `processingstore`, `eventstore` (sequenced domain event log), `commandstore` |
 | `internal/testutil/postgres/` | Test PostgreSQL lifecycle (`Run(m)`) |
 | `internal/testutil/pluginfixture/` | Builds plugin fixtures for tests (`Binary(t, name)`) |
 

@@ -22,6 +22,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/assignmentcontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/auditrecord"
 	"github.com/gopager/gopager/internal/persistence/ent/commandreceipt"
+	"github.com/gopager/gopager/internal/persistence/ent/consumeroffset"
 	"github.com/gopager/gopager/internal/persistence/ent/contributionsupport"
 	"github.com/gopager/gopager/internal/persistence/ent/correctiondirtytransmission"
 	"github.com/gopager/gopager/internal/persistence/ent/credential"
@@ -73,6 +74,7 @@ const (
 	TypeAssignmentControl           = "AssignmentControl"
 	TypeAuditRecord                 = "AuditRecord"
 	TypeCommandReceipt              = "CommandReceipt"
+	TypeConsumerOffset              = "ConsumerOffset"
 	TypeContributionSupport         = "ContributionSupport"
 	TypeCorrectionDirtyTransmission = "CorrectionDirtyTransmission"
 	TypeCredential                  = "Credential"
@@ -3596,6 +3598,428 @@ func (m *CommandReceiptMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown CommandReceipt edge %s", name)
 }
 
+// ConsumerOffsetMutation represents an operation that mutates the ConsumerOffset nodes in the graph.
+type ConsumerOffsetMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *string
+	last_seq      *int64
+	addlast_seq   *int64
+	updated_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*ConsumerOffset, error)
+	predicates    []predicate.ConsumerOffset
+}
+
+var _ ent.Mutation = (*ConsumerOffsetMutation)(nil)
+
+// consumeroffsetOption allows management of the mutation configuration using functional options.
+type consumeroffsetOption func(*ConsumerOffsetMutation)
+
+// newConsumerOffsetMutation creates new mutation for the ConsumerOffset entity.
+func newConsumerOffsetMutation(c config, op Op, opts ...consumeroffsetOption) *ConsumerOffsetMutation {
+	m := &ConsumerOffsetMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeConsumerOffset,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withConsumerOffsetID sets the ID field of the mutation.
+func withConsumerOffsetID(id string) consumeroffsetOption {
+	return func(m *ConsumerOffsetMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ConsumerOffset
+		)
+		m.oldValue = func(ctx context.Context) (*ConsumerOffset, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ConsumerOffset.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withConsumerOffset sets the old ConsumerOffset of the mutation.
+func withConsumerOffset(node *ConsumerOffset) consumeroffsetOption {
+	return func(m *ConsumerOffsetMutation) {
+		m.oldValue = func(context.Context) (*ConsumerOffset, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ConsumerOffsetMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ConsumerOffsetMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of ConsumerOffset entities.
+func (m *ConsumerOffsetMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ConsumerOffsetMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ConsumerOffsetMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ConsumerOffset.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetLastSeq sets the "last_seq" field.
+func (m *ConsumerOffsetMutation) SetLastSeq(i int64) {
+	m.last_seq = &i
+	m.addlast_seq = nil
+}
+
+// LastSeq returns the value of the "last_seq" field in the mutation.
+func (m *ConsumerOffsetMutation) LastSeq() (r int64, exists bool) {
+	v := m.last_seq
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastSeq returns the old "last_seq" field's value of the ConsumerOffset entity.
+// If the ConsumerOffset object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ConsumerOffsetMutation) OldLastSeq(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastSeq is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastSeq requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastSeq: %w", err)
+	}
+	return oldValue.LastSeq, nil
+}
+
+// AddLastSeq adds i to the "last_seq" field.
+func (m *ConsumerOffsetMutation) AddLastSeq(i int64) {
+	if m.addlast_seq != nil {
+		*m.addlast_seq += i
+	} else {
+		m.addlast_seq = &i
+	}
+}
+
+// AddedLastSeq returns the value that was added to the "last_seq" field in this mutation.
+func (m *ConsumerOffsetMutation) AddedLastSeq() (r int64, exists bool) {
+	v := m.addlast_seq
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetLastSeq resets all changes to the "last_seq" field.
+func (m *ConsumerOffsetMutation) ResetLastSeq() {
+	m.last_seq = nil
+	m.addlast_seq = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *ConsumerOffsetMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *ConsumerOffsetMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the ConsumerOffset entity.
+// If the ConsumerOffset object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ConsumerOffsetMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *ConsumerOffsetMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the ConsumerOffsetMutation builder.
+func (m *ConsumerOffsetMutation) Where(ps ...predicate.ConsumerOffset) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ConsumerOffsetMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ConsumerOffsetMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ConsumerOffset, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ConsumerOffsetMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ConsumerOffsetMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ConsumerOffset).
+func (m *ConsumerOffsetMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ConsumerOffsetMutation) Fields() []string {
+	fields := make([]string, 0, 2)
+	if m.last_seq != nil {
+		fields = append(fields, consumeroffset.FieldLastSeq)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, consumeroffset.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ConsumerOffsetMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case consumeroffset.FieldLastSeq:
+		return m.LastSeq()
+	case consumeroffset.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ConsumerOffsetMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case consumeroffset.FieldLastSeq:
+		return m.OldLastSeq(ctx)
+	case consumeroffset.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown ConsumerOffset field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ConsumerOffsetMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case consumeroffset.FieldLastSeq:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastSeq(v)
+		return nil
+	case consumeroffset.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ConsumerOffset field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ConsumerOffsetMutation) AddedFields() []string {
+	var fields []string
+	if m.addlast_seq != nil {
+		fields = append(fields, consumeroffset.FieldLastSeq)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ConsumerOffsetMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case consumeroffset.FieldLastSeq:
+		return m.AddedLastSeq()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ConsumerOffsetMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case consumeroffset.FieldLastSeq:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddLastSeq(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ConsumerOffset numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ConsumerOffsetMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ConsumerOffsetMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ConsumerOffsetMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown ConsumerOffset nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ConsumerOffsetMutation) ResetField(name string) error {
+	switch name {
+	case consumeroffset.FieldLastSeq:
+		m.ResetLastSeq()
+		return nil
+	case consumeroffset.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown ConsumerOffset field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ConsumerOffsetMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ConsumerOffsetMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ConsumerOffsetMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ConsumerOffsetMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ConsumerOffsetMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ConsumerOffsetMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ConsumerOffsetMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown ConsumerOffset unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ConsumerOffsetMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown ConsumerOffset edge %s", name)
+}
+
 // ContributionSupportMutation represents an operation that mutates the ContributionSupport nodes in the graph.
 type ContributionSupportMutation struct {
 	config
@@ -5703,8 +6127,12 @@ type DomainEventMutation struct {
 	op             Op
 	typ            string
 	id             *uuid.UUID
+	seq            *int64
+	addseq         *int64
 	envelope       *json.RawMessage
 	appendenvelope json.RawMessage
+	_type          *string
+	occurred_at    *time.Time
 	clearedFields  map[string]struct{}
 	done           bool
 	oldValue       func(context.Context) (*DomainEvent, error)
@@ -5815,6 +6243,76 @@ func (m *DomainEventMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
 	}
 }
 
+// SetSeq sets the "seq" field.
+func (m *DomainEventMutation) SetSeq(i int64) {
+	m.seq = &i
+	m.addseq = nil
+}
+
+// Seq returns the value of the "seq" field in the mutation.
+func (m *DomainEventMutation) Seq() (r int64, exists bool) {
+	v := m.seq
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSeq returns the old "seq" field's value of the DomainEvent entity.
+// If the DomainEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DomainEventMutation) OldSeq(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSeq is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSeq requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSeq: %w", err)
+	}
+	return oldValue.Seq, nil
+}
+
+// AddSeq adds i to the "seq" field.
+func (m *DomainEventMutation) AddSeq(i int64) {
+	if m.addseq != nil {
+		*m.addseq += i
+	} else {
+		m.addseq = &i
+	}
+}
+
+// AddedSeq returns the value that was added to the "seq" field in this mutation.
+func (m *DomainEventMutation) AddedSeq() (r int64, exists bool) {
+	v := m.addseq
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearSeq clears the value of the "seq" field.
+func (m *DomainEventMutation) ClearSeq() {
+	m.seq = nil
+	m.addseq = nil
+	m.clearedFields[domainevent.FieldSeq] = struct{}{}
+}
+
+// SeqCleared returns if the "seq" field was cleared in this mutation.
+func (m *DomainEventMutation) SeqCleared() bool {
+	_, ok := m.clearedFields[domainevent.FieldSeq]
+	return ok
+}
+
+// ResetSeq resets all changes to the "seq" field.
+func (m *DomainEventMutation) ResetSeq() {
+	m.seq = nil
+	m.addseq = nil
+	delete(m.clearedFields, domainevent.FieldSeq)
+}
+
 // SetEnvelope sets the "envelope" field.
 func (m *DomainEventMutation) SetEnvelope(jm json.RawMessage) {
 	m.envelope = &jm
@@ -5866,6 +6364,104 @@ func (m *DomainEventMutation) ResetEnvelope() {
 	m.appendenvelope = nil
 }
 
+// SetType sets the "type" field.
+func (m *DomainEventMutation) SetType(s string) {
+	m._type = &s
+}
+
+// GetType returns the value of the "type" field in the mutation.
+func (m *DomainEventMutation) GetType() (r string, exists bool) {
+	v := m._type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldType returns the old "type" field's value of the DomainEvent entity.
+// If the DomainEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DomainEventMutation) OldType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldType: %w", err)
+	}
+	return oldValue.Type, nil
+}
+
+// ClearType clears the value of the "type" field.
+func (m *DomainEventMutation) ClearType() {
+	m._type = nil
+	m.clearedFields[domainevent.FieldType] = struct{}{}
+}
+
+// TypeCleared returns if the "type" field was cleared in this mutation.
+func (m *DomainEventMutation) TypeCleared() bool {
+	_, ok := m.clearedFields[domainevent.FieldType]
+	return ok
+}
+
+// ResetType resets all changes to the "type" field.
+func (m *DomainEventMutation) ResetType() {
+	m._type = nil
+	delete(m.clearedFields, domainevent.FieldType)
+}
+
+// SetOccurredAt sets the "occurred_at" field.
+func (m *DomainEventMutation) SetOccurredAt(t time.Time) {
+	m.occurred_at = &t
+}
+
+// OccurredAt returns the value of the "occurred_at" field in the mutation.
+func (m *DomainEventMutation) OccurredAt() (r time.Time, exists bool) {
+	v := m.occurred_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOccurredAt returns the old "occurred_at" field's value of the DomainEvent entity.
+// If the DomainEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DomainEventMutation) OldOccurredAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOccurredAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOccurredAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOccurredAt: %w", err)
+	}
+	return oldValue.OccurredAt, nil
+}
+
+// ClearOccurredAt clears the value of the "occurred_at" field.
+func (m *DomainEventMutation) ClearOccurredAt() {
+	m.occurred_at = nil
+	m.clearedFields[domainevent.FieldOccurredAt] = struct{}{}
+}
+
+// OccurredAtCleared returns if the "occurred_at" field was cleared in this mutation.
+func (m *DomainEventMutation) OccurredAtCleared() bool {
+	_, ok := m.clearedFields[domainevent.FieldOccurredAt]
+	return ok
+}
+
+// ResetOccurredAt resets all changes to the "occurred_at" field.
+func (m *DomainEventMutation) ResetOccurredAt() {
+	m.occurred_at = nil
+	delete(m.clearedFields, domainevent.FieldOccurredAt)
+}
+
 // Where appends a list predicates to the DomainEventMutation builder.
 func (m *DomainEventMutation) Where(ps ...predicate.DomainEvent) {
 	m.predicates = append(m.predicates, ps...)
@@ -5900,9 +6496,18 @@ func (m *DomainEventMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *DomainEventMutation) Fields() []string {
-	fields := make([]string, 0, 1)
+	fields := make([]string, 0, 4)
+	if m.seq != nil {
+		fields = append(fields, domainevent.FieldSeq)
+	}
 	if m.envelope != nil {
 		fields = append(fields, domainevent.FieldEnvelope)
+	}
+	if m._type != nil {
+		fields = append(fields, domainevent.FieldType)
+	}
+	if m.occurred_at != nil {
+		fields = append(fields, domainevent.FieldOccurredAt)
 	}
 	return fields
 }
@@ -5912,8 +6517,14 @@ func (m *DomainEventMutation) Fields() []string {
 // schema.
 func (m *DomainEventMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case domainevent.FieldSeq:
+		return m.Seq()
 	case domainevent.FieldEnvelope:
 		return m.Envelope()
+	case domainevent.FieldType:
+		return m.GetType()
+	case domainevent.FieldOccurredAt:
+		return m.OccurredAt()
 	}
 	return nil, false
 }
@@ -5923,8 +6534,14 @@ func (m *DomainEventMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *DomainEventMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case domainevent.FieldSeq:
+		return m.OldSeq(ctx)
 	case domainevent.FieldEnvelope:
 		return m.OldEnvelope(ctx)
+	case domainevent.FieldType:
+		return m.OldType(ctx)
+	case domainevent.FieldOccurredAt:
+		return m.OldOccurredAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown DomainEvent field %s", name)
 }
@@ -5934,12 +6551,33 @@ func (m *DomainEventMutation) OldField(ctx context.Context, name string) (ent.Va
 // type.
 func (m *DomainEventMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case domainevent.FieldSeq:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSeq(v)
+		return nil
 	case domainevent.FieldEnvelope:
 		v, ok := value.(json.RawMessage)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetEnvelope(v)
+		return nil
+	case domainevent.FieldType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetType(v)
+		return nil
+	case domainevent.FieldOccurredAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOccurredAt(v)
 		return nil
 	}
 	return fmt.Errorf("unknown DomainEvent field %s", name)
@@ -5948,13 +6586,21 @@ func (m *DomainEventMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *DomainEventMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	if m.addseq != nil {
+		fields = append(fields, domainevent.FieldSeq)
+	}
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *DomainEventMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case domainevent.FieldSeq:
+		return m.AddedSeq()
+	}
 	return nil, false
 }
 
@@ -5963,6 +6609,13 @@ func (m *DomainEventMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *DomainEventMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case domainevent.FieldSeq:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSeq(v)
+		return nil
 	}
 	return fmt.Errorf("unknown DomainEvent numeric field %s", name)
 }
@@ -5970,7 +6623,17 @@ func (m *DomainEventMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *DomainEventMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(domainevent.FieldSeq) {
+		fields = append(fields, domainevent.FieldSeq)
+	}
+	if m.FieldCleared(domainevent.FieldType) {
+		fields = append(fields, domainevent.FieldType)
+	}
+	if m.FieldCleared(domainevent.FieldOccurredAt) {
+		fields = append(fields, domainevent.FieldOccurredAt)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -5983,6 +6646,17 @@ func (m *DomainEventMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *DomainEventMutation) ClearField(name string) error {
+	switch name {
+	case domainevent.FieldSeq:
+		m.ClearSeq()
+		return nil
+	case domainevent.FieldType:
+		m.ClearType()
+		return nil
+	case domainevent.FieldOccurredAt:
+		m.ClearOccurredAt()
+		return nil
+	}
 	return fmt.Errorf("unknown DomainEvent nullable field %s", name)
 }
 
@@ -5990,8 +6664,17 @@ func (m *DomainEventMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *DomainEventMutation) ResetField(name string) error {
 	switch name {
+	case domainevent.FieldSeq:
+		m.ResetSeq()
+		return nil
 	case domainevent.FieldEnvelope:
 		m.ResetEnvelope()
+		return nil
+	case domainevent.FieldType:
+		m.ResetType()
+		return nil
+	case domainevent.FieldOccurredAt:
+		m.ResetOccurredAt()
 		return nil
 	}
 	return fmt.Errorf("unknown DomainEvent field %s", name)

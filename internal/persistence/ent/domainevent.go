@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -18,8 +19,14 @@ type DomainEvent struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID uuid.UUID `json:"id,omitempty"`
+	// Seq holds the value of the "seq" field.
+	Seq int64 `json:"seq,omitempty"`
 	// Envelope holds the value of the "envelope" field.
-	Envelope     json.RawMessage `json:"envelope,omitempty"`
+	Envelope json.RawMessage `json:"envelope,omitempty"`
+	// Type holds the value of the "type" field.
+	Type string `json:"type,omitempty"`
+	// OccurredAt holds the value of the "occurred_at" field.
+	OccurredAt   time.Time `json:"occurred_at,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -30,6 +37,12 @@ func (*DomainEvent) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case domainevent.FieldEnvelope:
 			values[i] = new([]byte)
+		case domainevent.FieldSeq:
+			values[i] = new(sql.NullInt64)
+		case domainevent.FieldType:
+			values[i] = new(sql.NullString)
+		case domainevent.FieldOccurredAt:
+			values[i] = new(sql.NullTime)
 		case domainevent.FieldID:
 			values[i] = new(uuid.UUID)
 		default:
@@ -53,6 +66,12 @@ func (_m *DomainEvent) assignValues(columns []string, values []any) error {
 			} else if value != nil {
 				_m.ID = *value
 			}
+		case domainevent.FieldSeq:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field seq", values[i])
+			} else if value.Valid {
+				_m.Seq = value.Int64
+			}
 		case domainevent.FieldEnvelope:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field envelope", values[i])
@@ -60,6 +79,18 @@ func (_m *DomainEvent) assignValues(columns []string, values []any) error {
 				if err := json.Unmarshal(*value, &_m.Envelope); err != nil {
 					return fmt.Errorf("unmarshal field envelope: %w", err)
 				}
+			}
+		case domainevent.FieldType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field type", values[i])
+			} else if value.Valid {
+				_m.Type = value.String
+			}
+		case domainevent.FieldOccurredAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field occurred_at", values[i])
+			} else if value.Valid {
+				_m.OccurredAt = value.Time
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -97,8 +128,17 @@ func (_m *DomainEvent) String() string {
 	var builder strings.Builder
 	builder.WriteString("DomainEvent(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	builder.WriteString("seq=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Seq))
+	builder.WriteString(", ")
 	builder.WriteString("envelope=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Envelope))
+	builder.WriteString(", ")
+	builder.WriteString("type=")
+	builder.WriteString(_m.Type)
+	builder.WriteString(", ")
+	builder.WriteString("occurred_at=")
+	builder.WriteString(_m.OccurredAt.Format(time.ANSIC))
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -22,6 +22,8 @@ type Tx struct {
 	AuditRecord *AuditRecordClient
 	// CommandReceipt is the client for interacting with the CommandReceipt builders.
 	CommandReceipt *CommandReceiptClient
+	// ConsumerOffset is the client for interacting with the ConsumerOffset builders.
+	ConsumerOffset *ConsumerOffsetClient
 	// ContributionSupport is the client for interacting with the ContributionSupport builders.
 	ContributionSupport *ContributionSupportClient
 	// CorrectionDirtyTransmission is the client for interacting with the CorrectionDirtyTransmission builders.
@@ -224,6 +226,7 @@ func (tx *Tx) init() {
 	tx.AssignmentControl = NewAssignmentControlClient(tx.config)
 	tx.AuditRecord = NewAuditRecordClient(tx.config)
 	tx.CommandReceipt = NewCommandReceiptClient(tx.config)
+	tx.ConsumerOffset = NewConsumerOffsetClient(tx.config)
 	tx.ContributionSupport = NewContributionSupportClient(tx.config)
 	tx.CorrectionDirtyTransmission = NewCorrectionDirtyTransmissionClient(tx.config)
 	tx.Credential = NewCredentialClient(tx.config)

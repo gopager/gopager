@@ -3,6 +3,8 @@
 package domainevent
 
 import (
+	"time"
+
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/persistence/ent/predicate"
@@ -51,6 +53,196 @@ func IDLT(id uuid.UUID) predicate.DomainEvent {
 // IDLTE applies the LTE predicate on the ID field.
 func IDLTE(id uuid.UUID) predicate.DomainEvent {
 	return predicate.DomainEvent(sql.FieldLTE(FieldID, id))
+}
+
+// Seq applies equality check predicate on the "seq" field. It's identical to SeqEQ.
+func Seq(v int64) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldEQ(FieldSeq, v))
+}
+
+// Type applies equality check predicate on the "type" field. It's identical to TypeEQ.
+func Type(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldEQ(FieldType, v))
+}
+
+// OccurredAt applies equality check predicate on the "occurred_at" field. It's identical to OccurredAtEQ.
+func OccurredAt(v time.Time) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldEQ(FieldOccurredAt, v))
+}
+
+// SeqEQ applies the EQ predicate on the "seq" field.
+func SeqEQ(v int64) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldEQ(FieldSeq, v))
+}
+
+// SeqNEQ applies the NEQ predicate on the "seq" field.
+func SeqNEQ(v int64) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldNEQ(FieldSeq, v))
+}
+
+// SeqIn applies the In predicate on the "seq" field.
+func SeqIn(vs ...int64) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldIn(FieldSeq, vs...))
+}
+
+// SeqNotIn applies the NotIn predicate on the "seq" field.
+func SeqNotIn(vs ...int64) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldNotIn(FieldSeq, vs...))
+}
+
+// SeqGT applies the GT predicate on the "seq" field.
+func SeqGT(v int64) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldGT(FieldSeq, v))
+}
+
+// SeqGTE applies the GTE predicate on the "seq" field.
+func SeqGTE(v int64) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldGTE(FieldSeq, v))
+}
+
+// SeqLT applies the LT predicate on the "seq" field.
+func SeqLT(v int64) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldLT(FieldSeq, v))
+}
+
+// SeqLTE applies the LTE predicate on the "seq" field.
+func SeqLTE(v int64) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldLTE(FieldSeq, v))
+}
+
+// SeqIsNil applies the IsNil predicate on the "seq" field.
+func SeqIsNil() predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldIsNull(FieldSeq))
+}
+
+// SeqNotNil applies the NotNil predicate on the "seq" field.
+func SeqNotNil() predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldNotNull(FieldSeq))
+}
+
+// TypeEQ applies the EQ predicate on the "type" field.
+func TypeEQ(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldEQ(FieldType, v))
+}
+
+// TypeNEQ applies the NEQ predicate on the "type" field.
+func TypeNEQ(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldNEQ(FieldType, v))
+}
+
+// TypeIn applies the In predicate on the "type" field.
+func TypeIn(vs ...string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldIn(FieldType, vs...))
+}
+
+// TypeNotIn applies the NotIn predicate on the "type" field.
+func TypeNotIn(vs ...string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldNotIn(FieldType, vs...))
+}
+
+// TypeGT applies the GT predicate on the "type" field.
+func TypeGT(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldGT(FieldType, v))
+}
+
+// TypeGTE applies the GTE predicate on the "type" field.
+func TypeGTE(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldGTE(FieldType, v))
+}
+
+// TypeLT applies the LT predicate on the "type" field.
+func TypeLT(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldLT(FieldType, v))
+}
+
+// TypeLTE applies the LTE predicate on the "type" field.
+func TypeLTE(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldLTE(FieldType, v))
+}
+
+// TypeContains applies the Contains predicate on the "type" field.
+func TypeContains(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldContains(FieldType, v))
+}
+
+// TypeHasPrefix applies the HasPrefix predicate on the "type" field.
+func TypeHasPrefix(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldHasPrefix(FieldType, v))
+}
+
+// TypeHasSuffix applies the HasSuffix predicate on the "type" field.
+func TypeHasSuffix(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldHasSuffix(FieldType, v))
+}
+
+// TypeIsNil applies the IsNil predicate on the "type" field.
+func TypeIsNil() predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldIsNull(FieldType))
+}
+
+// TypeNotNil applies the NotNil predicate on the "type" field.
+func TypeNotNil() predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldNotNull(FieldType))
+}
+
+// TypeEqualFold applies the EqualFold predicate on the "type" field.
+func TypeEqualFold(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldEqualFold(FieldType, v))
+}
+
+// TypeContainsFold applies the ContainsFold predicate on the "type" field.
+func TypeContainsFold(v string) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldContainsFold(FieldType, v))
+}
+
+// OccurredAtEQ applies the EQ predicate on the "occurred_at" field.
+func OccurredAtEQ(v time.Time) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldEQ(FieldOccurredAt, v))
+}
+
+// OccurredAtNEQ applies the NEQ predicate on the "occurred_at" field.
+func OccurredAtNEQ(v time.Time) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldNEQ(FieldOccurredAt, v))
+}
+
+// OccurredAtIn applies the In predicate on the "occurred_at" field.
+func OccurredAtIn(vs ...time.Time) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldIn(FieldOccurredAt, vs...))
+}
+
+// OccurredAtNotIn applies the NotIn predicate on the "occurred_at" field.
+func OccurredAtNotIn(vs ...time.Time) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldNotIn(FieldOccurredAt, vs...))
+}
+
+// OccurredAtGT applies the GT predicate on the "occurred_at" field.
+func OccurredAtGT(v time.Time) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldGT(FieldOccurredAt, v))
+}
+
+// OccurredAtGTE applies the GTE predicate on the "occurred_at" field.
+func OccurredAtGTE(v time.Time) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldGTE(FieldOccurredAt, v))
+}
+
+// OccurredAtLT applies the LT predicate on the "occurred_at" field.
+func OccurredAtLT(v time.Time) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldLT(FieldOccurredAt, v))
+}
+
+// OccurredAtLTE applies the LTE predicate on the "occurred_at" field.
+func OccurredAtLTE(v time.Time) predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldLTE(FieldOccurredAt, v))
+}
+
+// OccurredAtIsNil applies the IsNil predicate on the "occurred_at" field.
+func OccurredAtIsNil() predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldIsNull(FieldOccurredAt))
+}
+
+// OccurredAtNotNil applies the NotNil predicate on the "occurred_at" field.
+func OccurredAtNotNil() predicate.DomainEvent {
+	return predicate.DomainEvent(sql.FieldNotNull(FieldOccurredAt))
 }
 
 // And groups predicates with the AND operator between them.

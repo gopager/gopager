@@ -267,12 +267,12 @@ func (_q *DomainEventQuery) Clone() *DomainEventQuery {
 // Example:
 //
 //	var v []struct {
-//		Envelope json.RawMessage `json:"envelope,omitempty"`
+//		Seq int64 `json:"seq,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.DomainEvent.Query().
-//		GroupBy(domainevent.FieldEnvelope).
+//		GroupBy(domainevent.FieldSeq).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *DomainEventQuery) GroupBy(field string, fields ...string) *DomainEventGroupBy {
@@ -290,11 +290,11 @@ func (_q *DomainEventQuery) GroupBy(field string, fields ...string) *DomainEvent
 // Example:
 //
 //	var v []struct {
-//		Envelope json.RawMessage `json:"envelope,omitempty"`
+//		Seq int64 `json:"seq,omitempty"`
 //	}
 //
 //	client.DomainEvent.Query().
-//		Select(domainevent.FieldEnvelope).
+//		Select(domainevent.FieldSeq).
 //		Scan(ctx, &v)
 func (_q *DomainEventQuery) Select(fields ...string) *DomainEventSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

@@ -118,6 +118,18 @@ var (
 			},
 		},
 	}
+	// ConsumerOffsetsColumns holds the columns for the "consumer_offsets" table.
+	ConsumerOffsetsColumns = []*schema.Column{
+		{Name: "consumer", Type: field.TypeString},
+		{Name: "last_seq", Type: field.TypeInt64},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// ConsumerOffsetsTable holds the schema information for the "consumer_offsets" table.
+	ConsumerOffsetsTable = &schema.Table{
+		Name:       "consumer_offsets",
+		Columns:    ConsumerOffsetsColumns,
+		PrimaryKey: []*schema.Column{ConsumerOffsetsColumns[0]},
+	}
 	// ContributionSupportsColumns holds the columns for the "contribution_supports" table.
 	ContributionSupportsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -202,7 +214,10 @@ var (
 	// DomainEventsColumns holds the columns for the "domain_events" table.
 	DomainEventsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
+		{Name: "seq", Type: field.TypeInt64, Unique: true, Nullable: true},
 		{Name: "envelope", Type: field.TypeJSON},
+		{Name: "type", Type: field.TypeString, Nullable: true},
+		{Name: "occurred_at", Type: field.TypeTime, Nullable: true},
 	}
 	// DomainEventsTable holds the schema information for the "domain_events" table.
 	DomainEventsTable = &schema.Table{
@@ -930,6 +945,7 @@ var (
 		AssignmentControlTable,
 		IdentityAuditTable,
 		CommandReceiptsTable,
+		ConsumerOffsetsTable,
 		ContributionSupportsTable,
 		CorrectionDirtyTransmissionsTable,
 		IdentityCredentialsTable,
@@ -983,6 +999,9 @@ func init() {
 	}
 	CommandReceiptsTable.Annotation = &entsql.Annotation{
 		Table: "command_receipts",
+	}
+	ConsumerOffsetsTable.Annotation = &entsql.Annotation{
+		Table: "consumer_offsets",
 	}
 	ContributionSupportsTable.Annotation = &entsql.Annotation{
 		Table: "contribution_supports",

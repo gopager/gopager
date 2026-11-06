@@ -17,6 +17,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/assignmentcontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/auditrecord"
 	"github.com/gopager/gopager/internal/persistence/ent/commandreceipt"
+	"github.com/gopager/gopager/internal/persistence/ent/consumeroffset"
 	"github.com/gopager/gopager/internal/persistence/ent/contributionsupport"
 	"github.com/gopager/gopager/internal/persistence/ent/correctiondirtytransmission"
 	"github.com/gopager/gopager/internal/persistence/ent/credential"
@@ -115,6 +116,7 @@ func checkColumn(t, c string) error {
 			assignmentcontrol.Table:           assignmentcontrol.ValidColumn,
 			auditrecord.Table:                 auditrecord.ValidColumn,
 			commandreceipt.Table:              commandreceipt.ValidColumn,
+			consumeroffset.Table:              consumeroffset.ValidColumn,
 			contributionsupport.Table:         contributionsupport.ValidColumn,
 			correctiondirtytransmission.Table: correctiondirtytransmission.ValidColumn,
 			credential.Table:                  credential.ValidColumn,
