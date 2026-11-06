@@ -93,11 +93,19 @@ func executeInstalled(ctx context.Context, step compiledStep, frame *executionFr
 		position := *call.TargetPosition
 		call.TargetPosition = &position
 	}
-	envelope, configurationDependencies, preview, err := frame.invocations.AuthorizeInstalled(ctx,
-		step.definition.Installed.InstanceID, step.definition.Installed.ConfigurationRevision, call, detached)
-	if err != nil {
+	// Authorization is a database transaction, not built-in compute: its latency under load must
+	// not be charged to the compute allowance, whose expiry would surface as STORAGE_UNAVAILABLE.
+	var envelope InvocationEnvelope
+	var configurationDependencies []Dependency
+	var preview bool
+	if err := frame.budget.guestWait(func(parent context.Context) (err error) {
+		envelope, configurationDependencies, preview, err = frame.invocations.AuthorizeInstalled(parent,
+			step.definition.Installed.InstanceID, step.definition.Installed.ConfigurationRevision, call, detached)
+		return err
+	}); err != nil {
 		return nil, err
 	}
+	ctx = frame.budget.computeContext() // the pause replaced the allowance's context
 	if envelope.ConfigurationRevision != step.definition.Installed.ConfigurationRevision {
 		return nil, capabilityUnavailable(errors.New("installed configuration revision changed"))
 	}

@@ -273,7 +273,7 @@ Patterns are checked when the definition is compiled, so an inadmissible pattern
 - The step's `outputSchema` must equal the manifest's `resultSchema` exactly.
 - At save, activation and run time the pinned revision must be the instance's **current** revision, and the instance must be enabled. An instance update therefore requires saving and activating a workflow version that pins the new revision.
 - Each call is authorized again at run time. The instance's execution principal must hold field permission for every group of the definition's [classification](#classification) and read access to the source. The input sent to the plugin must equal the evaluated input.
-- Each invocation is bounded to 30 s. Exceeding it fails the run with `RESOURCE_LIMIT` and kills the plugin process. The time spent waiting for the plugin is not charged to the 1 s built-in budget.
+- Each invocation is bounded to 30 s. Exceeding it fails the run with `RESOURCE_LIMIT` and kills the plugin process. The time spent waiting for the plugin, and for the authorization transaction that precedes each call, is not charged to the 1 s built-in budget.
 - Plugin failure reasons map to codes:
   - `resource-limit` → `RESOURCE_LIMIT`
   - `capability-unavailable` → `AUTHORITY_UNAVAILABLE`
