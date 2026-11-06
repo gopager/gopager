@@ -20,6 +20,8 @@ type LoginAttempt struct {
 	ID uuid.UUID `json:"id,omitempty"`
 	// AccountKey holds the value of the "account_key" field.
 	AccountKey []byte `json:"-"`
+	// SourceKey holds the value of the "source_key" field.
+	SourceKey []byte `json:"-"`
 	// AttemptedAt holds the value of the "attempted_at" field.
 	AttemptedAt  time.Time `json:"attempted_at,omitempty"`
 	selectValues sql.SelectValues
@@ -30,7 +32,7 @@ func (*LoginAttempt) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case loginattempt.FieldAccountKey:
+		case loginattempt.FieldAccountKey, loginattempt.FieldSourceKey:
 			values[i] = new([]byte)
 		case loginattempt.FieldAttemptedAt:
 			values[i] = new(sql.NullTime)
@@ -62,6 +64,12 @@ func (_m *LoginAttempt) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field account_key", values[i])
 			} else if value != nil {
 				_m.AccountKey = *value
+			}
+		case loginattempt.FieldSourceKey:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field source_key", values[i])
+			} else if value != nil {
+				_m.SourceKey = *value
 			}
 		case loginattempt.FieldAttemptedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -106,6 +114,8 @@ func (_m *LoginAttempt) String() string {
 	builder.WriteString("LoginAttempt(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("account_key=<sensitive>")
+	builder.WriteString(", ")
+	builder.WriteString("source_key=<sensitive>")
 	builder.WriteString(", ")
 	builder.WriteString("attempted_at=")
 	builder.WriteString(_m.AttemptedAt.Format(time.ANSIC))

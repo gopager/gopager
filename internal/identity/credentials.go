@@ -16,13 +16,13 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/gopager/gopager/internal/platform"
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
@@ -31,12 +31,14 @@ import (
 // Sentinel errors of the identity package.
 var (
 	// ErrInvalidInput reports malformed caller input (username, password,
-	// secret, or missing dependencies); HTTP maps it to INVALID_INPUT.
-	ErrInvalidInput = errors.New("invalid identity input")
+	// secret, or missing dependencies); HTTP maps it to INVALID_INPUT. Like
+	// ErrLoginRequired it is a *platform.Failure so its code survives a
+	// transaction boundary.
+	ErrInvalidInput error = platform.NewFailure(platform.CodeInvalidInput, nil)
 	// ErrLoginRequired reports missing, malformed, unknown, expired, revoked or
 	// otherwise unusable proof, or an inactive account. It deliberately does
 	// not say which; HTTP maps it to LOGIN_REQUIRED (401).
-	ErrLoginRequired = errors.New("sign in to continue")
+	ErrLoginRequired error = platform.NewFailure(platform.CodeLoginRequired, nil)
 )
 
 const (

@@ -58,7 +58,7 @@ func TestReadinessRequiresEveryAuthorityCheck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Shutdown(context.Background())
+	defer func() { _ = h.Shutdown(context.Background()) }()
 	for _, code := range []ErrorCode{CodeStorageUnavailable, CodeAuthorityUnavailable, CodeIncompatibleVersion} {
 		store.mu.Lock()
 		failure := NewFailure(code, errors.New("synthetic-secret-dsn"))
@@ -193,5 +193,18 @@ func TestSafeDiagnosticsDoNotDependOnDisplayPreferences(t *testing.T) {
 				t.Fatalf("unsafe/unstable diagnostics: %s", output.String())
 			}
 		})
+	}
+}
+
+func TestNewHTTPServerBoundsEveryConnectionPhase(t *testing.T) {
+	server := newHTTPServer(context.Background(), http.NotFoundHandler())
+	if server.ReadHeaderTimeout != httpReadHeaderTimeout || server.ReadTimeout != httpReadTimeout ||
+		server.WriteTimeout != httpWriteTimeout || server.IdleTimeout != httpIdleTimeout ||
+		server.MaxHeaderBytes != httpMaxHeaderBytes {
+		t.Fatalf("server limits not applied: %+v", server)
+	}
+	if httpReadHeaderTimeout <= 0 || httpReadTimeout <= 0 || httpWriteTimeout <= 0 || httpIdleTimeout <= 0 ||
+		httpMaxHeaderBytes <= 0 || httpMaxHeaderBytes > 1<<20 {
+		t.Fatal("a server limit is unset or unreasonably large")
 	}
 }

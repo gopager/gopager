@@ -35,6 +35,12 @@ func (_u *LoginAttemptUpdate) SetAccountKey(v []byte) *LoginAttemptUpdate {
 	return _u
 }
 
+// SetSourceKey sets the "source_key" field.
+func (_u *LoginAttemptUpdate) SetSourceKey(v []byte) *LoginAttemptUpdate {
+	_u.mutation.SetSourceKey(v)
+	return _u
+}
+
 // SetAttemptedAt sets the "attempted_at" field.
 func (_u *LoginAttemptUpdate) SetAttemptedAt(v time.Time) *LoginAttemptUpdate {
 	_u.mutation.SetAttemptedAt(v)
@@ -99,6 +105,9 @@ func (_u *LoginAttemptUpdate) sqlSave(ctx context.Context) (_node int, err error
 	if value, ok := _u.mutation.AccountKey(); ok {
 		_spec.SetField(loginattempt.FieldAccountKey, field.TypeBytes, value)
 	}
+	if value, ok := _u.mutation.SourceKey(); ok {
+		_spec.SetField(loginattempt.FieldSourceKey, field.TypeBytes, value)
+	}
 	if value, ok := _u.mutation.AttemptedAt(); ok {
 		_spec.SetField(loginattempt.FieldAttemptedAt, field.TypeTime, value)
 	}
@@ -127,6 +136,12 @@ type LoginAttemptUpdateOne struct {
 // SetAccountKey sets the "account_key" field.
 func (_u *LoginAttemptUpdateOne) SetAccountKey(v []byte) *LoginAttemptUpdateOne {
 	_u.mutation.SetAccountKey(v)
+	return _u
+}
+
+// SetSourceKey sets the "source_key" field.
+func (_u *LoginAttemptUpdateOne) SetSourceKey(v []byte) *LoginAttemptUpdateOne {
+	_u.mutation.SetSourceKey(v)
 	return _u
 }
 
@@ -223,6 +238,9 @@ func (_u *LoginAttemptUpdateOne) sqlSave(ctx context.Context) (_node *LoginAttem
 	}
 	if value, ok := _u.mutation.AccountKey(); ok {
 		_spec.SetField(loginattempt.FieldAccountKey, field.TypeBytes, value)
+	}
+	if value, ok := _u.mutation.SourceKey(); ok {
+		_spec.SetField(loginattempt.FieldSourceKey, field.TypeBytes, value)
 	}
 	if value, ok := _u.mutation.AttemptedAt(); ok {
 		_spec.SetField(loginattempt.FieldAttemptedAt, field.TypeTime, value)

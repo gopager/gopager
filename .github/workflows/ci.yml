@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: Static checks and quick tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Formatting
+        run: make fmt-check
+      - name: go vet
+        run: make vet
+      - name: golangci-lint
+        run: make golangci
+      - name: Quick tests
+        run: make test
+      - name: Generated code is current
+        run: make generate-check
+
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    needs: static
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # The runner's Docker daemon starts the PostgreSQL containers the tests need.
+      - name: Integration tests with the race detector
+        run: make test-integration
+
+  # Not part of the required checks: govulncheck reports standard-library findings
+  # for the Go version pinned in go.mod, so it fails until that pin is raised. Run it
+  # on a schedule and on demand instead of blocking merges.
+  vulnerabilities:
+    name: Vulnerability scan
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: govulncheck
+        run: make vuln

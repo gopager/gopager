@@ -60,6 +60,11 @@ func AccountKey(v []byte) predicate.LoginAttempt {
 	return predicate.LoginAttempt(sql.FieldEQ(FieldAccountKey, v))
 }
 
+// SourceKey applies equality check predicate on the "source_key" field. It's identical to SourceKeyEQ.
+func SourceKey(v []byte) predicate.LoginAttempt {
+	return predicate.LoginAttempt(sql.FieldEQ(FieldSourceKey, v))
+}
+
 // AttemptedAt applies equality check predicate on the "attempted_at" field. It's identical to AttemptedAtEQ.
 func AttemptedAt(v time.Time) predicate.LoginAttempt {
 	return predicate.LoginAttempt(sql.FieldEQ(FieldAttemptedAt, v))
@@ -103,6 +108,46 @@ func AccountKeyLT(v []byte) predicate.LoginAttempt {
 // AccountKeyLTE applies the LTE predicate on the "account_key" field.
 func AccountKeyLTE(v []byte) predicate.LoginAttempt {
 	return predicate.LoginAttempt(sql.FieldLTE(FieldAccountKey, v))
+}
+
+// SourceKeyEQ applies the EQ predicate on the "source_key" field.
+func SourceKeyEQ(v []byte) predicate.LoginAttempt {
+	return predicate.LoginAttempt(sql.FieldEQ(FieldSourceKey, v))
+}
+
+// SourceKeyNEQ applies the NEQ predicate on the "source_key" field.
+func SourceKeyNEQ(v []byte) predicate.LoginAttempt {
+	return predicate.LoginAttempt(sql.FieldNEQ(FieldSourceKey, v))
+}
+
+// SourceKeyIn applies the In predicate on the "source_key" field.
+func SourceKeyIn(vs ...[]byte) predicate.LoginAttempt {
+	return predicate.LoginAttempt(sql.FieldIn(FieldSourceKey, vs...))
+}
+
+// SourceKeyNotIn applies the NotIn predicate on the "source_key" field.
+func SourceKeyNotIn(vs ...[]byte) predicate.LoginAttempt {
+	return predicate.LoginAttempt(sql.FieldNotIn(FieldSourceKey, vs...))
+}
+
+// SourceKeyGT applies the GT predicate on the "source_key" field.
+func SourceKeyGT(v []byte) predicate.LoginAttempt {
+	return predicate.LoginAttempt(sql.FieldGT(FieldSourceKey, v))
+}
+
+// SourceKeyGTE applies the GTE predicate on the "source_key" field.
+func SourceKeyGTE(v []byte) predicate.LoginAttempt {
+	return predicate.LoginAttempt(sql.FieldGTE(FieldSourceKey, v))
+}
+
+// SourceKeyLT applies the LT predicate on the "source_key" field.
+func SourceKeyLT(v []byte) predicate.LoginAttempt {
+	return predicate.LoginAttempt(sql.FieldLT(FieldSourceKey, v))
+}
+
+// SourceKeyLTE applies the LTE predicate on the "source_key" field.
+func SourceKeyLTE(v []byte) predicate.LoginAttempt {
+	return predicate.LoginAttempt(sql.FieldLTE(FieldSourceKey, v))
 }
 
 // AttemptedAtEQ applies the EQ predicate on the "attempted_at" field.

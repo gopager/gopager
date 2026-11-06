@@ -36,8 +36,11 @@ func (h *RunningHandle) applicationHandler(api http.Handler) http.Handler {
 }
 
 // writeAPIUnavailable answers 503 with the public JSON error envelope for
-// CodeAuthorityUnavailable (retryable, fresh request ID) and nothing else.
+// CodeAuthorityUnavailable (retryable, fresh request ID, logged with its code) and
+// nothing else.
 func writeAPIUnavailable(w http.ResponseWriter) {
+	requestID := uuid.NewString()
+	LogErrorResponse(string(CodeAuthorityUnavailable), http.StatusServiceUnavailable, requestID)
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusServiceUnavailable)
@@ -52,7 +55,7 @@ func writeAPIUnavailable(w http.ResponseWriter) {
 	}{
 		SchemaVersion: 1, Code: CodeAuthorityUnavailable, Parameters: map[string]any{},
 		TextKey: "error.AUTHORITY_UNAVAILABLE", Fallback: englishFallbacks[CodeAuthorityUnavailable],
-		RequestID: uuid.NewString(), Retryable: true,
+		RequestID: requestID, Retryable: true,
 	}
 	if err := json.NewEncoder(w).Encode(body); err != nil {
 		slog.Error("API availability response write failed", "code", CodeInternalError)

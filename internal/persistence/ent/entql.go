@@ -392,6 +392,7 @@ var schemaGraph = func() *sqlgraph.Schema {
 		Type: "LoginAttempt",
 		Fields: map[string]*sqlgraph.FieldSpec{
 			loginattempt.FieldAccountKey:  {Type: field.TypeBytes, Column: loginattempt.FieldAccountKey},
+			loginattempt.FieldSourceKey:   {Type: field.TypeBytes, Column: loginattempt.FieldSourceKey},
 			loginattempt.FieldAttemptedAt: {Type: field.TypeTime, Column: loginattempt.FieldAttemptedAt},
 		},
 	}
@@ -2326,6 +2327,11 @@ func (f *LoginAttemptFilter) WhereID(p entql.ValueP) {
 // WhereAccountKey applies the entql []byte predicate on the account_key field.
 func (f *LoginAttemptFilter) WhereAccountKey(p entql.BytesP) {
 	f.Where(p.Field(loginattempt.FieldAccountKey))
+}
+
+// WhereSourceKey applies the entql []byte predicate on the source_key field.
+func (f *LoginAttemptFilter) WhereSourceKey(p entql.BytesP) {
+	f.Where(p.Field(loginattempt.FieldSourceKey))
 }
 
 // WhereAttemptedAt applies the entql time.Time predicate on the attempted_at field.

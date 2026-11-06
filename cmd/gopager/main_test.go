@@ -25,6 +25,8 @@ func TestParseConfigBindsExplicitInputs(t *testing.T) {
 		{"configured artifact root", []string{"--profile=full", "--roles=worker", "--processing-artifact-root=/"}, "synthetic-secret", true},
 		{"empty artifact root", []string{"--profile=full", "--roles=worker", "--processing-artifact-root="}, "synthetic-secret", false},
 		{"invalid artifact root", []string{"--profile=full", "--roles=worker", "--processing-artifact-root=/dev/null"}, "synthetic-secret", false},
+		{"configured source limit", []string{"--profile=full", "--roles=worker", "--login-attempts-per-source=5"}, "synthetic-secret", true},
+		{"invalid source limit", []string{"--profile=full", "--roles=worker", "--login-attempts-per-source=0"}, "synthetic-secret", false},
 		{"invalid login limit", []string{"--profile=full", "--roles=worker", "--login-attempts-per-account=0"}, "synthetic-secret", false},
 		{"configured dispatch", []string{"--profile=full", "--roles=worker", "--processing-concurrency=8", "--processing-poll-interval=750ms"}, "synthetic-secret", true},
 		{"zero concurrency", []string{"--profile=full", "--roles=worker", "--processing-concurrency=0"}, "synthetic-secret", false},
@@ -71,6 +73,12 @@ func TestParseConfigBindsExplicitInputs(t *testing.T) {
 			if test.ok && test.name != "configured dispatch" && (config.ProcessingDispatch.Concurrency != worker.DefaultDispatchConcurrency ||
 				config.ProcessingDispatch.PollInterval != worker.DefaultDispatchPollInterval) {
 				t.Fatalf("Processing dispatch defaults not applied: %+v", config.ProcessingDispatch)
+			}
+			if test.name == "configured source limit" && config.LoginLimits.SourceAttempts != 5 {
+				t.Fatal("configured source login limit was not bound")
+			}
+			if test.ok && test.name != "configured source limit" && config.LoginLimits.SourceAttempts != 30 {
+				t.Fatalf("default source login limit = %d, want 30", config.LoginLimits.SourceAttempts)
 			}
 			if test.name == "configured artifact root" && config.ProcessingArtifactRoot != "/" {
 				t.Fatal("Processing artifact root was not bound")

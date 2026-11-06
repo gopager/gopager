@@ -43,6 +43,7 @@ Flags use Go `flag` syntax (`--name=value` or `-name value`). Positional argumen
 | `--processing-artifact-root` | — | — | Plugin directory. Must exist and be openable; leading/trailing whitespace and an explicitly empty value are rejected. |
 | `GOPAGER_PROCESSING_ARTIFACT_ROOT` (env) | — | — | Plugin directory, used only when `--processing-artifact-root` is not given. Same validation. |
 | `--login-attempts-per-account` | `10` | — | Login attempts per minute per normalized username. Must be > 0. |
+| `--login-attempts-per-source` | `30` | — | Login attempts per minute per client source, across all usernames. The source is the host part of the connection's remote address. Must be > 0. See [Security](#security). |
 | `--login-attempts-per-instance` | `300` | — | Login attempts per minute across the whole instance. Must be > 0. |
 | `--allow-insecure-db` | `false` | — | Permit a non-local database connection without certificate-verified TLS. See [Database TLS](#database-tls). |
 
@@ -54,6 +55,10 @@ Fixed values (not configurable):
 | Per-call / per-transaction timeout | 30 s |
 | Readiness re-check interval | 5 s |
 | HTTP `ReadHeaderTimeout` | 5 s |
+| HTTP `ReadTimeout` (whole request including body) | 30 s |
+| HTTP `WriteTimeout` (whole response) | 60 s |
+| HTTP `IdleTimeout` (keep-alive connection) | 120 s |
+| HTTP `MaxHeaderBytes` | 64 KiB |
 | Shutdown deadline | 30 s |
 
 ### Bootstrap
@@ -209,6 +214,8 @@ A `worker`-only process has no health endpoint. Monitor its log for `platform ro
 
 Logs are written to stderr by Go's default `log/slog` handler (`2026/11/05 23:54:28 INFO platform started profile=full roles=[api worker]`). Errors are logged by code only; connection strings, credentials, causes and payloads are never logged. On exit 1 the last line is `ERROR GoPager exited code=<CODE>`.
 
+**Correlating a client error with the log.** Every API error response carries a fresh `requestId` (see [HTTP API](http-api.md#errors)). The same response writes one log line, `API error response code=<CODE> status=<HTTP status> requestId=<UUID>`, at `ERROR` level for 5xx and `INFO` level for 4xx. To find out what happened to a failed request, search the log for the `requestId` the client reports. The line carries only these three values: no request, body, credential or private cause. The cause itself is deliberately not logged (see above), so the `code` is the diagnosis; for `STORAGE_UNAVAILABLE` and `AUTHORITY_UNAVAILABLE` also check the platform readiness lines.
+
 | Code | Typical operational cause |
 | --- | --- |
 | `INVALID_INPUT` | Bad flag, missing variable, invalid public origin, insecure remote database without `--allow-insecure-db`, invalid plugin directory, bootstrap input rejected |
@@ -220,7 +227,7 @@ Logs are written to stderr by Go's default `log/slog` handler (`2026/11/05 23:54
 | `COMMIT_UNCERTAIN` | Connection lost during commit; outcome unknown |
 | `INTERNAL_ERROR` | Any other failure, including listener bind errors |
 
-Log lines in use: `platform started`, `platform readiness check failed`, `platform role stopped`, `GoPager exited`, the worker retry warnings `Processing dispatch selection failed; retrying` and `correction runner storage failure; retrying` with their recovery lines `Processing dispatch selection recovered` and `correction runner recovered`, and the warning `operator approved a remote database connection without certificate-verified TLS`.
+Log lines in use: `platform started`, `API error response`, `platform readiness check failed`, `platform role stopped`, `GoPager exited`, the worker retry warnings `Processing dispatch selection failed; retrying` and `correction runner storage failure; retrying` with their recovery lines `Processing dispatch selection recovered` and `correction runner recovered`, and the warning `operator approved a remote database connection without certificate-verified TLS`.
 
 ## Database TLS
 
@@ -252,7 +259,10 @@ The total deadline is 30 s. Exceeding it, or any role failure during the run, yi
 - **Public origin.** `--public-origin` is the single source for cookie and CSRF origin policy. `Host` and `X-Forwarded-*` headers are ignored. Set it to the exact origin users type into the browser (e.g. `https://pager.example.org`); default ports `80`/`443` are normalized away.
 - **Session cookie.** `gopager_session`, host-only, `Path=/`, `HttpOnly`, `SameSite=Lax`, `Secure` when the public origin is `https://`. Behind an HTTPS proxy, use the `https://` origin even though GoPager itself listens on HTTP.
 - **Browser requests.** Login and cookie-authenticated state-changing requests require a single `Origin` header equal to the public origin; state-changing requests also require `X-CSRF-Token`. API keys use `Authorization: Bearer …` and are not subject to origin checks. Details: [HTTP API](http-api.md).
-- **Login rate limits.** Per normalized username and per instance, per minute (`--login-attempts-per-account`, `--login-attempts-per-instance`). Limits are not keyed by client IP. Rejections return a retry interval.
+- **Login rate limits.** Three per-minute buckets, checked in this order: per instance (`--login-attempts-per-instance`), per client source (`--login-attempts-per-source`) and per normalized username (`--login-attempts-per-account`). The source bucket stops one client from trying many usernames and from exhausting the instance bucket, which would lock every operator out. The account bucket is not keyed by address, so an attacker cannot block a user's login from the user's own address by guessing from another. Rejections return `RATE_LIMITED` with a retry interval; rejected attempts are not counted again. Only hashes of usernames and source addresses are stored.
+- **Client source behind a reverse proxy.** The source is the host part of the TCP peer address; `X-Forwarded-For` and similar headers are ignored because a client can set them to pick its own bucket. Behind a proxy that terminates the connection, every client therefore shares the proxy's address and one source bucket. Either configure the proxy to preserve the client address at connection level, or raise `--login-attempts-per-source` (up to the instance limit) to what all users behind the proxy need. Trusted-proxy header parsing is not implemented.
+- **HTTP timeouts.** The server bounds header reading (5 s), the whole request (30 s), the whole response (60 s) and idle keep-alive connections (120 s), and rejects headers over 64 KiB. Slow clients are disconnected. A future streaming response (server-sent events) must extend its own write deadline per request instead of raising the global value.
+- **Authentication before body.** Gateway intake (`POST /api/v1/transmissions`, `POST /api/v1/gateway/state`) verifies the bearer credential before it reads the request body, so unauthenticated clients cannot make the server buffer payloads.
 - **Transport.** GoPager serves plain HTTP. Restrict `--listen-address` to loopback or a private interface and terminate TLS at a proxy.
 - **Secrets.** Provide `GOPAGER_DATABASE_URL` from a secret store; never pass passwords as arguments. Bootstrap reads the password from stdin only.
 - **Database role.** Day-to-day processes can use `check` mode; reserve DDL privileges for the process or job that runs `apply`, if your setup separates roles.

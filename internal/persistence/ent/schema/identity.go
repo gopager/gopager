@@ -294,7 +294,7 @@ func (ConsumerOffset) Fields() []ent.Field {
 }
 
 // LoginAttempt defines the identity_login_attempts table: a timestamped login attempt per
-// hashed account key, used for login rate limiting.
+// hashed account key and hashed client source key, used for login rate limiting.
 type LoginAttempt struct{ ent.Schema }
 
 // Policy returns the privacy policy that guards queries and mutations of the LoginAttempt schema.
@@ -310,11 +310,13 @@ func (LoginAttempt) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.UUID{}).Default(uuid.New),
 		field.Bytes("account_key").Sensitive(),
+		field.Bytes("source_key").Sensitive(),
 		field.Time("attempted_at"),
 	}
 }
 
 // Indexes returns the indexes and unique constraints of the LoginAttempt schema.
 func (LoginAttempt) Indexes() []ent.Index {
-	return []ent.Index{index.Fields("attempted_at"), index.Fields("account_key", "attempted_at")}
+	return []ent.Index{index.Fields("attempted_at"), index.Fields("account_key", "attempted_at"),
+		index.Fields("source_key", "attempted_at")}
 }

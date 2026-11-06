@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -102,11 +103,11 @@ func TestOrdinaryLoginCommitsSessionAuditAndFactWithoutCommandIdentity(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := login.AuthenticateLocal(t.Context(), "STRASSE", "correct-password")
+	first, err := login.AuthenticateLocal(t.Context(), "test-source", "STRASSE", "correct-password")
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := login.AuthenticateLocal(t.Context(), "Straße", "correct-password")
+	second, err := login.AuthenticateLocal(t.Context(), "test-source", "Straße", "correct-password")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +159,7 @@ func TestOrdinaryLoginCommitsSessionAuditAndFactWithoutCommandIdentity(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result, err := broken.AuthenticateLocal(t.Context(), "STRASSE", "correct-password"); !errors.Is(err, failure) || result.Secret != "" {
+	if result, err := broken.AuthenticateLocal(t.Context(), "test-source", "STRASSE", "correct-password"); !errors.Is(err, failure) || result.Secret != "" {
 		t.Fatalf("failed fact append returned effective login: %v", err)
 	}
 	err = store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
@@ -205,12 +206,12 @@ func TestLoginRejectionAndPersistentAccountThrottle(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"unknown", "excluded"} {
-		if result, err := login.AuthenticateLocal(t.Context(), name, "correct-password"); !errors.Is(err, identity.ErrLoginRequired) || result.Secret != "" {
+		if result, err := login.AuthenticateLocal(t.Context(), "test-source", name, "correct-password"); !errors.Is(err, identity.ErrLoginRequired) || result.Secret != "" {
 			t.Fatalf("unknown/excluded account returned unexpected rejection: %v", err)
 		}
 	}
 	for i := 0; i < 10; i++ {
-		if _, err := login.AuthenticateLocal(t.Context(), "STRASSE", "wrong-password"); !errors.Is(err, identity.ErrLoginRequired) {
+		if _, err := login.AuthenticateLocal(t.Context(), "test-source", "STRASSE", "wrong-password"); !errors.Is(err, identity.ErrLoginRequired) {
 			t.Fatalf("attempt %d not accounted/rejected: %v", i+1, err)
 		}
 	}
@@ -219,18 +220,18 @@ func TestLoginRejectionAndPersistentAccountThrottle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = other.AuthenticateLocal(t.Context(), "Straße", "correct-password")
+	_, err = other.AuthenticateLocal(t.Context(), "test-source", "Straße", "correct-password")
 	var limited *identity.RateLimited
 	if !errors.As(err, &limited) || limited.RetryAfter != time.Minute {
 		t.Fatalf("equivalent username bypassed persisted throttle: %v", err)
 	}
 	// Another account at the same location is not blocked by the account bucket.
 	seedLoginAccount(t, store, "other-account", true)
-	if _, err := other.AuthenticateLocal(t.Context(), "other-account", "correct-password"); err != nil {
+	if _, err := other.AuthenticateLocal(t.Context(), "test-source", "other-account", "correct-password"); err != nil {
 		t.Fatalf("unrelated account was blocked: %v", err)
 	}
 	clock.now = clock.now.Add(time.Minute)
-	if _, err := login.AuthenticateLocal(t.Context(), "STRASSE", "correct-password"); err != nil {
+	if _, err := login.AuthenticateLocal(t.Context(), "test-source", "STRASSE", "correct-password"); err != nil {
 		t.Fatalf("account throttle did not expire at the exact boundary: %v", err)
 	}
 	err = store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
@@ -248,7 +249,7 @@ func TestLoginRejectionAndPersistentAccountThrottle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := login.AuthenticateLocal(t.Context(), "STRASSE", "correct-password"); !errors.Is(err, identity.ErrLoginRequired) {
+	if _, err := login.AuthenticateLocal(t.Context(), "test-source", "STRASSE", "correct-password"); !errors.Is(err, identity.ErrLoginRequired) {
 		t.Fatalf("suspended account logged in: %v", err)
 	}
 }
@@ -432,9 +433,11 @@ func TestLoginInstanceThrottleBoundsUnknownAccountStorage(t *testing.T) {
 			return err
 		}
 		for i := 0; i < 300; i++ {
-			var key [32]byte
+			var key, source [32]byte
 			key[0], key[1] = byte(i), byte(i>>8)
-			retry, err := repository.TakeLoginAttempt(tx.Context(), tx, key, now, identity.DefaultLoginRateLimits())
+			// Distinct sources keep the per-source bucket out of this instance-bucket test.
+			source[0], source[1] = byte(i), byte(i>>8)
+			retry, err := repository.TakeLoginAttempt(tx.Context(), tx, identity.LoginAttemptKeys{Account: key, Source: source}, now, identity.DefaultLoginRateLimits())
 			if err != nil {
 				return err
 			}
@@ -443,7 +446,7 @@ func TestLoginInstanceThrottleBoundsUnknownAccountStorage(t *testing.T) {
 			}
 		}
 		for i := 0; i < 10; i++ {
-			retry, err := repository.TakeLoginAttempt(tx.Context(), tx, [32]byte{255, 255}, now, identity.DefaultLoginRateLimits())
+			retry, err := repository.TakeLoginAttempt(tx.Context(), tx, identity.LoginAttemptKeys{Account: [32]byte{255, 255}, Source: [32]byte{250}}, now, identity.DefaultLoginRateLimits())
 			if err != nil {
 				return err
 			}
@@ -462,34 +465,98 @@ func TestLoginInstanceThrottleBoundsUnknownAccountStorage(t *testing.T) {
 		if count != 300 {
 			t.Fatalf("unknown-account attempts exceed bounded storage: %d", count)
 		}
-		retry, err := repository.TakeLoginAttempt(tx.Context(), tx, [32]byte{255, 255}, now.Add(time.Minute), identity.DefaultLoginRateLimits())
+		retry, err := repository.TakeLoginAttempt(tx.Context(), tx, identity.LoginAttemptKeys{Account: [32]byte{255, 255}, Source: [32]byte{250}}, now.Add(time.Minute), identity.DefaultLoginRateLimits())
 		if err != nil {
 			return err
 		}
 		if retry != 0 {
 			t.Fatal("instance throttle failed to clear expired attempts")
 		}
-		limits := identity.LoginRateLimits{AccountAttempts: 1, InstanceAttempts: 2}
-		retry, err = repository.TakeLoginAttempt(tx.Context(), tx, [32]byte{255, 255}, now.Add(time.Minute), limits)
+		limits := identity.LoginRateLimits{AccountAttempts: 1, SourceAttempts: 100, InstanceAttempts: 2}
+		retry, err = repository.TakeLoginAttempt(tx.Context(), tx, identity.LoginAttemptKeys{Account: [32]byte{255, 255}, Source: [32]byte{250}}, now.Add(time.Minute), limits)
 		if err != nil {
 			return err
 		}
 		if retry != time.Minute {
 			t.Fatal("configured shorter account limit was ignored")
 		}
-		retry, err = repository.TakeLoginAttempt(tx.Context(), tx, [32]byte{254, 254}, now.Add(time.Minute), limits)
+		retry, err = repository.TakeLoginAttempt(tx.Context(), tx, identity.LoginAttemptKeys{Account: [32]byte{254, 254}, Source: [32]byte{251}}, now.Add(time.Minute), limits)
 		if err != nil {
 			return err
 		}
 		if retry != 0 {
 			t.Fatal("configured account limit blocked a different account")
 		}
-		retry, err = repository.TakeLoginAttempt(tx.Context(), tx, [32]byte{253, 253}, now.Add(time.Minute), limits)
+		retry, err = repository.TakeLoginAttempt(tx.Context(), tx, identity.LoginAttemptKeys{Account: [32]byte{253, 253}, Source: [32]byte{252}}, now.Add(time.Minute), limits)
 		if err != nil {
 			return err
 		}
 		if retry != time.Minute {
 			t.Fatal("configured instance limit was ignored")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestLoginSourceThrottleSpansUsernames: one client source trying many usernames is stopped
+// by the 31st attempt within the minute without blocking other sources or the instance.
+func TestLoginSourceThrottleSpansUsernames(t *testing.T) {
+	store := newStore(t)
+	seedLoginAccount(t, store, "operator", true)
+	repository, err := identitystore.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock := &loginClock{now: time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)}
+	resolver, err := identity.NewResolver(repository, clock, repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts, err := eventstore.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	login, err := identity.NewLoginService(store, resolver, repository, facts, identity.DefaultLoginRateLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 30; i++ {
+		_, err := login.AuthenticateLocal(t.Context(), "203.0.113.7", fmt.Sprintf("guess-%d", i), "wrong-password")
+		if !errors.Is(err, identity.ErrLoginRequired) {
+			t.Fatalf("attempt %d: %v, want the generic rejection", i+1, err)
+		}
+	}
+	_, err = login.AuthenticateLocal(t.Context(), "203.0.113.7", "guess-30", "wrong-password")
+	var limited *identity.RateLimited
+	if !errors.As(err, &limited) || limited.RetryAfter != time.Minute {
+		t.Fatalf("31st attempt from one source = %v, want RateLimited for a minute", err)
+	}
+	// The flooding source cannot lock the operator out from another address.
+	if _, err := login.AuthenticateLocal(t.Context(), "198.51.100.9", "operator", "correct-password"); err != nil {
+		t.Fatalf("other source blocked: %v", err)
+	}
+	if _, err := login.AuthenticateLocal(t.Context(), "203.0.113.7", "operator", "correct-password"); !errors.As(err, &limited) {
+		t.Fatalf("throttled source still reached the account: %v", err)
+	}
+	clock.now = clock.now.Add(time.Minute)
+	if _, err := login.AuthenticateLocal(t.Context(), "203.0.113.7", "operator", "correct-password"); err != nil {
+		t.Fatalf("source throttle did not expire at the boundary: %v", err)
+	}
+	err = store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		var raw int
+		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM identity_login_attempts
+			WHERE encode(source_key, 'escape') LIKE '%203.0.113%'`).Scan(&raw); err != nil {
+			return err
+		}
+		if raw != 0 {
+			t.Fatal("client address stored in clear")
 		}
 		return nil
 	})

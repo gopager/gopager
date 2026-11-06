@@ -369,16 +369,17 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 
 ### Errors and failure codes
 
-`platform.Failure` wraps a cause with one of these codes: `INVALID_INPUT`, `REVISION_CONFLICT`, `INCOMPATIBLE_VERSION`, `RESOURCE_LIMIT`, `STORAGE_UNAVAILABLE`, `AUTHORITY_UNAVAILABLE`, `COMMIT_UNCERTAIN`, `INTERNAL_ERROR`. `Error()` returns only an English fallback text, so wrapped causes never reach clients or logs (`LogValue`). PostgreSQL errors are classified as follows:
+`platform.Failure` wraps a cause with one of these codes: `INVALID_INPUT`, `LOGIN_REQUIRED`, `FORBIDDEN`, `NOT_FOUND`, `REVISION_CONFLICT`, `IDEMPOTENCY_CONFLICT`, `INCOMPATIBLE_VERSION`, `RESOURCE_LIMIT`, `STORAGE_UNAVAILABLE`, `AUTHORITY_UNAVAILABLE`, `COMMIT_UNCERTAIN`, `INTERNAL_ERROR`. `Error()` returns only an English fallback text, so wrapped causes never reach clients or logs (`LogValue`). The domain sentinels (`authz.ErrInvalidInput`, `ErrForbidden`, `ErrNotFound`, `ErrRevisionConflict`, `identity.ErrInvalidInput`, `ErrLoginRequired`, `commands.ErrIdempotencyConflict`) are themselves `*platform.Failure` values, so `platform.FailureCode` reports their own code when one is returned from a transaction callback, and `errors.Is` still matches them. The store passes any `*platform.Failure` through unchanged and classifies every other callback error as `STORAGE_UNAVAILABLE`. PostgreSQL errors are classified as follows:
 
 | SQLSTATE | Code |
 | --- | --- |
-| serialization failure, deadlock, unique violation | `REVISION_CONFLICT` |
+| serialization failure, deadlock | `REVISION_CONFLICT` (retryable; the callback is rerun once first) |
+| unique violation | `REVISION_CONFLICT`, not retryable |
 | read-only transaction | `AUTHORITY_UNAVAILABLE` |
 | out-of-range values and resource exhaustion | `RESOURCE_LIMIT` |
 | lost connection during commit | `COMMIT_UNCERTAIN` (never retried automatically) |
 
-`STORAGE_UNAVAILABLE`, `AUTHORITY_UNAVAILABLE` and `REVISION_CONFLICT` are retryable. Domain sentinel errors (`authz.ErrForbidden`, `ErrNotFound`, …) are mapped to HTTP responses in `cmd/gopager`. The response envelope (`code`, `textKey`, `fallback`, `requestId`, `retryable`) is documented in [http-api.md](http-api.md).
+`STORAGE_UNAVAILABLE`, `AUTHORITY_UNAVAILABLE` and `REVISION_CONFLICT` are retryable, except a `REVISION_CONFLICT` created by `platform.NewPermanentFailure` (unique violation). After a serialization failure or deadlock the server has rolled the transaction back, so `WithinTransaction` reruns the callback once in a new transaction; callbacks must be safe to run twice. A failed commit is never rerun. Sentinel and `Failure` codes are mapped to HTTP statuses by `platform.HTTPStatus` and to responses in `cmd/gopager` and `internal/identity`; every error response logs its code with its `requestId`. The response envelope (`code`, `textKey`, `fallback`, `requestId`, `retryable`) is documented in [http-api.md](http-api.md).
 
 ### Readiness and lifecycle
 

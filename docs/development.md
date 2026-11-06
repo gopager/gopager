@@ -7,10 +7,11 @@ Contribution and documentation rules: [CONTRIBUTING.md](../CONTRIBUTING.md). Run
 | Tool | Needed for |
 | --- | --- |
 | Go, version from [go.mod](../go.mod) (`go 1.26.2`) | everything |
-| Make | `make fmt`, `make lint` |
+| Make | all `make` targets below |
+| Network access | `make lint` and `make vuln` fetch their pinned tools through `go run` the first time |
 | Docker (running daemon, pull access to `postgres:18.0-alpine`) | integration tests, unless an external test database is supplied |
 
-All other tools (Ent code generator, Ginkgo CLI) are pinned in `go.mod` and run through `go tool` / `go run`; nothing needs a global install.
+All other tools are pinned and run through `go tool` / `go run`; nothing needs a global install: the Ent code generator and Ginkgo CLI via `go.mod`, golangci-lint (`v1.64.8`) and govulncheck (`v1.1.4`) via the version variables at the top of the [Makefile](../Makefile). Change a pin there only.
 
 ## Repository Layout
 
@@ -64,13 +65,29 @@ go build -o gopager ./cmd/gopager       # the executable
 ## Formatting and Linting
 
 ```sh
-make            # same as make lint
-make fmt        # gofmt -w cmd internal
-make fmt-check  # fail and list files that need gofmt
-make lint       # fmt-check, then go vet ./...
+make                    # same as make lint
+make fmt                # gofmt -w cmd internal
+make fmt-check          # fail and list files that need gofmt
+make vet                # go vet ./...
+make golangci           # golangci-lint run ./... (pinned version)
+make lint               # fmt-check, vet, golangci
+make test               # quick tier: go test ./...
+make test-integration   # GOPAGER_INTEGRATION=1 go test -race -count=1 -timeout=20m ./...
+make generate-check     # go generate ./..., then fail if the Ent output differs from git
+make vuln               # govulncheck ./... (pinned version, needs network)
 ```
 
-`gofmt` covers `cmd/` and `internal/` (including generated Ent code and tests). Neither target needs Docker or a database.
+`gofmt` covers `cmd/` and `internal/` (including generated Ent code and tests). Only `test-integration` needs Docker.
+
+[.golangci.yml](../.golangci.yml) enables a conservative set: `govet`, `staticcheck`, `errcheck`, `ineffassign`, `unused`, `misspell`. Generated code is skipped by golangci-lint's generated-file detection. Four known findings in processing code are excluded by path and text (an unused `unavailableInstanceLifecycle` type, two ineffectual assignments in `cmd/gopager/processing.go` and `internal/processing/workflow_test.go`, and an overwritten argument in `internal/processing/workflow.go`); delete the matching `exclude-rules` entry when you fix one. Do not add new exclusions to hide findings in code you change.
+
+`make generate-check` compares only the Ent output (`internal/persistence/ent`, not its hand-written `schema/`) with git, so commit or stage regenerated files before expecting it to pass locally; it also fails on generated files that git does not track.
+
+`make vuln` currently reports standard-library vulnerabilities fixed in later Go 1.26 patch releases than the `go 1.26.2` in `go.mod`, plus findings in two test-only dependencies. It is therefore not a required CI check; raising the Go version is the fix.
+
+### Continuous integration
+
+[.github/workflows/ci.yml](../.github/workflows/ci.yml) runs on pull requests and pushes to `main`. Job `static`: `make fmt-check`, `make vet`, `make golangci`, `make test`, `make generate-check`. Job `integration` (after `static`): `make test-integration` on the runner's Docker daemon. Job `vulnerabilities` runs `make vuln` as non-blocking information. The Go version comes from `go.mod`.
 
 ## Tests
 
@@ -78,8 +95,8 @@ make lint       # fmt-check, then go vet ./...
 
 | Tier | Command | Needs |
 | --- | --- | --- |
-| Quick | `go test ./...` | Go only. Database tests are skipped with `PostgreSQL integration disabled; run with GOPAGER_INTEGRATION=1`. |
-| Full, owned containers | `GOPAGER_INTEGRATION=1 go test -race -count=1 ./...` | Docker |
+| Quick | `make test` (`go test ./...`) | Go only. Database tests are skipped with `PostgreSQL integration disabled; run with GOPAGER_INTEGRATION=1`. |
+| Full, owned containers | `make test-integration` (`GOPAGER_INTEGRATION=1 go test -race -count=1 -timeout=20m ./...`) | Docker |
 | Full, external database | `GOPAGER_TEST_DATABASE_URL='postgres://…' go test -race -count=1 ./...` | A disposable PostgreSQL database with `CREATE SCHEMA` privilege |
 
 Environment variables:
@@ -166,16 +183,17 @@ Runtime check/apply semantics: [Operations](operations.md#database-migrations).
 
 ### Errors
 
-- Platform-facing errors are `*platform.Failure` created with `platform.NewFailure(code, cause)`. Codes: `INVALID_INPUT`, `REVISION_CONFLICT`, `INCOMPATIBLE_VERSION`, `RESOURCE_LIMIT`, `STORAGE_UNAVAILABLE`, `AUTHORITY_UNAVAILABLE`, `COMMIT_UNCERTAIN`, `INTERNAL_ERROR`.
+- Platform-facing errors are `*platform.Failure` created with `platform.NewFailure(code, cause)`. Codes: `INVALID_INPUT`, `LOGIN_REQUIRED`, `FORBIDDEN`, `NOT_FOUND`, `REVISION_CONFLICT`, `IDEMPOTENCY_CONFLICT`, `INCOMPATIBLE_VERSION`, `RESOURCE_LIMIT`, `STORAGE_UNAVAILABLE`, `AUTHORITY_UNAVAILABLE`, `COMMIT_UNCERTAIN`, `INTERNAL_ERROR`. `platform.NewPermanentFailure` is the same with `Retryable()` forced to false.
 - `Failure.Error()` returns only a fixed English fallback; the cause is reachable through `errors.Unwrap`/`errors.Is` but never printed. `LogValue` logs code and fallback only. Use `platform.FailureCode(err)` for logging; never log causes, DSNs, secrets or payloads.
 - `Retryable()` is true for `STORAGE_UNAVAILABLE`, `AUTHORITY_UNAVAILABLE`, `REVISION_CONFLICT`. `COMMIT_UNCERTAIN` must not be retried blindly; callers look up the operation's receipt.
-- Domain packages define sentinel errors (`authz.ErrInvalidInput`, `authz.ErrForbidden`, `authz.ErrNotFound`, `authz.ErrRevisionConflict`, `identity.ErrInvalidInput`, …) which HTTP adapters in `cmd/gopager` map to API error codes.
-- PostgreSQL errors are classified centrally in `internal/platform/postgres` (`40001`/`40P01`/`23505` → `REVISION_CONFLICT`, `25006` → `AUTHORITY_UNAVAILABLE`, `22003`/`53100`/`53200`/`53300`/`53400` → `RESOURCE_LIMIT`, others → `STORAGE_UNAVAILABLE`).
+- Domain packages define sentinel errors (`authz.ErrInvalidInput`, `authz.ErrForbidden`, `authz.ErrNotFound`, `authz.ErrRevisionConflict`, `identity.ErrInvalidInput`, `identity.ErrLoginRequired`, `commands.ErrIdempotencyConflict`). Those listed are `*platform.Failure` values (a nil cause), so their code survives a transaction boundary and `errors.Is` still matches. Define new cross-layer sentinels the same way. HTTP adapters map codes to statuses with `platform.HTTPStatus`.
+- PostgreSQL errors are classified centrally in `internal/platform/postgres` (`40001`/`40P01` → retryable `REVISION_CONFLICT`, `23505` → non-retryable `REVISION_CONFLICT`, `25006` → `AUTHORITY_UNAVAILABLE`, `22003`/`53100`/`53200`/`53300`/`53400` → `RESOURCE_LIMIT`, others → `STORAGE_UNAVAILABLE`). Any callback error that already is a `*platform.Failure` keeps its code.
+- Every API error response logs `code`, `status` and `requestId` through `platform.LogErrorResponse` (never the cause or request data); use it in any new error writer.
 
 ### Transactions
 
 - Services receive a transaction runner (`WithinTransaction(ctx, func(platform.TransactionContext) error) error`), not a database handle. All repositories called inside one callback share that transaction.
-- The PostgreSQL store runs `READ COMMITTED`, verifies write authority at transaction start, compares the applied schema version with the one it started with, bounds every transaction to 30 s, rejects nested transactions and never retries an uncertain commit.
+- The PostgreSQL store runs `READ COMMITTED`, verifies write authority at transaction start, compares the applied schema version with the one it started with, bounds every transaction to 30 s, rejects nested transactions and never retries an uncertain commit. A callback that fails with `40001` or `40P01` (rolled back by the server) is rerun once in a new transaction, so callbacks must be safe to run twice: keep side effects inside the transaction and reset captured outer variables at the start of the callback.
 - Repository adapters obtain the SQL executor with `store.Resolve(tx)` (or an Ent client via `borrowed.New(store, tx)`); a `TransactionContext` is invalid after its callback returns.
 - No plugin calls, provider I/O or long computation inside a write transaction.
 

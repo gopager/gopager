@@ -128,9 +128,13 @@ or anonymous requests. No CORS headers are emitted.
 
 ### Login rate limiting
 
-Login attempts are counted per minute, both per normalized username and per instance.
-The defaults are 10 and 300. Change them with `-login-attempts-per-account` and
-`-login-attempts-per-instance`. Attempts are counted whether or not they succeed.
+Login attempts are counted per minute in three buckets: per normalized username, per
+client source (the host of the connection's remote address, across all usernames) and per
+instance. The defaults are 10, 30 and 300. Change them with `-login-attempts-per-account`,
+`-login-attempts-per-source` and `-login-attempts-per-instance`. Attempts are counted
+whether or not they succeed; attempts that are rejected for exceeding a limit are not.
+Behind a reverse proxy that does not preserve the client address, all clients share one
+source bucket (see [Operations](operations.md#security)).
 When a limit is exceeded, the response is:
 
 ```
@@ -256,7 +260,9 @@ Every application error, except for unmatched routes, has this shape:
 - `fallback` is a redacted English message. It never contains internal causes, SQL or
   identifiers of hidden objects.
 - `parameters` is currently always `{}`.
-- `requestId` is a fresh UUID per error response.
+- `requestId` is a fresh UUID per error response. The server logs the same `requestId` with the
+  code and HTTP status (`API error response`), so an operator can correlate a client's report with
+  the log; see [Operations](operations.md#exit-status-and-logging).
 - `retryAfterSeconds` appears only with `RATE_LIMITED`.
 
 | Code | HTTP | `retryable` | Meaning |
@@ -265,7 +271,7 @@ Every application error, except for unmatched routes, has this shape:
 | `LOGIN_REQUIRED` | 401 | false | See [Authentication](#authentication) |
 | `FORBIDDEN` | 403 | false | See [Authorization](#authorization) |
 | `NOT_FOUND` | 404 | false | Absent, deleted or not visible |
-| `REVISION_CONFLICT` | 409 | true | Stale `expectedRevision`, conflicting rule, already active suppression, or second pending Gateway credential. Reload the current state, then retry. |
+| `REVISION_CONFLICT` | 409 | true | Stale `expectedRevision`, conflicting rule, already active suppression, or second pending Gateway credential. Reload the current state, then retry. A database serialization failure or deadlock is retried once by the server before it is reported with this code. A duplicate-key violation also reports `REVISION_CONFLICT` but with `retryable: false`: repeating the same request meets the same conflict. |
 | `IDEMPOTENCY_CONFLICT` | 409 | false | A `commandId` was reused by the same caller for a different operation or input, or a Gateway `submissionId` was reused with different content. Retrying the same request cannot succeed; send the original request again or use a new identifier. |
 | `INCOMPATIBLE_VERSION` | 409 | false | Incompatible version |
 | `RESOURCE_LIMIT` | 413 | false | Body or collection size limit exceeded, or revision counter exhausted |
@@ -274,6 +280,11 @@ Every application error, except for unmatched routes, has this shape:
 | `AUTHORITY_UNAVAILABLE` | 503 | true | Process not ready, or a required component is unavailable |
 | `COMMIT_UNCERTAIN` | 503 | false | The write may have committed. Re-send with the **same** command ID or `submissionId`, or read the resource, instead of creating a new operation. |
 | `INTERNAL_ERROR` | 500 | false | Unexpected failure |
+
+`RETRY_LIMIT` is not an error `code`. It appears only as the `failureCode` of a failed
+assignment correction (`GET /assignment-corrections/{id}`) when a scope used up its five
+attempts; other `failureCode` values there are the codes above. Retry such a correction with
+`POST /assignment-corrections/{id}/retry`.
 
 ### Command IDs (idempotent creation)
 

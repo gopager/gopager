@@ -395,6 +395,7 @@ var (
 	IdentityLoginAttemptsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "account_key", Type: field.TypeBytes},
+		{Name: "source_key", Type: field.TypeBytes},
 		{Name: "attempted_at", Type: field.TypeTime},
 	}
 	// IdentityLoginAttemptsTable holds the schema information for the "identity_login_attempts" table.
@@ -406,12 +407,17 @@ var (
 			{
 				Name:    "loginattempt_attempted_at",
 				Unique:  false,
-				Columns: []*schema.Column{IdentityLoginAttemptsColumns[2]},
+				Columns: []*schema.Column{IdentityLoginAttemptsColumns[3]},
 			},
 			{
 				Name:    "loginattempt_account_key_attempted_at",
 				Unique:  false,
-				Columns: []*schema.Column{IdentityLoginAttemptsColumns[1], IdentityLoginAttemptsColumns[2]},
+				Columns: []*schema.Column{IdentityLoginAttemptsColumns[1], IdentityLoginAttemptsColumns[3]},
+			},
+			{
+				Name:    "loginattempt_source_key_attempted_at",
+				Unique:  false,
+				Columns: []*schema.Column{IdentityLoginAttemptsColumns[2], IdentityLoginAttemptsColumns[3]},
 			},
 		},
 	}

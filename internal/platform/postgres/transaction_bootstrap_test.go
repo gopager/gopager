@@ -26,7 +26,9 @@ func TestTransactionDoesNotWaitForMigrationLock(t *testing.T) {
 	if _, err := holder.ExecContext(ctx, "SELECT pg_advisory_lock($1)", migrationLockKey); err != nil {
 		t.Fatalf("hold migration lock: %v", err)
 	}
-	defer holder.ExecContext(context.Background(), "SELECT pg_advisory_unlock($1)", migrationLockKey)
+	defer func() {
+		_, _ = holder.ExecContext(context.Background(), "SELECT pg_advisory_unlock($1)", migrationLockKey)
+	}()
 
 	bounded, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
