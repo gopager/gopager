@@ -4,7 +4,7 @@ package ent
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"time"
@@ -59,7 +59,7 @@ func (_c *TransmissionCreate) SetProtocol(v transmission.Protocol) *Transmission
 }
 
 // SetPayload sets the "payload" field.
-func (_c *TransmissionCreate) SetPayload(v json.RawMessage) *TransmissionCreate {
+func (_c *TransmissionCreate) SetPayload(v jsontext.Value) *TransmissionCreate {
 	_c.mutation.SetPayload(v)
 	return _c
 }
@@ -103,7 +103,7 @@ func (_c *TransmissionCreate) SetNillableIncomplete(v *bool) *TransmissionCreate
 }
 
 // SetQualityMetrics sets the "quality_metrics" field.
-func (_c *TransmissionCreate) SetQualityMetrics(v json.RawMessage) *TransmissionCreate {
+func (_c *TransmissionCreate) SetQualityMetrics(v jsontext.Value) *TransmissionCreate {
 	_c.mutation.SetQualityMetrics(v)
 	return _c
 }

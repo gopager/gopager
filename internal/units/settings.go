@@ -57,9 +57,9 @@ func canonicalColor(value string) error {
 		return authz.ErrInvalidInput
 	}
 	for _, character := range value[1:] {
-		if !(character >= '0' && character <= '9') &&
-			!(character >= 'a' && character <= 'f') &&
-			!(character >= 'A' && character <= 'F') {
+		if (character < '0' || character > '9') &&
+			(character < 'a' || character > 'f') &&
+			(character < 'A' || character > 'F') {
 			return authz.ErrInvalidInput
 		}
 	}
@@ -71,9 +71,9 @@ func canonicalIcon(value string) error {
 		return authz.ErrInvalidInput
 	}
 	for _, character := range value {
-		if !(character >= 'a' && character <= 'z') &&
-			!(character >= 'A' && character <= 'Z') &&
-			!(character >= '0' && character <= '9') &&
+		if (character < 'a' || character > 'z') &&
+			(character < 'A' || character > 'Z') &&
+			(character < '0' || character > '9') &&
 			!strings.ContainsRune("._-", character) {
 			return authz.ErrInvalidInput
 		}

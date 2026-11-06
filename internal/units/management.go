@@ -652,9 +652,7 @@ func (s *Service) BulkUnits(ctx context.Context, proof identity.Proof, command u
 				return platform.NewFailure(platform.CodeAuthorityUnavailable, authz.ErrInvalidInput)
 			}
 			result = make([]BulkUnitResult, len(replay.Items))
-			for i, item := range replay.Items {
-				result[i] = BulkUnitResult{ID: item.ID, Revision: item.Revision, Status: item.Status}
-			}
+			copy(result, replay.Items)
 			return nil
 		}
 		values, err := s.prepareBulk(tx.Context(), tx, authority, input, now)
@@ -697,11 +695,7 @@ func (s *Service) BulkUnits(ctx context.Context, proof identity.Proof, command u
 			result[i] = BulkUnitResult{ID: value.ID, Revision: value.Revision, Status: status}
 		}
 		receiptItems := make([]commands.ResultItem, len(result))
-		if len(result) > 0 {
-			for i, item := range result {
-				receiptItems[i] = commands.ResultItem{ID: item.ID, Revision: item.Revision, Status: item.Status}
-			}
-		}
+		copy(receiptItems, result)
 		receiptResult := commands.Result{ID: result[0].ID, Revision: result[0].Revision, Items: receiptItems}
 		return s.commands.SaveCommandReceipt(tx.Context(), tx, commands.Receipt{ActorID: actor, CommandID: command,
 			Operation: "unit.bulk." + input.Operation, Fingerprint: fingerprint, Result: receiptResult, RecordedAt: now})

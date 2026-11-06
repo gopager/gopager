@@ -151,5 +151,5 @@ func (runtime *processingAPIRuntime) Close(ctx context.Context) error {
 type unavailableInstanceInspector struct{}
 
 func (unavailableInstanceInspector) InspectInstance(context.Context, processing.InstanceConfiguration) error {
-	return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Processing artifact root unavailable"))
+	return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("processing artifact root unavailable"))
 }

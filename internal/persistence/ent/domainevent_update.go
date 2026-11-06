@@ -4,7 +4,7 @@ package ent
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 
@@ -31,13 +31,13 @@ func (_u *DomainEventUpdate) Where(ps ...predicate.DomainEvent) *DomainEventUpda
 }
 
 // SetEnvelope sets the "envelope" field.
-func (_u *DomainEventUpdate) SetEnvelope(v json.RawMessage) *DomainEventUpdate {
+func (_u *DomainEventUpdate) SetEnvelope(v jsontext.Value) *DomainEventUpdate {
 	_u.mutation.SetEnvelope(v)
 	return _u
 }
 
 // AppendEnvelope appends value to the "envelope" field.
-func (_u *DomainEventUpdate) AppendEnvelope(v json.RawMessage) *DomainEventUpdate {
+func (_u *DomainEventUpdate) AppendEnvelope(v jsontext.Value) *DomainEventUpdate {
 	_u.mutation.AppendEnvelope(v)
 	return _u
 }
@@ -129,13 +129,13 @@ type DomainEventUpdateOne struct {
 }
 
 // SetEnvelope sets the "envelope" field.
-func (_u *DomainEventUpdateOne) SetEnvelope(v json.RawMessage) *DomainEventUpdateOne {
+func (_u *DomainEventUpdateOne) SetEnvelope(v jsontext.Value) *DomainEventUpdateOne {
 	_u.mutation.SetEnvelope(v)
 	return _u
 }
 
 // AppendEnvelope appends value to the "envelope" field.
-func (_u *DomainEventUpdateOne) AppendEnvelope(v json.RawMessage) *DomainEventUpdateOne {
+func (_u *DomainEventUpdateOne) AppendEnvelope(v jsontext.Value) *DomainEventUpdateOne {
 	_u.mutation.AppendEnvelope(v)
 	return _u
 }

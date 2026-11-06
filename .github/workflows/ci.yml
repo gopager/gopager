@@ -27,6 +27,8 @@ jobs:
         run: make vet
       - name: golangci-lint
         run: make golangci
+      - name: Documentation links and IDs
+        run: make docs-check
       - name: Quick tests
         run: make test
       - name: Generated code is current
@@ -53,8 +55,9 @@ jobs:
           name: test-reports
           path: build/test-reports
           if-no-files-found: warn
+      # Only when a report exists: a build failure before the first test leaves none.
       - name: Slowest tests
-        if: always()
+        if: always() && hashFiles('build/test-reports/test.json') != ''
         run: |
           {
             echo '### Slowest tests'

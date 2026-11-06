@@ -1,11 +1,11 @@
 # GoPager Work Packages
 
-Start from the assigned AP. Read its required inputs and planning references, not the entire development-process tree or the permanent [docs/](../docs/README.md). [Shared rules](work-packages/shared-rules.md) govern execution; the [plan](authoritative-plan.md#delivery-scope) owns delivery scope and approval; [execution records](execution/README.md) own results.
+Start from the assigned AP. Read its required inputs and planning references, not the entire development-process tree or the permanent [docs/](../docs/README.md). [Shared rules](work-packages/shared-rules.md) govern execution; the [plan](authoritative-plan.md#delivery-scope) owns delivery scope and the [approval rule](authoritative-plan.md#workflow-and-approval-gates); [execution records](execution/README.md) own results.
 
 <a id="package-directory"></a>
 ## Revised Execution Path
 
-Complete each producer and verify its handover before starting a dependent AP. An AP's own planning is work before coding, not an external prerequisite.
+Complete each producer and verify its handover before starting a dependent AP. An AP's own planning is work before coding, not an external prerequisite. There is one approval gate per package: the user approves a package before it starts. No intermediate approval gates exist inside a package, and its completion evidence stays mandatory.
 
 | AP | Assignment | Tasks |
 | --- | --- | --- |

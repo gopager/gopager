@@ -1,0 +1,9 @@
+# Findings accepted on purpose. Format: path kind detail-prefix  # reason
+# Every entry must keep matching a finding; a stale entry is reported as "stale-ignore".
+
+# The archived source records use the first work-package sequence (AP-17..AP-27, renumbered to
+# AP-06..AP-16 under D-96/D-97); history keeps its original wording.
+development/execution/source-ap-06.md unknown-work-package AP-18  # old sequence, see decisions D-97
+development/execution/source-ap-07.md unknown-work-package AP-24  # old sequence, see decisions D-97
+development/execution/source-ap-08.md unknown-work-package AP-19  # old sequence, see decisions D-97
+development/execution/source-ap-12.md unknown-work-package AP-23  # old sequence, see decisions D-97

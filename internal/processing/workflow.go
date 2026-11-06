@@ -264,7 +264,7 @@ func compileWorkflow(ctx context.Context, definition Definition, source Declarat
 	var prepare func([]Step, map[string]FieldSchema, int) ([]compiledStep, error)
 	prepare = func(steps []Step, local map[string]FieldSchema, depth int) ([]compiledStep, error) {
 		if depth > MaxDepth {
-			return nil, resource(errors.New("Workflow branch depth boundary"))
+			return nil, resource(errors.New("workflow branch depth boundary"))
 		}
 		var compiled []compiledStep
 		for _, step := range steps {
@@ -273,7 +273,7 @@ func compileWorkflow(ctx context.Context, definition Definition, source Declarat
 			}
 			count++
 			if count > MaxSteps {
-				return nil, resource(errors.New("Workflow total step boundary"))
+				return nil, resource(errors.New("workflow total step boundary"))
 			}
 			if !validLocalName(step.ID) || ids[step.ID] {
 				return nil, invalid(errors.New("duplicate/invalid local step ID"))
@@ -514,7 +514,7 @@ func (b *executionBudget) consume(value any) error {
 	}
 	b.used += len(encoded)
 	if b.used > MaxInputBytes {
-		return resource(errors.New("Workflow aggregate input/intermediate boundary"))
+		return resource(errors.New("workflow aggregate input/intermediate boundary"))
 	}
 	decodedBytes, err := decodedBytesInJSON(encoded)
 	if err != nil {
@@ -522,7 +522,7 @@ func (b *executionBudget) consume(value any) error {
 	}
 	b.bytesUsed += decodedBytes
 	if b.bytesUsed > MaxInputBytes {
-		return resource(errors.New("Workflow aggregate decoded bytes boundary"))
+		return resource(errors.New("workflow aggregate decoded bytes boundary"))
 	}
 	return nil
 }
@@ -870,7 +870,7 @@ func (p *WorkflowProgram) evaluateScoped(ctx context.Context, source *CapturedSo
 			return Evaluation{}, invalid(err)
 		}
 		if len(encoded) > MaxOutputBytes {
-			return Evaluation{}, resource(errors.New("Workflow complete result boundary"))
+			return Evaluation{}, resource(errors.New("workflow complete result boundary"))
 		}
 	}
 	if err := budget.computeContext().Err(); err != nil {

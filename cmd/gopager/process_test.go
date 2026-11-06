@@ -22,7 +22,7 @@ func TestRunProcessHelper(t *testing.T) { //nolint:paralleltest // child-process
 	if roles == "" {
 		return
 	}
-	os.Args = []string{"gopager", "--profile=full", "--roles=" + roles,
+	os.Args = []string{"gopager", "--roles=" + roles,
 		"--migration-mode=apply", "--listen-address=" + os.Getenv("GOPAGER_TEST_LISTEN")}
 	if strings.Contains(roles, "api") {
 		os.Args = append(os.Args, "--public-origin=http://"+os.Getenv("GOPAGER_TEST_LISTEN"))
@@ -66,7 +66,7 @@ func TestFullCommandProcessStartupAndSignalShutdown(t *testing.T) {
 			defer func() {
 				if !waited {
 					_ = command.Process.Kill()
-					<-exited
+					t.Logf("process exit after kill: %v", <-exited)
 				}
 			}()
 			deadline := time.Now().Add(platform.DefaultCallTimeout + time.Second)

@@ -4,7 +4,7 @@ package ent
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"time"
@@ -37,7 +37,7 @@ func (_c *DomainEventCreate) SetNillableSeq(v *int64) *DomainEventCreate {
 }
 
 // SetEnvelope sets the "envelope" field.
-func (_c *DomainEventCreate) SetEnvelope(v json.RawMessage) *DomainEventCreate {
+func (_c *DomainEventCreate) SetEnvelope(v jsontext.Value) *DomainEventCreate {
 	_c.mutation.SetEnvelope(v)
 	return _c
 }

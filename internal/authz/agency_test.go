@@ -63,7 +63,7 @@ func TestAuthorizeMatchesAgencyTargets(t *testing.T) {
 	}
 	for _, c := range cases {
 		err := Authorize(authority, c.action, nil, c.target, now)
-		if !errors.Is(err, c.want) && !(c.want == nil && err == nil) {
+		if !errors.Is(err, c.want) && (c.want != nil || err != nil) {
 			t.Fatalf("%s: Authorize=%v want %v", c.name, err, c.want)
 		}
 	}

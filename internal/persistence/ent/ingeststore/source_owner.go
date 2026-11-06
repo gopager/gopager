@@ -181,7 +181,7 @@ func (o *ProcessingSourceOwner) CheckCandidate(ctx context.Context, tx platform.
 		return err
 	}
 	if revision != candidate.ConfigurationRevision {
-		return platform.NewFailure(platform.CodeRevisionConflict, errors.New("Processing configuration changed"))
+		return platform.NewFailure(platform.CodeRevisionConflict, errors.New("processing configuration changed"))
 	}
 	identity, err := capture.Source.Identity()
 	if err != nil {
@@ -224,7 +224,7 @@ func (o *ProcessingSourceOwner) CheckRetrySource(ctx context.Context, tx platfor
 		return err
 	}
 	if revision != candidate.ConfigurationRevision {
-		return platform.NewFailure(platform.CodeRevisionConflict, errors.New("Processing configuration changed"))
+		return platform.NewFailure(platform.CodeRevisionConflict, errors.New("processing configuration changed"))
 	}
 	definition, err := o.readDefinition(ctx, tx, selected.id, selected.version)
 	if err != nil {
@@ -508,12 +508,12 @@ func (o *ProcessingSourceOwner) readSource(ctx context.Context, tx platform.Tran
 		return sourceSnapshot{}, err
 	}
 	if snapshot.sourceRevision <= 0 {
-		return sourceSnapshot{}, platform.NewFailure(platform.CodeRevisionConflict, errors.New("Transmission has no source revision"))
+		return sourceSnapshot{}, platform.NewFailure(platform.CodeRevisionConflict, errors.New("transmission has no source revision"))
 	}
 	snapshot.transmission = transmission
 	snapshot.protocol = protocols.Protocol(protocolValue)
 	if snapshot.protocol != protocols.Protocol(networkProtocol) {
-		return sourceSnapshot{}, platform.NewFailure(platform.CodeRevisionConflict, errors.New("Transmission Network Protocol changed"))
+		return sourceSnapshot{}, platform.NewFailure(platform.CodeRevisionConflict, errors.New("transmission Network Protocol changed"))
 	}
 	if err := json.Unmarshal(payloadJSON, &snapshot.payload); err != nil {
 		return sourceSnapshot{}, platform.NewFailure(platform.CodeInvalidInput, err)
@@ -1118,7 +1118,7 @@ func (o *ProcessingSourceOwner) checkDefinitionInstances(ctx context.Context, tx
 					return err
 				}
 				if !configuration.Enabled {
-					return platform.NewFailure(platform.CodeRevisionConflict, errors.New("Processing instance is disabled"))
+					return platform.NewFailure(platform.CodeRevisionConflict, errors.New("processing instance is disabled"))
 				}
 				if _, err := o.principals.ResolvePrincipalAuthority(ctx, tx, configuration.ExecutionPrincipalID); err != nil {
 					return err
@@ -1128,7 +1128,7 @@ func (o *ProcessingSourceOwner) checkDefinitionInstances(ctx context.Context, tx
 					return err
 				}
 				if artifact == nil {
-					return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Processing artifact owner returned no artifact"))
+					return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("processing artifact owner returned no artifact"))
 				}
 				if err := artifact.Close(context.WithoutCancel(ctx)); err != nil {
 					return err

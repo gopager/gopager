@@ -290,7 +290,7 @@ func (s *Store) MarkPending(ctx context.Context, tx platform.TransactionContext,
 		return 0, err
 	}
 	if revision == math.MaxInt64 {
-		return 0, platform.NewFailure(platform.CodeResourceLimit, errors.New("Assignment revision exhausted"))
+		return 0, platform.NewFailure(platform.CodeResourceLimit, errors.New("assignment revision exhausted"))
 	}
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {
@@ -392,7 +392,7 @@ func (s *Store) InvalidateUnit(ctx context.Context, tx platform.TransactionConte
 		return err
 	}
 	if overflow {
-		return platform.NewFailure(platform.CodeResourceLimit, errors.New("Address-rule revision exhausted"))
+		return platform.NewFailure(platform.CodeResourceLimit, errors.New("address-rule revision exhausted"))
 	}
 	if _, err := client.AddressRule.Update().SetEnabled(false).AddRevision(1).Save(scope); err != nil {
 		return err

@@ -369,12 +369,13 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 			return ingest.Receipt{}, err
 		}
 	}
-	if decision.Kind == "created" {
+	switch decision.Kind {
+	case "created":
 		if err := s.appendFact(ctx, tx, events.IntakeFact{ID: uuid.New(), Type: events.MessageCreated,
 			TransmissionID: transmissionID, MessageID: messageID, Revision: decision.MessageRevision, OccurredAt: now}); err != nil {
 			return ingest.Receipt{}, err
 		}
-	} else if decision.Kind == "merged" {
+	case "merged":
 		if err := s.appendFact(ctx, tx, events.IntakeFact{ID: uuid.New(), Type: events.MessageMerged,
 			TransmissionID: transmissionID, MessageID: messageID, Absorbed: decision.AbsorbedMessage,
 			Revision: decision.MessageRevision, OccurredAt: now}); err != nil {
@@ -385,7 +386,7 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 			Revision: decision.MessageRevision, OccurredAt: now}); err != nil {
 			return ingest.Receipt{}, err
 		}
-	} else {
+	default:
 		if err := s.appendFact(ctx, tx, events.IntakeFact{ID: uuid.New(), Type: events.MessageTransmissionJoined,
 			TransmissionID: transmissionID, MessageID: messageID, LateJoin: decision.LateJoin,
 			Revision: decision.MessageRevision, OccurredAt: now}); err != nil {

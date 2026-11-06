@@ -299,7 +299,7 @@ func TestPredicateLogicIsTwoValued(t *testing.T) {
 				{"and", Predicate{Op: "and", Args: []Predicate{leftPredicate, rightPredicate}}, l && r},
 				{"or", Predicate{Op: "or", Args: []Predicate{leftPredicate, rightPredicate}}, l || r},
 				{"not", Predicate{Op: "not", Args: []Predicate{leftPredicate}}, !l},
-				{"not-or", Predicate{Op: "not", Args: []Predicate{{Op: "or", Args: []Predicate{leftPredicate, rightPredicate}}}}, !(l || r)},
+				{"not-or", Predicate{Op: "not", Args: []Predicate{{Op: "or", Args: []Predicate{leftPredicate, rightPredicate}}}}, !l && !r},
 			} {
 				program, err := CompilePredicate(context.Background(), item.predicate, fixture)
 				if err != nil {

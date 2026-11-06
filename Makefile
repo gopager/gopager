@@ -1,12 +1,13 @@
 .DEFAULT_GOAL := lint
 
 # Tool versions are pinned here and run through "go run", so no global install is
-# needed and local runs match CI. Bump deliberately; v1.64.8 is the last release of
-# the golangci-lint v1 line, whose .golangci.yml format the repository uses.
-GOLANGCI_LINT_VERSION := v1.64.8
-GOVULNCHECK_VERSION := v1.1.4
-GOLANGCI_LINT := go run github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+# needed and local runs match CI. Bump deliberately; golangci-lint v2 is required
+# for Go 1.27 (v1 cannot read its export data).
+GOLANGCI_LINT_VERSION := v2.15.0
+GOVULNCHECK_VERSION := v1.9.0
+GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 GOVULNCHECK := go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
+
 # gotestsum runs on every test run, so it is pinned as a go.mod tool dependency: "go tool"
 # resolves it from go.sum and the module cache and needs no network, unlike "go run pkg@version",
 # which looks up deprecation on the module proxy each time.
@@ -27,7 +28,7 @@ GINKGO_SUITE_PACKAGES := ./internal/identity ./internal/events ./internal/platfo
 # schema input.
 GENERATED := internal/persistence/ent ':(exclude)internal/persistence/ent/schema'
 
-.PHONY: fmt fmt-check vet golangci lint test test-integration test-race test-slowest test-stress generate-check vuln
+.PHONY: fmt fmt-check vet golangci lint test test-integration test-race test-slowest test-stress generate-check vuln docs-check
 
 fmt:
 	gofmt -w cmd internal
@@ -46,7 +47,7 @@ golangci:
 	$(GOLANGCI_LINT) run ./...
 
 # lint is the full static-analysis tier: formatting, go vet and golangci-lint.
-lint: fmt-check vet golangci
+lint: fmt-check vet golangci docs-check
 
 # test is the quick tier: no Docker, database tests are skipped.
 test:
@@ -98,3 +99,8 @@ generate-check:
 # It needs network access to the vulnerability database.
 vuln:
 	$(GOVULNCHECK) ./...
+
+# docs-check verifies Markdown links, heading fragments and D-/REQ-/AP-/C- IDs.
+# It is not part of the default target or CI until the documents are fixed.
+docs-check:
+	go run ./tools/doccheck

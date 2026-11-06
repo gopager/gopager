@@ -4,7 +4,7 @@ package ent
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"time"
@@ -68,13 +68,13 @@ func (_u *TransmissionTargetUpdate) AddPosition(v int) *TransmissionTargetUpdate
 }
 
 // SetOriginal sets the "original" field.
-func (_u *TransmissionTargetUpdate) SetOriginal(v json.RawMessage) *TransmissionTargetUpdate {
+func (_u *TransmissionTargetUpdate) SetOriginal(v jsontext.Value) *TransmissionTargetUpdate {
 	_u.mutation.SetOriginal(v)
 	return _u
 }
 
 // AppendOriginal appends value to the "original" field.
-func (_u *TransmissionTargetUpdate) AppendOriginal(v json.RawMessage) *TransmissionTargetUpdate {
+func (_u *TransmissionTargetUpdate) AppendOriginal(v jsontext.Value) *TransmissionTargetUpdate {
 	_u.mutation.AppendOriginal(v)
 	return _u
 }
@@ -491,13 +491,13 @@ func (_u *TransmissionTargetUpdateOne) AddPosition(v int) *TransmissionTargetUpd
 }
 
 // SetOriginal sets the "original" field.
-func (_u *TransmissionTargetUpdateOne) SetOriginal(v json.RawMessage) *TransmissionTargetUpdateOne {
+func (_u *TransmissionTargetUpdateOne) SetOriginal(v jsontext.Value) *TransmissionTargetUpdateOne {
 	_u.mutation.SetOriginal(v)
 	return _u
 }
 
 // AppendOriginal appends value to the "original" field.
-func (_u *TransmissionTargetUpdateOne) AppendOriginal(v json.RawMessage) *TransmissionTargetUpdateOne {
+func (_u *TransmissionTargetUpdateOne) AppendOriginal(v jsontext.Value) *TransmissionTargetUpdateOne {
 	_u.mutation.AppendOriginal(v)
 	return _u
 }

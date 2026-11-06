@@ -17,30 +17,29 @@ func TestParseConfigBindsExplicitInputs(t *testing.T) {
 		dsn  string
 		ok   bool
 	}{
-		{"worker", []string{"--profile=full", "--roles=worker"}, "synthetic-secret", true},
-		{"combined", []string{"--profile=full", "--roles=api,worker", "--listen-address=127.0.0.1:8080", "--public-origin=https://pager.example", "--migration-mode=apply"}, "synthetic-secret", true},
-		{"HTTP origin", []string{"--profile=full", "--roles=api", "--listen-address=127.0.0.1:8080", "--public-origin=http://pager.example:8080"}, "synthetic-secret", true},
-		{"missing public origin", []string{"--profile=full", "--roles=api", "--listen-address=127.0.0.1:8080"}, "synthetic-secret", false},
-		{"bad public origin", []string{"--profile=full", "--roles=api", "--listen-address=127.0.0.1:8080", "--public-origin=https://pager.example/path"}, "synthetic-secret", false},
-		{"configured login limits", []string{"--profile=full", "--roles=worker", "--login-attempts-per-account=2", "--login-attempts-per-instance=20"}, "synthetic-secret", true},
-		{"configured artifact root", []string{"--profile=full", "--roles=worker", "--processing-artifact-root=/"}, "synthetic-secret", true},
-		{"empty artifact root", []string{"--profile=full", "--roles=worker", "--processing-artifact-root="}, "synthetic-secret", false},
-		{"invalid artifact root", []string{"--profile=full", "--roles=worker", "--processing-artifact-root=/dev/null"}, "synthetic-secret", false},
-		{"configured source limit", []string{"--profile=full", "--roles=worker", "--login-attempts-per-source=5"}, "synthetic-secret", true},
-		{"invalid source limit", []string{"--profile=full", "--roles=worker", "--login-attempts-per-source=0"}, "synthetic-secret", false},
-		{"invalid login limit", []string{"--profile=full", "--roles=worker", "--login-attempts-per-account=0"}, "synthetic-secret", false},
-		{"configured dispatch", []string{"--profile=full", "--roles=worker", "--processing-concurrency=8", "--processing-poll-interval=750ms"}, "synthetic-secret", true},
-		{"zero concurrency", []string{"--profile=full", "--roles=worker", "--processing-concurrency=0"}, "synthetic-secret", false},
-		{"negative concurrency", []string{"--profile=full", "--roles=worker", "--processing-concurrency=-1"}, "synthetic-secret", false},
-		{"zero poll interval", []string{"--profile=full", "--roles=worker", "--processing-poll-interval=0s"}, "synthetic-secret", false},
-		{"negative poll interval", []string{"--profile=full", "--roles=worker", "--processing-poll-interval=-1s"}, "synthetic-secret", false},
-		{"malformed poll interval", []string{"--profile=full", "--roles=worker", "--processing-poll-interval=soon"}, "synthetic-secret", false},
-		{"unsupported profile", []string{"--profile=lite", "--roles=worker"}, "synthetic-secret", false},
-		{"unknown role", []string{"--profile=full", "--roles=other"}, "synthetic-secret", false},
-		{"empty role", []string{"--profile=full", "--roles=worker,"}, "synthetic-secret", false},
-		{"duplicate role", []string{"--profile=full", "--roles=worker,worker"}, "synthetic-secret", false},
-		{"missing listen", []string{"--profile=full", "--roles=api"}, "synthetic-secret", false},
-		{"missing dsn", []string{"--profile=full", "--roles=worker"}, "", false},
+		{"worker", []string{"--roles=worker"}, "synthetic-secret", true},
+		{"combined", []string{"--roles=api,worker", "--listen-address=127.0.0.1:8080", "--public-origin=https://pager.example", "--migration-mode=apply"}, "synthetic-secret", true},
+		{"HTTP origin", []string{"--roles=api", "--listen-address=127.0.0.1:8080", "--public-origin=http://pager.example:8080"}, "synthetic-secret", true},
+		{"missing public origin", []string{"--roles=api", "--listen-address=127.0.0.1:8080"}, "synthetic-secret", false},
+		{"bad public origin", []string{"--roles=api", "--listen-address=127.0.0.1:8080", "--public-origin=https://pager.example/path"}, "synthetic-secret", false},
+		{"configured login limits", []string{"--roles=worker", "--login-attempts-per-account=2", "--login-attempts-per-instance=20"}, "synthetic-secret", true},
+		{"configured artifact root", []string{"--roles=worker", "--processing-artifact-root=/"}, "synthetic-secret", true},
+		{"empty artifact root", []string{"--roles=worker", "--processing-artifact-root="}, "synthetic-secret", false},
+		{"invalid artifact root", []string{"--roles=worker", "--processing-artifact-root=/dev/null"}, "synthetic-secret", false},
+		{"configured source limit", []string{"--roles=worker", "--login-attempts-per-source=5"}, "synthetic-secret", true},
+		{"invalid source limit", []string{"--roles=worker", "--login-attempts-per-source=0"}, "synthetic-secret", false},
+		{"invalid login limit", []string{"--roles=worker", "--login-attempts-per-account=0"}, "synthetic-secret", false},
+		{"configured dispatch", []string{"--roles=worker", "--processing-concurrency=8", "--processing-poll-interval=750ms"}, "synthetic-secret", true},
+		{"zero concurrency", []string{"--roles=worker", "--processing-concurrency=0"}, "synthetic-secret", false},
+		{"negative concurrency", []string{"--roles=worker", "--processing-concurrency=-1"}, "synthetic-secret", false},
+		{"zero poll interval", []string{"--roles=worker", "--processing-poll-interval=0s"}, "synthetic-secret", false},
+		{"negative poll interval", []string{"--roles=worker", "--processing-poll-interval=-1s"}, "synthetic-secret", false},
+		{"malformed poll interval", []string{"--roles=worker", "--processing-poll-interval=soon"}, "synthetic-secret", false},
+		{"unknown role", []string{"--roles=other"}, "synthetic-secret", false},
+		{"empty role", []string{"--roles=worker,"}, "synthetic-secret", false},
+		{"duplicate role", []string{"--roles=worker,worker"}, "synthetic-secret", false},
+		{"missing listen", []string{"--roles=api"}, "synthetic-secret", false},
+		{"missing dsn", []string{"--roles=worker"}, "", false},
 		{"unknown flag", []string{"--unknown=synthetic-secret"}, "", false},
 		{"positional", []string{"synthetic-secret"}, "", false},
 	} {
@@ -104,7 +103,7 @@ func TestParseConfigReadsPluginRootFromEnvironment(t *testing.T) {
 			return ""
 		}
 	}
-	args := []string{"--profile=full", "--roles=worker"}
+	args := []string{"--roles=worker"}
 	config, err := parseConfig(args, environment(fromEnv))
 	if err != nil || config.ProcessingArtifactRoot != fromEnv {
 		t.Fatalf("environment plugin root not used: %q, %v", config.ProcessingArtifactRoot, err)

@@ -346,7 +346,6 @@ func TestFullStartupExposesSafeHealthAndShutdown(t *testing.T) {
 		t.Fatalf("release API port: %v", err)
 	}
 	config := platform.Config{
-		Profile:       "full",
 		Roles:         []platform.Role{platform.RoleAPI, platform.RoleWorker},
 		MigrationMode: platform.MigrationApply,
 		DatabaseURL:   storeTestDSN(store),
@@ -357,7 +356,7 @@ func TestFullStartupExposesSafeHealthAndShutdown(t *testing.T) {
 		t.Fatalf("start Full API+worker composition: %v", err)
 	}
 	status := handle.ReadStatus()
-	if !status.Live || !status.Ready || status.Profile != "full" || len(status.Roles) != 2 {
+	if !status.Live || !status.Ready || len(status.Roles) != 2 {
 		t.Fatalf("startup status = %+v", status)
 	}
 	response, err := http.Get("http://" + address + "/health/ready")

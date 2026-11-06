@@ -437,7 +437,7 @@ func (s *Service) prepareReferenced(ctx context.Context, definition processing.D
 	}
 	if program == nil {
 		return processing.Definition{}, nil, platform.NewFailure(platform.CodeAuthorityUnavailable,
-			errors.New("Workflow preparation owner returned no program"))
+			errors.New("workflow preparation owner returned no program"))
 	}
 	if closer, ok := s.preparer.(interface {
 		ClosePreparedWorkflow(context.Context, *processing.WorkflowProgram) error
@@ -456,7 +456,7 @@ func (s *Service) prepareReferenced(ctx context.Context, definition processing.D
 	}
 	if !bytes.Equal(encoded, actual) {
 		return processing.Definition{}, nil, platform.NewFailure(platform.CodeAuthorityUnavailable,
-			errors.New("Workflow preparation substituted the definition"))
+			errors.New("workflow preparation substituted the definition"))
 	}
 	return checked, program.SourceReferences(), ctx.Err()
 }

@@ -21,7 +21,6 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "full api and worker",
 			cfg: Config{
-				Profile:       "full",
 				Roles:         []Role{RoleAPI, RoleWorker},
 				MigrationMode: MigrationCheck,
 				DatabaseURL:   "postgres://user:secret@localhost/db",
@@ -32,7 +31,6 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "worker only",
 			cfg: Config{
-				Profile:       "full",
 				Roles:         []Role{RoleWorker},
 				MigrationMode: MigrationApply,
 				DatabaseURL:   "postgres://user:secret@localhost/db",
@@ -42,25 +40,14 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "migration check defaults",
 			cfg: Config{
-				Profile:     "full",
 				Roles:       []Role{RoleWorker},
 				DatabaseURL: "postgres://user:secret@localhost/db",
 			},
 			ok: true,
 		},
 		{
-			name: "lite rejected",
-			cfg: Config{
-				Profile:       "lite",
-				Roles:         []Role{RoleWorker},
-				MigrationMode: MigrationCheck,
-				DatabaseURL:   "postgres://user:secret@localhost/db",
-			},
-		},
-		{
 			name: "duplicate role rejected",
 			cfg: Config{
-				Profile:       "full",
 				Roles:         []Role{RoleAPI, RoleAPI},
 				MigrationMode: MigrationCheck,
 				DatabaseURL:   "postgres://user:secret@localhost/db",
@@ -70,7 +57,6 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "api requires address",
 			cfg: Config{
-				Profile:       "full",
 				Roles:         []Role{RoleAPI},
 				MigrationMode: MigrationCheck,
 				DatabaseURL:   "postgres://user:secret@localhost/db",
@@ -79,7 +65,6 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "connection required",
 			cfg: Config{
-				Profile:       "full",
 				Roles:         []Role{RoleWorker},
 				MigrationMode: MigrationCheck,
 			},
@@ -158,7 +143,6 @@ func TestStartWorkerOnlyAndShutdown(t *testing.T) {
 	store := &fakeStore{}
 	worker := &blockingRunner{done: make(chan struct{})}
 	handle, err := Start(context.Background(), Config{
-		Profile:       "full",
 		Roles:         []Role{RoleWorker},
 		MigrationMode: MigrationCheck,
 		DatabaseURL:   "postgres://localhost/gopager",

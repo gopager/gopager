@@ -90,8 +90,8 @@ func TestProcessingInstanceHTTPUsesRootAndRedactsCurrentConfiguration(t *testing
 		t.Fatalf("instance request could not be decoded: %v; body=%s", err, createBody)
 	}
 	if decodedMutation.SchemaVersion != 1 || decodedMutation.CommandID == uuid.Nil ||
-		decodedMutation.InstanceInput.ExecutionPrincipalID != operatorID ||
-		decodedMutation.InstanceInput.Configuration.Kind != processing.ObjectValue ||
+		decodedMutation.ExecutionPrincipalID != operatorID ||
+		decodedMutation.Configuration.Kind != processing.ObjectValue ||
 		decodedMutation.ExpectedRevision != 0 {
 		t.Fatalf("instance request decoded incorrectly: %+v; body=%s", decodedMutation, createBody)
 	}
