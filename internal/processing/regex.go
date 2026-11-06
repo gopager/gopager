@@ -20,7 +20,7 @@ const (
 	maxRegexInsts        = 20_000
 	maxRegexNFABytes     = 32 << 20
 	regexCallBudget      = time.Second
-	regexCancelInterval  = 256
+	regexCancelInterval  = 16
 )
 
 // RegexCapture is one named capture group of a match. Index is the group's position in
@@ -165,7 +165,9 @@ func estimateRegexInsts(re *syntax.Regexp) int64 {
 	}
 }
 
-// cancellableReader checks its context periodically so regexp stops reading after cancellation.
+// cancellableReader checks its context every regexCancelInterval runes so regexp stops reading
+// after cancellation. The interval is small because one rune of a near-limit pattern can cost
+// milliseconds of NFA work; a coarse interval let a call overrun its budget by up to half a second.
 type cancellableReader struct {
 	ctx    context.Context
 	source io.RuneReader

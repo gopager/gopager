@@ -20,8 +20,9 @@ import (
 // the current Assignment revision for lease (at most one minute) from now. Claiming
 // increments the attempt count and fencing token.
 // The bool is false when no scope is claimable, including when the chosen scope is locked
-// by another worker or has used its five attempts (it is then marked failed with
-// RETRY_LIMIT).
+// by another worker or has used its five attempts. A scope with no attempt left is marked
+// failed with RETRY_LIMIT and reported through the returned lease (Exhausted set, ID,
+// Reason and Attempts filled) so the caller records the final failure fact.
 func (s *Store) ClaimCorrection(ctx context.Context, tx platform.TransactionContext, now time.Time,
 	lease time.Duration,
 ) (assignments.CorrectionLease, bool, error) {
@@ -56,8 +57,9 @@ func (s *Store) ClaimCorrection(ctx context.Context, tx platform.TransactionCont
 	}
 	var attempts int
 	var fencing int64
-	if err := executor.QueryRowContext(ctx, `SELECT attempts,fencing_token FROM assignment_pending_scopes
-		WHERE id=$1`, id).Scan(&attempts, &fencing); err != nil {
+	var reason string
+	if err := executor.QueryRowContext(ctx, `SELECT attempts,fencing_token,reason FROM assignment_pending_scopes
+		WHERE id=$1`, id).Scan(&attempts, &fencing, &reason); err != nil {
 		return assignments.CorrectionLease{}, false, err
 	}
 	if attempts >= 5 {
@@ -65,7 +67,7 @@ func (s *Store) ClaimCorrection(ctx context.Context, tx platform.TransactionCont
 			SET state='failed',lease_until=NULL,failure_code='RETRY_LIMIT' WHERE id=$1`, id); err != nil {
 			return assignments.CorrectionLease{}, false, err
 		}
-		return assignments.CorrectionLease{}, false, nil
+		return assignments.CorrectionLease{ID: id, Reason: reason, Attempts: attempts, Exhausted: true}, false, nil
 	}
 	if fencing == int64(^uint64(0)>>1) {
 		return assignments.CorrectionLease{}, false, platform.NewFailure(platform.CodeResourceLimit, errors.New("correction fencing token exhausted"))

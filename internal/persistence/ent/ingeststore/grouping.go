@@ -10,12 +10,40 @@ import (
 	"github.com/gopager/gopager/internal/platform/postgres"
 )
 
+// lockCandidateTransmissions row-locks every Transmission of the Messages that could be merge
+// candidates (same payload identity, bounds within the window), in id order. The merge later
+// reassigns all Transmissions of the absorbed Messages, and the worker and the correction batch
+// lock a Transmission before its Message, so taking the Transmission locks first keeps the one
+// documented order (Transmission, then Message) and avoids a lock-order deadlock. The caller holds
+// the payload-identity lock, which keeps the Messages' bounds and membership stable for this identity.
+func lockCandidateTransmissions(ctx context.Context, executor postgres.Executor, window int64,
+	submission ingest.ValidatedSubmission) error {
+	rows, err := executor.QueryContext(ctx, `SELECT t.id FROM transmissions t
+		WHERE t.message_id IN (SELECT m.id FROM messages m
+			WHERE m.identity_form=$1 AND m.identity_subtype=$2 AND m.identity_value=$3
+			AND m.last_observed_at >= $4::timestamptz - make_interval(secs => $5::double precision)
+			AND m.first_observed_at <= $4::timestamptz + make_interval(secs => $5::double precision))
+		ORDER BY t.id FOR UPDATE OF t`,
+		submission.Identity.Form, submission.Identity.Subtype, submission.Identity.Value,
+		submission.ObservedAt, window)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+	}
+	return rows.Err()
+}
+
 // groupCandidates loads, and row-locks, the Messages with the submission's payload identity that
 // have a member inside the inclusive grouping window, together with those members' observation
 // times. The Message bounds pre-filter through messages_identity; the member lookup is a range
 // on transmissions.observed_at so no per-row arithmetic defeats the index.
 func groupCandidates(ctx context.Context, executor postgres.Executor, window int64,
 	submission ingest.ValidatedSubmission) ([]messages.ExistingMessage, error) {
+	if err := lockCandidateTransmissions(ctx, executor, window, submission); err != nil {
+		return nil, err
+	}
 	rows, err := executor.QueryContext(ctx, `SELECT m.id, t.id, t.observed_at
 		FROM messages m JOIN transmissions t ON t.message_id=m.id
 		WHERE m.identity_form=$1 AND m.identity_subtype=$2 AND m.identity_value=$3

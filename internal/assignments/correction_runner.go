@@ -19,6 +19,7 @@ const (
 	correctionLease     = 30 * time.Second
 	correctionPoll      = 500 * time.Millisecond
 	correctionMaxRetry  = 30 * time.Second
+	retryLimitCode      = "RETRY_LIMIT"
 )
 
 // CorrectionMatcher re-matches stored targets against current rules inside the
@@ -115,7 +116,9 @@ func correctionRetryDelay(failures int) time.Duration {
 // with exponential backoff and is not returned; RunOnce returns an error only
 // when it cannot claim or reschedule. A reschedule failure is joined ahead of
 // the batch failure, so FailureCode reports why the scope could not be
-// rescheduled. The bool reports whether any work was done.
+// rescheduled. A claim that finds a scope with no attempt left (its fifth lease expired) fails it
+// and appends its correction.failed fact in the claim transaction; that counts as work. The bool
+// reports whether any work was done.
 func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 	var lease CorrectionLease
 	var claimed bool
@@ -125,10 +128,16 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 			return err
 		}
 		lease, claimed, err = r.repository.ClaimCorrection(tx.Context(), tx, now, correctionLease)
-		return err
+		if err != nil || !lease.Exhausted {
+			return err
+		}
+		return r.appendFailed(tx, lease, retryLimitCode)
 	})
 	if err != nil {
 		return false, err
+	}
+	if lease.Exhausted {
+		return true, nil
 	}
 	if !claimed {
 		return false, nil
@@ -216,17 +225,23 @@ func (r *CorrectionRunner) fail(ctx context.Context, lease CorrectionLease, code
 		if err != nil || !final {
 			return err
 		}
-		now, err := r.clock.Now(tx.Context(), tx)
-		if err != nil {
-			return err
-		}
-		_, err = r.facts.AppendCorrectionFact(tx.Context(), tx, events.CorrectionFact{
-			ID: uuid.New(), Type: "correction.failed",
-			Aggregate: events.EntityRef{Type: "correction", ID: lease.ID},
-			Revision:  int64(lease.Attempts), OccurredAt: now, Reason: lease.Reason, FailureCode: code,
-		})
-		return err
+		return r.appendFailed(tx, lease, code)
 	})
+}
+
+// appendFailed appends the final-failure fact in the caller's transaction, so the fact commits with
+// the scope's failed state.
+func (r *CorrectionRunner) appendFailed(tx platform.TransactionContext, lease CorrectionLease, code string) error {
+	now, err := r.clock.Now(tx.Context(), tx)
+	if err != nil {
+		return err
+	}
+	_, err = r.facts.AppendCorrectionFact(tx.Context(), tx, events.CorrectionFact{
+		ID: uuid.New(), Type: "correction.failed",
+		Aggregate: events.EntityRef{Type: "correction", ID: lease.ID},
+		Revision:  int64(lease.Attempts), OccurredAt: now, Reason: lease.Reason, FailureCode: code,
+	})
+	return err
 }
 
 func correctionBackoff(attempt int) time.Duration {
