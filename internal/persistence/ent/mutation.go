@@ -4246,6 +4246,8 @@ type ConsumerOffsetMutation struct {
 	op            Op
 	typ           string
 	id            *string
+	last_tx_id    *uint64
+	addlast_tx_id *int64
 	last_seq      *int64
 	addlast_seq   *int64
 	updated_at    *time.Time
@@ -4357,6 +4359,62 @@ func (m *ConsumerOffsetMutation) IDs(ctx context.Context) ([]string, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetLastTxID sets the "last_tx_id" field.
+func (m *ConsumerOffsetMutation) SetLastTxID(u uint64) {
+	m.last_tx_id = &u
+	m.addlast_tx_id = nil
+}
+
+// LastTxID returns the value of the "last_tx_id" field in the mutation.
+func (m *ConsumerOffsetMutation) LastTxID() (r uint64, exists bool) {
+	v := m.last_tx_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastTxID returns the old "last_tx_id" field's value of the ConsumerOffset entity.
+// If the ConsumerOffset object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ConsumerOffsetMutation) OldLastTxID(ctx context.Context) (v uint64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastTxID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastTxID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastTxID: %w", err)
+	}
+	return oldValue.LastTxID, nil
+}
+
+// AddLastTxID adds u to the "last_tx_id" field.
+func (m *ConsumerOffsetMutation) AddLastTxID(u int64) {
+	if m.addlast_tx_id != nil {
+		*m.addlast_tx_id += u
+	} else {
+		m.addlast_tx_id = &u
+	}
+}
+
+// AddedLastTxID returns the value that was added to the "last_tx_id" field in this mutation.
+func (m *ConsumerOffsetMutation) AddedLastTxID() (r int64, exists bool) {
+	v := m.addlast_tx_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetLastTxID resets all changes to the "last_tx_id" field.
+func (m *ConsumerOffsetMutation) ResetLastTxID() {
+	m.last_tx_id = nil
+	m.addlast_tx_id = nil
 }
 
 // SetLastSeq sets the "last_seq" field.
@@ -4485,7 +4543,10 @@ func (m *ConsumerOffsetMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ConsumerOffsetMutation) Fields() []string {
-	fields := make([]string, 0, 2)
+	fields := make([]string, 0, 3)
+	if m.last_tx_id != nil {
+		fields = append(fields, consumeroffset.FieldLastTxID)
+	}
 	if m.last_seq != nil {
 		fields = append(fields, consumeroffset.FieldLastSeq)
 	}
@@ -4500,6 +4561,8 @@ func (m *ConsumerOffsetMutation) Fields() []string {
 // schema.
 func (m *ConsumerOffsetMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case consumeroffset.FieldLastTxID:
+		return m.LastTxID()
 	case consumeroffset.FieldLastSeq:
 		return m.LastSeq()
 	case consumeroffset.FieldUpdatedAt:
@@ -4513,6 +4576,8 @@ func (m *ConsumerOffsetMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *ConsumerOffsetMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case consumeroffset.FieldLastTxID:
+		return m.OldLastTxID(ctx)
 	case consumeroffset.FieldLastSeq:
 		return m.OldLastSeq(ctx)
 	case consumeroffset.FieldUpdatedAt:
@@ -4526,6 +4591,13 @@ func (m *ConsumerOffsetMutation) OldField(ctx context.Context, name string) (ent
 // type.
 func (m *ConsumerOffsetMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case consumeroffset.FieldLastTxID:
+		v, ok := value.(uint64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastTxID(v)
+		return nil
 	case consumeroffset.FieldLastSeq:
 		v, ok := value.(int64)
 		if !ok {
@@ -4548,6 +4620,9 @@ func (m *ConsumerOffsetMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *ConsumerOffsetMutation) AddedFields() []string {
 	var fields []string
+	if m.addlast_tx_id != nil {
+		fields = append(fields, consumeroffset.FieldLastTxID)
+	}
 	if m.addlast_seq != nil {
 		fields = append(fields, consumeroffset.FieldLastSeq)
 	}
@@ -4559,6 +4634,8 @@ func (m *ConsumerOffsetMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *ConsumerOffsetMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case consumeroffset.FieldLastTxID:
+		return m.AddedLastTxID()
 	case consumeroffset.FieldLastSeq:
 		return m.AddedLastSeq()
 	}
@@ -4570,6 +4647,13 @@ func (m *ConsumerOffsetMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *ConsumerOffsetMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case consumeroffset.FieldLastTxID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddLastTxID(v)
+		return nil
 	case consumeroffset.FieldLastSeq:
 		v, ok := value.(int64)
 		if !ok {
@@ -4604,6 +4688,9 @@ func (m *ConsumerOffsetMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *ConsumerOffsetMutation) ResetField(name string) error {
 	switch name {
+	case consumeroffset.FieldLastTxID:
+		m.ResetLastTxID()
+		return nil
 	case consumeroffset.FieldLastSeq:
 		m.ResetLastSeq()
 		return nil

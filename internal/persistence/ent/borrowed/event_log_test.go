@@ -86,7 +86,7 @@ func commitFixtureFacts(t *testing.T, store *postgres.Store, s *eventstore.Store
 }
 
 // readLog reads one page of the log in a fresh transaction.
-func readLog(t *testing.T, store *postgres.Store, s *eventstore.Store, after int64, limit int) []events.Record {
+func readLog(t *testing.T, store *postgres.Store, s *eventstore.Store, after events.Position, limit int) []events.Record {
 	t.Helper()
 	var records []events.Record
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) (err error) {
@@ -246,14 +246,14 @@ func TestEventLogReadAfterNeverSkipsAnUncommittedLowerSeq(t *testing.T) {
 		}
 		// Transaction B takes a higher seq and commits first.
 		commitFixtureFacts(t, store, s, second)
-		if got := readLog(t, store, s, 0, 10); len(got) != 0 {
+		if got := readLog(t, store, s, events.Position{}, 10); len(got) != 0 {
 			t.Fatalf("reader saw %d records beyond an uncommitted lower seq: %v", len(got), recordIDs(got))
 		}
 		return nil
 	}); err != nil {
 		t.Fatal(err)
 	}
-	got := readLog(t, store, s, 0, 10)
+	got := readLog(t, store, s, events.Position{}, 10)
 	if want := []uuid.UUID{first, second}; !slices.Equal(recordIDs(got), want) {
 		t.Fatalf("after commit got %v, want %v in seq order", recordIDs(got), want)
 	}
@@ -272,7 +272,7 @@ func TestEventLogReadAfterRespectsLastSeqAndLimit(t *testing.T) {
 	for _, id := range ids {
 		commitFixtureFacts(t, store, s, id)
 	}
-	page := readLog(t, store, s, 0, 2)
+	page := readLog(t, store, s, events.Position{}, 2)
 	if !slices.Equal(recordIDs(page), ids[:2]) {
 		t.Fatalf("limit page got %v, want %v", recordIDs(page), ids[:2])
 	}
@@ -280,15 +280,15 @@ func TestEventLogReadAfterRespectsLastSeqAndLimit(t *testing.T) {
 	if first.Type != string(events.PrincipalAccessChanged) || first.OccurredAt.IsZero() || len(first.Envelope) == 0 {
 		t.Fatalf("record fields not populated: %+v", first)
 	}
-	next := readLog(t, store, s, page[1].Seq, 10)
+	next := readLog(t, store, s, page[1].Position(), 10)
 	if !slices.Equal(recordIDs(next), ids[2:]) {
-		t.Fatalf("resume after seq %d got %v, want %v", page[1].Seq, recordIDs(next), ids[2:])
+		t.Fatalf("resume after %+v got %v, want %v", page[1].Position(), recordIDs(next), ids[2:])
 	}
-	if got := readLog(t, store, s, next[1].Seq, 10); len(got) != 0 {
+	if got := readLog(t, store, s, next[1].Position(), 10); len(got) != 0 {
 		t.Fatalf("read past the end returned %v", recordIDs(got))
 	}
 	err = store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		_, err := s.ReadAfter(tx.Context(), tx, 0, 0)
+		_, err := s.ReadAfter(tx.Context(), tx, events.Position{}, 0)
 		return err
 	})
 	if platform.FailureCode(err) != platform.CodeInvalidInput {
@@ -302,7 +302,7 @@ func TestConsumerOffsetRoundTripAndNeverMovesBackwards(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	offset := func(consumer string) (got int64) {
+	offset := func(consumer string) (got events.Position) {
 		t.Helper()
 		if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) (err error) {
 			got, err = s.Offset(tx.Context(), tx, consumer)
@@ -312,39 +312,44 @@ func TestConsumerOffsetRoundTripAndNeverMovesBackwards(t *testing.T) {
 		}
 		return got
 	}
-	advance := func(consumer string, seq int64) error {
+	advance := func(consumer string, position events.Position) error {
 		return store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-			return s.Advance(tx.Context(), tx, consumer, seq)
+			return s.Advance(tx.Context(), tx, consumer, position)
 		})
 	}
-	if got := offset("projection"); got != 0 {
-		t.Fatalf("unknown consumer offset = %d, want 0", got)
+	if got := offset("projection"); got != (events.Position{}) {
+		t.Fatalf("unknown consumer offset = %+v, want zero", got)
 	}
-	for _, step := range []struct{ advance, want int64 }{{5, 5}, {9, 9}, {3, 9}, {9, 9}} {
+	// The order is (TxID, Seq): a higher TxID wins even with a lower Seq.
+	p := func(txID uint64, seq int64) events.Position { return events.Position{TxID: txID, Seq: seq} }
+	for _, step := range []struct{ advance, want events.Position }{
+		{p(5, 5), p(5, 5)}, {p(5, 9), p(5, 9)}, {p(5, 3), p(5, 9)}, {p(4, 99), p(5, 9)},
+		{p(5, 9), p(5, 9)}, {p(7, 2), p(7, 2)}, {p(6, 50), p(7, 2)},
+	} {
 		if err := advance("projection", step.advance); err != nil {
-			t.Fatalf("advance to %d: %v", step.advance, err)
+			t.Fatalf("advance to %+v: %v", step.advance, err)
 		}
 		if got := offset("projection"); got != step.want {
-			t.Fatalf("after advance to %d offset = %d, want %d", step.advance, got, step.want)
+			t.Fatalf("after advance to %+v offset = %+v, want %+v", step.advance, got, step.want)
 		}
 	}
-	if got := offset("other"); got != 0 {
-		t.Fatalf("consumers share an offset: %d", got)
+	if got := offset("other"); got != (events.Position{}) {
+		t.Fatalf("consumers share an offset: %+v", got)
 	}
-	if err := advance("projection", -1); platform.FailureCode(err) != platform.CodeInvalidInput {
+	if err := advance("projection", p(8, -1)); platform.FailureCode(err) != platform.CodeInvalidInput {
 		t.Fatalf("negative seq accepted: %v", err)
 	}
 	abort := errors.New("abort after advance")
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		if err := s.Advance(tx.Context(), tx, "projection", 50); err != nil {
+		if err := s.Advance(tx.Context(), tx, "projection", p(50, 50)); err != nil {
 			return err
 		}
 		return abort
 	}); !errors.Is(err, abort) {
 		t.Fatalf("caller abort lost: %v", err)
 	}
-	if got := offset("projection"); got != 9 {
-		t.Fatalf("rolled-back advance persisted: %d", got)
+	if got := offset("projection"); got != p(7, 2) {
+		t.Fatalf("rolled-back advance persisted: %+v", got)
 	}
 }
 
@@ -407,5 +412,61 @@ func TestEventLogAppendNotifiesAfterCommit(t *testing.T) {
 		if notification.Payload == rolledBackSeq {
 			t.Fatalf("rolled-back append was announced: %v", received)
 		}
+	}
+}
+
+// TestEventLogReadAfterNeverSkipsALowerSeqOfAHigherTransaction reproduces the reversed-xid
+// interleaving: transaction T takes the lower xid (early write), transaction X then takes the
+// higher xid and appends the lower seq and stays open, T appends the higher seq and commits.
+// A consumer that read and advanced in that window must still receive X's fact once it commits.
+func TestEventLogReadAfterNeverSkipsALowerSeqOfAHigherTransaction(t *testing.T) {
+	store := newStore(t)
+	s, err := eventstore.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lowerSeq, higherSeq := uuid.New(), uuid.New()
+	tHasXID, xAppended, tCommitted := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	tDone := make(chan error, 1)
+	go func() {
+		tDone <- store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+			executor, err := store.Resolve(tx)
+			if err != nil {
+				return err
+			}
+			var xid string
+			if err := executor.QueryRowContext(tx.Context(), "SELECT pg_current_xact_id()::text").Scan(&xid); err != nil {
+				return err
+			}
+			close(tHasXID)
+			<-xAppended
+			return appendFixtureFact(store, s, tx, higherSeq)
+		})
+		close(tCommitted)
+	}()
+	<-tHasXID
+	var delivered []uuid.UUID
+	var cursor events.Position
+	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		if err := appendFixtureFact(store, s, tx, lowerSeq); err != nil {
+			return err
+		}
+		close(xAppended)
+		<-tCommitted
+		got := readLog(t, store, s, cursor, 10)
+		delivered = append(delivered, recordIDs(got)...)
+		if len(got) > 0 {
+			cursor = got[len(got)-1].Position()
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-tDone; err != nil {
+		t.Fatal(err)
+	}
+	delivered = append(delivered, recordIDs(readLog(t, store, s, cursor, 10))...)
+	if !slices.Contains(delivered, lowerSeq) || !slices.Contains(delivered, higherSeq) {
+		t.Fatalf("consumer lost a fact: delivered %v, want both %v and %v", delivered, lowerSeq, higherSeq)
 	}
 }

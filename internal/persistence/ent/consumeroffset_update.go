@@ -29,6 +29,27 @@ func (_u *ConsumerOffsetUpdate) Where(ps ...predicate.ConsumerOffset) *ConsumerO
 	return _u
 }
 
+// SetLastTxID sets the "last_tx_id" field.
+func (_u *ConsumerOffsetUpdate) SetLastTxID(v uint64) *ConsumerOffsetUpdate {
+	_u.mutation.ResetLastTxID()
+	_u.mutation.SetLastTxID(v)
+	return _u
+}
+
+// SetNillableLastTxID sets the "last_tx_id" field if the given value is not nil.
+func (_u *ConsumerOffsetUpdate) SetNillableLastTxID(v *uint64) *ConsumerOffsetUpdate {
+	if v != nil {
+		_u.SetLastTxID(*v)
+	}
+	return _u
+}
+
+// AddLastTxID adds value to the "last_tx_id" field.
+func (_u *ConsumerOffsetUpdate) AddLastTxID(v int64) *ConsumerOffsetUpdate {
+	_u.mutation.AddLastTxID(v)
+	return _u
+}
+
 // SetLastSeq sets the "last_seq" field.
 func (_u *ConsumerOffsetUpdate) SetLastSeq(v int64) *ConsumerOffsetUpdate {
 	_u.mutation.ResetLastSeq()
@@ -124,6 +145,12 @@ func (_u *ConsumerOffsetUpdate) sqlSave(ctx context.Context) (_node int, err err
 			}
 		}
 	}
+	if value, ok := _u.mutation.LastTxID(); ok {
+		_spec.SetField(consumeroffset.FieldLastTxID, field.TypeUint64, value)
+	}
+	if value, ok := _u.mutation.AddedLastTxID(); ok {
+		_spec.AddField(consumeroffset.FieldLastTxID, field.TypeUint64, value)
+	}
 	if value, ok := _u.mutation.LastSeq(); ok {
 		_spec.SetField(consumeroffset.FieldLastSeq, field.TypeInt64, value)
 	}
@@ -153,6 +180,27 @@ type ConsumerOffsetUpdateOne struct {
 	hooks     []Hook
 	mutation  *ConsumerOffsetMutation
 	modifiers []func(*sql.UpdateBuilder)
+}
+
+// SetLastTxID sets the "last_tx_id" field.
+func (_u *ConsumerOffsetUpdateOne) SetLastTxID(v uint64) *ConsumerOffsetUpdateOne {
+	_u.mutation.ResetLastTxID()
+	_u.mutation.SetLastTxID(v)
+	return _u
+}
+
+// SetNillableLastTxID sets the "last_tx_id" field if the given value is not nil.
+func (_u *ConsumerOffsetUpdateOne) SetNillableLastTxID(v *uint64) *ConsumerOffsetUpdateOne {
+	if v != nil {
+		_u.SetLastTxID(*v)
+	}
+	return _u
+}
+
+// AddLastTxID adds value to the "last_tx_id" field.
+func (_u *ConsumerOffsetUpdateOne) AddLastTxID(v int64) *ConsumerOffsetUpdateOne {
+	_u.mutation.AddLastTxID(v)
+	return _u
 }
 
 // SetLastSeq sets the "last_seq" field.
@@ -279,6 +327,12 @@ func (_u *ConsumerOffsetUpdateOne) sqlSave(ctx context.Context) (_node *Consumer
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.LastTxID(); ok {
+		_spec.SetField(consumeroffset.FieldLastTxID, field.TypeUint64, value)
+	}
+	if value, ok := _u.mutation.AddedLastTxID(); ok {
+		_spec.AddField(consumeroffset.FieldLastTxID, field.TypeUint64, value)
 	}
 	if value, ok := _u.mutation.LastSeq(); ok {
 		_spec.SetField(consumeroffset.FieldLastSeq, field.TypeInt64, value)

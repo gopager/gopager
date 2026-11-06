@@ -64,6 +64,11 @@ func IDContainsFold(id string) predicate.ConsumerOffset {
 	return predicate.ConsumerOffset(sql.FieldContainsFold(FieldID, id))
 }
 
+// LastTxID applies equality check predicate on the "last_tx_id" field. It's identical to LastTxIDEQ.
+func LastTxID(v uint64) predicate.ConsumerOffset {
+	return predicate.ConsumerOffset(sql.FieldEQ(FieldLastTxID, v))
+}
+
 // LastSeq applies equality check predicate on the "last_seq" field. It's identical to LastSeqEQ.
 func LastSeq(v int64) predicate.ConsumerOffset {
 	return predicate.ConsumerOffset(sql.FieldEQ(FieldLastSeq, v))
@@ -72,6 +77,46 @@ func LastSeq(v int64) predicate.ConsumerOffset {
 // UpdatedAt applies equality check predicate on the "updated_at" field. It's identical to UpdatedAtEQ.
 func UpdatedAt(v time.Time) predicate.ConsumerOffset {
 	return predicate.ConsumerOffset(sql.FieldEQ(FieldUpdatedAt, v))
+}
+
+// LastTxIDEQ applies the EQ predicate on the "last_tx_id" field.
+func LastTxIDEQ(v uint64) predicate.ConsumerOffset {
+	return predicate.ConsumerOffset(sql.FieldEQ(FieldLastTxID, v))
+}
+
+// LastTxIDNEQ applies the NEQ predicate on the "last_tx_id" field.
+func LastTxIDNEQ(v uint64) predicate.ConsumerOffset {
+	return predicate.ConsumerOffset(sql.FieldNEQ(FieldLastTxID, v))
+}
+
+// LastTxIDIn applies the In predicate on the "last_tx_id" field.
+func LastTxIDIn(vs ...uint64) predicate.ConsumerOffset {
+	return predicate.ConsumerOffset(sql.FieldIn(FieldLastTxID, vs...))
+}
+
+// LastTxIDNotIn applies the NotIn predicate on the "last_tx_id" field.
+func LastTxIDNotIn(vs ...uint64) predicate.ConsumerOffset {
+	return predicate.ConsumerOffset(sql.FieldNotIn(FieldLastTxID, vs...))
+}
+
+// LastTxIDGT applies the GT predicate on the "last_tx_id" field.
+func LastTxIDGT(v uint64) predicate.ConsumerOffset {
+	return predicate.ConsumerOffset(sql.FieldGT(FieldLastTxID, v))
+}
+
+// LastTxIDGTE applies the GTE predicate on the "last_tx_id" field.
+func LastTxIDGTE(v uint64) predicate.ConsumerOffset {
+	return predicate.ConsumerOffset(sql.FieldGTE(FieldLastTxID, v))
+}
+
+// LastTxIDLT applies the LT predicate on the "last_tx_id" field.
+func LastTxIDLT(v uint64) predicate.ConsumerOffset {
+	return predicate.ConsumerOffset(sql.FieldLT(FieldLastTxID, v))
+}
+
+// LastTxIDLTE applies the LTE predicate on the "last_tx_id" field.
+func LastTxIDLTE(v uint64) predicate.ConsumerOffset {
+	return predicate.ConsumerOffset(sql.FieldLTE(FieldLastTxID, v))
 }
 
 // LastSeqEQ applies the EQ predicate on the "last_seq" field.

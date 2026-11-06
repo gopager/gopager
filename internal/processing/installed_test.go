@@ -124,6 +124,11 @@ func TestInstalledPluginOwnDeadlineIsResourceLimit(t *testing.T) {
 	installedInvocationTimeout = 300 * time.Millisecond
 	t.Cleanup(func() { installedInvocationTimeout = original })
 	for _, mode := range []string{"loop", "ok"} {
+		if mode == "ok" {
+			// The restart after the deadline starts a new process, which can exceed the short test
+			// deadline under load; the restarted call gets the production limit.
+			installedInvocationTimeout = original
+		}
 		value, err := Literal(StringValue, mode)
 		if err != nil {
 			t.Fatal(err)

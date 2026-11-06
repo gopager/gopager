@@ -175,6 +175,7 @@ var schemaGraph = func() *sqlgraph.Schema {
 		},
 		Type: "ConsumerOffset",
 		Fields: map[string]*sqlgraph.FieldSpec{
+			consumeroffset.FieldLastTxID:  {Type: field.TypeUint64, Column: consumeroffset.FieldLastTxID},
 			consumeroffset.FieldLastSeq:   {Type: field.TypeInt64, Column: consumeroffset.FieldLastSeq},
 			consumeroffset.FieldUpdatedAt: {Type: field.TypeTime, Column: consumeroffset.FieldUpdatedAt},
 		},
@@ -1529,6 +1530,11 @@ func (f *ConsumerOffsetFilter) Where(p entql.P) {
 // WhereID applies the entql string predicate on the id field.
 func (f *ConsumerOffsetFilter) WhereID(p entql.StringP) {
 	f.Where(p.Field(consumeroffset.FieldID))
+}
+
+// WhereLastTxID applies the entql uint64 predicate on the last_tx_id field.
+func (f *ConsumerOffsetFilter) WhereLastTxID(p entql.Uint64P) {
+	f.Where(p.Field(consumeroffset.FieldLastTxID))
 }
 
 // WhereLastSeq applies the entql int64 predicate on the last_seq field.
