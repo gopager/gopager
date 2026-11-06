@@ -10,6 +10,7 @@ import (
 )
 
 func TestWorkflowComputeBudgetAccumulatesWithoutGuestWaitReset(t *testing.T) {
+	t.Parallel()
 	budget := &executionBudget{}
 	budget.startCompute(context.Background(), time.Second)
 	defer budget.closeCompute()
@@ -35,6 +36,7 @@ func TestWorkflowComputeBudgetAccumulatesWithoutGuestWaitReset(t *testing.T) {
 }
 
 func TestWorkflowComputeBudgetPreservesCallerCancellationDuringGuest(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	budget := &executionBudget{}
@@ -51,16 +53,19 @@ func TestWorkflowComputeBudgetPreservesCallerCancellationDuringGuest(t *testing.
 }
 
 func TestWorkflowComputeBudgetExcludesActualElapsedGuestWait(t *testing.T) {
+	t.Parallel()
+	// The allowance is larger than the margin a loaded machine can steal between resuming and checking.
+	const allowance = time.Second
 	budget := &executionBudget{}
-	budget.startCompute(context.Background(), 200*time.Millisecond)
+	budget.startCompute(context.Background(), allowance)
 	defer budget.closeCompute()
 	if err := budget.guestWait(func(ctx context.Context) error {
-		time.Sleep(1100 * time.Millisecond)
+		time.Sleep(allowance + 500*time.Millisecond)
 		return ctx.Err()
 	}); err != nil || budget.computeContext().Err() != nil {
 		t.Fatalf("elapsed guest wait canceled resumed host compute: %v", err)
 	}
-	if budget.remaining <= 0 || budget.remaining > 200*time.Millisecond {
+	if budget.remaining <= 0 || budget.remaining > allowance {
 		t.Fatalf("guest wait renewed/exhausted host allowance: %s", budget.remaining)
 	}
 	<-budget.computeContext().Done()
@@ -70,6 +75,7 @@ func TestWorkflowComputeBudgetExcludesActualElapsedGuestWait(t *testing.T) {
 }
 
 func TestWorkflowComputeBudgetExpiryIsExplicitResourceLimit(t *testing.T) {
+	t.Parallel()
 	budget := &executionBudget{}
 	budget.startCompute(context.Background(), time.Nanosecond)
 	defer budget.closeCompute()
@@ -92,7 +98,7 @@ func TestWorkflowComputeBudgetExpiryIsExplicitResourceLimit(t *testing.T) {
 	}
 }
 
-func TestWorkflowEvaluationComputeExhaustionAndCallerCancellation(t *testing.T) {
+func TestWorkflowEvaluationComputeExhaustionAndCallerCancellation(t *testing.T) { //nolint:paralleltest // swaps the package variable computeAllowance
 	_, source := sourceFixture(t)
 	program, err := CompileWorkflow(context.Background(), selectedDefinition(), source, nil)
 	if err != nil {
@@ -114,4 +120,13 @@ func TestWorkflowEvaluationComputeExhaustionAndCallerCancellation(t *testing.T) 
 	if result, err := program.Evaluate(context.Background(), source); err != nil || !result.Selected {
 		t.Fatalf("evaluation after restored allowance failed: %+v, %v", result, err)
 	}
+}
+
+// withoutWallClockBounds lifts the compute and predicate time bounds for a serial test that
+// asserts size limits, so CPU contention from other test packages cannot decide its outcome.
+func withoutWallClockBounds(t *testing.T) {
+	t.Helper()
+	allowance, timeout := computeAllowance, predicateTimeout
+	computeAllowance, predicateTimeout = time.Minute, time.Minute
+	t.Cleanup(func() { computeAllowance, predicateTimeout = allowance, timeout })
 }

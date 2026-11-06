@@ -17,6 +17,10 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
+// predicateTimeout bounds one predicate evaluation. It is a variable only so that tests of the
+// input-size limits are not decided by CPU contention; production code never changes it.
+var predicateTimeout = time.Second
+
 // FieldRef names an explicitly declared field, never executable expression text.
 type FieldRef struct {
 	Namespace string   `json:"namespace"`
@@ -348,7 +352,7 @@ func (p *PredicateProgram) Evaluate(ctx context.Context, reader FieldReader) (bo
 	if p == nil || p.program == nil || reader == nil || ctx == nil {
 		return false, invalid(errors.New("missing predicate program/reader/context"))
 	}
-	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	ctx, cancel := context.WithTimeout(ctx, predicateTimeout)
 	defer cancel()
 	input := make(map[string]any, len(p.fields)*2)
 	encodedSize := 0

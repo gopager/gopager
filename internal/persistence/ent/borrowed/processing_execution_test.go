@@ -165,20 +165,23 @@ func provisionExecutionFixture(t *testing.T, root *os.Root, supportsPreview bool
 }
 
 func TestProcessingExecutionCurrentAuthorityAndArtifactLifetime(t *testing.T) {
-	f := newMatcherFixture(t)
-	repository, err := processingstore.New(f.store)
-	if err != nil {
-		t.Fatal(err)
-	}
-	host := processing.NewPluginHost()
-	t.Cleanup(func() {
-		if err := host.Close(context.Background()); err != nil {
-			t.Error(err)
-		}
-	})
+	t.Parallel()
 	for _, name := range []string{"main", "preview", "preview-unsupported", "invalid-artifact", "source-denied",
 		"global-hidden", "changed-revision", "principal-revoked", "editor-revoked", "stop"} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			// Several cases revoke grants or change revisions, so each owns its database and host.
+			f := newMatcherFixture(t)
+			repository, err := processingstore.New(f.store)
+			if err != nil {
+				t.Fatal(err)
+			}
+			host := processing.NewPluginHost()
+			t.Cleanup(func() {
+				if err := host.Close(context.Background()); err != nil {
+					t.Error(err)
+				}
+			})
 			root, err := os.OpenRoot(t.TempDir())
 			if err != nil {
 				t.Fatal(err)

@@ -49,6 +49,7 @@ func (a blockedArtifacts) PrepareInstalled(ctx context.Context, _ uuid.UUID, _ i
 }
 
 func TestRunToleratesTransientRenewalFailureInsideLease(t *testing.T) {
+	t.Parallel()
 	failure := func(code platform.ErrorCode) error { return platform.NewFailure(code, errors.New("renewal failed")) }
 	for _, test := range []struct {
 		name         string
@@ -65,6 +66,7 @@ func TestRunToleratesTransientRenewalFailureInsideLease(t *testing.T) {
 			failure(platform.CodeStorageUnavailable), failure(platform.CodeStorageUnavailable)}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			synctest.Test(t, func(t *testing.T) {
 				now := time.Now().UTC()
 				candidate := processing.Candidate{ID: uuid.New(), Revision: 1, State: "pending",

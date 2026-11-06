@@ -14,6 +14,7 @@ import (
 )
 
 func TestProjectProcessingSourcePreservesOriginalTargetContexts(t *testing.T) {
+	t.Parallel()
 	var payload protocols.TransmissionPayload
 	if err := json.Unmarshal([]byte(`{"form":"numeric","value":"123"}`), &payload); err != nil {
 		t.Fatal(err)

@@ -122,6 +122,7 @@ func (a *ingestTestProcessingAppender) AppendProcessingCompletion(ctx context.Co
 }
 
 func TestGatewayCredentialCutoverStateAndNetworkReplacement(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	facts, err := eventstore.New(store)
 	if err != nil {
@@ -246,6 +247,7 @@ func TestGatewayCredentialCutoverStateAndNetworkReplacement(t *testing.T) {
 }
 
 func TestTransmissionGroupingMergeRollbackAndOffsetPersistence(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	facts, err := eventstore.New(store)
 	if err != nil {
@@ -418,6 +420,7 @@ func TestTransmissionGroupingMergeRollbackAndOffsetPersistence(t *testing.T) {
 }
 
 func TestTransmissionAcceptanceRollsBackAtEachParticipant(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name, table, timing string
 		selectedWorkflow    bool
@@ -431,6 +434,7 @@ func TestTransmissionAcceptanceRollsBackAtEachParticipant(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			store := newStore(t)
 			facts, err := eventstore.New(store)
 			if err != nil {
@@ -568,6 +572,7 @@ func TestTransmissionAcceptanceRollsBackAtEachParticipant(t *testing.T) {
 }
 
 func TestConcurrentTransmissionReceiptsAreIdempotent(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	facts, err := eventstore.New(store)
 	if err != nil {
@@ -740,6 +745,7 @@ func TestConcurrentTransmissionReceiptsAreIdempotent(t *testing.T) {
 }
 
 func TestSubmissionRetryAfterKnownRollbackAndLostCommitAcknowledgment(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	facts, err := eventstore.New(store)
 	if err != nil {
@@ -873,6 +879,7 @@ func TestSubmissionRetryAfterKnownRollbackAndLostCommitAcknowledgment(t *testing
 }
 
 func TestSelectedWorkflowKeepsProcessingPending(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	facts, err := eventstore.New(store)
 	if err != nil {
@@ -977,6 +984,7 @@ func TestSelectedWorkflowKeepsProcessingPending(t *testing.T) {
 }
 
 func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	facts, err := eventstore.New(store)
 	if err != nil {

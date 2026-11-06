@@ -61,6 +61,7 @@ func selectedDefinition() Definition {
 }
 
 func TestWorkflowScopedEvaluationSkipsExcludedContextsWithoutRenumbering(t *testing.T) {
+	t.Parallel()
 	projection, source := sourceFixture(t, "111", "222")
 	projection.Targets[0].Fields[0].Field.State = FieldAbsent
 	projection.Targets[0].Fields[0].Field.Value = nil
@@ -113,6 +114,7 @@ func TestWorkflowScopedEvaluationSkipsExcludedContextsWithoutRenumbering(t *test
 }
 
 func TestWorkflowCheckedDefinitionReturnsDetachedPreparedData(t *testing.T) {
+	t.Parallel()
 	_, source := sourceFixture(t)
 	definition := selectedDefinition()
 	program, err := CompileWorkflow(t.Context(), definition, source, nil)
@@ -136,6 +138,7 @@ func TestWorkflowCheckedDefinitionReturnsDetachedPreparedData(t *testing.T) {
 }
 
 func TestWorkflowTargetResultsAndSourceOnlyCardinality(t *testing.T) {
+	t.Parallel()
 	_, source := sourceFixture(t, "111", "222")
 	definition := selectedDefinition()
 	ref := FieldRef{"target", []string{"address"}}
@@ -172,6 +175,7 @@ func TestWorkflowTargetResultsAndSourceOnlyCardinality(t *testing.T) {
 }
 
 func TestTargetSelectionDependencyUnionAndNoPartialSuccess(t *testing.T) {
+	t.Parallel()
 	projection, source := sourceFixture(t, "111", "222")
 	ref := FieldRef{"target", []string{"address"}}
 	literal := Value{StringValue, json.RawMessage(`"111"`)}
@@ -223,6 +227,7 @@ func TestTargetSelectionDependencyUnionAndNoPartialSuccess(t *testing.T) {
 }
 
 func TestWorkflowTargetlessAndUnusedBranchStaticDependence(t *testing.T) {
+	t.Parallel()
 	_, source := sourceFixture(t)
 	ref := FieldRef{"target", []string{"address"}}
 	definition := selectedDefinition()
@@ -256,6 +261,7 @@ func TestWorkflowTargetlessAndUnusedBranchStaticDependence(t *testing.T) {
 }
 
 func TestWorkflowExtractionBranchMappingAndParallelReuse(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	_, source := sourceFixture(t)
 	definition := selectedDefinition()
@@ -301,6 +307,7 @@ func TestWorkflowExtractionBranchMappingAndParallelReuse(t *testing.T) {
 }
 
 func TestSourceCaptureRejectsForeignAndMutableContext(t *testing.T) {
+	t.Parallel()
 	projection, captured := sourceFixture(t, "111")
 	projection.Fields[0].Field.Value.Value = json.RawMessage(`false`)
 	program, err := CompileWorkflow(context.Background(), selectedDefinition(), captured, nil)

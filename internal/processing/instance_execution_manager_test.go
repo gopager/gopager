@@ -26,6 +26,7 @@ func executionManagerWithRun() (*InstanceExecutions, *InstanceExecution) {
 }
 
 func TestInstanceExecutionsCloseWaitsForRunCleanup(t *testing.T) {
+	t.Parallel()
 	manager, run := executionManagerWithRun()
 	result := make(chan error, 1)
 	go func() {
@@ -57,6 +58,7 @@ func TestInstanceExecutionsCloseWaitsForRunCleanup(t *testing.T) {
 }
 
 func TestInstanceExecutionsCloseHonorsContextDeadline(t *testing.T) {
+	t.Parallel()
 	manager, run := executionManagerWithRun()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
@@ -72,6 +74,7 @@ func TestInstanceExecutionsCloseHonorsContextDeadline(t *testing.T) {
 }
 
 func TestInstanceExecutionsCloseReturnsRunCleanupFailure(t *testing.T) {
+	t.Parallel()
 	manager, run := executionManagerWithRun()
 	run.prepared[uuid.New()] = preparedInstance{main: nil}
 	result := make(chan error, 1)

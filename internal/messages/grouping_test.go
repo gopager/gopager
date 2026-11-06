@@ -9,6 +9,7 @@ import (
 )
 
 func TestDecideJoinsAndMergesExactMembershipComponents(t *testing.T) {
+	t.Parallel()
 	identity := protocols.PayloadIdentity{Form: "text", Value: []byte("page")}
 	older := uuid.New()
 	newer := uuid.New()
@@ -28,6 +29,7 @@ func TestDecideJoinsAndMergesExactMembershipComponents(t *testing.T) {
 }
 
 func TestDecideKeepsIdentityAndWindowBoundariesExact(t *testing.T) {
+	t.Parallel()
 	inputID := uuid.New()
 	input := Member{TransmissionID: inputID, ObservedAt: time.Unix(30, 0).UTC(),
 		Identity: protocols.PayloadIdentity{Form: "text", Value: []byte("same")}}
@@ -54,6 +56,7 @@ func TestDecideKeepsIdentityAndWindowBoundariesExact(t *testing.T) {
 }
 
 func TestDecideValidatesSafeIntegerGroupingWindow(t *testing.T) {
+	t.Parallel()
 	input := Member{TransmissionID: uuid.New(), ObservedAt: time.Unix(1, 0).UTC(),
 		Identity: protocols.PayloadIdentity{Form: "tone-only"}}
 	if _, err := Decide(Policy{Revision: 1, WindowSeconds: MaxGroupingWindowSeconds}, input, nil); err != nil {

@@ -54,6 +54,7 @@ func holdLock(t *testing.T, store interface {
 // reads (authority resolution, matching, candidate work) to be shared: a second reader must
 // proceed while the first still holds its lock.
 func TestControlRowReadersDoNotBlockEachOther(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	identities, err := identitystore.New(store)
 	if err != nil {
@@ -77,6 +78,7 @@ func TestControlRowReadersDoNotBlockEachOther(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			release := holdLock(t, store, c.reader)
 			defer release()
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -96,6 +98,7 @@ func TestControlRowReadersDoNotBlockEachOther(t *testing.T) {
 // resolution takes and expects a configuration change, which bumps the access revision,
 // to commit meanwhile: only access-changing commands wait for in-flight readers.
 func TestConfigurationChangeDoesNotWaitForAuthorityReaders(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	actor := seedLoginAccount(t, store, "Operator", false)
 	identities, err := identitystore.New(store)
@@ -155,6 +158,7 @@ func waitForLockWaiters(t *testing.T, store *postgres.Store, n int) {
 // exclusive access lock before it resolves its own authority, so two such commands never
 // hold the readers' lock while waiting for each other.
 func TestConcurrentLogoutsWaitForReadersWithoutConflict(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	identities, err := identitystore.New(store)
 	if err != nil {
@@ -228,6 +232,7 @@ func (r *intakeHoldAfterAccept) AcceptTransmission(ctx context.Context, tx platf
 // a Transmission and expects an intake with a different Payload identity to complete
 // meanwhile: Grouping serializes per Payload identity, not on a global row.
 func TestIntakeOfDistinctIdentitiesOverlaps(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	facts, err := eventstore.New(store)
 	if err != nil {

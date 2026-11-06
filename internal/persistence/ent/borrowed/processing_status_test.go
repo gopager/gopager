@@ -260,6 +260,7 @@ const toneOnlyPayload = `{"form":"tone-only"}`
 // TestIntakeWithoutSelectedWorkflowReportsNoProcessing expects a Transmission that selects no
 // Workflow to be accepted with processing status none, both in the receipt and in the row.
 func TestIntakeWithoutSelectedWorkflowReportsNoProcessing(t *testing.T) {
+	t.Parallel()
 	f := newProcessingSourceFixture(t)
 	receipt := f.accept(t, "no-workflow", f.now, toneOnlyPayload, nil)
 	if receipt.ProcessingStatus != "none" {
@@ -274,6 +275,7 @@ func TestIntakeWithoutSelectedWorkflowReportsNoProcessing(t *testing.T) {
 // candidate to be published immediately, while the Transmission stays pending until the
 // candidate of the second selected Workflow has completed as well.
 func TestCompletedCandidatePublishesWhileSiblingPending(t *testing.T) {
+	t.Parallel()
 	f := newProcessingSourceFixture(t)
 	f.seedWorkflow(t, "first", protocolSelectorDefinition(t))
 	f.seedWorkflow(t, "second", protocolSelectorDefinition(t))
@@ -305,6 +307,7 @@ func TestCompletedCandidatePublishesWhileSiblingPending(t *testing.T) {
 // its Transmission failed once no selected Workflow is pending, while the other Workflow's
 // result stays published.
 func TestFailedCandidateMarksTransmissionFailed(t *testing.T) {
+	t.Parallel()
 	f := newProcessingSourceFixture(t)
 	f.seedWorkflow(t, "sound", protocolSelectorDefinition(t))
 	f.seedWorkflow(t, "broken", undeclaredFieldDefinition(t))
@@ -329,6 +332,7 @@ func TestFailedCandidateMarksTransmissionFailed(t *testing.T) {
 // results of absorbed Messages to the surviving Message, and the schema to refuse a result
 // that references no Message.
 func TestMergeMovesPublishedResultsToSurvivor(t *testing.T) {
+	t.Parallel()
 	f := newProcessingSourceFixture(t)
 	f.exec(t, `UPDATE grouping_control SET window_seconds=30 WHERE id=1`)
 	f.seedWorkflow(t, "merge", protocolSelectorDefinition(t))
@@ -375,6 +379,7 @@ func TestMergeMovesPublishedResultsToSurvivor(t *testing.T) {
 // leaving the Transmission without current work. The context is the assignment revision of
 // the Transmission's own targets, so the test restamps them as a correction batch would.
 func TestReconcileReadmitsAfterContextRevisionChange(t *testing.T) {
+	t.Parallel()
 	f := newProcessingSourceFixture(t)
 	f.seedWorkflow(t, "context", protocolSelectorDefinition(t))
 	function := uint8(1)

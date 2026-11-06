@@ -38,10 +38,12 @@ func openDB(dsn string) (*sql.DB, error) {
 // TestConcurrentClonesAreIsolated clones one template from parallel tests and writes to each
 // clone, which must neither fail on the template lock nor leak rows between clones.
 func TestConcurrentClonesAreIsolated(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("GOPAGER_TEST_DATABASE_URL") == "" {
 		t.Skip(skipMessage)
 	}
 	t.Run("group", func(t *testing.T) {
+		t.Parallel()
 		for range 12 {
 			t.Run("clone", func(t *testing.T) {
 				t.Parallel()
@@ -64,6 +66,7 @@ func TestConcurrentClonesAreIsolated(t *testing.T) {
 
 // TestEmptyDatabaseIsEmpty checks that EmptyDatabase does not inherit template content.
 func TestEmptyDatabaseIsEmpty(t *testing.T) {
+	t.Parallel()
 	db, err := openDB(EmptyDatabase(t))
 	if err != nil {
 		t.Fatal(err)
@@ -77,6 +80,7 @@ func TestEmptyDatabaseIsEmpty(t *testing.T) {
 
 // TestWithDatabaseSupportsBothDSNForms checks URL and keyword/value rewriting.
 func TestWithDatabaseSupportsBothDSNForms(t *testing.T) {
+	t.Parallel()
 	for _, dsn := range []string{
 		"postgres://u:p@h:5432/a?sslmode=disable",
 		"host=h port=5432 user=u password=p dbname=a sslmode=disable",

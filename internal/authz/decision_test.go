@@ -11,6 +11,7 @@ import (
 )
 
 func TestConcreteActionScopeUnionAndKeyIntersection(t *testing.T) {
+	t.Parallel()
 	owner, network, otherNetwork, unit, otherUnit, collection := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	now := time.Date(2026, 10, 27, 12, 0, 0, 123456000, time.UTC)
 	hour := int64(3600)
@@ -70,6 +71,7 @@ func TestConcreteActionScopeUnionAndKeyIntersection(t *testing.T) {
 }
 
 func TestAccountAndWithoutUnitActionsNeedConcreteContext(t *testing.T) {
+	t.Parallel()
 	owner, account, network := uuid.New(), uuid.New(), uuid.New()
 	authority := authz.Authority{PrincipalID: owner.String(), Active: true, Revision: 1,
 		Grants: []authz.Grant{{
@@ -99,6 +101,7 @@ func TestAccountAndWithoutUnitActionsNeedConcreteContext(t *testing.T) {
 }
 
 func TestAgeCutoffDoesNotOverflow(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 10, 27, 12, 0, 0, 123456000, time.UTC)
 	cutoff, err := authz.AgeCutoff(math.MaxInt64, now)
 	if err != nil || cutoff.Year() != 0 || cutoff.Month() != time.January || cutoff.Day() != 1 {

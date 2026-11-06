@@ -15,6 +15,7 @@ import (
 )
 
 func TestManagementErrorFallbacksAndRetryability(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		err       error
 		status    int
@@ -49,6 +50,7 @@ func TestManagementErrorFallbacksAndRetryability(t *testing.T) {
 }
 
 func TestManagementErrorMapping(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		err    error
 		status int

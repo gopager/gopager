@@ -41,6 +41,7 @@ func (f *processingRetrySourceFixture) CheckRetrySource(_ context.Context, _ pla
 }
 
 func TestProcessingRetryRechecksProofAndRequiresCurrentSourceOwner(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	service, _ := newProcessingManagementFixture(t, f, &processingPreparationFixture{}, f.facts)
 	created, err := service.CreateWorkflow(t.Context(), f.proof, uuid.New(),

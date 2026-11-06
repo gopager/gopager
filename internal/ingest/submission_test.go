@@ -11,6 +11,7 @@ import (
 )
 
 func TestSubmissionValidationNormalizesObservationAndPreservesOriginal(t *testing.T) {
+	t.Parallel()
 	raw := []byte(`{"schemaVersion":1,"submissionId":"op-1","protocol":"pocsag","observationTime":"2026-11-04T10:00:00.987654+01:00","payload":{"form":"text","value":" e\u0301 "},"transmissionTargets":[{"address":123,"function":1}],"incomplete":true}`)
 	var submission Submission
 	if err := json.Unmarshal(raw, &submission); err != nil {
@@ -29,6 +30,7 @@ func TestSubmissionValidationNormalizesObservationAndPreservesOriginal(t *testin
 }
 
 func TestSubmissionRejectsMissingNullAndInvalidFormData(t *testing.T) {
+	t.Parallel()
 	tests := []string{
 		`{"schemaVersion":1,"submissionId":"id","protocol":"pocsag","observationTime":"2026-11-04T10:00:00Z","payload":{"form":"text","value":"x"}}`,
 		`{"schemaVersion":1,"submissionId":"id","protocol":"pocsag","observationTime":"2026-11-04T10:00:00Z","payload":null,"transmissionTargets":[]}`,
@@ -51,6 +53,7 @@ func TestSubmissionRejectsMissingNullAndInvalidFormData(t *testing.T) {
 // TestResolveNetworkFollowsDeclarationSingleAddressAndPriority covers the five resolution cases of
 // a Gateway with several Networks per protocol; priority 0 is the highest.
 func TestResolveNetworkFollowsDeclarationSingleAddressAndPriority(t *testing.T) {
+	t.Parallel()
 	high, middle, low, tone := uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	// Listed out of priority order on purpose: resolution must not depend on slice order.
 	pocsag := []GatewayNetwork{
@@ -90,6 +93,7 @@ func TestResolveNetworkFollowsDeclarationSingleAddressAndPriority(t *testing.T) 
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			protocol := test.protocol
 			if protocol == "" {
 				protocol = protocols.POCSAG
@@ -111,6 +115,7 @@ func TestResolveNetworkFollowsDeclarationSingleAddressAndPriority(t *testing.T) 
 }
 
 func TestResolveNetworkRejectsDuplicateIdentifiers(t *testing.T) {
+	t.Parallel()
 	input := ValidatedSubmission{Submission: Submission{Protocol: protocols.POCSAG}}
 	if _, _, err := ResolveNetwork(input, []GatewayNetwork{
 		{Identifier: "a", NetworkID: uuid.New(), Protocol: protocols.POCSAG},

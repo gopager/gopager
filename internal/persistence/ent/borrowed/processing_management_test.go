@@ -80,6 +80,7 @@ func processingMetadataFixture(name string, scope authz.Scope) management.Metada
 }
 
 func TestProcessingManagementVersionsActivationOnlyAndRetainedHistory(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	preparer := &processingPreparationFixture{}
 	service, capture := newProcessingManagementFixture(t, f, preparer, f.facts)
@@ -174,6 +175,7 @@ func TestProcessingManagementVersionsActivationOnlyAndRetainedHistory(t *testing
 }
 
 func TestProcessingManagementRechecksAuthorityAfterPreparationAndRejectsInvalidFact(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	preparer := &processingPreparationFixture{}
 	service, _ := newProcessingManagementFixture(t, f, preparer, f.facts)
@@ -224,6 +226,7 @@ func TestProcessingManagementRechecksAuthorityAfterPreparationAndRejectsInvalidF
 }
 
 func TestProcessingManagementPreparationRejectsChangedConfigurationSubstitutionAndMissingOwner(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	preparer := &processingPreparationFixture{}
 	service, _ := newProcessingManagementFixture(t, f, preparer, f.facts)
@@ -263,6 +266,7 @@ func TestProcessingManagementPreparationRejectsChangedConfigurationSubstitutionA
 // Workflow to be authorized through the Unit's own Agency, not through the Agencies of the
 // Networks whose rules alert the Unit, and required metadata to have no implicit defaults.
 func TestProcessingManagementUnitScopeFollowsTheUnitAgencyAndExplicitInput(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	preparer := &processingPreparationFixture{}
 	service, _ := newProcessingManagementFixture(t, f, preparer, f.facts)

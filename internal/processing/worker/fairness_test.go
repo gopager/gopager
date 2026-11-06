@@ -9,6 +9,7 @@ import (
 )
 
 func TestDispatcherFailedCandidatesDoNotStarveLaterWork(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		f := newDispatchFixture(7)
 		f.failure = errors.New("fixture owner unavailable")

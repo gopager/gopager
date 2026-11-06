@@ -192,6 +192,7 @@ func (fixture gatewayHTTPFixture) setGrant(t *testing.T, networks []uuid.UUID, a
 }
 
 func TestGatewayNetworkReplacementHTTPAuthorizationAndValidation(t *testing.T) {
+	t.Parallel()
 	fixture := newGatewayHTTPFixture(t)
 	path := "/api/v1/gateways/" + fixture.gateway.String() + "/networks"
 	replace := func(revision string, networks string, expected int) []byte {
@@ -254,6 +255,7 @@ func TestGatewayNetworkReplacementHTTPAuthorizationAndValidation(t *testing.T) {
 }
 
 func TestGatewayCredentialManagementHTTPSecretLifecycleAndAuthorization(t *testing.T) {
+	t.Parallel()
 	fixture := newGatewayHTTPFixture(t)
 	path := "/api/v1/gateways/" + fixture.gateway.String() + "/credentials"
 	fixture.setGrant(t, []uuid.UUID{fixture.current}, "gateway.update", "gateway.read")

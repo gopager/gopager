@@ -17,6 +17,7 @@ type identityErrorBody struct {
 }
 
 func TestLoginRejectsOversizedBodyAsResourceLimit(t *testing.T) {
+	t.Parallel()
 	const origin = "https://pager.example"
 	transport, err := NewHTTPTransport(origin)
 	if err != nil {
@@ -61,6 +62,7 @@ func TestLoginRejectsOversizedBodyAsResourceLimit(t *testing.T) {
 }
 
 func TestIdentityErrorMapsIdempotencyConflict(t *testing.T) {
+	t.Parallel()
 	recorder := httptest.NewRecorder()
 	writeIdentityError(recorder, commands.ErrIdempotencyConflict)
 	var result identityErrorBody

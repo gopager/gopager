@@ -15,8 +15,8 @@ import (
 
 // TestManagementErrorLogsCodeWithRequestIDWithoutCause lets an operator correlate a
 // client's requestId with the log while keeping the private cause out of it.
-func TestManagementErrorLogsCodeWithRequestIDWithoutCause(t *testing.T) {
-	for _, test := range []struct {
+func TestManagementErrorLogsCodeWithRequestIDWithoutCause(t *testing.T) { //nolint:paralleltest // replaces the process-wide slog default logger
+	for _, test := range []struct { //nolint:paralleltest // replaces the process-wide slog default logger
 		name string
 		err  error
 		code string

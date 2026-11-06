@@ -103,9 +103,11 @@ func newFixtureRunner(t *testing.T, f *runnerFixture) *CorrectionRunner {
 }
 
 func TestCorrectionRunnerSurvivesTransientFailures(t *testing.T) {
+	t.Parallel()
 	for _, code := range []platform.ErrorCode{platform.CodeStorageUnavailable,
 		platform.CodeAuthorityUnavailable, platform.CodeCommitUncertain} {
 		t.Run(string(code), func(t *testing.T) {
+			t.Parallel()
 			synctest.Test(t, func(t *testing.T) {
 				f := &runnerFixture{failures: 3, pending: true,
 					err: platform.NewFailure(code, errors.New("database restarting"))}
@@ -149,6 +151,7 @@ func TestCorrectionRunnerSurvivesTransientFailures(t *testing.T) {
 }
 
 func TestCorrectionRunnerBackoffBoundedAndCancellable(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		f := &runnerFixture{failures: 1 << 20,
 			err: platform.NewFailure(platform.CodeStorageUnavailable, errors.New("down"))}
@@ -180,6 +183,7 @@ func TestCorrectionRunnerBackoffBoundedAndCancellable(t *testing.T) {
 }
 
 func TestCorrectionRunnerReturnsNonTransientFailure(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		failure := platform.NewFailure(platform.CodeInternalError, errors.New("invariant broken"))
 		f := &runnerFixture{failures: 1, err: failure}

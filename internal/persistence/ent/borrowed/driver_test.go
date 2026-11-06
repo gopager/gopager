@@ -110,6 +110,7 @@ func createAccount(ctx context.Context, client *ent.Client, id uuid.UUID, name s
 }
 
 func TestBorrowedDriverUsesPlatformRollbackAndExpires(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	var client *ent.Client
 	var savedContext context.Context
@@ -179,6 +180,7 @@ func TestBorrowedDriverUsesPlatformRollbackAndExpires(t *testing.T) {
 }
 
 func TestNativeAgeBoundaryAndIndependentGrantUnion(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	atBoundary, older := uuid.New(), uuid.New()
 	now := time.Date(2026, 10, 26, 12, 0, 0, 123456000, time.UTC)
@@ -253,6 +255,7 @@ func TestNativeAgeBoundaryAndIndependentGrantUnion(t *testing.T) {
 }
 
 func TestNativePrivacyFiltersCountPageAndMutations(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	visible, hidden := uuid.New(), uuid.New()
 	err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
@@ -297,6 +300,7 @@ func TestNativePrivacyFiltersCountPageAndMutations(t *testing.T) {
 }
 
 func TestNativeReadScopeKeepsGlobalFieldsSeparateFromScopedDataAndAge(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	first, second := uuid.New(), uuid.New()
 	now := time.Date(2026, 10, 26, 12, 0, 0, 123456000, time.UTC)

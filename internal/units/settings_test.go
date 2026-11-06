@@ -5,6 +5,7 @@ import (
 )
 
 func TestSettingsCanonical(t *testing.T) {
+	t.Parallel()
 	color := "#aAbB10"
 	meanings := map[int]string{0: "fire"}
 	settings, err := (Settings{
@@ -25,6 +26,7 @@ func TestSettingsCanonical(t *testing.T) {
 }
 
 func TestSettingsCanonicalRejectsInvalidValues(t *testing.T) {
+	t.Parallel()
 	tests := []Settings{
 		{Color: FieldSetting[string]{Mode: "value"}},
 		{Color: FieldSetting[string]{Mode: "value", Value: stringValue("#12345G")}},
@@ -39,6 +41,7 @@ func TestSettingsCanonicalRejectsInvalidValues(t *testing.T) {
 }
 
 func TestResolveAndMaterializeSettings(t *testing.T) {
+	t.Parallel()
 	unitColor := "#112233"
 	orgColor := "#AABBCC"
 	defaults := Defaults{

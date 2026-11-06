@@ -38,6 +38,7 @@ func (r *fakeAuthorityResolver) Resolve(context.Context, platform.TransactionCon
 }
 
 func TestWithAuthorityResolvesAuthorityInsideTheTransaction(t *testing.T) {
+	t.Parallel()
 	var inside bool
 	var began int
 	now := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
@@ -64,6 +65,7 @@ func TestWithAuthorityResolvesAuthorityInsideTheTransaction(t *testing.T) {
 }
 
 func TestWithAuthorityRequiresACheckOnlyForMutations(t *testing.T) {
+	t.Parallel()
 	var inside bool
 	var began int
 	resolver := &fakeAuthorityResolver{inside: &inside}
@@ -94,6 +96,7 @@ func TestWithAuthorityRequiresACheckOnlyForMutations(t *testing.T) {
 }
 
 func TestWithAuthorityReturnsTheOperationErrorUnchanged(t *testing.T) {
+	t.Parallel()
 	var inside bool
 	var began int
 	resolver := &fakeAuthorityResolver{inside: &inside}
@@ -106,6 +109,7 @@ func TestWithAuthorityReturnsTheOperationErrorUnchanged(t *testing.T) {
 }
 
 func TestWithAuthorityStopsWhenResolutionFails(t *testing.T) {
+	t.Parallel()
 	var inside bool
 	var began int
 	resolver := &fakeAuthorityResolver{inside: &inside, err: ErrLoginRequired}
@@ -120,14 +124,16 @@ func TestWithAuthorityStopsWhenResolutionFails(t *testing.T) {
 }
 
 func TestWithAuthorityOptions(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
 	past, future := now.Add(-time.Second), now.Add(time.Second)
-	var inside bool
-	var began int
-	transactions := trackedTransactions{&inside, &began}
 	noop := func(platform.TransactionContext, authz.Authority, time.Time) error { return nil }
 
 	t.Run("expired authentication is rejected only when enforced", func(t *testing.T) {
+		t.Parallel()
+		var inside bool // per subtest: the tracked flag is written by every transaction
+		var began int
+		transactions := trackedTransactions{&inside, &began}
 		resolver := &fakeAuthorityResolver{inside: &inside, authentication: Authentication{ExpiresAt: &past}}
 		if err := WithAuthority(t.Context(), transactions, fixedClock{now}, resolver, Proof{}, false, nil, noop); err != nil {
 			t.Fatalf("default policy rejected: %v", err)
@@ -145,6 +151,10 @@ func TestWithAuthorityOptions(t *testing.T) {
 	})
 
 	t.Run("lock runs inside the transaction for mutations only", func(t *testing.T) {
+		t.Parallel()
+		var inside bool // per subtest: the tracked flag is written by every transaction
+		var began int
+		transactions := trackedTransactions{&inside, &began}
 		resolver := &fakeAuthorityResolver{inside: &inside}
 		var locks int
 		lock := LockMutations(func(context.Context, platform.TransactionContext) error {
@@ -164,6 +174,10 @@ func TestWithAuthorityOptions(t *testing.T) {
 	})
 
 	t.Run("lock failure stops the operation", func(t *testing.T) {
+		t.Parallel()
+		var inside bool // per subtest: the tracked flag is written by every transaction
+		var began int
+		transactions := trackedTransactions{&inside, &began}
 		resolver := &fakeAuthorityResolver{inside: &inside}
 		failure := errors.New("lock unavailable")
 		err := WithAuthority(t.Context(), transactions, fixedClock{now}, resolver, Proof{}, true,

@@ -32,6 +32,7 @@ func (noProcessingReadmission) ReadmitProcessing(context.Context, platform.Trans
 // resolution to supersede the Transmission's completed candidate and admit a current one in the
 // same batch transaction, leave untouched Transmissions alone, and never hide published evidence.
 func TestCorrectionReadmitsProcessingForChangedTargets(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	intakeRepository, err := ingeststore.New(f.store, f.facts, f.facts)
 	if err != nil {
@@ -267,6 +268,7 @@ func (failingCorrectionReads) ReadCorrectionBatch(context.Context, platform.Tran
 
 // TestCorrectionExhaustionFailsSafelyAndRetryCreatesCurrentWork covers correction failure and retry.
 func TestCorrectionExhaustionFailsSafelyAndRetryCreatesCurrentWork(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	var revision int64
 	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {

@@ -10,6 +10,7 @@ import (
 )
 
 func TestApplicationRegistrationPreservesHealthAndReadiness(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	h := &RunningHandle{root: ctx, status: Status{Live: true, Ready: true}}
@@ -49,6 +50,7 @@ func TestApplicationRegistrationPreservesHealthAndReadiness(t *testing.T) {
 }
 
 func TestApplicationRegistrationRejectsNewWorkAfterCancellation(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	h := &RunningHandle{root: ctx, status: Status{Live: true, Ready: true}}
 	handler := h.applicationHandler(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {

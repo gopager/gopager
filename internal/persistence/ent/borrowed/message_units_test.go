@@ -59,6 +59,7 @@ func readMessageUnits(t *testing.T, f matcherFixture, message uuid.UUID) []messa
 // another Agency replaces the rows in place; targets carry typed columns and the Transmission
 // no longer duplicates its targets as JSON.
 func TestMessageUnitCacheFollowsIntakeAndCorrection(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	networkID, gatewayID := f.networks[0], uuid.New()
 	unitA, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),

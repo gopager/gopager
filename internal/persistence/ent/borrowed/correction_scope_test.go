@@ -70,6 +70,7 @@ func readTarget(t *testing.T, f matcherFixture, transmission uuid.UUID) targetSt
 // deletion scopes that Unit's targets. Targets of other addresses and Networks keep their
 // assignment revision, and no dirty-capture table exists.
 func TestCorrectionScopesBySelectorAndLeavesUnrelatedTargetsAlone(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	gatewayID := uuid.New()
 	unitA, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{AgencyID: f.agency, Name: "A", CollectionIDs: []uuid.UUID{}}, checkedMutation)

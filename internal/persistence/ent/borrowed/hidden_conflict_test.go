@@ -17,6 +17,7 @@ import (
 // only one Unit of Agency A and may create rules on A's Network must still get a conflict when the
 // new rule overlaps a rule of another Unit of A that the manager cannot read.
 func TestUnitGrantStillDetectsHiddenConflictOnTheUnitsOwnAgencyNetwork(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	create := func(name string) commands.Result {
 		t.Helper()

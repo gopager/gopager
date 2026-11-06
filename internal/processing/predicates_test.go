@@ -53,6 +53,7 @@ func fixtureFor(ref FieldRef, schema FieldSchema, value *Value, state FieldState
 }
 
 func TestPredicateTypedCompatibility(t *testing.T) {
+	t.Parallel()
 	ref := FieldRef{Namespace: "source", Path: []string{"text"}}
 	integer := FieldSchema{Kind: IntegerValue}
 	for _, item := range []struct {
@@ -93,6 +94,7 @@ func TestPredicateTypedCompatibility(t *testing.T) {
 			Value{NullValue, json.RawMessage(`null`)}, Value{NullValue, json.RawMessage(`null`)}, "true"},
 	} {
 		t.Run(item.name, func(t *testing.T) {
+			t.Parallel()
 			fixture := fixtureFor(ref, item.schema, &item.input, FieldPresent)
 			program, err := CompilePredicate(context.Background(), Predicate{Op: item.op, Field: &ref, Value: &item.comparison}, fixture)
 			if err != nil {
@@ -111,6 +113,7 @@ func TestPredicateTypedCompatibility(t *testing.T) {
 }
 
 func TestPredicateBytesOperationsAndClassifiedStates(t *testing.T) {
+	t.Parallel()
 	ref := FieldRef{Namespace: "source", Path: []string{"binary"}}
 	schema := FieldSchema{Kind: BytesValue}
 	observed, err := Literal(BytesValue, []byte{0, 1, 2, 255})
@@ -137,6 +140,7 @@ func TestPredicateBytesOperationsAndClassifiedStates(t *testing.T) {
 		{name: "membership", op: "in", vals: []Value{different, other}, want: true},
 	} {
 		t.Run(item.name, func(t *testing.T) {
+			t.Parallel()
 			fixture := fixtureFor(ref, schema, &observed, FieldPresent)
 			program, err := CompilePredicate(context.Background(),
 				Predicate{Op: item.op, Field: &ref, Value: item.value, Values: item.vals}, fixture)
@@ -168,6 +172,7 @@ func TestPredicateBytesOperationsAndClassifiedStates(t *testing.T) {
 			state: FieldAbsent, want: false},
 	} {
 		t.Run("present/"+item.name, func(t *testing.T) {
+			t.Parallel()
 			fixture := fixtureFor(ref, item.schema, item.value, item.state)
 			program, err := CompilePredicate(context.Background(),
 				Predicate{Op: "present", Field: &ref, Value: &trueValue}, fixture)
@@ -196,6 +201,7 @@ func TestPredicateBytesOperationsAndClassifiedStates(t *testing.T) {
 }
 
 func TestPredicateBytesRejectsStringAndOrderedOperations(t *testing.T) {
+	t.Parallel()
 	ref := FieldRef{Namespace: "source", Path: []string{"binary"}}
 	fixture := &predicateFixture{schemas: map[string]FieldSchema{ref.key(): {Kind: BytesValue}},
 		values: map[string]FieldValue{}, calls: make(map[string]int)}
@@ -205,6 +211,7 @@ func TestPredicateBytesRejectsStringAndOrderedOperations(t *testing.T) {
 	}
 	for _, op := range []string{"contains", "lt", "lte", "gt", "gte"} {
 		t.Run(op, func(t *testing.T) {
+			t.Parallel()
 			_, err := CompilePredicate(context.Background(),
 				Predicate{Op: op, Field: &ref, Value: &value}, fixture)
 			if platform.FailureCode(err) != platform.CodeInvalidInput {
@@ -214,7 +221,8 @@ func TestPredicateBytesRejectsStringAndOrderedOperations(t *testing.T) {
 	}
 }
 
-func TestPredicateBytesComparisonsAreChargedByLength(t *testing.T) {
+func TestPredicateBytesComparisonsAreChargedByLength(t *testing.T) { //nolint:paralleltest // swaps the package variables computeAllowance and predicateTimeout
+	withoutWallClockBounds(t)
 	ref := FieldRef{Namespace: "source", Path: []string{"binary"}}
 	const length = 400_000
 	observed, err := Literal(BytesValue, make([]byte, length))
@@ -261,6 +269,7 @@ func TestPredicateBytesComparisonsAreChargedByLength(t *testing.T) {
 // present and absent operands; an absent operand makes its comparison false, so NOT of it is
 // true, and no combination is "unknown".
 func TestPredicateLogicIsTwoValued(t *testing.T) {
+	t.Parallel()
 	left := FieldRef{Namespace: "source", Path: []string{"left"}}
 	right := FieldRef{Namespace: "source", Path: []string{"right"}}
 	yes := Value{BooleanValue, json.RawMessage(`true`)}
@@ -308,6 +317,7 @@ func TestPredicateLogicIsTwoValued(t *testing.T) {
 // TestPredicateRejectsHiddenFieldState keeps the removed hidden state from reappearing on
 // the wire: a reader returning an unknown state is an invalid field, not an unknown truth.
 func TestPredicateRejectsHiddenFieldState(t *testing.T) {
+	t.Parallel()
 	ref := FieldRef{Namespace: "source", Path: []string{"left"}}
 	yes := Value{BooleanValue, json.RawMessage(`true`)}
 	fixture := fixtureFor(ref, FieldSchema{Kind: BooleanValue, Optional: true}, nil, FieldState("hidden"))
@@ -321,6 +331,7 @@ func TestPredicateRejectsHiddenFieldState(t *testing.T) {
 }
 
 func TestPredicateBoundsAndParallelReuse(t *testing.T) {
+	t.Parallel()
 	ref := FieldRef{Namespace: "source", Path: []string{"text"}}
 	text := Value{StringValue, json.RawMessage(`"x"`)}
 	fixture := fixtureFor(ref, FieldSchema{Kind: StringValue}, &text, FieldPresent)
@@ -371,6 +382,7 @@ func TestPredicateBoundsAndParallelReuse(t *testing.T) {
 }
 
 func TestDependencyUnionPreservesContextsAndOwnership(t *testing.T) {
+	t.Parallel()
 	position := uint32(0)
 	left, right := predicateDependency("payload", "payload"), predicateDependency("address")
 	left.TargetPosition, right.TargetPosition = &position, &position
@@ -388,7 +400,8 @@ func TestDependencyUnionPreservesContextsAndOwnership(t *testing.T) {
 	}
 }
 
-func TestPredicateExactEncodedInputBoundary(t *testing.T) {
+func TestPredicateExactEncodedInputBoundary(t *testing.T) { //nolint:paralleltest // swaps the package variables computeAllowance and predicateTimeout
+	withoutWallClockBounds(t)
 	ref := FieldRef{Namespace: "source", Path: []string{"text"}}
 	comparison := Value{StringValue, json.RawMessage(`"x"`)}
 	value := Value{StringValue, json.RawMessage(`""`)}
@@ -419,6 +432,7 @@ func TestPredicateExactEncodedInputBoundary(t *testing.T) {
 }
 
 func TestPredicateCELResourceFailuresAreSafe(t *testing.T) {
+	t.Parallel()
 	ref := FieldRef{Namespace: "source", Path: []string{"text"}}
 	text := Value{StringValue, json.RawMessage(`"private input value"`)}
 	fixture := fixtureFor(ref, FieldSchema{Kind: StringValue}, &text, FieldPresent)
@@ -448,6 +462,7 @@ func TestPredicateCELResourceFailuresAreSafe(t *testing.T) {
 }
 
 func TestPredicateMembershipUsesFilterNotTypedListBoundary(t *testing.T) {
+	t.Parallel()
 	ref := FieldRef{Namespace: "source", Path: []string{"text"}}
 	value := Value{StringValue, json.RawMessage(`"x"`)}
 	fixture := fixtureFor(ref, FieldSchema{Kind: StringValue}, &value, FieldPresent)

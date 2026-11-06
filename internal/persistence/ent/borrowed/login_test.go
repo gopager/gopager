@@ -85,6 +85,7 @@ func seedLoginAccount(t *testing.T, store *postgres.Store, username string, allo
 }
 
 func TestOrdinaryLoginCommitsSessionAuditAndFactWithoutCommandIdentity(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	id := seedLoginAccount(t, store, "Straße", true)
 	repository, err := identitystore.New(store)
@@ -185,6 +186,7 @@ func TestOrdinaryLoginCommitsSessionAuditAndFactWithoutCommandIdentity(t *testin
 }
 
 func TestLoginRejectionAndPersistentAccountThrottle(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	id := seedLoginAccount(t, store, "Straße", true)
 	seedLoginAccount(t, store, "excluded", false)
@@ -255,8 +257,10 @@ func TestLoginRejectionAndPersistentAccountThrottle(t *testing.T) {
 }
 
 func TestLoginLogoutHTTPWithPrimaryAuthorityAndTLSProxy(t *testing.T) {
+	t.Parallel()
 	for _, proxyTLS := range []bool{false, true} {
 		t.Run(map[bool]string{false: "HTTP", true: "HTTPS proxy HTTP upstream"}[proxyTLS], func(t *testing.T) {
+			t.Parallel()
 			store := newStore(t)
 			seedLoginAccount(t, store, "http-user", true)
 			repository, err := identitystore.New(store)
@@ -422,6 +426,7 @@ func TestLoginLogoutHTTPWithPrimaryAuthorityAndTLSProxy(t *testing.T) {
 	}
 }
 func TestLoginInstanceThrottleBoundsUnknownAccountStorage(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	repository, err := identitystore.New(store)
 	if err != nil {
@@ -504,6 +509,7 @@ func TestLoginInstanceThrottleBoundsUnknownAccountStorage(t *testing.T) {
 // TestLoginSourceThrottleSpansUsernames: one client source trying many usernames is stopped
 // by the 31st attempt within the minute without blocking other sources or the instance.
 func TestLoginSourceThrottleSpansUsernames(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	seedLoginAccount(t, store, "operator", true)
 	repository, err := identitystore.New(store)

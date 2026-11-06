@@ -74,6 +74,7 @@ func (r *lifecycleRepository) CompleteCandidate(_ context.Context, _ platform.Tr
 }
 
 func TestRunReleasesCapturedResourcesAcrossOutcomes(t *testing.T) {
+	t.Parallel()
 	releaseErr := errors.New("release failed")
 	for _, test := range []struct {
 		name       string
@@ -87,6 +88,7 @@ func TestRunReleasesCapturedResourcesAcrossOutcomes(t *testing.T) {
 		{name: "release failure", releaseErr: releaseErr},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			now := time.Now().UTC()
 			candidate := processing.Candidate{ID: uuid.New(), Revision: 1, State: "pending",
 				CandidateBinding: processing.CandidateBinding{TransmissionID: uuid.New(), WorkflowID: uuid.New(),

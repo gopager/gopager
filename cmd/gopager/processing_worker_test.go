@@ -24,6 +24,7 @@ import (
 // artifact loader and publisher: the run completes inside the worker's own transactions,
 // publishes its result and marks the Transmission completed.
 func TestInstalledWorkflowRunsOnProductionWiring(t *testing.T) {
+	t.Parallel()
 	store := newManagementStoreWithFields(t, []string{"unit", "address", "payload", "gateway", "derived"})
 	network, gateway := uuid.New(), uuid.New()
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {

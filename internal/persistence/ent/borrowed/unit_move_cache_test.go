@@ -17,6 +17,7 @@ import (
 // message_units history along; otherwise the old Agency keeps the Unit's Messages and the new
 // Agency sees none of them.
 func TestUnitMoveRewritesMessageUnitCache(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	networkID, gatewayID := f.networks[0], uuid.New()
 	moved, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),

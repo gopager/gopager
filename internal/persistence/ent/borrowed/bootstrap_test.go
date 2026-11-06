@@ -13,6 +13,7 @@ import (
 )
 
 func TestLocalBootstrapIsAtomicAndCreatesOnlyExplicitAuthority(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	repository, err := identitystore.New(store)
 	if err != nil {
@@ -87,6 +88,7 @@ func TestLocalBootstrapIsAtomicAndCreatesOnlyExplicitAuthority(t *testing.T) {
 }
 
 func TestConcurrentLocalBootstrapHasOneWinner(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	repository, err := identitystore.New(store)
 	if err != nil {

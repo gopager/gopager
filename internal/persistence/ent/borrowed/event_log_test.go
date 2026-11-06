@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"os"
 	"slices"
 	"strconv"
 	"testing"
@@ -112,6 +111,7 @@ func assertEventLogCounts(t *testing.T, db *sql.DB, want int) {
 }
 
 func TestEventLogAllProducersAreAtomic(t *testing.T) {
+	t.Parallel()
 	type appendFact func(*eventstore.Store, platform.TransactionContext, uuid.UUID, time.Time) (uuid.UUID, error)
 	producers := map[string]appendFact{
 		"identity": func(s *eventstore.Store, tx platform.TransactionContext, id uuid.UUID, now time.Time) (uuid.UUID, error) {
@@ -149,6 +149,7 @@ func TestEventLogAllProducersAreAtomic(t *testing.T) {
 	}
 	for name, append := range producers {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			store := newStore(t)
 			db := observerDatabase(t, store)
 			s, err := eventstore.New(store)
@@ -221,7 +222,7 @@ func TestEventLogAllProducersAreAtomic(t *testing.T) {
 	}
 }
 
-func TestEventLogReadAfterNeverSkipsAnUncommittedLowerSeq(t *testing.T) {
+func TestEventLogReadAfterNeverSkipsAnUncommittedLowerSeq(t *testing.T) { //nolint:paralleltest // reads the event log, whose visibility horizon (pg_snapshot_xmin) is server-wide, so transactions of tests running in parallel hide committed events
 	store := newStore(t)
 	s, err := eventstore.New(store)
 	if err != nil {
@@ -251,7 +252,7 @@ func TestEventLogReadAfterNeverSkipsAnUncommittedLowerSeq(t *testing.T) {
 	}
 }
 
-func TestEventLogReadAfterRespectsLastSeqAndLimit(t *testing.T) {
+func TestEventLogReadAfterRespectsLastSeqAndLimit(t *testing.T) { //nolint:paralleltest // reads the event log, whose visibility horizon (pg_snapshot_xmin) is server-wide, so transactions of tests running in parallel hide committed events
 	store := newStore(t)
 	s, err := eventstore.New(store)
 	if err != nil {
@@ -286,6 +287,7 @@ func TestEventLogReadAfterRespectsLastSeqAndLimit(t *testing.T) {
 }
 
 func TestConsumerOffsetRoundTripAndNeverMovesBackwards(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	s, err := eventstore.New(store)
 	if err != nil {
@@ -343,13 +345,14 @@ func TestConsumerOffsetRoundTripAndNeverMovesBackwards(t *testing.T) {
 }
 
 func TestEventLogAppendNotifiesAfterCommit(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	s, err := eventstore.New(store)
 	if err != nil {
 		t.Fatal(err)
 	}
 	db := observerDatabase(t, store)
-	listener, err := pgx.Connect(t.Context(), os.Getenv("GOPAGER_TEST_DATABASE_URL"))
+	listener, err := pgx.Connect(t.Context(), storeDSN(t, store))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -408,7 +411,7 @@ func TestEventLogAppendNotifiesAfterCommit(t *testing.T) {
 // interleaving: transaction T takes the lower xid (early write), transaction X then takes the
 // higher xid and appends the lower seq and stays open, T appends the higher seq and commits.
 // A consumer that read and advanced in that window must still receive X's fact once it commits.
-func TestEventLogReadAfterNeverSkipsALowerSeqOfAHigherTransaction(t *testing.T) {
+func TestEventLogReadAfterNeverSkipsALowerSeqOfAHigherTransaction(t *testing.T) { //nolint:paralleltest // reads the event log, whose visibility horizon (pg_snapshot_xmin) is server-wide, so transactions of tests running in parallel hide committed events
 	store := newStore(t)
 	s, err := eventstore.New(store)
 	if err != nil {

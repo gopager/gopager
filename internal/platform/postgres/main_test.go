@@ -16,6 +16,7 @@ func TestMain(m *testing.M) {
 // TestOwnedPostgresFixtureIsNonDurable pins the speed settings of the container started by
 // Run. An external DSN may legitimately be durable, so it is not asserted.
 func TestOwnedPostgresFixtureIsNonDurable(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	if !testpostgres.OwnsContainer() {
 		t.Skip("fixture is not an owned container; durability settings are not controlled")

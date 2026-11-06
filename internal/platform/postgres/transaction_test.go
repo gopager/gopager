@@ -13,6 +13,7 @@ import (
 )
 
 func TestTransactionOutcomesAndNoReplay(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name        string
 		callbackErr error
@@ -31,6 +32,7 @@ func TestTransactionOutcomesAndNoReplay(t *testing.T) {
 		{"server shutdown", nil, &pgconn.PgError{Code: "57P01"}, platform.CodeCommitUncertain, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			store := &Store{}
 			raw := &testTransaction{commitErr: test.commitErr}
 			calls := 0
@@ -60,6 +62,7 @@ func TestTransactionOutcomesAndNoReplay(t *testing.T) {
 }
 
 func TestCapabilitiesExpireAndCannotCrossStores(t *testing.T) {
+	t.Parallel()
 	store := &Store{}
 	other := &Store{}
 	var saved platform.TransactionContext
@@ -80,6 +83,7 @@ func TestCapabilitiesExpireAndCannotCrossStores(t *testing.T) {
 }
 
 func TestTransactionPanicRollsBackAndInvalidatesCapability(t *testing.T) {
+	t.Parallel()
 	store := &Store{}
 	raw := &testTransaction{}
 	var saved platform.TransactionContext

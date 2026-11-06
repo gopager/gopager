@@ -37,12 +37,14 @@ func (b explodingBody) Read([]byte) (int, error) {
 func (explodingBody) Close() error { return nil }
 
 func TestIngestAuthenticatesBeforeReadingTheBody(t *testing.T) {
+	t.Parallel()
 	secret, _, err := identity.NewSecret()
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, path := range []string{"/api/v1/transmissions", "/api/v1/gateway/state"} {
 		t.Run(path, func(t *testing.T) {
+			t.Parallel()
 			intake := &fakeIntake{}
 			mux := http.NewServeMux()
 			RegisterIngestRoutes(mux, intake)

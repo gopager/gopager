@@ -54,6 +54,7 @@ func assignmentFacts(t *testing.T, f matcherFixture, transmission uuid.UUID) []m
 // targets in position order) and exactly one more when a rule change re-resolves both targets
 // (reason corrected, both targets with before and after).
 func TestAssignmentChangedIsOneFactPerTransmissionAtIntakeAndCorrection(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	gatewayID := uuid.New()
 	unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{AgencyID: f.agency, Name: "A", CollectionIDs: []uuid.UUID{}}, checkedMutation)

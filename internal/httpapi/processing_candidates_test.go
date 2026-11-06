@@ -8,6 +8,7 @@ import (
 )
 
 func TestWorkflowRetryResponseIsBounded(t *testing.T) {
+	t.Parallel()
 	response := workflowRetryResponse{
 		CandidateID: uuid.MustParse("b29f0e2e-f49d-4c69-90c9-a27e28f4c26c"),
 		Revision:    3,

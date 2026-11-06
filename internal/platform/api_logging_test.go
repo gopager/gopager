@@ -30,7 +30,7 @@ func captureLogs(t *testing.T) func() []map[string]any {
 	}
 }
 
-func TestAPIUnavailableLogsCodeWithRequestID(t *testing.T) {
+func TestAPIUnavailableLogsCodeWithRequestID(t *testing.T) { //nolint:paralleltest // replaces the process-wide slog default logger
 	records := captureLogs(t)
 	recorder := httptest.NewRecorder()
 	writeAPIUnavailable(recorder)

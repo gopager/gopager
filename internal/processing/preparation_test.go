@@ -28,6 +28,7 @@ func (d fixedDeclarations) FieldSchema(ref FieldRef) (FieldSchema, error) {
 }
 
 func TestWorkflowDefinitionPreparerUsesOnlyTrustedDeclarations(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	flag := FieldRef{Namespace: "source", Path: []string{"flag"}}
 	preparer, err := NewWorkflowDefinitionPreparer(fixedDeclarationOwner{
@@ -47,6 +48,7 @@ func TestWorkflowDefinitionPreparerUsesOnlyTrustedDeclarations(t *testing.T) {
 }
 
 func TestWorkflowDefinitionPreparerFailsClosedWithoutDeclarationOwner(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	preparer, err := NewWorkflowDefinitionPreparer(MissingSourceDeclarationOwner{}, CoreRegex{}, nil)
 	if err != nil {
@@ -58,6 +60,7 @@ func TestWorkflowDefinitionPreparerFailsClosedWithoutDeclarationOwner(t *testing
 }
 
 func TestMissingDeclarationOwnerDoesNotMaskCancellation(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	preparer, err := NewWorkflowDefinitionPreparer(MissingSourceDeclarationOwner{}, CoreRegex{}, nil)

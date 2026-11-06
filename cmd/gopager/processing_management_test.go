@@ -101,6 +101,7 @@ func pluginFixtureRoot(t *testing.T) string {
 }
 
 func TestProcessingInstanceArtifactFixturesLoadFromConfiguredRoot(t *testing.T) {
+	t.Parallel()
 	root, err := os.OpenRoot(pluginFixtureRoot(t))
 	if err != nil {
 		t.Fatal(err)
@@ -129,12 +130,14 @@ func TestProcessingInstanceArtifactFixturesLoadFromConfiguredRoot(t *testing.T) 
 }
 
 func TestProcessingWorkflowHTTPRequiresCurrentCSRFAndUsesSyntheticDeclarations(t *testing.T) {
+	t.Parallel()
 	for _, secureProxy := range []bool{false, true} {
 		name := "direct-http"
 		if secureProxy {
 			name = "https-reverse-proxy"
 		}
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			// The saved definitions select on a payload field, which the author must be able to read.
 			store := newManagementStoreWithFields(t, []string{"unit", "address", "payload"})
 			backend := httptest.NewUnstartedServer(nil)
@@ -270,12 +273,14 @@ func TestProcessingWorkflowHTTPRequiresCurrentCSRFAndUsesSyntheticDeclarations(t
 }
 
 func TestProcessingSyntheticPreviewHTTPUsesCurrentFixtureNetworks(t *testing.T) {
+	t.Parallel()
 	for _, secureProxy := range []bool{false, true} {
 		name := "direct-http"
 		if secureProxy {
 			name = "https-reverse-proxy"
 		}
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			store := newManagementStoreWithFields(t,
 				[]string{"unit", "address", "payload", "gateway", "derived"})
 			identityRepository, err := identitystore.New(store)
@@ -444,6 +449,7 @@ func TestProcessingSyntheticPreviewHTTPUsesCurrentFixtureNetworks(t *testing.T) 
 }
 
 func TestProcessingSyntheticPreviewHonorsCurrentUnitScope(t *testing.T) {
+	t.Parallel()
 	store := newManagementStoreWithFields(t,
 		[]string{"unit", "address", "payload", "gateway", "derived"})
 	identityRepository, err := identitystore.New(store)
@@ -565,6 +571,7 @@ func TestProcessingSyntheticPreviewHonorsCurrentUnitScope(t *testing.T) {
 }
 
 func TestProcessingSyntheticPreviewUsesProductionNetworkOwner(t *testing.T) {
+	t.Parallel()
 	store := newManagementStoreWithFields(t,
 		[]string{"unit", "address", "payload", "gateway", "derived"})
 	live, deleted := uuid.New(), uuid.New()
@@ -662,6 +669,7 @@ func TestProcessingSyntheticPreviewUsesProductionNetworkOwner(t *testing.T) {
 // TestProcessingSyntheticPreviewUsesOnlyPreviewSupportingInstalledPlugins checks that an editor preview
 // reaches an installed plugin in preview mode only when its manifest declares supportsPreview.
 func TestProcessingSyntheticPreviewUsesOnlyPreviewSupportingInstalledPlugins(t *testing.T) {
+	t.Parallel()
 	store := newManagementStoreWithFields(t,
 		[]string{"unit", "address", "payload", "gateway", "derived"})
 	identityRepository, err := identitystore.New(store)
@@ -1079,6 +1087,7 @@ func seedCurrentInstance(t *testing.T, store *postgres.Store, value processing.I
 }
 
 func TestProcessingInstanceHTTPUsesRootAndRedactsCurrentConfiguration(t *testing.T) {
+	t.Parallel()
 	store := newManagementStore(t)
 	shared := mustComposeCore(t, store)
 	runtime, err := composeProcessingAPIRuntime(t.Context(), shared, pluginFixtureRoot(t))
@@ -1377,6 +1386,7 @@ func revokeReadReviewer(t *testing.T, store *postgres.Store, principalID uuid.UU
 }
 
 func TestProcessingStatusHTTPFiltersWorkflowPagesAndHidesPrivateEvidence(t *testing.T) {
+	t.Parallel()
 	store := newManagementStore(t)
 	shared := mustComposeCore(t, store)
 	runtime, err := composeProcessingAPIRuntime(t.Context(), shared, "")
@@ -1587,6 +1597,7 @@ func rawProcessingRequest(t *testing.T, client *http.Client, origin, path, body,
 }
 
 func TestProcessingCandidateRetryHTTPUsesCurrentSourceOwner(t *testing.T) {
+	t.Parallel()
 	// The saved definitions select on a payload field, which the author must be able to read.
 	store := newManagementStoreWithFields(t, []string{"unit", "address", "payload"})
 	network, gateway := uuid.New(), uuid.New()

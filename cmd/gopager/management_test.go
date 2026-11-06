@@ -175,12 +175,14 @@ func managementResultID(t *testing.T, result managementResponse) (uuid.UUID, str
 }
 
 func TestManagementHTTPAndTLSReverseProxyWithHTTPUpstream(t *testing.T) {
+	t.Parallel()
 	for _, secure := range []bool{false, true} {
 		name := "plain-http"
 		if secure {
 			name = "https-proxy-http-upstream"
 		}
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			store := newManagementStore(t)
 			agency := `"agencyId":"` + seedAgency(t, store).String() + `",`
 			backend := httptest.NewUnstartedServer(nil)
@@ -420,6 +422,7 @@ func TestManagementHTTPAndTLSReverseProxyWithHTTPUpstream(t *testing.T) {
 }
 
 func TestManagementProductionNetworkOwnerHidesUnknownNetwork(t *testing.T) {
+	t.Parallel()
 	store := newManagementStore(t)
 	handler, err := composeApplicationAPI("http://example.test", identity.DefaultLoginRateLimits(), mustComposeCore(t, store), nil)
 	if err != nil {

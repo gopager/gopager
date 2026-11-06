@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 	"testing/fstest"
 
@@ -44,16 +43,6 @@ func newStoreAtWithParams(t testing.TB, databaseURL string, params map[string]st
 		}
 	})
 	return &Store{db: db, config: config}
-}
-
-// testDatabaseURL skips database-dependent cases only in the optional quick run.
-func testDatabaseURL(t testing.TB) string {
-	t.Helper()
-	value := os.Getenv("GOPAGER_TEST_DATABASE_URL")
-	if value == "" {
-		t.Skip("PostgreSQL integration disabled; run with GOPAGER_INTEGRATION=1")
-	}
-	return value
 }
 
 // storeTestDSN returns the DSN of the store's isolated database for a second pool.

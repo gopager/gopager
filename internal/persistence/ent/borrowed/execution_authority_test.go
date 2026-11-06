@@ -15,6 +15,7 @@ import (
 )
 
 func TestExecutionPrincipalHoldsPrimaryAuthorityLockAndRejectsSuspension(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()

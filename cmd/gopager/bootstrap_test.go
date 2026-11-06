@@ -9,6 +9,7 @@ import (
 )
 
 func TestBootstrapPasswordInputPreservesBytes(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		input string
 		want  string

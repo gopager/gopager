@@ -65,6 +65,7 @@ func processingAuthorityFixture(actor uuid.UUID, scopes ...authz.Scope) authz.Au
 }
 
 func TestProcessingConfigurationNativeUnionBeforeCountPagingAndVersionLookup(t *testing.T) {
+	t.Parallel()
 	primary := newStore(t)
 	store, err := processingstore.New(primary)
 	if err != nil {
@@ -160,6 +161,7 @@ func TestProcessingConfigurationNativeUnionBeforeCountPagingAndVersionLookup(t *
 }
 
 func TestProcessingConfigurationSaveActivationCASAndAllParticipantsRollback(t *testing.T) {
+	t.Parallel()
 	primary := newStore(t)
 	store, err := processingstore.New(primary)
 	if err != nil {
@@ -341,6 +343,7 @@ func TestProcessingConfigurationSaveActivationCASAndAllParticipantsRollback(t *t
 }
 
 func TestProcessingSchemaDeferredVersionOwnershipAndPrivacy(t *testing.T) {
+	t.Parallel()
 	primary := newStore(t)
 	store, err := processingstore.New(primary)
 	if err != nil {

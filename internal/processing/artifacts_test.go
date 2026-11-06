@@ -58,6 +58,7 @@ func writeManifest(t *testing.T, root *os.Root, manifest InstalledManifest) {
 }
 
 func TestInstalledLoadDoesNotStartPlugin(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	host := NewPluginHost()
 	t.Cleanup(func() {
@@ -106,6 +107,7 @@ func TestInstalledLoadDoesNotStartPlugin(t *testing.T) {
 }
 
 func TestInstalledArtifactPathsExecutableAndHashBoundary(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	_, root, _, _ := artifactFixture(t, markerScript)
 	outside := t.TempDir()
@@ -154,6 +156,7 @@ func TestInstalledArtifactPathsExecutableAndHashBoundary(t *testing.T) {
 }
 
 func TestInstalledManifestRejectsUnsupportedAndUnclassifiedConfiguration(t *testing.T) {
+	t.Parallel()
 	_, _, manifest, pin := artifactFixture(t, markerScript)
 	for _, mutate := range []func(*InstalledManifest){
 		func(m *InstalledManifest) { m.Pure = false },
@@ -192,6 +195,7 @@ func TestInstalledManifestRejectsUnsupportedAndUnclassifiedConfiguration(t *test
 }
 
 func TestInstalledManifestBytesAreSDK2AndCannotBeConfiguration(t *testing.T) {
+	t.Parallel()
 	_, _, manifest, pin := artifactFixture(t, markerScript)
 	manifest.InputSchema = map[string]FieldSchema{"binary": {Kind: BytesValue}}
 	manifest.ResultSchema = map[string]FieldSchema{"items": {Kind: ListValue, Element: &FieldSchema{Kind: BytesValue}}}

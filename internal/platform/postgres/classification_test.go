@@ -17,6 +17,7 @@ import (
 // TestDomainSentinelsKeepTheirOwnCodeThroughTransactions guards against classifyFailure
 // reporting a domain outcome (for example a stale revision) as a storage outage.
 func TestDomainSentinelsKeepTheirOwnCodeThroughTransactions(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		sentinel error
 		want     platform.ErrorCode
@@ -30,6 +31,7 @@ func TestDomainSentinelsKeepTheirOwnCodeThroughTransactions(t *testing.T) {
 		{commands.ErrIdempotencyConflict, "IDEMPOTENCY_CONFLICT"},
 	} {
 		t.Run(string(test.want)+"/"+test.sentinel.Error(), func(t *testing.T) {
+			t.Parallel()
 			store := &Store{}
 			err := store.withinTransaction(context.Background(), func(platform.TransactionContext) error {
 				return fmt.Errorf("context: %w", test.sentinel)
@@ -45,8 +47,10 @@ func TestDomainSentinelsKeepTheirOwnCodeThroughTransactions(t *testing.T) {
 // TestSerializationFailureIsRetriedOnce covers the rolled-back 40001/40P01 outcomes: a
 // second attempt is safe, a third is not made.
 func TestSerializationFailureIsRetriedOnce(t *testing.T) {
+	t.Parallel()
 	for _, state := range []string{"40001", "40P01"} {
 		t.Run(state+" then success", func(t *testing.T) {
+			t.Parallel()
 			store := &Store{}
 			var transactions []*testTransaction
 			calls := 0
@@ -67,6 +71,7 @@ func TestSerializationFailureIsRetriedOnce(t *testing.T) {
 			}
 		})
 		t.Run(state+" twice", func(t *testing.T) {
+			t.Parallel()
 			store := &Store{}
 			calls := 0
 			err := store.withinTransaction(context.Background(), func(platform.TransactionContext) error {
@@ -81,6 +86,7 @@ func TestSerializationFailureIsRetriedOnce(t *testing.T) {
 		})
 	}
 	t.Run("other errors are not retried", func(t *testing.T) {
+		t.Parallel()
 		store := &Store{}
 		calls := 0
 		err := store.withinTransaction(context.Background(), func(platform.TransactionContext) error {
@@ -96,6 +102,7 @@ func TestSerializationFailureIsRetriedOnce(t *testing.T) {
 // TestUniqueViolationIsConflictButNotRetryable: replaying the same request hits the same
 // constraint, so the client must change the request instead of retrying.
 func TestUniqueViolationIsConflictButNotRetryable(t *testing.T) {
+	t.Parallel()
 	store := &Store{}
 	calls := 0
 	err := store.withinTransaction(context.Background(), func(platform.TransactionContext) error {

@@ -7,6 +7,7 @@ import (
 )
 
 func TestRequestMode(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name, request, want string
 		fails               bool
@@ -18,6 +19,7 @@ func TestRequestMode(t *testing.T) {
 		{name: "not JSON", request: `x`, fails: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			got, err := pluginsdk.RequestMode([]byte(test.request))
 			if test.fails != (err != nil) || got != test.want {
 				t.Fatalf("RequestMode = %q, %v; want %q, failure %v", got, err, test.want, test.fails)

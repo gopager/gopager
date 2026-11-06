@@ -46,6 +46,7 @@ func (s *countingSourceOwner) CaptureCandidate(context.Context, platform.Transac
 // transaction callback to be released exactly once; a lost release keeps the execution registered
 // until the instance shutdown deadline.
 func TestRunReleasesEveryCaptureOfRetriedTransaction(t *testing.T) {
+	t.Parallel()
 	now := time.Now().UTC()
 	candidate := processing.Candidate{ID: uuid.New(), Revision: 1, State: "pending",
 		CandidateBinding: processing.CandidateBinding{TransmissionID: uuid.New(), WorkflowID: uuid.New(),

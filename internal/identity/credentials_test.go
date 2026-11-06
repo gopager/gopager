@@ -9,6 +9,7 @@ import (
 )
 
 func TestCredentials(t *testing.T) {
+	t.Parallel()
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	ginkgo.RunSpecs(t, "Local Credential Contract")
 }

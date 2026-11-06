@@ -15,6 +15,7 @@ import (
 )
 
 func TestProcessingFactParticipantUsesCallerTransactionAndRejectsExpiredCapability(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	appender, err := eventstore.New(store)
 	if err != nil {

@@ -13,6 +13,7 @@ import (
 // unit.update authority over the old and the new Agency, because the move hands the Unit's
 // whole history to the new Agency; a grant on the Unit alone may edit it but not move it.
 func TestUnitMoveNeedsAuthorityOverBothAgencies(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
 		units.UnitInput{AgencyID: f.agencies[0], Name: "Station", CollectionIDs: []uuid.UUID{}}, checkedMutation)

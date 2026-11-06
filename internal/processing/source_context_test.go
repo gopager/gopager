@@ -7,6 +7,7 @@ import (
 )
 
 func TestSourceContextClassificationSurvivesWorkflowDerivation(t *testing.T) {
+	t.Parallel()
 	projection, _ := sourceFixture(t)
 	projection.Subtype = "alpha"
 	contextual, err := projection.WithContextFields("Dispatch")
@@ -33,6 +34,7 @@ func TestSourceContextClassificationSurvivesWorkflowDerivation(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.path[len(test.path)-1], func(t *testing.T) {
+			t.Parallel()
 			reference := FieldRef{Namespace: "source", Path: test.path}
 			definition := selectedDefinition()
 			definition.OutputSchema["context"] = FieldSchema{Kind: StringValue}
@@ -71,6 +73,7 @@ func TestSourceContextClassificationSurvivesWorkflowDerivation(t *testing.T) {
 }
 
 func TestSourceContextAbsenceAndInvalidOwnerInput(t *testing.T) {
+	t.Parallel()
 	projection, _ := sourceFixture(t)
 	contextual, err := projection.WithContextFields("Dispatch")
 	if err != nil {

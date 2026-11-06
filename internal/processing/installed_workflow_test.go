@@ -104,6 +104,7 @@ func newInstalledOwnerFixture(t *testing.T) *installedOwnerFixture {
 }
 
 func TestInstalledWorkflowPreviewModeRunsOnlyPluginsThatSupportIt(t *testing.T) {
+	t.Parallel()
 	owner := newInstalledOwnerFixture(t)
 	_, source := sourceFixture(t)
 	definition := installedDefinition(owner, "ok", FieldRef{Namespace: "source", Path: []string{"text"}})
@@ -142,6 +143,7 @@ func installedDefinition(owner *installedOwnerFixture, mode string, input FieldR
 }
 
 func TestInstalledWorkflowIdenticalInputsStillCarryDistinctOriginalContexts(t *testing.T) {
+	t.Parallel()
 	owner := newInstalledOwnerFixture(t)
 	projection, source := sourceFixture(t, "111", "222")
 	definition := installedDefinition(owner, "ok", FieldRef{Namespace: "source", Path: []string{"text"}})
@@ -183,6 +185,7 @@ func TestInstalledWorkflowIdenticalInputsStillCarryDistinctOriginalContexts(t *t
 }
 
 func TestInstalledWorkflowActuallyWaitsBeyondBuiltinBudgetWithoutDetachingCaller(t *testing.T) {
+	t.Parallel()
 	owner := newInstalledOwnerFixture(t)
 	_, source := sourceFixture(t)
 	definition := installedDefinition(owner, "loop", FieldRef{Namespace: "source", Path: []string{"text"}})
@@ -215,7 +218,7 @@ func TestInstalledWorkflowActuallyWaitsBeyondBuiltinBudgetWithoutDetachingCaller
 	}
 }
 
-func TestInstalledWorkflowPluginOwnDeadlineIsResourceLimit(t *testing.T) {
+func TestInstalledWorkflowPluginOwnDeadlineIsResourceLimit(t *testing.T) { //nolint:paralleltest // swaps the package variable installedInvocationTimeout
 	owner := newInstalledOwnerFixture(t)
 	_, source := sourceFixture(t)
 	definition := installedDefinition(owner, "loop", FieldRef{Namespace: "source", Path: []string{"text"}})
@@ -233,6 +236,7 @@ func TestInstalledWorkflowPluginOwnDeadlineIsResourceLimit(t *testing.T) {
 }
 
 func TestInstalledWorkflowRechecksEveryTargetAndRejectsInputSubstitution(t *testing.T) {
+	t.Parallel()
 	owner := newInstalledOwnerFixture(t)
 	_, source := sourceFixture(t, "111", "222")
 	definition := installedDefinition(owner, "ok", FieldRef{Namespace: "target", Path: []string{"address"}})

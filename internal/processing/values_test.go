@@ -11,6 +11,7 @@ import (
 )
 
 func TestClosedTypedValuesPreserveWireSemantics(t *testing.T) {
+	t.Parallel()
 	for _, item := range []struct {
 		raw    string
 		schema processing.FieldSchema
@@ -39,6 +40,7 @@ func TestClosedTypedValuesPreserveWireSemantics(t *testing.T) {
 		{`{"kind":"string","value":"a"} {}`, processing.FieldSchema{Kind: processing.StringValue}, false},
 	} {
 		t.Run(item.raw, func(t *testing.T) {
+			t.Parallel()
 			var value processing.Value
 			err := processing.Decode([]byte(item.raw), &value)
 			if err == nil {
@@ -68,6 +70,7 @@ func TestClosedTypedValuesPreserveWireSemantics(t *testing.T) {
 }
 
 func TestValueCollectionsAndJSONBounds(t *testing.T) {
+	t.Parallel()
 	integer := processing.FieldSchema{Kind: processing.IntegerValue}
 	schema := processing.FieldSchema{Kind: processing.ObjectValue, Properties: map[string]processing.FieldSchema{
 		"ids": {Kind: processing.ListValue, Element: &integer},

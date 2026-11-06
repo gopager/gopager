@@ -10,6 +10,7 @@ import (
 )
 
 func TestCurrentInstanceJoinMatchesTheCurrentRevision(t *testing.T) {
+	t.Parallel()
 	selector := sql.Dialect("postgres").Select().From(sql.Table(processinginstanceversion.Table))
 	currentInstanceJoin(selector)
 	query, args := selector.Query()

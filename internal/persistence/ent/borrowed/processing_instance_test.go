@@ -17,6 +17,7 @@ import (
 )
 
 func TestProcessingInstanceImmutableSnapshotsCASAndAudit(t *testing.T) {
+	t.Parallel()
 	primary := newStore(t)
 	store, err := processingstore.New(primary)
 	if err != nil {
