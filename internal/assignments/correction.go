@@ -182,6 +182,9 @@ type CorrectionLease struct {
 	FencingToken  int64
 	LeaseUntil    time.Time
 	Attempts      int
+	// Exhausted marks the lease ClaimCorrection returns, unclaimed, for a scope it just failed
+	// with RETRY_LIMIT; only ID, Reason and Attempts are set.
+	Exhausted bool
 }
 
 // CorrectionBatchItem is one stored transmission within a correction scope,
@@ -226,7 +229,8 @@ type CorrectionApplied struct {
 
 // CorrectionWorkRepository is the persistence port used by CorrectionRunner.
 // ClaimCorrection leases the oldest queued (or expired running) scope; it
-// reports false when there is none. ApplyCorrectionBatch and
+// reports false when there is none. A scope that has no attempt left is failed instead
+// and returned with Exhausted set, so the runner records its final failure. ApplyCorrectionBatch and
 // CompleteCorrection must be called with a still-valid lease and fail with a
 // revision conflict when the fence is lost; a newer assignment revision or
 // access revision is fine, because every scope runs against current rules.

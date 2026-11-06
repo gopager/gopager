@@ -250,6 +250,15 @@ func (s *Store) SubmissionReceipt(ctx context.Context, tx platform.TransactionCo
 	return receipt, result, true, nil
 }
 
+// notFoundIfNoRows maps a missing row to authz.ErrNotFound and returns every other error
+// unchanged, so a storage failure reaches the Gateway as a retryable failure instead of a 404.
+func notFoundIfNoRows(err error) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return authz.ErrNotFound
+	}
+	return err
+}
+
 // AcceptTransmission persists original evidence, current target admission, Grouping and facts atomically.
 func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionContext, gateway uuid.UUID,
 	submission ingest.ValidatedSubmission, accepted time.Time, match assignments.MatchResult) (ingest.Receipt, error) {
@@ -269,7 +278,7 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 	var gatewayRevision int64
 	if err := executor.QueryRowContext(ctx, `SELECT state, revision FROM gateways WHERE id=$1 FOR UPDATE`,
 		gateway).Scan(&oldState, &gatewayRevision); err != nil {
-		return ingest.Receipt{}, authz.ErrNotFound
+		return ingest.Receipt{}, notFoundIfNoRows(err)
 	}
 	newState := oldState
 	if oldState == "stopped" || oldState == "contact-lost" {

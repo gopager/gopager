@@ -338,8 +338,9 @@ func (o *ProcessingSourceOwner) ReconcileCandidate(ctx context.Context, tx platf
 }
 
 // ReadmitProcessing supersedes the Transmission's candidates whose binding is no longer current,
-// admits a candidate for every currently selected Workflow without one and refreshes the
-// processing status, in the caller's transaction. The correction runner calls it for every
+// admits a candidate for every currently selected Workflow without one, notifies the
+// dispatchers when any Workflow is selected and refreshes the processing status, in the
+// caller's transaction. The correction runner calls it for every
 // Transmission whose target resolution it changed. It fails with a revision conflict while the
 // stored targets differ from the current matching. It also returns the Transmission's processing
 // context: the highest assignment revision stamped on its targets, or 1 without targets.
@@ -375,6 +376,12 @@ func (o *ProcessingSourceOwner) ReadmitProcessing(ctx context.Context, tx platfo
 	executor, err := o.store.primary.Resolve(tx)
 	if err != nil {
 		return err
+	}
+	if len(workflows) > 0 {
+		// Wake the dispatchers like intake does; a wake-up without new work is harmless.
+		if _, err := executor.ExecContext(ctx, `SELECT pg_notify('gopager_processing_due', '')`); err != nil {
+			return err
+		}
 	}
 	return o.refreshProcessingStatus(ctx, executor, snapshot, configurationRevision, workflows, candidates)
 }

@@ -17,9 +17,11 @@ var _ processing.CandidateWorkRepository = (*Store)(nil)
 
 // SelectDueWork returns up to limit due or lease-expired candidates ordered by due time and id,
 // judged on the primary clock. It locks the selected rows with FOR UPDATE SKIP LOCKED instead of
-// the Processing-control row, so concurrent dispatchers receive disjoint rows and never wait on
-// each other or on configuration changes. Selection is not a claim; each worker must recheck
-// current owner authority before reserving work.
+// the Processing-control row, so a dispatcher never waits on another one or on configuration
+// changes and skips rows another open selection transaction holds. The row locks end when the
+// selection transaction commits, so concurrent dispatchers can still receive the same rows
+// afterwards; selection is not a claim. The revision-checked claim is the guard against double
+// execution, and each worker must recheck current owner authority before reserving work.
 func (s *Store) SelectDueWork(ctx context.Context, tx platform.TransactionContext, limit int) ([]processing.Candidate, error) {
 	if limit < 1 {
 		return nil, authz.ErrInvalidInput
