@@ -63,15 +63,14 @@ func New(transactions identity.Transactions, resolver *identity.Resolver, clock 
 
 // within keeps current proofs, primary time and protected configuration operations in one
 // transaction. Unlike the master-data services it serializes mutations behind the Processing
-// revision and rejects an expired authentication before the caller's check.
+// revision.
 func (s *Service) within(ctx context.Context, proof identity.Proof, mutation bool, check func(identity.Authentication) error,
 	operation func(platform.TransactionContext, authz.Authority, time.Time) error) error {
 	return identity.WithAuthority(ctx, s.transactions, s.clock, s.resolver, proof, mutation, check, operation,
 		identity.LockMutations(func(ctx context.Context, tx platform.TransactionContext) error {
 			_, err := s.repository.LockRevisionForChange(ctx, tx)
 			return err
-		}),
-		identity.RejectExpiredAuthentication())
+		}))
 }
 
 // authorizeScope checks that every Workflow scope reference exists and that the caller holds

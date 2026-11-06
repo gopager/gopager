@@ -127,19 +127,21 @@ func TestWithAuthorityOptions(t *testing.T) {
 	transactions := trackedTransactions{&inside, &began}
 	noop := func(platform.TransactionContext, authz.Authority, time.Time) error { return nil }
 
-	t.Run("expired authentication is rejected only when enforced", func(t *testing.T) {
+	t.Run("expired authentication is rejected without any option, before the check", func(t *testing.T) {
 		resolver := &fakeAuthorityResolver{inside: &inside, authentication: Authentication{ExpiresAt: &past}}
-		if err := WithAuthority(t.Context(), transactions, fixedClock{now}, resolver, Proof{}, false, nil, noop); err != nil {
-			t.Fatalf("default policy rejected: %v", err)
-		}
-		err := WithAuthority(t.Context(), transactions, fixedClock{now}, resolver, Proof{}, false, nil, noop,
-			RejectExpiredAuthentication())
-		if !errors.Is(err, ErrLoginRequired) {
-			t.Fatalf("enforced policy error = %v, want ErrLoginRequired", err)
+		check := func(Authentication) error { t.Error("check ran for an expired authentication"); return nil }
+		for _, mutation := range []bool{false, true} {
+			err := WithAuthority(t.Context(), transactions, fixedClock{now}, resolver, Proof{}, mutation, check,
+				func(platform.TransactionContext, authz.Authority, time.Time) error {
+					t.Error("operation ran for an expired authentication")
+					return nil
+				})
+			if !errors.Is(err, ErrLoginRequired) {
+				t.Fatalf("mutation=%t error = %v, want ErrLoginRequired", mutation, err)
+			}
 		}
 		resolver.authentication.ExpiresAt = &future
-		if err := WithAuthority(t.Context(), transactions, fixedClock{now}, resolver, Proof{}, false, nil, noop,
-			RejectExpiredAuthentication()); err != nil {
+		if err := WithAuthority(t.Context(), transactions, fixedClock{now}, resolver, Proof{}, false, nil, noop); err != nil {
 			t.Fatalf("unexpired authentication rejected: %v", err)
 		}
 	})
