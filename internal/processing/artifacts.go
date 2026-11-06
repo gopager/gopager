@@ -12,8 +12,9 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
-	"github.com/hashicorp/go-plugin"
+	"github.com/google/uuid"
 
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/pluginsdk"
@@ -47,7 +48,7 @@ type InstalledManifest struct {
 	CapabilityID        string                 `json:"capabilityId"`
 	Artifact            ArtifactReference      `json:"artifact"`
 	Pure                bool                   `json:"pure"`
-	PurePreview         bool                   `json:"purePreview"`
+	SupportsPreview     bool                   `json:"supportsPreview"`
 	InputSchema         map[string]FieldSchema `json:"inputSchema"`
 	ResultSchema        map[string]FieldSchema `json:"resultSchema"`
 	ConfigurationSchema FieldSchema            `json:"configurationSchema"`
@@ -65,20 +66,51 @@ type ArtifactPin struct {
 	Digest       string `json:"digest"`
 }
 
-// InstalledArtifact is a verified plugin executable; loading never starts it. Its process starts on
-// first invocation and belongs to this artifact (one per configured instance and run).
+// InstalledArtifact is a handle to a verified plugin executable; loading never starts it. The
+// process starts on first invocation and is shared, through the host's pool, by every handle loaded
+// for the same instance revision (see PluginHost). Closing a handle releases its reference; it does
+// not stop a pooled process, which the idle timeout, InstanceChanged and host Close do.
 // Invocation still requires the separate current configuration/Principal/source authority participant.
 type InstalledArtifact struct {
 	manifest InstalledManifest
 	host     *PluginHost
-	path     string
-	dir      string
+	process  *pluginProcess
 
 	mu     sync.Mutex
 	closed bool
-	client *plugin.Client
-	stub   *pluginsdk.Client
 }
+
+// isClosed reports whether Close was called on this handle.
+func (a *InstalledArtifact) isClosed() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.closed
+}
+
+// artifactCacheKey identifies a verified executable by its location below the artifact root and its
+// pinned digest.
+type artifactCacheKey struct {
+	root       string
+	executable string
+	digest     string
+}
+
+// cachedArtifact records that the executable at key hashed to key.digest when it had this size,
+// modification time and mode, so later loads skip re-hashing up to MaxArtifactBytes. It is only a
+// load-time shortcut: SecureConfig re-verifies the bytes whenever a process starts.
+type cachedArtifact struct {
+	key       artifactCacheKey
+	path      string
+	dir       string
+	size      int64
+	modTime   time.Time
+	mode      os.FileMode
+	instances map[uuid.UUID]struct{}
+}
+
+// maxCachedArtifacts bounds the verification cache; it is cleared when exceeded because entries
+// are cheap to rebuild and instances rarely pin more than a handful of distinct executables.
+const maxCachedArtifacts = 256
 
 func capabilityUnavailable(cause error) error {
 	return platform.NewFailure(platform.CodeAuthorityUnavailable, cause)
@@ -261,8 +293,22 @@ func hashExecutable(ctx context.Context, root *os.Root, path string) (digest str
 }
 
 // LoadInstalled reads only Operator-provisioned files below root and verifies the exact pinned
-// executable. It does not start the plugin, grant authority or cache a directory scan.
+// executable. It does not start the plugin or grant authority. The artifact is not tied to an
+// instance, so it gets a private process that stops when the handle is closed; use LoadInstalledFor
+// for pooled, reusable processes.
 func (h *PluginHost) LoadInstalled(ctx context.Context, root *os.Root, manifestPath string, pin ArtifactPin) (*InstalledArtifact, error) {
+	return h.LoadInstalledFor(ctx, root, manifestPath, pin, uuid.Nil, 0, InvocationModeLive)
+}
+
+// LoadInstalledFor is LoadInstalled for a configured instance revision. Handles loaded for the
+// same instance, revision, digest and invocation mode share one long-lived plugin process, which
+// the host stops after pluginIdleTimeout, on InstanceChanged for the instance, or on Close. Live
+// and preview invocations never share a process, so an editor's preview cannot occupy the call
+// slot a live run waits for. The executable hash is cached per digest and revalidated by size,
+// modification time and file mode, so repeated loads do not re-read the binary; the manifest is
+// always re-read so edits are never served stale.
+func (h *PluginHost) LoadInstalledFor(ctx context.Context, root *os.Root, manifestPath string, pin ArtifactPin,
+	instance uuid.UUID, revision int64, mode string) (*InstalledArtifact, error) {
 	if h == nil || ctx == nil || root == nil {
 		return nil, invalid(errors.New("missing plugin host/root/context"))
 	}
@@ -277,37 +323,83 @@ func (h *PluginHost) LoadInstalled(ctx context.Context, root *os.Root, manifestP
 	if err := validateManifest(manifest, pin); err != nil {
 		return nil, err
 	}
-	executable := filepath.FromSlash(manifest.Artifact.Path)
-	digest, err := hashExecutable(ctx, root, executable)
-	if err != nil {
-		return nil, err
-	}
-	if digest != pin.Digest {
-		return nil, capabilityUnavailable(errors.New("installed artifact digest changed"))
-	}
 	base, err := filepath.Abs(root.Name())
 	if err != nil {
 		return nil, capabilityUnavailable(err)
 	}
-	path := filepath.Join(base, executable)
-	artifact := &InstalledArtifact{manifest: manifest, host: h, path: path, dir: filepath.Dir(path)}
-	if err := h.register(artifact); err != nil {
+	cached, err := h.verifiedExecutable(ctx, root, base, filepath.FromSlash(manifest.Artifact.Path), pin.Digest, instance)
+	if err != nil {
 		return nil, err
 	}
-	return artifact, nil
+	process, err := h.acquire(processKey{instance: instance, revision: revision, digest: pin.Digest, mode: mode}, cached)
+	if err != nil {
+		return nil, err
+	}
+	return &InstalledArtifact{manifest: manifest, host: h, process: process}, nil
 }
 
-// Close stops this artifact's plugin process after invocations drain; it does not close the host.
+// verifiedExecutable returns the cache entry for an executable whose digest equals digest, hashing
+// the file only when no entry matches its current size, modification time and mode. A digest
+// mismatch is an explicit capability failure and leaves no entry behind.
+func (h *PluginHost) verifiedExecutable(ctx context.Context, root *os.Root, base, executable, digest string,
+	instance uuid.UUID) (*cachedArtifact, error) {
+	key := artifactCacheKey{root: base, executable: executable, digest: digest}
+	info, err := root.Stat(executable)
+	if err != nil {
+		return nil, capabilityUnavailable(err)
+	}
+	h.mu.Lock()
+	entry, hit := h.cache[key]
+	if hit && (entry.size != info.Size() || !entry.modTime.Equal(info.ModTime()) || entry.mode != info.Mode()) {
+		delete(h.cache, key)
+		hit = false
+	}
+	if hit {
+		rememberInstance(entry, instance)
+		h.mu.Unlock()
+		return entry, nil
+	}
+	h.mu.Unlock()
+	actual, err := hashExecutable(ctx, root, executable)
+	if err != nil {
+		return nil, err
+	}
+	if actual != digest {
+		return nil, capabilityUnavailable(errors.New("installed artifact digest changed"))
+	}
+	path := filepath.Join(base, executable)
+	entry = &cachedArtifact{key: key, path: path, dir: filepath.Dir(path), size: info.Size(),
+		modTime: info.ModTime(), mode: info.Mode(), instances: make(map[uuid.UUID]struct{})}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if len(h.cache) >= maxCachedArtifacts {
+		clear(h.cache)
+	}
+	h.cache[key] = entry
+	rememberInstance(entry, instance)
+	return entry, nil
+}
+
+// rememberInstance records which instance loaded an entry so InstanceChanged can drop it.
+func rememberInstance(entry *cachedArtifact, instance uuid.UUID) {
+	if instance != uuid.Nil {
+		entry.instances[instance] = struct{}{}
+	}
+}
+
+// Close releases this handle's reference to its plugin process. A pooled process keeps running for
+// later runs of the same instance revision; an unpooled one stops with its last handle. It is
+// idempotent and does not close the host.
 func (a *InstalledArtifact) Close(ctx context.Context) error {
 	if a == nil || ctx == nil {
 		return invalid(errors.New("missing installed artifact/context"))
 	}
 	a.mu.Lock()
+	already := a.closed
 	a.closed = true
-	a.stopLocked()
 	a.mu.Unlock()
-	if a.host != nil {
-		a.host.forget(a)
+	if !already && a.process != nil {
+		a.process.release()
 	}
 	return nil
 }

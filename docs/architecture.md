@@ -32,7 +32,7 @@ flowchart LR
 | --- | --- |
 | Gateway | Submits transmissions and state reports with a per-gateway bearer credential. See [http-api.md](http-api.md). |
 | Browser / API client | Authenticates with a session cookie (human accounts) or an access key, or acts as the guest account when anonymous. Manages master data, rules, gateways, workflows and instances. |
-| Plugin | Operator-provisioned executable started as a managed child process and called over gRPC. See [plugins.md](plugins.md). |
+| Plugin | Operator-provisioned executable, pinned by SHA-256 digest and verified again by go-plugin each time it is started. One long-lived child process per instance revision, pooled by the plugin host, called over gRPC one request at a time and stopped after an idle timeout, when its instance changes, or at shutdown. Previews call the same process with `mode: "preview"`. See [plugins.md](plugins.md). |
 | PostgreSQL | The only store: domain state, domain events, outbox, work queues, migration ledger, and the clock used for domain time. See [operations.md](operations.md). |
 
 ## End-to-end data flow
@@ -170,7 +170,7 @@ The layering rules that the code follows:
 | `internal/Units` (package `units`) | Agencies, Units, Unit collections, Organizations with setting defaults, Unit templates, bulk Unit operations, setting inheritance |
 | `internal/assignments` | Address rules (selectors, validity intervals, conflict validation), target matching, suppressions, correction status/retry, `CorrectionRunner` |
 | `internal/ingest` | Submission validation, Network resolution, intake service, gateway state reports, gateway administration (network assignment, credentials) |
-| `internal/processing` | Workflow definition model and compiler, CEL predicates, Core regex, value/schema codec, candidate state machine, retry schedule, source capture, plugin host and installed-step execution, processing instances |
+| `internal/processing` | Workflow definition model and compiler, CEL predicates, Core regex, value/schema codec, candidate state machine, retry schedule, source capture, plugin host (process pool, verified-artifact cache) and installed-step execution, processing instances |
 | `internal/processing/management` | Authorized workflow/version/instance commands and reads, candidate status reads, manual retry, preview |
 | `internal/processing/worker` | Candidate dispatcher and per-candidate execution (claim, evaluate, complete/fail, publish) |
 | `internal/processing/publication` | Applies completed results and source readiness in the caller's transaction |
@@ -188,7 +188,7 @@ The layering rules that the code follows:
 | `internal/persistence/ent/processingstore` | Workflows, versions, scope references, instances, candidates, results, publication items |
 | `internal/persistence/ent/commandstore` | Command receipt persistence |
 | `internal/persistence/ent/eventstore` | Appends domain events and their outbox references |
-| `pluginsdk` | Public Go SDK for plugins (`Serve`, `Handler`) |
+| `pluginsdk` | Public Go SDK for plugins (`Serve`, `Handler`, `RequestMode`) |
 | `internal/testutil/postgres`, `internal/testutil/pluginfixture` | Test-only: disposable PostgreSQL, plugin fixture binary |
 
 Repository layout, tests and code generation are covered in [development.md](development.md).

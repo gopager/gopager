@@ -22,7 +22,7 @@ func NewLocalInstanceInspector(host *PluginHost, root *os.Root) (*LocalInstanceI
 	return &LocalInstanceInspector{host: host, root: root}, nil
 }
 
-// InspectInstance verifies exact main/preview pins and configuration without running guest code.
+// InspectInstance verifies the exact artifact pin and configuration without running guest code.
 func (i *LocalInstanceInspector) InspectInstance(ctx context.Context, configuration InstanceConfiguration) (failure error) {
 	if err := configuration.Validate(); err != nil {
 		return err
@@ -43,15 +43,7 @@ func (i *LocalInstanceInspector) InspectInstance(ctx context.Context, configurat
 		manifest.ConfigurationPolicy, configuration.Configuration); err != nil {
 		return err
 	}
-	if configuration.Preview == nil {
-		return nil
-	}
-	preview, err := i.host.LoadInstalled(ctx, i.root, configuration.Preview.ManifestPath, configuration.Preview.Pin)
-	if err != nil {
-		return err
-	}
-	defer func() { failure = errors.Join(failure, preview.Close(context.WithoutCancel(ctx))) }()
-	return validatePreviewArtifact(main, preview)
+	return nil
 }
 
 // ProjectInstanceConfiguration returns declared configuration with Secret and user-scoped values redacted.
@@ -73,23 +65,6 @@ func (i *LocalInstanceInspector) ProjectInstanceConfiguration(ctx context.Contex
 			view = InstanceConfigurationView{}
 		}
 	}()
-	var preview *InstalledArtifact
-	if configuration.Preview != nil {
-		preview, err = i.host.LoadInstalled(ctx, i.root, configuration.Preview.ManifestPath,
-			configuration.Preview.Pin)
-		if err != nil {
-			return InstanceConfigurationView{}, err
-		}
-		defer func() {
-			failure = errors.Join(failure, preview.Close(context.WithoutCancel(ctx)))
-			if failure != nil {
-				view = InstanceConfigurationView{}
-			}
-		}()
-		if err := validatePreviewArtifact(main, preview); err != nil {
-			return InstanceConfigurationView{}, err
-		}
-	}
 	manifest, err := main.Manifest()
 	if err != nil {
 		return InstanceConfigurationView{}, err

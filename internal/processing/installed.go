@@ -9,8 +9,20 @@ import (
 	"github.com/google/uuid"
 )
 
+// Invocation modes carried in InvocationEnvelope.Mode.
+const (
+	// InvocationModeLive is an ordinary processing run; it is the default for an empty Mode.
+	InvocationModeLive = "live"
+	// InvocationModePreview is a dry run for an editor: the plugin must compute its result
+	// without any effect outside its process. Only plugins whose manifest sets supportsPreview
+	// are ever invoked in this mode.
+	InvocationModePreview = "preview"
+)
+
 // InvocationEnvelope contains only current owner-projected input/configuration and pinned identities.
-// It is not accepted from an HTTP caller as execution authority.
+// It is not accepted from an HTTP caller as execution authority. Mode selects live or preview
+// behaviour; the wire schemaVersion stays 2 because the field is additive and a plugin that does
+// not know it is never sent a preview request (see InstalledManifest.SupportsPreview).
 type InvocationEnvelope struct {
 	SchemaVersion         int              `json:"schemaVersion"`
 	InvocationID          uuid.UUID        `json:"invocationId"`
@@ -25,6 +37,7 @@ type InvocationEnvelope struct {
 	Deadline              time.Time        `json:"deadline"`
 	Input                 map[string]Value `json:"input"`
 	Configuration         Value            `json:"configuration"`
+	Mode                  string           `json:"mode"`
 }
 
 type invocationResponse struct {
@@ -68,11 +81,14 @@ func hasSecretPolicy(policy ConfigurationPolicy) bool {
 
 // invokeProjected is deliberately package-private: the current configuration/Principal/source
 // participant must authorize and detach this envelope before the runtime is called.
-func (a *InstalledArtifact) invokeProjected(ctx context.Context, envelope InvocationEnvelope, preview bool) (map[string]Value, error) {
-	return a.invokeProjectedBudget(ctx, envelope, preview, nil)
+func (a *InstalledArtifact) invokeProjected(ctx context.Context, envelope InvocationEnvelope) (map[string]Value, error) {
+	return a.invokeProjectedBudget(ctx, envelope, nil)
 }
 
-func (a *InstalledArtifact) invokeProjectedBudget(ctx context.Context, envelope InvocationEnvelope, preview bool, budget *executionBudget) (map[string]Value, error) {
+// invokeProjectedBudget validates the authorized envelope against the pinned manifest and invokes the
+// plugin. A preview envelope is refused for a plugin that does not declare supportsPreview, so a
+// plugin that ignores envelope.mode can never run its live behaviour for an editor's dry run.
+func (a *InstalledArtifact) invokeProjectedBudget(ctx context.Context, envelope InvocationEnvelope, budget *executionBudget) (map[string]Value, error) {
 	if a == nil || a.host == nil || ctx == nil {
 		return nil, invalid(errors.New("missing installed invocation participant"))
 	}
@@ -85,8 +101,16 @@ func (a *InstalledArtifact) invokeProjectedBudget(ctx context.Context, envelope 
 		envelope.CapabilityID != a.manifest.CapabilityID {
 		return nil, invalid(errors.New("invalid or unpinned invocation identity"))
 	}
-	if preview && !a.manifest.PurePreview {
-		return nil, capabilityUnavailable(errors.New("pure preview capability unavailable"))
+	switch envelope.Mode {
+	case "":
+		envelope.Mode = InvocationModeLive
+	case InvocationModeLive:
+	case InvocationModePreview:
+		if !a.manifest.SupportsPreview {
+			return nil, capabilityUnavailable(errors.New("plugin does not support preview"))
+		}
+	default:
+		return nil, invalid(errors.New("unknown invocation mode"))
 	}
 	if hasSecretPolicy(a.manifest.ConfigurationPolicy) {
 		return nil, capabilityUnavailable(errors.New("Secret resolution is not supplied by this adapter"))

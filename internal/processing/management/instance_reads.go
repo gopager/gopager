@@ -27,13 +27,12 @@ type InstanceArtifactView struct {
 
 // InstanceSummary is the redacted administrative instance listing projection.
 type InstanceSummary struct {
-	ID                   uuid.UUID             `json:"id"`
-	Revision             int64                 `json:"revision,string"`
-	Enabled              bool                  `json:"enabled"`
-	ExecutionPrincipalID uuid.UUID             `json:"executionPrincipalId"`
-	Main                 InstanceArtifactView  `json:"main"`
-	Preview              *InstanceArtifactView `json:"preview,omitempty"`
-	CreatedAt            time.Time             `json:"createdAt"`
+	ID                   uuid.UUID            `json:"id"`
+	Revision             int64                `json:"revision,string"`
+	Enabled              bool                 `json:"enabled"`
+	ExecutionPrincipalID uuid.UUID            `json:"executionPrincipalId"`
+	Main                 InstanceArtifactView `json:"main"`
+	CreatedAt            time.Time            `json:"createdAt"`
 }
 
 // InstanceView adds manifest-classified configuration to a redacted instance summary.
@@ -62,12 +61,6 @@ func instanceSummary(configuration processing.InstanceConfiguration) (InstanceSu
 			CapabilityID: configuration.Main.Pin.CapabilityID,
 		},
 		CreatedAt: configuration.CreatedAt,
-	}
-	if configuration.Preview != nil {
-		summary.Preview = &InstanceArtifactView{
-			PluginID: configuration.Preview.Pin.PluginID, Version: configuration.Preview.Pin.Version,
-			CapabilityID: configuration.Preview.Pin.CapabilityID,
-		}
 	}
 	return summary, nil
 }

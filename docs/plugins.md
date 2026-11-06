@@ -21,16 +21,19 @@ Related documents: [Workflows](workflows.md) (step definitions, instances, previ
 | --- | --- |
 | Process model | Child process of the GoPager server, started through [HashiCorp go-plugin](https://github.com/hashicorp/go-plugin), gRPC protocol only. No in-process loading. |
 | Where it runs | Every server process with the `api` role (workflow preview) or `worker` role (message processing) can start plugins. Each such process needs the artifact directory. |
-| Process ownership | One process per **instance per workflow run**. Two instances of the same plugin, or two concurrent runs using the same instance, never share a process. A main artifact and its preview artifact are separate processes. |
-| Calls per process | Steps and targets of one run are evaluated sequentially, so a process receives one `Invoke` at a time. A step that depends on message targets is invoked once per selected target, all on the same process. |
-| Start | Lazy: on the first `Invoke` of a run. Loading, validating and inspecting an instance never starts the executable. |
+| Process ownership | One long-lived process per **instance configuration revision** (a process pool in the server). Two instances of the same plugin never share a process. All live runs that use the same instance revision, including concurrent runs, share its process; preview invocations of that revision use a second pooled process, so an editor's preview never occupies the call slot a live run waits for. A process keeps its state between runs. |
+| Calls per process | The server sends a process one `Invoke` at a time: concurrent runs queue on the process (the queue wait counts against the 30 s call deadline). A plugin handler therefore needs no locking against concurrent calls. A step that depends on message targets is invoked once per selected target. |
+| Start | Lazy: on the first `Invoke` after the instance revision is first used, or after the process was stopped. Loading, validating and inspecting an instance never starts the executable. |
+| Verified start | The server starts the executable through go-plugin with a `SecureConfig` checksum (the pinned SHA-256 digest). go-plugin hashes the file immediately before it starts it and refuses to start it on a mismatch (`AUTHORITY_UNAVAILABLE`, nothing is executed). The check and the `exec` are two steps; an attacker who can write to the artifact directory can still race them, so keep it writable only by the operator. |
 | Handshake timeout | 10 s. A process that does not complete the handshake is killed. |
+| Idle timeout | 5 minutes without any call stops the process; the next call starts a new one. |
 | Working directory | The directory containing the executable. |
 | Environment | Only `PATH`, `HOME`, `LANG`, `LC_ALL`, `TZ`, `TMPDIR` (when set in the server) plus the go-plugin variables (see [§2](#2-wire-protocol)). Server configuration such as `GOPAGER_DATABASE_URL` is never passed. |
 | stdout / stderr | Discarded after the handshake line; not forwarded to server logs. |
 | Per-call deadline | 30 s. The deadline is also sent in the envelope and as the gRPC deadline. |
-| Kill | On deadline expiry, cancellation, a gRPC error returned by `Invoke` (including a handler error) or a broken connection, the process is killed. The next call in the same run starts a new process. |
-| Stop | When the run ends, the server closes the connection (go-plugin `Shutdown` controller call), waits up to 2 s for the process to exit, then sends `SIGKILL`. Server shutdown stops all remaining processes. |
+| Kill | On deadline expiry, cancellation, a gRPC error returned by `Invoke` (including a handler error) or a broken connection, the process is killed. The next call starts a new process. |
+| Stop | A process stops after the idle timeout, when a newer revision of its instance is committed (the older revision's process stops; running calls of that revision fail), and at server shutdown. Stopping closes the connection (go-plugin `Shutdown` controller call), waits up to 2 s for the process to exit, then sends `SIGKILL`. The end of a workflow run does not stop it. |
+| Artifact cache | The server remembers that an executable matched its pinned digest, keyed by artifact directory, path and digest, and re-hashes it only when its size, modification time or mode changes or the instance changes. The manifest is re-read on every load. |
 | Trust | Plugins are trusted, operator-installed code. There is no sandbox, no memory limit and no seccomp/namespace isolation; use OS or container limits. |
 
 Steps of kind `installed` only accept plugins that declare themselves `pure` (no side effects, no host capabilities). The server cannot enforce purity; it is the author's declaration.
@@ -73,16 +76,21 @@ The request JSON is the invocation envelope. All fields are always present.
 | `schemaVersion` | number | Always `2`. |
 | `invocationId` | string (UUID) | New for every call. |
 | `instanceId` | string (UUID) | The configured instance. Use it to keep per-instance state apart. |
-| `artifactDigest` | string | Lowercase hex SHA-256 of the executable that is being called (the preview artifact's digest during preview). |
+| `artifactDigest` | string | Lowercase hex SHA-256 of the executable that is being called. |
 | `capabilityId` | string | `capabilityId` from the manifest. |
 | `workflowId` | string (UUID) | Workflow being evaluated. |
 | `definitionVersionId` | string (UUID) | Saved workflow version being evaluated. |
-| `runId` | string (UUID) | Workflow run; constant for all calls on one process. |
+| `runId` | string (UUID) | Workflow run of this call. A process serves many runs, so this changes between calls. |
 | `executionPrincipalId` | string (UUID) | Principal the instance executes as. |
 | `configurationRevision` | string | Instance configuration revision as a decimal string, e.g. `"3"`. |
 | `deadline` | string | RFC 3339 timestamp with fractional seconds and the server's local offset, e.g. `"2026-11-05T14:00:30.123456789+01:00"`. Same instant as the gRPC deadline. |
 | `input` | object | Field name → [typed value](#typed-values). Contains only names from `inputSchema`. Optional fields without a value are omitted. |
 | `configuration` | typed value | The instance configuration: a typed value of kind `object` matching `configurationSchema`. |
+| `mode` | string | `"live"` or `"preview"`. See [Preview mode](#preview-mode). |
+
+### Preview mode
+
+`mode` is `"live"` for message processing and `"preview"` when an editor tests a workflow draft (`POST /api/v1/workflows/{id}/preview`). In preview mode the plugin must compute its result **without any effect outside its process** and may return a representative result (for example a plugin that normally calls a lookup service returns sample data). The server sends `"preview"` only to plugins whose manifest sets `supportsPreview` to `true`; for any other plugin a preview of an `installed` step fails with `AUTHORITY_UNAVAILABLE` and the plugin is not called. Because of that gate the field is additive: the envelope `schemaVersion` stays `2`, and a plugin that ignores `mode` is safe as long as it does not declare `supportsPreview`. The server always sends `mode`; treat a missing value as `"live"`. Preview and live calls share the instance's process.
 
 Example:
 
@@ -99,6 +107,7 @@ Example:
   "executionPrincipalId": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
   "configurationRevision": "1",
   "deadline": "2026-11-05T14:00:30.5+01:00",
+  "mode": "live",
   "input": {
     "text": {"kind": "string", "value": "alarm"}
   },
@@ -186,7 +195,7 @@ Return a `failure` response instead of a Go/gRPC error for expected failures: an
 
 | Limit | Value | Enforced by |
 | --- | --- | --- |
-| Call deadline | 30 s per `Invoke`, including process start on the first call of a run; exceeding it is `RESOURCE_LIMIT` | server context + gRPC deadline |
+| Call deadline | 30 s per `Invoke`, including waiting for the process to become free and process start; exceeding it is `RESOURCE_LIMIT` | server context + gRPC deadline |
 | Handshake | 10 s | go-plugin start timeout |
 | Request JSON | ≤ 1 MiB | server (before sending) |
 | Response JSON | ≤ 256 KiB | gRPC receive limit + server check |
@@ -198,7 +207,7 @@ Return a `failure` response instead of a Go/gRPC error for expected failures: an
 | Executable size | ≤ 256 MiB | server (digest check) |
 | Manifest size | ≤ 1 MiB | server |
 | Memory / CPU | none | use OS or container limits |
-| Concurrency | Worker processes 2 candidates in parallel (fixed default); preview requests run in addition. Processes in use = concurrent runs × instances they call. | server |
+| Concurrency | Worker processes 2 candidates in parallel (fixed default); preview requests run in addition. One process per instance revision handles one call at a time, so concurrent runs of the same instance are serialized. | server |
 
 ## 6. Packaging and installation
 
@@ -214,9 +223,6 @@ All paths are relative to the root and cannot leave it (`..`, absolute paths and
 │   ├── 1.0.0/
 │   │   ├── manifest.json
 │   │   └── upper            # executable, mode 0755
-│   └── 1.0.0-preview/
-│       ├── manifest.json
-│       └── upper-preview
 ```
 
 `artifact.path` in a manifest is resolved **relative to the root**, not relative to the manifest file. With the layout above, `upper/1.0.0/manifest.json` contains `"path": "upper/1.0.0/upper"`.
@@ -236,7 +242,7 @@ JSON, UTF-8, at most 1 MiB. Unknown members and duplicate keys are rejected.
 | `artifact.path` | string | yes | Relative path (forward slashes) of the executable inside the root. |
 | `artifact.digest` | string | yes | Lowercase hex SHA-256 of the executable. Must equal the pin and the file. |
 | `pure` | boolean | yes | Must be `true`. |
-| `purePreview` | boolean | for preview | Must be `true` in a preview artifact's manifest. Main artifacts never run in preview. |
+| `supportsPreview` | boolean | no | `true` if the plugin handles [`mode: "preview"`](#preview-mode) without effects outside its process. Default `false`: previews of workflows using this plugin fail with `AUTHORITY_UNAVAILABLE`. The former `purePreview` member is gone and, like any unknown member, rejected. |
 | `inputSchema` | object | yes | Field name → [field schema](#field-schema), ≤ 1000 entries. |
 | `resultSchema` | object | yes | Field name → field schema, ≤ 1000 entries. |
 | `configurationSchema` | field schema | yes | Kind `object`; no `bytes` anywhere. |
@@ -260,7 +266,7 @@ Example (adapted from `internal/processing/testdata/instance-manifest.json`):
     "digest": "5e718916f839bcdcd66bd15a9ad4eae5ff7228b029898d602df75901f5b1d847"
   },
   "pure": true,
-  "purePreview": false,
+  "supportsPreview": true,
   "inputSchema": {"text": {"kind": "string"}},
   "resultSchema": {"upper": {"kind": "string"}},
   "configurationSchema": {
@@ -305,7 +311,7 @@ shasum -a 256 upper/1.0.0/upper     # macOS
 sha256sum upper/1.0.0/upper         # Linux
 ```
 
-Use the lowercase hex output in `artifact.digest` and in the instance pin. On every run the server streams the file (regular file, at least one execute bit, ≤ 256 MiB) and compares the digest before using it. Replacing the file changes the digest and makes existing instances fail with `AUTHORITY_UNAVAILABLE` until they are updated. Ship a new version in a new path rather than overwriting the old one.
+Use the lowercase hex output in `artifact.digest` and in the instance pin. When an artifact is loaded the server streams the file (regular file, at least one execute bit, ≤ 256 MiB) and compares the digest; later loads reuse that result while size, modification time and mode are unchanged. Every process start is verified again by go-plugin (see [Verified start](#1-runtime-model)). Replacing the file changes the digest and makes existing instances fail with `AUTHORITY_UNAVAILABLE` until they are updated. Ship a new version in a new path rather than overwriting the old one.
 
 ### Referencing a plugin
 
@@ -345,9 +351,9 @@ A workflow step references the instance by ID and configuration revision; its `o
 }
 ```
 
-### Preview artifact
+### Preview
 
-Workflow preview never runs the main artifact. An instance may name an optional `preview` artifact with its own manifest and pin. Requirements: `pure` and `purePreview` are `true`; `pluginId`, `version` and `capabilityId` equal the main artifact's; `inputSchema`, `resultSchema`, `configurationSchema` and `configurationPolicy` are identical; its digest may differ. Without a preview artifact, preview of an `installed` step returns `AUTHORITY_UNAVAILABLE`.
+Workflow preview calls the instance's own plugin with `mode: "preview"`; there is no separate preview artifact or `preview` member in an instance. A plugin that does not declare `supportsPreview` is never called in preview, and preview of an `installed` step that uses it returns `AUTHORITY_UNAVAILABLE`. The plugin author is responsible for making preview effect-free; the server cannot enforce it, just as it cannot enforce `pure`.
 
 ### Platform requirements
 
@@ -366,7 +372,10 @@ type Handler interface {
 }
 func Serve(handler Handler)          // blocks until the server stops the plugin
 type HandlerFunc func(ctx context.Context, request []byte) ([]byte, error)
+func RequestMode(request []byte) (string, error) // ModeLive or ModePreview
 ```
+
+The server keeps the process alive between calls and sends it one request at a time, so a handler may cache state (connections, compiled expressions) across calls but must not assume a fresh process per run, and must tolerate being stopped at any time.
 
 `ctx` carries the call deadline and is cancelled when the server gives up. The SDK passes raw JSON; decoding and typed-value handling are the plugin's job.
 
@@ -407,6 +416,7 @@ type value struct {
 type request struct {
 	SchemaVersion int              `json:"schemaVersion"`
 	InstanceID    string           `json:"instanceId"`
+	Mode          string           `json:"mode"`
 	Input         map[string]value `json:"input"`
 	Configuration value            `json:"configuration"`
 }
@@ -424,6 +434,12 @@ func failure(reason string) ([]byte, error) {
 func handle(ctx context.Context, data []byte) ([]byte, error) {
 	var req request
 	if err := json.Unmarshal(data, &req); err != nil || req.SchemaVersion != 2 {
+		return failure("conversion-failed")
+	}
+	// Upper-casing has no effects, so "preview" computes the same result as "live" and the
+	// manifest can declare supportsPreview. A plugin with effects must branch on req.Mode here
+	// (pluginsdk.ModeLive / pluginsdk.ModePreview) and skip them in preview.
+	if req.Mode != pluginsdk.ModeLive && req.Mode != pluginsdk.ModePreview {
 		return failure("conversion-failed")
 	}
 	// Configuration is an object of typed values; "prefix" is optional.
@@ -481,7 +497,7 @@ func TestHandle(t *testing.T) {
 		`"instanceId":"5f0c6f7e-3a3b-4d43-8f0e-6f8f3c0a1b2c","artifactDigest":"00","capabilityId":"upper",` +
 		`"workflowId":"8a7d9a52-1d3c-4b0e-9a0f-0d4d6b9e8c11","definitionVersionId":"c3f1b2a4-6e5d-4c3b-8a29-1f0e9d8c7b6a",` +
 		`"runId":"e2d4c6b8-a0f1-4e3d-9c5b-7a6f8e0d2c4b","executionPrincipalId":"1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",` +
-		`"configurationRevision":"1","deadline":"2026-11-05T14:00:30.5+01:00",` +
+		`"configurationRevision":"1","deadline":"2026-11-05T14:00:30.5+01:00","mode":"live",` +
 		`"input":{"text":{"kind":"string","value":"alarm"}},` +
 		`"configuration":{"kind":"object","value":{"prefix":{"kind":"string","value":"FW: "}}}}`
 	got, err := handle(context.Background(), []byte(request))
@@ -550,7 +566,7 @@ go run ./cmd/hostcheck ./upper request.json
 # {"schemaVersion":2,"fields":{"upper":{"kind":"string","value":"ALARM"}}}
 ```
 
-This does not validate the response against the manifest. For an end-to-end check, provision the artifact directory, create an instance and run a workflow preview with a preview artifact (see [Workflows](workflows.md)). The server's own fixtures are in `internal/processing/testdata/command` and `internal/processing/testdata/preview`.
+This does not validate the response against the manifest. For an end-to-end check, provision the artifact directory, create an instance and run a workflow preview (see [Workflows](workflows.md)); the plugin must declare `supportsPreview`. The server's own fixture is `internal/processing/testdata/command`; it answers `mode: "preview"` by prefixing its `text` field with `PREVIEW:`.
 
 ## 8. Writing a plugin in another language
 
@@ -561,12 +577,12 @@ Follow go-plugin's [non-Go plugin guide](https://github.com/hashicorp/go-plugin/
 3. Start a plaintext gRPC server on a Unix socket (e.g. in `TMPDIR`) or on `127.0.0.1` with a port in `PLUGIN_MIN_PORT`..`PLUGIN_MAX_PORT`.
 4. Register `gopager.plugin.v2.Plugin` from [`plugin.proto`](../api/plugin/v2/plugin.proto) (method `Invoke`, `google.protobuf.BytesValue` in and out).
 5. Register `grpc.health.v1.Health` reporting service `plugin` as `SERVING`.
-6. Optionally implement `plugin.GRPCController/Shutdown` to exit on request; otherwise the process is killed 2 s after the run ends. `plugin.GRPCStdio` and `plugin.GRPCBroker` are not needed.
+6. Optionally implement `plugin.GRPCController/Shutdown` to exit on request; otherwise the process is killed 2 s after the server stops it (idle timeout, newer instance revision, shutdown). `plugin.GRPCStdio` and `plugin.GRPCBroker` are not needed.
 7. After the server listens, print exactly one line to stdout and flush it: `1|2|unix|/path/to/socket|grpc` or `1|2|tcp|127.0.0.1:PORT|grpc`. Complete this within 10 s of process start.
 8. Accept a request message of up to 1 MiB (plus framing); return at most 256 KiB of JSON.
-9. Parse the [request envelope](#3-invocation-request); encode results as [typed values](#typed-values) (integers as decimal strings, bytes as padded standard Base64, timestamps as RFC 3339 with offset).
+9. Parse the [request envelope](#3-invocation-request), including `mode` (see [Preview mode](#preview-mode)); encode results as [typed values](#typed-values) (integers as decimal strings, bytes as padded standard Base64, timestamps as RFC 3339 with offset).
 10. Return a [response document](#4-response) with `schemaVersion` 2 and exactly one of `fields` / `failure`; return `failure` instead of a gRPC error for expected failures.
-11. Honour the gRPC deadline (≤ 30 s); work beyond it is discarded and the process is killed.
+11. Honour the gRPC deadline (≤ 30 s); work beyond it is discarded and the process is killed. Expect one request at a time and a process that lives across many runs.
 12. Do not rely on stdout/stderr for diagnostics after the handshake line; they are discarded.
 13. Do not rely on environment variables other than `PATH`, `HOME`, `LANG`, `LC_ALL`, `TZ`, `TMPDIR` and the go-plugin variables.
 14. Package as an executable file (`chmod +x`), write the manifest, compute the SHA-256 and provision both in the artifact directory ([§6](#6-packaging-and-installation)).

@@ -2347,6 +2347,8 @@ paths:
         by its `networkId`: an unknown Network is 404 `NOT_FOUND`; a deleted Network, or one whose
         Protocol differs from the input, is 503 `AUTHORITY_UNAVAILABLE`. `storedTransmissionId` is not
         supported and returns 503 `AUTHORITY_UNAVAILABLE` after validation and authorization.
+        An `installed` step is called in preview mode; a plugin whose manifest does not declare
+        `supportsPreview` is not called and the request is 503 `AUTHORITY_UNAVAILABLE`.
          The body is limited to 1 MiB and is decoded strictly: unknown fields, duplicate object keys and trailing data are 400.
       security:
       - sessionCookie: []
@@ -5937,8 +5939,8 @@ components:
       additionalProperties: false
     CreateInstanceRequest:
       type: object
-      description: '`preview` is optional and must match `main` in plugin, version and capability. `configuration`
-        must be valid against the manifest''s configuration schema.'
+      description: '`configuration` must be valid against the manifest''s configuration schema. A preview of
+        a Workflow calls `main` in preview mode and requires its manifest to declare `supportsPreview`.'
       required:
       - schemaVersion
       - commandId
@@ -5966,8 +5968,6 @@ components:
           format: uuid
           description: Principal the plugin runs as; must currently resolve.
         main:
-          $ref: '#/components/schemas/ProvisionedArtifact'
-        preview:
           $ref: '#/components/schemas/ProvisionedArtifact'
         configuration:
           $ref: '#/components/schemas/TypedValue'
@@ -5999,8 +5999,6 @@ components:
           format: uuid
           description: Principal the plugin runs as; must currently resolve.
         main:
-          $ref: '#/components/schemas/ProvisionedArtifact'
-        preview:
           $ref: '#/components/schemas/ProvisionedArtifact'
         configuration:
           $ref: '#/components/schemas/TypedValue'
@@ -6040,8 +6038,6 @@ components:
           type: string
           format: uuid
         main:
-          $ref: '#/components/schemas/InstanceArtifact'
-        preview:
           $ref: '#/components/schemas/InstanceArtifact'
         createdAt:
           type: string
@@ -6098,8 +6094,6 @@ components:
           type: string
           format: uuid
         main:
-          $ref: '#/components/schemas/InstanceArtifact'
-        preview:
           $ref: '#/components/schemas/InstanceArtifact'
         createdAt:
           type: string

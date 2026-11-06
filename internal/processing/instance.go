@@ -24,15 +24,14 @@ type ProvisionedArtifact struct {
 // InstanceConfiguration is an immutable administrative revision, separate from Workflow versions.
 // Unsupported Secret and personal configuration cannot be supplied through this administrative record.
 type InstanceConfiguration struct {
-	ID                   uuid.UUID            `json:"id"`
-	Revision             int64                `json:"revision,string"`
-	Enabled              bool                 `json:"enabled"`
-	ExecutionPrincipalID uuid.UUID            `json:"executionPrincipalId"`
-	Main                 ProvisionedArtifact  `json:"main"`
-	Preview              *ProvisionedArtifact `json:"preview,omitempty"`
-	Configuration        Value                `json:"configuration"`
-	CreatedAt            time.Time            `json:"createdAt"`
-	CreatedBy            uuid.UUID            `json:"createdBy"`
+	ID                   uuid.UUID           `json:"id"`
+	Revision             int64               `json:"revision,string"`
+	Enabled              bool                `json:"enabled"`
+	ExecutionPrincipalID uuid.UUID           `json:"executionPrincipalId"`
+	Main                 ProvisionedArtifact `json:"main"`
+	Configuration        Value               `json:"configuration"`
+	CreatedAt            time.Time           `json:"createdAt"`
+	CreatedBy            uuid.UUID           `json:"createdBy"`
 }
 
 // ConfigurationFieldView describes one declared administrative configuration value.
@@ -58,23 +57,15 @@ func (i InstanceConfiguration) Validate() error {
 		i.Main.ManifestPath == "" {
 		return invalid(errors.New("invalid installed instance identity"))
 	}
-	for _, artifact := range []*ProvisionedArtifact{&i.Main, i.Preview} {
-		if artifact == nil {
-			continue
-		}
-		if artifact.ManifestPath == "" || !utf8.ValidString(artifact.ManifestPath) ||
-			strings.ContainsRune(artifact.ManifestPath, '\x00') || !validLocalName(artifact.Pin.PluginID) ||
-			!validLocalName(artifact.Pin.Version) || !validLocalName(artifact.Pin.CapabilityID) {
-			return invalid(errors.New("invalid provisioned instance artifact"))
-		}
-		digest, err := hex.DecodeString(artifact.Pin.Digest)
-		if err != nil || len(digest) != sha256.Size || artifact.Pin.Digest != strings.ToLower(artifact.Pin.Digest) {
-			return invalid(errors.New("invalid instance artifact digest"))
-		}
-		if artifact != &i.Main && (artifact.Pin.PluginID != i.Main.Pin.PluginID ||
-			artifact.Pin.Version != i.Main.Pin.Version || artifact.Pin.CapabilityID != i.Main.Pin.CapabilityID) {
-			return capabilityUnavailable(errors.New("preview instance identity differs"))
-		}
+	artifact := i.Main
+	if !utf8.ValidString(artifact.ManifestPath) || strings.ContainsRune(artifact.ManifestPath, '\x00') ||
+		!validLocalName(artifact.Pin.PluginID) || !validLocalName(artifact.Pin.Version) ||
+		!validLocalName(artifact.Pin.CapabilityID) {
+		return invalid(errors.New("invalid provisioned instance artifact"))
+	}
+	digest, err := hex.DecodeString(artifact.Pin.Digest)
+	if err != nil || len(digest) != sha256.Size || artifact.Pin.Digest != strings.ToLower(artifact.Pin.Digest) {
+		return invalid(errors.New("invalid instance artifact digest"))
 	}
 	encoded, err := json.Marshal(i)
 	if err != nil {

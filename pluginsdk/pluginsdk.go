@@ -9,6 +9,11 @@
 //
 //	func main() {
 //		pluginsdk.Serve(pluginsdk.HandlerFunc(func(ctx context.Context, request []byte) ([]byte, error) {
+//			mode, err := pluginsdk.RequestMode(request)
+//			if err != nil {
+//				return nil, err
+//			}
+//			_ = mode // pluginsdk.ModePreview only reaches plugins that declare supportsPreview
 //			return []byte(`{"schemaVersion":2,"fields":{}}`), nil
 //		}))
 //	}
@@ -16,7 +21,9 @@ package pluginsdk
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"
@@ -46,8 +53,39 @@ var Handshake = plugin.HandshakeConfig{
 	MagicCookieValue: MagicCookieValue,
 }
 
+// Invocation modes carried in the request's "mode" property.
+const (
+	// ModeLive is an ordinary processing run and the default when "mode" is absent.
+	ModeLive = "live"
+	// ModePreview is a dry run for an editor: the plugin must compute its result without any
+	// effect outside its process. The Core sends it only to plugins whose manifest sets
+	// "supportsPreview", so a plugin without that declaration never needs to handle it.
+	ModePreview = "preview"
+)
+
+// RequestMode returns the invocation mode of a request: ModeLive when the property is absent,
+// ModePreview or ModeLive otherwise, and an error for malformed JSON or an unknown mode.
+func RequestMode(request []byte) (string, error) {
+	var header struct {
+		Mode string `json:"mode"`
+	}
+	if err := json.Unmarshal(request, &header); err != nil {
+		return "", fmt.Errorf("pluginsdk: invalid request: %w", err)
+	}
+	switch header.Mode {
+	case "", ModeLive:
+		return ModeLive, nil
+	case ModePreview:
+		return ModePreview, nil
+	default:
+		return "", fmt.Errorf("pluginsdk: unknown invocation mode %q", header.Mode)
+	}
+}
+
 // Handler receives one JSON request and returns one JSON response.
-// The context ends when the Core's deadline expires or the call is cancelled.
+// The context ends when the Core's deadline expires or the call is cancelled. The Core keeps one
+// long-lived process per configured instance and sends it one request at a time, so a Handler
+// may keep state between calls without locking but must not rely on a fresh process per call.
 type Handler interface {
 	Invoke(ctx context.Context, request []byte) ([]byte, error)
 }

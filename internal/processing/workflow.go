@@ -88,7 +88,6 @@ type compiledStep struct {
 	then       []compiledStep
 	otherwise  []compiledStep
 	installed  *InstalledArtifact
-	preview    *InstalledArtifact
 }
 
 // WorkflowProgram holds detached checked definitions and prepared CEL programs.
@@ -396,21 +395,6 @@ func compileWorkflow(ctx context.Context, definition Definition, source Declarat
 				}
 				if !sameOutputSchema(step.OutputSchema, manifest.ResultSchema) {
 					return nil, invalid(errors.New("installed step result declaration differs from capability"))
-				}
-				if previews, ok := artifacts.(InstalledPreviewArtifacts); ok {
-					preview, configured, err := previews.PrepareInstalledPreview(ctx,
-						step.Installed.InstanceID, step.Installed.ConfigurationRevision)
-					if err != nil {
-						return nil, err
-					}
-					if configured {
-						if err := validatePreviewArtifact(item.installed, preview); err != nil {
-							return nil, err
-						}
-						item.preview = preview
-					} else if preview != nil {
-						return nil, invalid(errors.New("unconfigured preview returned an artifact"))
-					}
 				}
 			default:
 				return nil, invalid(errors.New("unknown Workflow step kind"))

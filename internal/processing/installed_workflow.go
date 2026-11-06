@@ -36,46 +36,6 @@ type InstalledArtifactOwner interface {
 	InstalledArtifactLoader
 }
 
-// InstalledPreviewArtifacts resolves an independently pinned optional preview implementation.
-// False explicitly means unconfigured; an invalid configured artifact returns an error.
-type InstalledPreviewArtifacts interface {
-	PrepareInstalledPreview(context.Context, uuid.UUID, int64) (*InstalledArtifact, bool, error)
-}
-
-func validatePreviewArtifact(main, preview *InstalledArtifact) error {
-	if preview == nil || preview == main {
-		return capabilityUnavailable(errors.New("dedicated preview artifact unavailable"))
-	}
-	primary, err := main.Manifest()
-	if err != nil {
-		return err
-	}
-	declaration, err := preview.Manifest()
-	if err != nil {
-		return err
-	}
-	if !declaration.Pure || !declaration.PurePreview || declaration.PluginID != primary.PluginID ||
-		declaration.Version != primary.Version || declaration.CapabilityID != primary.CapabilityID ||
-		!sameOutputSchema(primary.InputSchema, declaration.InputSchema) ||
-		!sameOutputSchema(primary.ResultSchema, declaration.ResultSchema) ||
-		!sameOutputSchema(map[string]FieldSchema{"config": primary.ConfigurationSchema},
-			map[string]FieldSchema{"config": declaration.ConfigurationSchema}) {
-		return capabilityUnavailable(errors.New("dedicated preview declaration differs from processing capability"))
-	}
-	left, err := json.Marshal(primary.ConfigurationPolicy)
-	if err != nil {
-		return invalid(err)
-	}
-	right, err := json.Marshal(declaration.ConfigurationPolicy)
-	if err != nil {
-		return invalid(err)
-	}
-	if !bytes.Equal(left, right) {
-		return capabilityUnavailable(errors.New("dedicated preview configuration classification differs"))
-	}
-	return nil
-}
-
 // InvocationContext binds a call to the actual captured source and optional original body target.
 // It is host metadata, never a caller-selected public input or guest capability.
 type InvocationContext struct {
@@ -165,14 +125,15 @@ func executeInstalled(ctx context.Context, step compiledStep, frame *executionFr
 	if err := frame.budget.consume(envelope); err != nil {
 		return nil, err
 	}
-	artifact := step.installed
+	mode := InvocationModeLive
 	if preview {
-		if step.preview == nil {
-			return nil, capabilityUnavailable(errors.New("dedicated preview implementation unavailable"))
-		}
-		artifact = step.preview
+		mode = InvocationModePreview
 	}
-	output, err := artifact.invokeProjectedBudget(ctx, envelope, preview, frame.budget)
+	if envelope.Mode != "" && envelope.Mode != mode {
+		return nil, capabilityUnavailable(errors.New("authorized installed mode differs from the run"))
+	}
+	envelope.Mode = mode
+	output, err := step.installed.invokeProjectedBudget(ctx, envelope, frame.budget)
 	if err != nil {
 		return nil, err
 	}
