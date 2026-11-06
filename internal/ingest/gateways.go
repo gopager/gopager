@@ -121,46 +121,36 @@ func (s *GatewayAdministration) ConfigureNetworks(ctx context.Context, proof ide
 			Priority: item.Priority})
 	}
 	var revision int64
-	err := s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-		authentication, err := s.resolver.Resolve(tx.Context(), tx, proof)
-		if err != nil {
-			return err
-		}
-		if err := check(authentication); err != nil {
-			return err
-		}
-		now, err := s.clock.Now(tx.Context(), tx)
-		if err != nil {
-			return err
-		}
-		current, err := s.repository.GatewayNetworksForAuthorization(tx.Context(), tx, gateway)
-		if err != nil {
-			return err
-		}
-		scope := make(map[uuid.UUID]bool)
-		for _, network := range current {
-			scope[network.AgencyID] = true
-		}
-		for index := range assignments {
-			protocol, agency, err := s.repository.ReadNetwork(tx.Context(), tx, assignments[index].NetworkID)
+	err := identity.WithAuthority(ctx, s.transactions, s.clock, s.resolver, proof, true, check,
+		func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
+			current, err := s.repository.GatewayNetworksForAuthorization(tx.Context(), tx, gateway)
 			if err != nil {
-				if errors.Is(err, authz.ErrNotFound) {
-					return authz.ErrInvalidInput
-				}
 				return err
 			}
-			if !protocol.Valid() {
-				return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("invalid current Network Protocol"))
+			scope := make(map[uuid.UUID]bool)
+			for _, network := range current {
+				scope[network.AgencyID] = true
 			}
-			assignments[index].Protocol = protocol
-			scope[agency] = true
-		}
-		if err := authorizeGatewayNetworks(authentication.Authority, "gateway.update", scope, now); err != nil {
+			for index := range assignments {
+				protocol, agency, err := s.repository.ReadNetwork(tx.Context(), tx, assignments[index].NetworkID)
+				if err != nil {
+					if errors.Is(err, authz.ErrNotFound) {
+						return authz.ErrInvalidInput
+					}
+					return err
+				}
+				if !protocol.Valid() {
+					return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("invalid current Network Protocol"))
+				}
+				assignments[index].Protocol = protocol
+				scope[agency] = true
+			}
+			if err := authorizeGatewayNetworks(authority, "gateway.update", scope, now); err != nil {
+				return err
+			}
+			revision, err = s.repository.ReplaceGatewayNetworks(tx.Context(), tx, gateway, expected, assignments)
 			return err
-		}
-		revision, err = s.repository.ReplaceGatewayNetworks(tx.Context(), tx, gateway, expected, assignments)
-		return err
-	})
+		})
 	return revision, err
 }
 
@@ -174,32 +164,25 @@ func (s *GatewayAdministration) ReadCredentialStatus(ctx context.Context, proof 
 		return nil, authz.ErrInvalidInput
 	}
 	var result []GatewayCredentialView
-	err := s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-		authentication, err := s.resolver.Resolve(tx.Context(), tx, proof)
-		if err != nil {
+	err := identity.WithAuthority(ctx, s.transactions, s.clock, s.resolver, proof, false, nil,
+		func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
+			networks, err := s.repository.GatewayNetworksForAuthorization(tx.Context(), tx, gateway)
+			if err != nil {
+				return err
+			}
+			scope := make(map[uuid.UUID]bool)
+			for _, network := range networks {
+				scope[network.AgencyID] = true
+			}
+			if err := authorizeGatewayNetworks(authority, "gateway.read", scope, now); err != nil {
+				return err
+			}
+			result, err = s.repository.GatewayCredentialStatus(tx.Context(), tx, gateway)
+			if err == nil && !validGatewayCredentialViews(result) {
+				return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("invalid Gateway credential status"))
+			}
 			return err
-		}
-		now, err := s.clock.Now(tx.Context(), tx)
-		if err != nil {
-			return err
-		}
-		networks, err := s.repository.GatewayNetworksForAuthorization(tx.Context(), tx, gateway)
-		if err != nil {
-			return err
-		}
-		scope := make(map[uuid.UUID]bool)
-		for _, network := range networks {
-			scope[network.AgencyID] = true
-		}
-		if err := authorizeGatewayNetworks(authentication.Authority, "gateway.read", scope, now); err != nil {
-			return err
-		}
-		result, err = s.repository.GatewayCredentialStatus(tx.Context(), tx, gateway)
-		if err == nil && !validGatewayCredentialViews(result) {
-			return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("invalid Gateway credential status"))
-		}
-		return err
-	})
+		})
 	return result, err
 }
 
@@ -223,89 +206,79 @@ func (s *GatewayAdministration) IssueCredential(ctx context.Context, proof ident
 		return GatewayCredentialIssueResult{}, err
 	}
 	var result GatewayCredentialIssueResult
-	err = s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-		authentication, err := s.resolver.Resolve(tx.Context(), tx, proof)
-		if err != nil {
-			return err
-		}
-		if err := check(authentication); err != nil {
-			return err
-		}
-		now, err := s.clock.Now(tx.Context(), tx)
-		if err != nil {
-			return err
-		}
-		networks, err := s.repository.GatewayNetworksForAuthorization(tx.Context(), tx, gateway)
-		if err != nil {
-			return err
-		}
-		scope := make(map[uuid.UUID]bool)
-		for _, network := range networks {
-			scope[network.AgencyID] = true
-		}
-		if err := authorizeGatewayNetworks(authentication.Authority, "gateway.update", scope, now); err != nil {
-			return err
-		}
-		actor, err := uuid.Parse(authentication.Authority.PrincipalID)
-		if err != nil {
-			return platform.NewFailure(platform.CodeAuthorityUnavailable, err)
-		}
-		receipt, found, err := s.receipts.ReadCommandReceipt(tx.Context(), tx, actor, command)
-		if err != nil {
-			return err
-		}
-		if found {
-			recorded, err := receipt.Check("gateway.credential.issue", fingerprint)
+	err = identity.WithAuthority(ctx, s.transactions, s.clock, s.resolver, proof, true, check,
+		func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
+			networks, err := s.repository.GatewayNetworksForAuthorization(tx.Context(), tx, gateway)
 			if err != nil {
 				return err
 			}
-			views, err := s.repository.GatewayCredentialStatus(tx.Context(), tx, gateway)
+			scope := make(map[uuid.UUID]bool)
+			for _, network := range networks {
+				scope[network.AgencyID] = true
+			}
+			if err := authorizeGatewayNetworks(authority, "gateway.update", scope, now); err != nil {
+				return err
+			}
+			actor, err := uuid.Parse(authority.PrincipalID)
+			if err != nil {
+				return platform.NewFailure(platform.CodeAuthorityUnavailable, err)
+			}
+			receipt, found, err := s.receipts.ReadCommandReceipt(tx.Context(), tx, actor, command)
 			if err != nil {
 				return err
 			}
-			if !validGatewayCredentialViews(views) {
-				return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("invalid Gateway credential status"))
-			}
-			for _, view := range views {
-				if view.ID == recorded.ID {
-					result = GatewayCredentialIssueResult{CredentialID: recorded.ID, Status: view.Status,
-						Revision: recorded.Revision, Replayed: true}
-					return nil
+			if found {
+				recorded, err := receipt.Check("gateway.credential.issue", fingerprint)
+				if err != nil {
+					return err
 				}
+				views, err := s.repository.GatewayCredentialStatus(tx.Context(), tx, gateway)
+				if err != nil {
+					return err
+				}
+				if !validGatewayCredentialViews(views) {
+					return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("invalid Gateway credential status"))
+				}
+				for _, view := range views {
+					if view.ID == recorded.ID {
+						result = GatewayCredentialIssueResult{CredentialID: recorded.ID, Status: view.Status,
+							Revision: recorded.Revision, Replayed: true}
+						return nil
+					}
+				}
+				return authz.ErrNotFound
 			}
-			return authz.ErrNotFound
-		}
-		secret, hash, err := identity.NewSecret()
-		if err != nil {
-			return err
-		}
-		credentialID := uuid.New()
-		pending, revision, err := s.repository.IssueGatewayCredential(tx.Context(), tx, gateway,
-			expected, credentialID, hash, now)
-		if err != nil {
-			return err
-		}
-		if _, err := s.facts.AppendIdentityFact(tx.Context(), tx, events.IdentityFact{
-			ID: uuid.New(), Type: events.ConfigurationChanged,
-			Aggregate: events.EntityRef{Type: "credential", ID: credentialID}, Revision: credentialIssuedRevision,
-			OccurredAt: now, ChangeKind: events.CredentialIssued,
-		}); err != nil {
-			return err
-		}
-		if err := s.receipts.SaveCommandReceipt(tx.Context(), tx, commands.Receipt{
-			ActorID: actor, CommandID: command, Operation: "gateway.credential.issue", Fingerprint: fingerprint,
-			Result: commands.Result{ID: credentialID, Revision: revision}, RecordedAt: now,
-		}); err != nil {
-			return err
-		}
-		status := "current"
-		if pending {
-			status = "pending"
-		}
-		result = GatewayCredentialIssueResult{CredentialID: credentialID, Secret: secret,
-			Status: status, Revision: revision}
-		return nil
-	})
+			secret, hash, err := identity.NewSecret()
+			if err != nil {
+				return err
+			}
+			credentialID := uuid.New()
+			pending, revision, err := s.repository.IssueGatewayCredential(tx.Context(), tx, gateway,
+				expected, credentialID, hash, now)
+			if err != nil {
+				return err
+			}
+			if _, err := s.facts.AppendIdentityFact(tx.Context(), tx, events.IdentityFact{
+				ID: uuid.New(), Type: events.ConfigurationChanged,
+				Aggregate: events.EntityRef{Type: "credential", ID: credentialID}, Revision: credentialIssuedRevision,
+				OccurredAt: now, ChangeKind: events.CredentialIssued,
+			}); err != nil {
+				return err
+			}
+			if err := s.receipts.SaveCommandReceipt(tx.Context(), tx, commands.Receipt{
+				ActorID: actor, CommandID: command, Operation: "gateway.credential.issue", Fingerprint: fingerprint,
+				Result: commands.Result{ID: credentialID, Revision: revision}, RecordedAt: now,
+			}); err != nil {
+				return err
+			}
+			status := "current"
+			if pending {
+				status = "pending"
+			}
+			result = GatewayCredentialIssueResult{CredentialID: credentialID, Secret: secret,
+				Status: status, Revision: revision}
+			return nil
+		})
 	return result, err
 }
 
@@ -327,61 +300,51 @@ func (s *GatewayAdministration) RevokeCredential(ctx context.Context, proof iden
 		return 0, err
 	}
 	var revision int64
-	err = s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-		authentication, err := s.resolver.Resolve(tx.Context(), tx, proof)
-		if err != nil {
-			return err
-		}
-		if err := check(authentication); err != nil {
-			return err
-		}
-		now, err := s.clock.Now(tx.Context(), tx)
-		if err != nil {
-			return err
-		}
-		networks, err := s.repository.GatewayNetworksForAuthorization(tx.Context(), tx, gateway)
-		if err != nil {
-			return err
-		}
-		scope := make(map[uuid.UUID]bool)
-		for _, network := range networks {
-			scope[network.AgencyID] = true
-		}
-		if err := authorizeGatewayNetworks(authentication.Authority, "gateway.update", scope, now); err != nil {
-			return err
-		}
-		actor, err := uuid.Parse(authentication.Authority.PrincipalID)
-		if err != nil {
-			return platform.NewFailure(platform.CodeAuthorityUnavailable, err)
-		}
-		receipt, found, err := s.receipts.ReadCommandReceipt(tx.Context(), tx, actor, command)
-		if err != nil {
-			return err
-		}
-		if found {
-			recorded, err := receipt.Check("gateway.credential.revoke", fingerprint)
+	err = identity.WithAuthority(ctx, s.transactions, s.clock, s.resolver, proof, true, check,
+		func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
+			networks, err := s.repository.GatewayNetworksForAuthorization(tx.Context(), tx, gateway)
 			if err != nil {
 				return err
 			}
-			revision = recorded.Revision
-			return nil
-		}
-		revision, err = s.repository.RevokeGatewayCredential(tx.Context(), tx, gateway, credential, expected, now)
-		if err != nil {
-			return err
-		}
-		if _, err := s.facts.AppendIdentityFact(tx.Context(), tx, events.IdentityFact{
-			ID: uuid.New(), Type: events.ConfigurationChanged,
-			Aggregate: events.EntityRef{Type: "credential", ID: credential}, Revision: credentialRevokedRevision,
-			OccurredAt: now, ChangeKind: events.CredentialRevoked,
-		}); err != nil {
-			return err
-		}
-		return s.receipts.SaveCommandReceipt(tx.Context(), tx, commands.Receipt{
-			ActorID: actor, CommandID: command, Operation: "gateway.credential.revoke", Fingerprint: fingerprint,
-			Result: commands.Result{ID: credential, Revision: revision}, RecordedAt: now,
+			scope := make(map[uuid.UUID]bool)
+			for _, network := range networks {
+				scope[network.AgencyID] = true
+			}
+			if err := authorizeGatewayNetworks(authority, "gateway.update", scope, now); err != nil {
+				return err
+			}
+			actor, err := uuid.Parse(authority.PrincipalID)
+			if err != nil {
+				return platform.NewFailure(platform.CodeAuthorityUnavailable, err)
+			}
+			receipt, found, err := s.receipts.ReadCommandReceipt(tx.Context(), tx, actor, command)
+			if err != nil {
+				return err
+			}
+			if found {
+				recorded, err := receipt.Check("gateway.credential.revoke", fingerprint)
+				if err != nil {
+					return err
+				}
+				revision = recorded.Revision
+				return nil
+			}
+			revision, err = s.repository.RevokeGatewayCredential(tx.Context(), tx, gateway, credential, expected, now)
+			if err != nil {
+				return err
+			}
+			if _, err := s.facts.AppendIdentityFact(tx.Context(), tx, events.IdentityFact{
+				ID: uuid.New(), Type: events.ConfigurationChanged,
+				Aggregate: events.EntityRef{Type: "credential", ID: credential}, Revision: credentialRevokedRevision,
+				OccurredAt: now, ChangeKind: events.CredentialRevoked,
+			}); err != nil {
+				return err
+			}
+			return s.receipts.SaveCommandReceipt(tx.Context(), tx, commands.Receipt{
+				ActorID: actor, CommandID: command, Operation: "gateway.credential.revoke", Fingerprint: fingerprint,
+				Result: commands.Result{ID: credential, Revision: revision}, RecordedAt: now,
+			})
 		})
-	})
 	return revision, err
 }
 

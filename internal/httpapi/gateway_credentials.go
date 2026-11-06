@@ -10,12 +10,9 @@ import (
 )
 
 type gatewayManagementAPI struct {
-	transport *identity.HTTPTransport
-	service   *ingest.GatewayAdministration
+	routeGuard
+	service *ingest.GatewayAdministration
 }
-
-type gatewayManagementOperation func(*http.Request, identity.Proof,
-	func(identity.Authentication) error) (any, error)
 
 type gatewayRevisionResult struct {
 	SchemaVersion int   `json:"schemaVersion"`
@@ -43,9 +40,21 @@ type gatewayCredentialIssueResponse struct {
 	replayed      bool
 }
 
+// responseStatus answers 200 for a replayed command, which created nothing, and the route's own
+// success status otherwise.
+func (r gatewayCredentialIssueResponse) responseStatus(fallback int) int {
+	if r.replayed {
+		return http.StatusOK
+	}
+	return fallback
+}
+
+// RegisterGatewayManagementRoutes adds the Gateway Network assignment and credential routes. Their
+// success bodies are not wrapped in the management data envelope.
 func RegisterGatewayManagementRoutes(mux *http.ServeMux, transport *identity.HTTPTransport,
-	service *ingest.GatewayAdministration) {
-	api := gatewayManagementAPI{transport: transport, service: service}
+	authenticator Authenticator, service *ingest.GatewayAdministration) {
+	api := gatewayManagementAPI{routeGuard: routeGuard{transport: transport, authenticator: authenticator},
+		service: service}
 	mux.HandleFunc("PUT /api/v1/gateways/{id}/networks", api.route(func(r *http.Request, proof identity.Proof,
 		check func(identity.Authentication) error) (any, error) {
 		gateway, err := managementID(r)
@@ -65,7 +74,7 @@ func RegisterGatewayManagementRoutes(mux *http.ServeMux, transport *identity.HTT
 			return nil, err
 		}
 		return gatewayRevisionResult{SchemaVersion: 1, Revision: revision}, nil
-	}, http.StatusOK))
+	}, http.StatusOK, withoutEnvelope()))
 	mux.HandleFunc("GET /api/v1/gateways/{id}/credentials", api.route(func(r *http.Request, proof identity.Proof,
 		_ func(identity.Authentication) error) (any, error) {
 		gateway, err := managementID(r)
@@ -80,7 +89,7 @@ func RegisterGatewayManagementRoutes(mux *http.ServeMux, transport *identity.HTT
 			SchemaVersion int                            `json:"schemaVersion"`
 			Credentials   []ingest.GatewayCredentialView `json:"credentials"`
 		}{1, credentials}, nil
-	}, http.StatusOK))
+	}, http.StatusOK, withoutEnvelope()))
 	mux.HandleFunc("POST /api/v1/gateways/{id}/credentials", api.route(func(r *http.Request, proof identity.Proof,
 		check func(identity.Authentication) error) (any, error) {
 		gateway, err := managementID(r)
@@ -101,7 +110,7 @@ func RegisterGatewayManagementRoutes(mux *http.ServeMux, transport *identity.HTT
 		}
 		return gatewayCredentialIssueResponse{SchemaVersion: 1, CredentialID: result.CredentialID.String(),
 			Secret: result.Secret, Status: result.Status, Revision: result.Revision, replayed: result.Replayed}, nil
-	}, http.StatusCreated))
+	}, http.StatusCreated, withoutEnvelope()))
 	mux.HandleFunc("DELETE /api/v1/gateways/{id}/credentials/{credentialId}", api.route(func(r *http.Request,
 		proof identity.Proof, check func(identity.Authentication) error) (any, error) {
 		gateway, err := managementID(r)
@@ -125,29 +134,5 @@ func RegisterGatewayManagementRoutes(mux *http.ServeMux, transport *identity.HTT
 			return nil, err
 		}
 		return gatewayRevisionResult{SchemaVersion: 1, Revision: revision}, nil
-	}, http.StatusOK))
-}
-
-func (api gatewayManagementAPI) route(operation gatewayManagementOperation, status int) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		responseStatus := status
-		proof, err := api.transport.SelectProof(r)
-		if err != nil {
-			writeManagementError(w, err)
-			return
-		}
-		result, err := operation(r, proof, func(authentication identity.Authentication) error {
-			return api.transport.CheckStateChange(r, authentication)
-		})
-		if err != nil {
-			writeManagementError(w, err)
-			return
-		}
-		if issue, ok := result.(gatewayCredentialIssueResponse); ok && issue.replayed {
-			responseStatus = http.StatusOK
-			issue.replayed = false
-			result = issue
-		}
-		writeManagementJSON(w, responseStatus, result)
-	}
+	}, http.StatusOK, withoutEnvelope()))
 }

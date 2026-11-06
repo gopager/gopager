@@ -13,12 +13,10 @@ import (
 )
 
 type managementAPI struct {
-	transport *identity.HTTPTransport
-	units     *units.Service
-	rules     *assignments.Service
+	routeGuard
+	units *units.Service
+	rules *assignments.Service
 }
-
-type managementOperation func(*http.Request, identity.Proof, func(identity.Authentication) error) (any, error)
 
 type deleteMutation struct {
 	SchemaVersion    int   `json:"schemaVersion"`
@@ -26,8 +24,9 @@ type deleteMutation struct {
 }
 
 // RegisterManagementRoutes adds the current master-data and assignment management surfaces.
-func RegisterManagementRoutes(mux *http.ServeMux, transport *identity.HTTPTransport, unitService *units.Service, ruleService *assignments.Service) {
-	api := managementAPI{transport: transport, units: unitService, rules: ruleService}
+func RegisterManagementRoutes(mux *http.ServeMux, transport *identity.HTTPTransport, authenticator Authenticator, unitService *units.Service, ruleService *assignments.Service) {
+	api := managementAPI{routeGuard: routeGuard{transport: transport, authenticator: authenticator},
+		units: unitService, rules: ruleService}
 	api.registerAgencies(mux)
 	api.registerOrganizations(mux)
 	api.registerUnitTemplates(mux)
@@ -35,26 +34,4 @@ func RegisterManagementRoutes(mux *http.ServeMux, transport *identity.HTTPTransp
 	api.registerCollections(mux)
 	api.registerRules(mux)
 	api.registerCorrections(mux)
-}
-
-// route selects transport proof before invoking a domain service with transaction-local CSRF checking.
-func (api managementAPI) route(operation managementOperation, status int) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		proof, err := api.transport.SelectProof(r)
-		if err != nil {
-			writeManagementError(w, err)
-			return
-		}
-		result, err := operation(r, proof, func(authentication identity.Authentication) error {
-			return api.transport.CheckStateChange(r, authentication)
-		})
-		if err != nil {
-			writeManagementError(w, err)
-			return
-		}
-		writeManagementJSON(w, status, struct {
-			SchemaVersion int `json:"schemaVersion"`
-			Data          any `json:"data"`
-		}{1, result})
-	}
 }

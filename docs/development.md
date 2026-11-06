@@ -20,7 +20,7 @@ One Go module, `github.com/gopager/gopager`.
 | Path | Contents |
 | --- | --- |
 | `cmd/gopager/` | Executable: flag parsing (`main.go`), `bootstrap` subcommand, composition of stores and services (`compose.go` builds the shared set once; `processing_runtime.go`, `processing_worker.go`, `processing_adapters.go`, `processing_preparation.go`, `scopes.go` compose Processing and its ports) |
-| `internal/httpapi/` | HTTP adapters for the application routes: `management_*.go` (one file per resource), `ingest.go`, `gateway_credentials.go`, `processing*.go`, and the shared `json.go`, `request.go`, `errors.go` |
+| `internal/httpapi/` | HTTP adapters for the application routes: `management_*.go` (one file per resource), `ingest.go`, `gateway_credentials.go`, `processing*.go`, and the shared `route.go` (route helper with pre-authentication), `json.go`, `request.go`, `errors.go` |
 | `api/openapi/v1.yaml` | HTTP API schema |
 | `api/plugin/v2/plugin.proto` | Plugin gRPC service definition |
 | `pluginsdk/` | Public Go SDK for plugin executables (handshake, `Serve`, gRPC client/server) |

@@ -60,9 +60,13 @@ selected from the request as follows:
    has no rights unless an administrator granted it some. If no guest account exists,
    the result is `401 LOGIN_REQUIRED`.
 
-The credential, the account state and the caller's grants are re-read from the primary
-database in the same transaction as the operation. Revocations take effect on the next
-request.
+On every authenticated route (master data, assignments, corrections, Gateway administration,
+Processing) a session or bearer credential is checked before the request body is read: an
+unknown, revoked, expired or inactive-account credential is `401 LOGIN_REQUIRED` without the
+body being consumed. Anonymous requests have no credential to check and proceed to the
+operation. This early check is advisory; the credential, the account state and the caller's
+grants are re-read from the primary database in the same transaction as the operation.
+Revocations take effect on the next request.
 
 ### Sessions (browser login)
 

@@ -267,13 +267,17 @@ func composeApplicationAPI(publicOrigin string, limits identity.LoginRateLimits,
 	if err != nil {
 		return nil, err
 	}
+	preauthenticator, err := identity.NewPreauthenticator(c.store, c.resolver)
+	if err != nil {
+		return nil, err
+	}
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/auth/", authHandler)
-	httpapi.RegisterManagementRoutes(mux, transport, c.unitService, ruleService)
+	httpapi.RegisterManagementRoutes(mux, transport, preauthenticator, c.unitService, ruleService)
 	httpapi.RegisterIngestRoutes(mux, intakeService)
-	httpapi.RegisterGatewayManagementRoutes(mux, transport, gatewayAdministration)
+	httpapi.RegisterGatewayManagementRoutes(mux, transport, preauthenticator, gatewayAdministration)
 	if len(processingRoutes) == 1 {
-		httpapi.RegisterProcessingRoutes(mux, transport, processingRoutes[0])
+		httpapi.RegisterProcessingRoutes(mux, transport, preauthenticator, processingRoutes[0])
 	}
 	return mux, nil
 }
