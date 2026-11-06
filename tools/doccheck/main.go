@@ -4,7 +4,8 @@
 //
 // Usage: go run ./tools/doccheck [-root dir] [-json]
 //
-// Findings print as "path:line: kind: detail", sorted. The exit status is 1 when
+// Findings print as "path:line: kind: detail", sorted. Findings accepted on purpose are listed
+// with a reason in tools/doccheck/ignore.txt; an entry that matches nothing is itself reported. The exit status is 1 when
 // there are findings, 2 on an operational error and 0 otherwise.
 package main
 
@@ -38,7 +39,12 @@ func run(root string, asJSON bool) int {
 		fmt.Fprintln(os.Stderr, "doccheck:", err)
 		return 2
 	}
-	findings := checkAll(root, docs)
+	ignore, err := loadIgnore(root)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "doccheck:", err)
+		return 2
+	}
+	findings := sortUnique(applyIgnore(checkAll(root, docs), ignore))
 	if asJSON {
 		if findings == nil {
 			findings = []finding{}

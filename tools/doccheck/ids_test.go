@@ -58,7 +58,7 @@ func TestEvidenceReferences(t *testing.T) {
 // current record, so references in the old numbering stay checked.
 func TestSourceEvidenceResolvesAgainstSourceRecord(t *testing.T) {
 	root := writeTree(t, map[string]string{
-		"development/authoritative-plan.md":     "| D-01 | one |\n",
+		"development/decisions/README.md":       "| D-01 | one |\n",
 		"development/requirements-catalog.md":   "| REQ-001 | a |\n",
 		"development/work-packages/ap-12-x.md":  "# AP-12\n",
 		"development/execution/source-ap-12.md": "# Old record\n\n### E-38 Old entry\n",
@@ -80,7 +80,7 @@ func TestSourceEvidenceResolvesAgainstSourceRecord(t *testing.T) {
 
 func TestCheckIDsEndToEnd(t *testing.T) {
 	root := writeTree(t, map[string]string{
-		"development/authoritative-plan.md":    "| D-01 | one |\n| D-02 | two |\n| D-02 | again |\n",
+		"development/decisions/README.md":      "| D-01 | one |\n| D-02 | two |\n| D-02 | again |\n",
 		"development/requirements-catalog.md":  "| REQ-001 | a |\n| REQ-002 | b |\n",
 		"development/work-packages/ap-01-x.md": "# AP-01\n",
 		"development/contracts/c-01-x.md":      "# C-01\n",
@@ -99,7 +99,7 @@ func TestCheckIDsEndToEnd(t *testing.T) {
 		got = append(got, f.String())
 	}
 	want := []string{
-		"development/authoritative-plan.md:3: duplicate-decision: D-02 listed again",
+		"development/decisions/README.md:3: duplicate-decision: D-02 listed again",
 		"notes.md:1: unknown-contract: C-02 no file in development/contracts/",
 		"notes.md:1: unknown-decision: D-03 not in the decision register",
 		"notes.md:1: unknown-decision: D-77 not in the decision register",

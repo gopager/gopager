@@ -8,7 +8,7 @@ import (
 
 // Fixed locations of the identifier sources, relative to the repository root.
 const (
-	decisionRegisterPath = "development/authoritative-plan.md"
+	decisionRegisterPath = "development/decisions/README.md"
 	requirementCatalogue = "development/requirements-catalog.md"
 	workPackageDirPrefix = "development/work-packages/"
 	contractDirPrefix    = "development/contracts/"
