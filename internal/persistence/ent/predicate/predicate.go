@@ -27,9 +27,6 @@ type CommandReceipt func(*sql.Selector)
 // ConsumerOffset is the predicate function for consumeroffset builders.
 type ConsumerOffset func(*sql.Selector)
 
-// CorrectionDirtyTransmission is the predicate function for correctiondirtytransmission builders.
-type CorrectionDirtyTransmission func(*sql.Selector)
-
 // Credential is the predicate function for credential builders.
 type Credential func(*sql.Selector)
 

@@ -613,80 +613,68 @@ func TestCurrentMatcherNativeMixedScopesAndRestrictingKeysMatchPointDecisions(t 
 	}
 }
 
-func TestPendingScopeSupersessionAndRebaseRespectAllScopeAndUnitIntersections(t *testing.T) {
+// TestPendingScopesRunIndependentlyWithoutSupersession expects every recorded correction scope
+// to stay queued at its own revision: a later scope on the same or another selector neither
+// supersedes nor rebases earlier ones, because each scope re-resolves against current rules and
+// skips targets a newer scope already restamped.
+func TestPendingScopesRunIndependentlyWithoutSupersession(t *testing.T) {
 	f := newMatcherFixture(t)
-	mark := func(networks []uuid.UUID, unit *uuid.UUID) int64 {
+	mark := func(scope assignments.CorrectionScope, reason string) int64 {
 		t.Helper()
 		var revision int64
 		if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 			var err error
-			revision, err = f.ruleStore.MarkPending(tx.Context(), tx, networks, unit, "rule-change")
+			revision, err = f.ruleStore.MarkPending(tx.Context(), tx, []assignments.CorrectionScope{scope}, reason)
 			return err
 		}); err != nil {
 			t.Fatal(err)
 		}
 		return revision
 	}
-	state := func(id uuid.UUID) (string, int64) {
-		t.Helper()
-		var got string
-		var revision int64
-		if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-			executor, err := f.store.Resolve(tx)
-			if err != nil {
+	first := mark(networkScope(f.networks[0]), "rule-change")
+	second := mark(networkScope(f.networks[1]), "rule-change")
+	third := mark(networkScope(f.networks[0]), "rule-change")
+	unit := uuid.New()
+	fourth := mark(assignments.UnitScope(unit), "unit-deleted")
+	if second != first+1 || third != second+1 || fourth != third+1 {
+		t.Fatalf("revisions %d %d %d %d are not consecutive", first, second, third, fourth)
+	}
+	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := f.store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		rows, err := executor.QueryContext(tx.Context(), `SELECT assignment_revision,state FROM assignment_pending_scopes
+			WHERE assignment_revision>=$1 ORDER BY assignment_revision`, first)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		var revisions []int64
+		for rows.Next() {
+			var revision int64
+			var state string
+			if err := rows.Scan(&revision, &state); err != nil {
 				return err
 			}
-			return executor.QueryRowContext(tx.Context(), `SELECT state,assignment_revision
-				FROM assignment_pending_scopes WHERE id=$1`, id).Scan(&got, &revision)
-		}); err != nil {
-			t.Fatal(err)
-		}
-		return got, revision
-	}
-	scopeID := func(revision int64) uuid.UUID {
-		t.Helper()
-		var id uuid.UUID
-		if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-			executor, err := f.store.Resolve(tx)
-			if err != nil {
-				return err
+			if state != "queued" {
+				t.Fatalf("scope at revision %d is %s, want queued", revision, state)
 			}
-			return executor.QueryRowContext(tx.Context(), `SELECT id FROM assignment_pending_scopes
-				WHERE assignment_revision=$1`, revision).Scan(&id)
-		}); err != nil {
-			t.Fatal(err)
+			revisions = append(revisions, revision)
 		}
-		return id
-	}
-
-	firstRevision := mark([]uuid.UUID{f.networks[0]}, nil)
-	firstID := scopeID(firstRevision)
-	allRevision := mark(nil, nil)
-	if got, _ := state(firstID); got != "superseded" {
-		t.Fatalf("all-Network scope did not supersede overlapping scope: %s", got)
-	}
-	allID := scopeID(allRevision)
-
-	unitA, unitB := uuid.New(), uuid.New()
-	unitARevision := mark([]uuid.UUID{f.networks[0]}, &unitA)
-	unitAID := scopeID(unitARevision)
-	unitBRevision := mark([]uuid.UUID{f.networks[0]}, &unitB)
-	unitBID := scopeID(unitBRevision)
-	if got, revision := state(allID); got != "superseded" {
-		t.Fatalf("Network/Unit scope did not supersede all-scope job: %s at %d", got, revision)
-	}
-	if got, revision := state(unitAID); got != "queued" || revision != unitBRevision {
-		t.Fatalf("disjoint Unit job was not rebased: %s at %d, want queued at %d", got, revision, unitBRevision)
-	}
-	if got, revision := state(unitBID); got != "queued" || revision != unitBRevision {
-		t.Fatalf("new Unit job has incorrect state/revision: %s at %d", got, revision)
+		if len(revisions) != 4 {
+			t.Fatalf("queued scopes=%v, want all four", revisions)
+		}
+		return rows.Err()
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
 func TestCorrectionLeaseExpiryReclaimsAndFencesPriorToken(t *testing.T) {
 	f := newMatcherFixture(t)
 	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		_, err := f.ruleStore.MarkPending(tx.Context(), tx, []uuid.UUID{f.networks[0]}, nil, "rule-change")
+		_, err := f.ruleStore.MarkPending(tx.Context(), tx, []assignments.CorrectionScope{networkScope(f.networks[0])}, "rule-change")
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -763,6 +751,11 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 	if err != nil {
 		t.Fatal(err)
 	}
+	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, f.ruleStore, f.facts, noProcessingReadmission{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	drainCorrections(t, runner)
 	function := uint8(1)
 	target := protocols.Target{Address: protocols.NumericAddress(10), Function: &function}
 	original, err := json.Marshal(target)
@@ -878,34 +871,18 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 	if err != nil || !claimed {
 		t.Fatalf("r2 correction was not claimed: claimed=%t err=%v", claimed, err)
 	}
-	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		executor, err := f.store.Resolve(tx)
-		if err != nil {
-			return err
-		}
-		var dirty int
-		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM correction_dirty_transmissions
-			WHERE scope_id=$1 AND transmission_id=$2`, oldLease.ID, lateReceipt.TransmissionID).Scan(&dirty); err != nil {
-			return err
-		}
-		if dirty != 1 {
-			t.Fatalf("concurrent intake dirty capture count=%d, want 1", dirty)
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var dirtyItem assignments.CorrectionBatchItem
+	// The late intake was resolved under the new rules and stamped with the new revision, so the
+	// scope selects only the historical Transmission; no dirty capture is needed.
+	var item assignments.CorrectionBatchItem
 	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		items, err := f.ruleStore.ReadCorrectionBatch(tx.Context(), tx, oldLease, 100)
 		if err != nil {
 			return err
 		}
-		if len(items) != 1 || !items[0].Dirty || items[0].TransmissionID != lateReceipt.TransmissionID {
-			t.Fatalf("correction did not select dirty intake: %+v", items)
+		if len(items) != 1 || items[0].TransmissionID != transmissionID {
+			t.Fatalf("correction selected %+v, want only the historical Transmission %s", items, transmissionID)
 		}
-		dirtyItem = items[0]
+		item = items[0]
 		return nil
 	})
 	if err != nil {
@@ -915,7 +892,7 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		var err error
 		staleMatch, err = f.rules.MatchTargets(tx.Context(), tx, networkID, protocols.POCSAG,
-			dirtyItem.ObservedAt, dirtyItem.Targets)
+			item.ObservedAt, item.Targets)
 		return err
 	})
 	if err != nil {
@@ -934,37 +911,27 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 	}
 	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		_, err := f.ruleStore.ApplyCorrectionBatch(tx.Context(), tx, oldLease,
-			[]assignments.CorrectionUpdate{{Item: dirtyItem, Match: staleMatch}})
+			[]assignments.CorrectionUpdate{{Item: item, Match: staleMatch}})
 		return err
 	})
 	if !errors.Is(err, authz.ErrRevisionConflict) {
 		t.Fatalf("correction applied under a stale access revision: %v", err)
 	}
+	// Hand the fenced lease back so the runner can claim the scope again at once.
+	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		_, err := f.ruleStore.FailCorrection(tx.Context(), tx, oldLease, "TEST_FENCE", 0)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// A second rule change records its own scope at a newer revision; the older scope is not
+	// superseded and both run against the current rules.
 	if _, err := f.rules.UpdateRule(t.Context(), f.proof, rule.ID, rule.Revision+1,
 		ruleInput(networkID, unitA.ID, 10, 20, 1), checkedMutation); err != nil {
 		t.Fatal(err)
 	}
-	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		_, err := f.ruleStore.ApplyCorrectionBatch(tx.Context(), tx, oldLease,
-			[]assignments.CorrectionUpdate{{Item: dirtyItem, Match: staleMatch}})
-		return err
-	})
-	if !errors.Is(err, authz.ErrRevisionConflict) {
-		t.Fatalf("superseded r2 worker committed derived changes: %v", err)
-	}
-	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		_, err := f.ruleStore.CompleteCorrection(tx.Context(), tx, oldLease)
-		return err
-	})
-	if !errors.Is(err, authz.ErrRevisionConflict) {
-		t.Fatalf("superseded r2 worker was not fenced: %v", err)
-	}
-	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, f.ruleStore, f.facts, noProcessingReadmission{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
-		t.Fatalf("historical correction did not run: worked=%t err=%v", worked, err)
+	if drainCorrections(t, runner) < 2 {
+		t.Fatal("the older and the newer historical correction scope did not both run")
 	}
 	assertCorrected := func(wantUnit uuid.UUID, wantSupport bool) int64 {
 		t.Helper()
@@ -1029,15 +996,14 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 	}
 	revision := assertCorrected(unitA.ID, true)
 	suppressionCommand := uuid.New()
-	suppressionInput := assignments.CreateSuppressionInput{TransmissionID: transmissionID, TargetPosition: 0,
-		ExpectedAssignmentRevision: revision}
+	suppressionInput := assignments.CreateSuppressionInput{TransmissionID: transmissionID, TargetPosition: 0}
 	suppressed, err := f.rules.CreateSuppression(t.Context(), f.proof, suppressionCommand,
 		suppressionInput, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// A replay after an uncertain commit carries the now-stale expected revision
-	// for an already active suppression and must still return the stored result.
+	// A replay after an uncertain commit finds the suppression already active and must still
+	// return the stored result.
 	beforeReplay := configurationCounts(t, f)
 	replayed, err := f.rules.CreateSuppression(t.Context(), f.proof, suppressionCommand,
 		suppressionInput, checkedMutation)
@@ -1047,14 +1013,14 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 		t.Fatalf("suppression replay did not return the stored result without new state: %v", err)
 	}
 	changedInput := suppressionInput
-	changedInput.ExpectedAssignmentRevision = beforeReplay[6]
+	changedInput.TransmissionID = lateReceipt.TransmissionID
 	if _, err := f.rules.CreateSuppression(t.Context(), f.proof, suppressionCommand,
 		changedInput, checkedMutation); !errors.Is(err, commands.ErrIdempotencyConflict) ||
 		configurationCounts(t, f) != beforeReplay {
 		t.Fatalf("changed suppression input under a reused command ID was not an idempotency conflict: %v", err)
 	}
-	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
-		t.Fatalf("suppression correction did not run: worked=%t err=%v", worked, err)
+	if drainCorrections(t, runner) == 0 {
+		t.Fatal("suppression correction did not run")
 	}
 	revision = assertCorrected(unitA.ID, false)
 	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
@@ -1080,11 +1046,11 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 		t.Fatal(err)
 	}
 	if _, err := f.rules.LiftSuppression(t.Context(), f.proof, suppressed.Suppression.ID,
-		suppressed.Suppression.Revision, revision, checkedMutation); err != nil {
+		suppressed.Suppression.Revision, checkedMutation); err != nil {
 		t.Fatal(err)
 	}
-	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
-		t.Fatalf("suppression lift correction did not run: worked=%t err=%v", worked, err)
+	if drainCorrections(t, runner) == 0 {
+		t.Fatal("suppression lift correction did not run")
 	}
 	revision = assertCorrected(unitA.ID, true)
 	unassignedTarget := protocols.Target{Address: protocols.NumericAddress(99), Function: &function}
@@ -1135,13 +1101,12 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 		t.Fatal(err)
 	}
 	suppressedUnassigned, err := f.rules.CreateSuppression(t.Context(), f.proof, uuid.New(),
-		assignments.CreateSuppressionInput{TransmissionID: unassignedTransmissionID, TargetPosition: 0,
-			ExpectedAssignmentRevision: revision}, checkedMutation)
+		assignments.CreateSuppressionInput{TransmissionID: unassignedTransmissionID, TargetPosition: 0}, checkedMutation)
 	if err != nil {
 		t.Fatalf("unassigned-target suppression failed (%T): %#v", err, err)
 	}
-	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
-		t.Fatalf("unassigned-target suppression correction did not run: worked=%t err=%v", worked, err)
+	if drainCorrections(t, runner) == 0 {
+		t.Fatal("unassigned-target suppression correction did not run")
 	}
 	assertUnassigned := func() {
 		t.Helper()
@@ -1171,13 +1136,13 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 		}
 	}
 	assertUnassigned()
-	currentRevision := assertCorrected(unitA.ID, true)
+	assertCorrected(unitA.ID, true)
 	if _, err := f.rules.LiftSuppression(t.Context(), f.proof, suppressedUnassigned.Suppression.ID,
-		suppressedUnassigned.Suppression.Revision, currentRevision, checkedMutation); err != nil {
+		suppressedUnassigned.Suppression.Revision, checkedMutation); err != nil {
 		t.Fatal(err)
 	}
-	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
-		t.Fatalf("unassigned-target suppression lift correction did not run: worked=%t err=%v", worked, err)
+	if drainCorrections(t, runner) == 0 {
+		t.Fatal("unassigned-target suppression lift correction did not run")
 	}
 	assertUnassigned()
 	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {

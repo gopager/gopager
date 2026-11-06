@@ -27,9 +27,107 @@ func (_c *PendingAssignmentScopeCreate) SetAssignmentRevision(v int64) *PendingA
 	return _c
 }
 
-// SetNetworkIds sets the "network_ids" field.
-func (_c *PendingAssignmentScopeCreate) SetNetworkIds(v []uuid.UUID) *PendingAssignmentScopeCreate {
-	_c.mutation.SetNetworkIds(v)
+// SetReason sets the "reason" field.
+func (_c *PendingAssignmentScopeCreate) SetReason(v pendingassignmentscope.Reason) *PendingAssignmentScopeCreate {
+	_c.mutation.SetReason(v)
+	return _c
+}
+
+// SetNetworkID sets the "network_id" field.
+func (_c *PendingAssignmentScopeCreate) SetNetworkID(v uuid.UUID) *PendingAssignmentScopeCreate {
+	_c.mutation.SetNetworkID(v)
+	return _c
+}
+
+// SetNillableNetworkID sets the "network_id" field if the given value is not nil.
+func (_c *PendingAssignmentScopeCreate) SetNillableNetworkID(v *uuid.UUID) *PendingAssignmentScopeCreate {
+	if v != nil {
+		_c.SetNetworkID(*v)
+	}
+	return _c
+}
+
+// SetProtocol sets the "protocol" field.
+func (_c *PendingAssignmentScopeCreate) SetProtocol(v pendingassignmentscope.Protocol) *PendingAssignmentScopeCreate {
+	_c.mutation.SetProtocol(v)
+	return _c
+}
+
+// SetNillableProtocol sets the "protocol" field if the given value is not nil.
+func (_c *PendingAssignmentScopeCreate) SetNillableProtocol(v *pendingassignmentscope.Protocol) *PendingAssignmentScopeCreate {
+	if v != nil {
+		_c.SetProtocol(*v)
+	}
+	return _c
+}
+
+// SetAddressFrom sets the "address_from" field.
+func (_c *PendingAssignmentScopeCreate) SetAddressFrom(v int64) *PendingAssignmentScopeCreate {
+	_c.mutation.SetAddressFrom(v)
+	return _c
+}
+
+// SetNillableAddressFrom sets the "address_from" field if the given value is not nil.
+func (_c *PendingAssignmentScopeCreate) SetNillableAddressFrom(v *int64) *PendingAssignmentScopeCreate {
+	if v != nil {
+		_c.SetAddressFrom(*v)
+	}
+	return _c
+}
+
+// SetAddressTo sets the "address_to" field.
+func (_c *PendingAssignmentScopeCreate) SetAddressTo(v int64) *PendingAssignmentScopeCreate {
+	_c.mutation.SetAddressTo(v)
+	return _c
+}
+
+// SetNillableAddressTo sets the "address_to" field if the given value is not nil.
+func (_c *PendingAssignmentScopeCreate) SetNillableAddressTo(v *int64) *PendingAssignmentScopeCreate {
+	if v != nil {
+		_c.SetAddressTo(*v)
+	}
+	return _c
+}
+
+// SetAddressText sets the "address_text" field.
+func (_c *PendingAssignmentScopeCreate) SetAddressText(v string) *PendingAssignmentScopeCreate {
+	_c.mutation.SetAddressText(v)
+	return _c
+}
+
+// SetNillableAddressText sets the "address_text" field if the given value is not nil.
+func (_c *PendingAssignmentScopeCreate) SetNillableAddressText(v *string) *PendingAssignmentScopeCreate {
+	if v != nil {
+		_c.SetAddressText(*v)
+	}
+	return _c
+}
+
+// SetValidFrom sets the "valid_from" field.
+func (_c *PendingAssignmentScopeCreate) SetValidFrom(v time.Time) *PendingAssignmentScopeCreate {
+	_c.mutation.SetValidFrom(v)
+	return _c
+}
+
+// SetNillableValidFrom sets the "valid_from" field if the given value is not nil.
+func (_c *PendingAssignmentScopeCreate) SetNillableValidFrom(v *time.Time) *PendingAssignmentScopeCreate {
+	if v != nil {
+		_c.SetValidFrom(*v)
+	}
+	return _c
+}
+
+// SetValidUntil sets the "valid_until" field.
+func (_c *PendingAssignmentScopeCreate) SetValidUntil(v time.Time) *PendingAssignmentScopeCreate {
+	_c.mutation.SetValidUntil(v)
+	return _c
+}
+
+// SetNillableValidUntil sets the "valid_until" field if the given value is not nil.
+func (_c *PendingAssignmentScopeCreate) SetNillableValidUntil(v *time.Time) *PendingAssignmentScopeCreate {
+	if v != nil {
+		_c.SetValidUntil(*v)
+	}
 	return _c
 }
 
@@ -47,9 +145,31 @@ func (_c *PendingAssignmentScopeCreate) SetNillableUnitID(v *uuid.UUID) *Pending
 	return _c
 }
 
-// SetReason sets the "reason" field.
-func (_c *PendingAssignmentScopeCreate) SetReason(v pendingassignmentscope.Reason) *PendingAssignmentScopeCreate {
-	_c.mutation.SetReason(v)
+// SetTransmissionID sets the "transmission_id" field.
+func (_c *PendingAssignmentScopeCreate) SetTransmissionID(v uuid.UUID) *PendingAssignmentScopeCreate {
+	_c.mutation.SetTransmissionID(v)
+	return _c
+}
+
+// SetNillableTransmissionID sets the "transmission_id" field if the given value is not nil.
+func (_c *PendingAssignmentScopeCreate) SetNillableTransmissionID(v *uuid.UUID) *PendingAssignmentScopeCreate {
+	if v != nil {
+		_c.SetTransmissionID(*v)
+	}
+	return _c
+}
+
+// SetTargetPosition sets the "target_position" field.
+func (_c *PendingAssignmentScopeCreate) SetTargetPosition(v int) *PendingAssignmentScopeCreate {
+	_c.mutation.SetTargetPosition(v)
+	return _c
+}
+
+// SetNillableTargetPosition sets the "target_position" field if the given value is not nil.
+func (_c *PendingAssignmentScopeCreate) SetNillableTargetPosition(v *int) *PendingAssignmentScopeCreate {
+	if v != nil {
+		_c.SetTargetPosition(*v)
+	}
 	return _c
 }
 
@@ -69,34 +189,6 @@ func (_c *PendingAssignmentScopeCreate) SetState(v pendingassignmentscope.State)
 func (_c *PendingAssignmentScopeCreate) SetNillableState(v *pendingassignmentscope.State) *PendingAssignmentScopeCreate {
 	if v != nil {
 		_c.SetState(*v)
-	}
-	return _c
-}
-
-// SetHighWaterAcceptedAt sets the "high_water_accepted_at" field.
-func (_c *PendingAssignmentScopeCreate) SetHighWaterAcceptedAt(v time.Time) *PendingAssignmentScopeCreate {
-	_c.mutation.SetHighWaterAcceptedAt(v)
-	return _c
-}
-
-// SetNillableHighWaterAcceptedAt sets the "high_water_accepted_at" field if the given value is not nil.
-func (_c *PendingAssignmentScopeCreate) SetNillableHighWaterAcceptedAt(v *time.Time) *PendingAssignmentScopeCreate {
-	if v != nil {
-		_c.SetHighWaterAcceptedAt(*v)
-	}
-	return _c
-}
-
-// SetHighWaterTransmissionID sets the "high_water_transmission_id" field.
-func (_c *PendingAssignmentScopeCreate) SetHighWaterTransmissionID(v uuid.UUID) *PendingAssignmentScopeCreate {
-	_c.mutation.SetHighWaterTransmissionID(v)
-	return _c
-}
-
-// SetNillableHighWaterTransmissionID sets the "high_water_transmission_id" field if the given value is not nil.
-func (_c *PendingAssignmentScopeCreate) SetNillableHighWaterTransmissionID(v *uuid.UUID) *PendingAssignmentScopeCreate {
-	if v != nil {
-		_c.SetHighWaterTransmissionID(*v)
 	}
 	return _c
 }
@@ -286,15 +378,22 @@ func (_c *PendingAssignmentScopeCreate) check() error {
 			return &ValidationError{Name: "assignment_revision", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.assignment_revision": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.NetworkIds(); !ok {
-		return &ValidationError{Name: "network_ids", err: errors.New(`ent: missing required field "PendingAssignmentScope.network_ids"`)}
-	}
 	if _, ok := _c.mutation.Reason(); !ok {
 		return &ValidationError{Name: "reason", err: errors.New(`ent: missing required field "PendingAssignmentScope.reason"`)}
 	}
 	if v, ok := _c.mutation.Reason(); ok {
 		if err := pendingassignmentscope.ReasonValidator(v); err != nil {
 			return &ValidationError{Name: "reason", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.reason": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.Protocol(); ok {
+		if err := pendingassignmentscope.ProtocolValidator(v); err != nil {
+			return &ValidationError{Name: "protocol", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.protocol": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.TargetPosition(); ok {
+		if err := pendingassignmentscope.TargetPositionValidator(v); err != nil {
+			return &ValidationError{Name: "target_position", err: fmt.Errorf(`ent: validator failed for field "PendingAssignmentScope.target_position": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.RecordedAt(); !ok {
@@ -376,17 +475,49 @@ func (_c *PendingAssignmentScopeCreate) createSpec() (*PendingAssignmentScope, *
 		_spec.SetField(pendingassignmentscope.FieldAssignmentRevision, field.TypeInt64, value)
 		_node.AssignmentRevision = value
 	}
-	if value, ok := _c.mutation.NetworkIds(); ok {
-		_spec.SetField(pendingassignmentscope.FieldNetworkIds, field.TypeJSON, value)
-		_node.NetworkIds = value
+	if value, ok := _c.mutation.Reason(); ok {
+		_spec.SetField(pendingassignmentscope.FieldReason, field.TypeEnum, value)
+		_node.Reason = value
+	}
+	if value, ok := _c.mutation.NetworkID(); ok {
+		_spec.SetField(pendingassignmentscope.FieldNetworkID, field.TypeUUID, value)
+		_node.NetworkID = &value
+	}
+	if value, ok := _c.mutation.Protocol(); ok {
+		_spec.SetField(pendingassignmentscope.FieldProtocol, field.TypeEnum, value)
+		_node.Protocol = &value
+	}
+	if value, ok := _c.mutation.AddressFrom(); ok {
+		_spec.SetField(pendingassignmentscope.FieldAddressFrom, field.TypeInt64, value)
+		_node.AddressFrom = &value
+	}
+	if value, ok := _c.mutation.AddressTo(); ok {
+		_spec.SetField(pendingassignmentscope.FieldAddressTo, field.TypeInt64, value)
+		_node.AddressTo = &value
+	}
+	if value, ok := _c.mutation.AddressText(); ok {
+		_spec.SetField(pendingassignmentscope.FieldAddressText, field.TypeString, value)
+		_node.AddressText = &value
+	}
+	if value, ok := _c.mutation.ValidFrom(); ok {
+		_spec.SetField(pendingassignmentscope.FieldValidFrom, field.TypeTime, value)
+		_node.ValidFrom = &value
+	}
+	if value, ok := _c.mutation.ValidUntil(); ok {
+		_spec.SetField(pendingassignmentscope.FieldValidUntil, field.TypeTime, value)
+		_node.ValidUntil = &value
 	}
 	if value, ok := _c.mutation.UnitID(); ok {
 		_spec.SetField(pendingassignmentscope.FieldUnitID, field.TypeUUID, value)
 		_node.UnitID = &value
 	}
-	if value, ok := _c.mutation.Reason(); ok {
-		_spec.SetField(pendingassignmentscope.FieldReason, field.TypeEnum, value)
-		_node.Reason = value
+	if value, ok := _c.mutation.TransmissionID(); ok {
+		_spec.SetField(pendingassignmentscope.FieldTransmissionID, field.TypeUUID, value)
+		_node.TransmissionID = &value
+	}
+	if value, ok := _c.mutation.TargetPosition(); ok {
+		_spec.SetField(pendingassignmentscope.FieldTargetPosition, field.TypeInt, value)
+		_node.TargetPosition = &value
 	}
 	if value, ok := _c.mutation.RecordedAt(); ok {
 		_spec.SetField(pendingassignmentscope.FieldRecordedAt, field.TypeTime, value)
@@ -395,14 +526,6 @@ func (_c *PendingAssignmentScopeCreate) createSpec() (*PendingAssignmentScope, *
 	if value, ok := _c.mutation.State(); ok {
 		_spec.SetField(pendingassignmentscope.FieldState, field.TypeEnum, value)
 		_node.State = value
-	}
-	if value, ok := _c.mutation.HighWaterAcceptedAt(); ok {
-		_spec.SetField(pendingassignmentscope.FieldHighWaterAcceptedAt, field.TypeTime, value)
-		_node.HighWaterAcceptedAt = &value
-	}
-	if value, ok := _c.mutation.HighWaterTransmissionID(); ok {
-		_spec.SetField(pendingassignmentscope.FieldHighWaterTransmissionID, field.TypeUUID, value)
-		_node.HighWaterTransmissionID = &value
 	}
 	if value, ok := _c.mutation.CursorAcceptedAt(); ok {
 		_spec.SetField(pendingassignmentscope.FieldCursorAcceptedAt, field.TypeTime, value)

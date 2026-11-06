@@ -16,9 +16,8 @@ type createSuppressionMutation struct {
 }
 
 type liftSuppressionMutation struct {
-	SchemaVersion              int   `json:"schemaVersion"`
-	ExpectedRevision           int64 `json:"expectedRevision,string"`
-	ExpectedAssignmentRevision int64 `json:"expectedAssignmentRevision,string"`
+	SchemaVersion    int   `json:"schemaVersion"`
+	ExpectedRevision int64 `json:"expectedRevision,string"`
 }
 
 type retryCorrectionMutation struct {
@@ -81,8 +80,7 @@ func (api managementAPI) registerCorrections(mux *http.ServeMux) {
 		if err != nil {
 			return nil, err
 		}
-		result, err := api.rules.LiftSuppression(r.Context(), proof, id, input.ExpectedRevision,
-			input.ExpectedAssignmentRevision, check)
+		result, err := api.rules.LiftSuppression(r.Context(), proof, id, input.ExpectedRevision, check)
 		if err != nil {
 			return nil, err
 		}

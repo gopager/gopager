@@ -3,7 +3,6 @@ package assignmentstore
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"math"
@@ -286,11 +285,19 @@ func (s *Store) DeleteRule(ctx context.Context, tx platform.TransactionContext, 
 	return nil
 }
 
-// MarkPending conservatively invalidates entire affected Networks, preserving durable unfinished work.
-func (s *Store) MarkPending(ctx context.Context, tx platform.TransactionContext, networks []uuid.UUID, unitID *uuid.UUID, reason string) (int64, error) {
-	if (reason != "rule-change" && reason != "unit-deleted" && reason != "suppression-change") ||
-		(unitID != nil && *unitID == uuid.Nil) {
+// MarkPending bumps the Assignment revision under the exclusive Assignment lock and records one
+// queued correction scope per distinct selector. The cache rows of Messages with affected targets
+// are marked correcting until a correction batch rebuilds them. Scopes run independently: a
+// target re-resolved by a newer scope carries a newer assignment revision and is skipped by older
+// scopes, so nothing is superseded or reset.
+func (s *Store) MarkPending(ctx context.Context, tx platform.TransactionContext, scopes []assignments.CorrectionScope, reason string) (int64, error) {
+	if (reason != "rule-change" && reason != "unit-deleted" && reason != "suppression-change") || len(scopes) == 0 {
 		return 0, authz.ErrInvalidInput
+	}
+	for _, scope := range scopes {
+		if err := scope.Validate(); err != nil {
+			return 0, err
+		}
 	}
 	revision, err := s.LockRevisionForChange(ctx, tx)
 	if err != nil {
@@ -311,17 +318,6 @@ func (s *Store) MarkPending(ctx context.Context, tx platform.TransactionContext,
 	if err != nil {
 		return 0, err
 	}
-	seen := make(map[uuid.UUID]bool, len(networks))
-	ids := make([]uuid.UUID, 0, len(networks))
-	for _, id := range networks {
-		if id == uuid.Nil {
-			return 0, authz.ErrInvalidInput
-		}
-		if !seen[id] {
-			seen[id] = true
-			ids = append(ids, id)
-		}
-	}
 	updated, err := executor.ExecContext(ctx, `UPDATE assignment_control SET revision=$2
 		WHERE id=1 AND revision=$1`, revision, revision+1)
 	if err != nil {
@@ -337,110 +333,71 @@ func (s *Store) MarkPending(ctx context.Context, tx platform.TransactionContext,
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
-	highWaterAt, highWaterID, err := correctionHighWater(ctx, executor, ids, unitID)
-	if err != nil {
-		return 0, err
-	}
-	encodedNetworks, err := json.Marshal(ids)
-	if err != nil {
-		return 0, err
-	}
-	textIDs := make([]string, len(ids))
-	for i, id := range ids {
-		textIDs[i] = id.String()
-	}
-	if _, err := executor.ExecContext(ctx, `UPDATE assignment_pending_scopes SET state='superseded',lease_until=NULL
-		WHERE state IN ('queued','running','failed') AND assignment_revision < $1
-		AND (jsonb_array_length(network_ids)=0 OR cardinality($2::text[])=0 OR EXISTS (
-			SELECT 1 FROM jsonb_array_elements_text(network_ids) AS old_network(value)
-			WHERE old_network.value=ANY($2::text[])))
-		AND ($3::uuid IS NULL OR unit_id IS NULL OR unit_id=$3)`,
-		revision+1, textIDs, unitID); err != nil {
-		return 0, err
-	}
-	if _, err := executor.ExecContext(ctx, `UPDATE assignment_pending_scopes scope SET
-		assignment_revision=$1,state='queued',attempts=0,lease_until=NULL,
-		fencing_token=fencing_token+1,cursor_accepted_at=NULL,cursor_transmission_id=NULL,
-		failure_code=NULL,
-		high_water_accepted_at=(SELECT t.accepted_at FROM transmissions t
-			WHERE (jsonb_array_length(scope.network_ids)=0 OR scope.network_ids @> jsonb_build_array(t.network_id::text))
-			AND (scope.unit_id IS NULL OR EXISTS (SELECT 1 FROM transmission_targets target
-				WHERE target.transmission_id=t.id AND target.unit_id=scope.unit_id))
-			ORDER BY t.accepted_at DESC,t.id DESC LIMIT 1),
-		high_water_transmission_id=(SELECT t.id FROM transmissions t
-			WHERE (jsonb_array_length(scope.network_ids)=0 OR scope.network_ids @> jsonb_build_array(t.network_id::text))
-			AND (scope.unit_id IS NULL OR EXISTS (SELECT 1 FROM transmission_targets target
-				WHERE target.transmission_id=t.id AND target.unit_id=scope.unit_id))
-			ORDER BY t.accepted_at DESC,t.id DESC LIMIT 1)
-		WHERE scope.state IN ('queued','running') AND scope.assignment_revision<$1
-		AND NOT ((jsonb_array_length(scope.network_ids)=0 OR cardinality($2::text[])=0 OR EXISTS (
-			SELECT 1 FROM jsonb_array_elements_text(scope.network_ids) AS old_network(value)
-			WHERE old_network.value=ANY($2::text[])))
-		AND ($3::uuid IS NULL OR scope.unit_id IS NULL OR scope.unit_id=$3))`,
-		revision+1, textIDs, unitID); err != nil {
-		return 0, err
-	}
-	if _, err := executor.ExecContext(ctx, `INSERT INTO assignment_pending_scopes
-		(id,assignment_revision,network_ids,unit_id,reason,recorded_at,state,
-		 high_water_accepted_at,high_water_transmission_id,access_revision)
-		VALUES($1,$2,$3::jsonb,$4,$5,$6,'queued',$7,$8,$9)`,
-		uuid.New(), revision+1, string(encodedNetworks), unitID, reason, now,
-		highWaterAt, highWaterID, accessRevision); err != nil {
-		return 0, err
+	seen := make(map[string]bool, len(scopes))
+	for _, scope := range scopes {
+		key, err := json.Marshal(scope)
+		if err != nil {
+			return 0, err
+		}
+		if seen[string(key)] {
+			continue
+		}
+		seen[string(key)] = true
+		if err := insertCorrectionScope(ctx, executor, uuid.New(), revision+1, scope, reason, now, accessRevision); err != nil {
+			return 0, err
+		}
 	}
 	return revision + 1, nil
 }
 
-func correctionHighWater(ctx context.Context, executor postgres.Executor, networks []uuid.UUID,
-	unitID *uuid.UUID,
-) (*time.Time, *uuid.UUID, error) {
-	var accepted time.Time
-	var transmission uuid.UUID
-	err := executor.QueryRowContext(ctx, `SELECT t.accepted_at,t.id FROM transmissions t
-		WHERE (cardinality($1::uuid[]) = 0 OR t.network_id=ANY($1::uuid[]))
-		AND ($2::uuid IS NULL OR EXISTS (SELECT 1 FROM transmission_targets target
-			WHERE target.transmission_id=t.id AND target.unit_id=$2))
-		ORDER BY t.accepted_at DESC,t.id DESC LIMIT 1`, networks, unitID).Scan(&accepted, &transmission)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil, nil
+// insertCorrectionScope records one queued scope and marks the cache rows of the Messages whose
+// targets it will re-resolve as correcting.
+func insertCorrectionScope(ctx context.Context, executor postgres.Executor, id uuid.UUID, revision int64,
+	scope assignments.CorrectionScope, reason string, now time.Time, accessRevision int64) error {
+	args := scopeArgs(scope, revision)
+	if _, err := executor.ExecContext(ctx, `INSERT INTO assignment_pending_scopes
+		(network_id,protocol,address_from,address_to,address_text,valid_from,valid_until,unit_id,transmission_id,target_position,
+		 assignment_revision,id,reason,recorded_at,state,access_revision)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'queued',$15)`,
+		append(args, id, reason, now, accessRevision)...); err != nil {
+		return err
 	}
-	if err != nil {
-		return nil, nil, err
-	}
-	return &accepted, &transmission, nil
+	_, err := executor.ExecContext(ctx, `UPDATE message_units SET correction_status='correcting'
+		WHERE message_id IN (SELECT t.message_id FROM transmission_targets target
+			JOIN transmissions t ON t.id=target.transmission_id WHERE `+inScopeSQL+`)`, args...)
+	return err
 }
 
-// networksForUnit lists the Radio networks whose current rules reference the Unit; a deleted Unit's
-// correction scope covers exactly those Networks.
-func (s *Store) networksForUnit(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) ([]uuid.UUID, error) {
-	executor, err := s.primary.Resolve(tx)
-	if err != nil {
-		return nil, err
+// inScopeSQL selects the targets of a correction scope that still carry an older assignment
+// revision; it reads the alias target and the positional parameters of scopeArgs.
+const inScopeSQL = `target.assignment_revision < $11 AND (
+	($1::uuid IS NOT NULL AND target.network_id=$1 AND target.protocol=$2
+		AND (($5::varchar IS NOT NULL AND target.address_text=$5)
+			OR ($3::bigint IS NOT NULL AND target.address_number BETWEEN $3 AND $4))
+		AND ($6::timestamptz IS NULL OR target.observed_at>=$6)
+		AND ($7::timestamptz IS NULL OR target.observed_at<$7))
+	OR ($8::uuid IS NOT NULL AND target.unit_id=$8)
+	OR ($9::uuid IS NOT NULL AND target.transmission_id=$9 AND target.position=$10))`
+
+// scopeArgs returns the eleven positional parameters of inScopeSQL: the scope's selector columns
+// in table order and the assignment revision below which a target counts as stale.
+func scopeArgs(scope assignments.CorrectionScope, revision int64) []any {
+	args := make([]any, 11)
+	args[0], args[1], args[2], args[3], args[4] = scope.NetworkID, nil, nil, nil, scope.AddressText
+	if scope.NetworkID != nil {
+		args[1] = string(scope.Protocol)
 	}
-	rows, err := executor.QueryContext(ctx, `SELECT DISTINCT network_id FROM address_rules
-		WHERE unit_id=$1 AND enabled=true ORDER BY network_id`, id)
-	if err != nil {
-		return nil, err
+	if scope.AddressFrom != nil && scope.AddressTo != nil {
+		args[2], args[3] = int64(min(*scope.AddressFrom, math.MaxInt64)), int64(min(*scope.AddressTo, math.MaxInt64))
 	}
-	defer rows.Close()
-	var networks []uuid.UUID
-	for rows.Next() {
-		var network uuid.UUID
-		if err := rows.Scan(&network); err != nil {
-			return nil, err
-		}
-		networks = append(networks, network)
-	}
-	return networks, rows.Err()
+	args[5], args[6], args[7], args[8], args[9], args[10] = scope.ValidFrom, scope.ValidUntil, scope.UnitID,
+		scope.TransmissionID, scope.TargetPosition, revision
+	return args
 }
 
 // InvalidateUnit disables its current rules and records pending correction in the same transaction.
 func (s *Store) InvalidateUnit(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) error {
 	if _, err := s.LockRevisionForChange(ctx, tx); err != nil {
-		return err
-	}
-	networks, err := s.networksForUnit(ctx, tx, id)
-	if err != nil {
 		return err
 	}
 	client, scope, err := s.client(ctx, tx, map[string]entql.P{"AddressRule": entql.And(
@@ -458,7 +415,7 @@ func (s *Store) InvalidateUnit(ctx context.Context, tx platform.TransactionConte
 	if _, err := client.AddressRule.Update().SetEnabled(false).AddRevision(1).Save(scope); err != nil {
 		return err
 	}
-	_, err = s.MarkPending(ctx, tx, networks, &id, "unit-deleted")
+	_, err = s.MarkPending(ctx, tx, []assignments.CorrectionScope{assignments.UnitScope(id)}, "unit-deleted")
 	return err
 }
 

@@ -71,7 +71,7 @@ flowchart TD
 | Target matching | Each target position is resolved against the current address rules at its observation time: `assigned` (Unit plus rule) or `unassigned`. Overlapping rules resolve to the most specific selector. Ambiguity is a conflict. | `assignments.Resolve`, `assignments.Service.MatchTargets` |
 | Grouping | Find Messages with equal payload identity that have a member within the grouping window (`grouping_control.window_seconds`). None found: create a Message. One found: join it. Several found: merge them into the lowest ID and move their transmissions and `message_units` rows. | `ingeststore.groupMessage` (decision type from `messages`) |
 | Persistence | Transmission, ordered targets with their resolution and typed address columns (`network_id`, `protocol`, `observed_at`, `address_number` or `address_text`, `function`), `message_units` cache rows (one per Message and Unit with the Unit's Agency, or one Unit-less row per Message and Network Agency for targetless input) | `ingeststore.AcceptTransmission` |
-| Correction capture | If a correction for the current assignment revision is queued or running, the transmission is recorded in `correction_dirty_transmissions` | `ingeststore.captureCorrectionDirty` |
+| Correction scope | None at intake: targets are stamped with the assignment revision read under the shared Assignment lock, so a correction recorded afterwards (always at a higher revision) selects them by selector if affected; no dirty capture exists | `assignmentstore.MarkPending` |
 | Facts | `gateway.state-changed`, `message.created` / `message.transmission-joined` / `message.merged`, `assignment.changed` (reason `created`) per target, `operation.observation-time-implausible` | `events`, `eventstore` |
 | Processing admission | Select enabled workflows with an active version and scope `all`, the matching Network, or one of the matched Units. Insert one `processing_candidates` row per selected workflow and set `processing_status` to `pending`, or to `none` when no workflow is selected. | `ingeststore.admitProcessing` |
 
@@ -108,7 +108,7 @@ Creating, updating or deleting a rule, deleting a Unit, or changing a suppressio
 `assignments.CorrectionRunner` then processes the queue:
 
 1. It claims the oldest due scope with a lease and fencing token (`assignmentstore.ClaimCorrection`).
-2. It reads affected transmissions in batches of 100, ordered by `(accepted_at, id)` up to a high-water mark, plus any dirty transmissions. Each batch runs `MatchTargets` again at the original observation time.
+2. It reads the transmissions with a target inside the scope's selector (Network, protocol and address range or text with an optional validity window; one Unit; or one target) that still carry an older assignment revision, in batches of 100 ordered by `(accepted_at, id)` after a cursor. Each batch runs `MatchTargets` again at the original observation time; the fresh match may be at a newer assignment revision than the scope.
 3. `ApplyCorrectionBatch` updates changed target resolutions and rebuilds the Message's `message_units` rows. Suppressed targets are excluded. Each change emits `assignment.changed` (reason `corrected`).
 4. In the same batch transaction, the runner re-admits processing for every transmission whose resolution changed (`ProcessingSourceOwner.ReadmitProcessing`): candidates bound to the old assignment context are superseded, a candidate is admitted for every currently selected workflow and the transmission's processing status becomes `pending`. Unchanged transmissions keep their candidates and status.
 5. On failure, the scope is rescheduled with backoff and a failure code. It can be retried through `POST /api/v1/assignment-corrections/{id}/retry`.
@@ -214,8 +214,6 @@ erDiagram
     UNIT |o--o{ MESSAGE_UNIT : "per Unit"
     AGENCY ||--o{ MESSAGE_UNIT : "owning Agency"
     TRANSMISSION ||--o{ TARGET_SUPPRESSION : "hides target"
-    PENDING_ASSIGNMENT_SCOPE ||--o{ CORRECTION_DIRTY_TRANSMISSION : tracks
-    TRANSMISSION ||--o{ CORRECTION_DIRTY_TRANSMISSION : ""
 ```
 
 ### Master data and processing
@@ -283,9 +281,9 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 | Unit template | `unit_templates` | Standalone settings preset for creating Units. Copied settings keep no link to the template. |
 | Address rule | `address_rules`, `assignments.Rule` | Mutable rule mapping a selector (address value or range, function set/mode) on a Network and protocol to a Unit, with optional `valid_from`/`valid_until` |
 | Assignment | `assignments.Resolution` | Result of resolving one target against current rules at its observation time: `assigned` or `unassigned` |
-| Assignment revision | `assignment_control.revision` | Global counter incremented by every rule, Unit or suppression change. Stamped on targets and candidates. |
+| Assignment revision | `assignment_control.revision` | Global counter incremented by every rule, Unit or suppression change. Stamped on targets when they are resolved; a candidate's processing context is the highest revision of its Transmission's own targets (1 without targets), so a change elsewhere does not invalidate it. |
 | Suppression | `target_suppressions` | Active marker that excludes one transmission target from the `message_units` cache |
-| Correction (pending scope) | `assignment_pending_scopes` | Durable rematch work for one assignment revision and affected Networks/Unit, with lease, cursor, attempts and failure code |
+| Correction (pending scope) | `assignment_pending_scopes` | Durable rematch work recorded at one assignment revision for one selector (address range or text on a Network and protocol with a validity window, one Unit, or one target), with lease, cursor, attempts and failure code; scopes run independently and are never superseded by later ones |
 | Principal / Account | `identity_accounts` | Internal identity of kind `human`, `technical` or `guest`. Grants and credentials attach to it. |
 | User group | `identity_user_groups` | Set of accounts used as a grant subject |
 | Credential | `identity_credentials` | Hashed `session`, `accessKey` or `recovery` secret of an account. Access keys carry restrictions. |

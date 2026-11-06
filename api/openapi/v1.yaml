@@ -1532,11 +1532,11 @@ paths:
       - Suppressions
       summary: Suppress one transmission target
       description: Requires `suppression.create` on the target's Network and Unit. Idempotent per caller and
-        `commandId`; the command receipt is checked before `expectedAssignmentRevision` and the active-suppression
-        rule, so re-sending an identical request (for example after `COMMIT_UNCERTAIN`) returns the original result
-        even though the create advanced the assignment revision; reusing the `commandId` with different input is 409
-        `IDEMPOTENCY_CONFLICT`. A stale `expectedAssignmentRevision` or an already suppressed target is 409
-        `REVISION_CONFLICT`.
+        `commandId`; the command receipt is checked before the active-suppression rule, so re-sending an identical
+        request (for example after `COMMIT_UNCERTAIN`) returns the original result even though the create advanced
+        the assignment revision; reusing the `commandId` with different input is 409 `IDEMPOTENCY_CONFLICT`. An
+        already suppressed target is 409 `REVISION_CONFLICT`. No assignment revision token is required, because
+        the suppression only concerns its own target.
       security:
       - sessionCookie: []
         csrfToken: []
@@ -1608,7 +1608,7 @@ paths:
       tags:
       - Suppressions
       summary: Lift a suppression
-      description: Requires `suppression.delete`. Checks both `expectedRevision` and `expectedAssignmentRevision`.
+      description: Requires `suppression.delete`. Checks the suppression's `expectedRevision`.
       security:
       - sessionCookie: []
         csrfToken: []
@@ -4643,12 +4643,9 @@ components:
               description: Number of rows the caller may read, independent of paging.
     CreateSuppressionRequest:
       type: object
-      description: '`expectedAssignmentRevision` is the current global assignment revision (see `assignmentRevision`
-        in suppression and correction responses).'
       required:
       - schemaVersion
       - commandId
-      - expectedAssignmentRevision
       - transmissionId
       - targetPosition
       properties:
@@ -4659,8 +4656,6 @@ components:
           format: uuid
           description: Client-generated idempotency key (not the nil UUID). Receipts are stored per (caller principal,
             commandId) and never expire.
-        expectedAssignmentRevision:
-          $ref: '#/components/schemas/Revision'
         transmissionId:
           type: string
           format: uuid
@@ -4673,13 +4668,10 @@ components:
       required:
       - schemaVersion
       - expectedRevision
-      - expectedAssignmentRevision
       properties:
         schemaVersion:
           $ref: '#/components/schemas/SchemaVersion'
         expectedRevision:
-          $ref: '#/components/schemas/Revision'
-        expectedAssignmentRevision:
           $ref: '#/components/schemas/Revision'
       additionalProperties: false
     SuppressionCommandResponse:
@@ -4720,8 +4712,7 @@ components:
       - id
       - assignmentRevision
       - state
-      - networkCount
-      - unitCount
+      - scope
       - processed
       - remaining
       properties:
@@ -4738,21 +4729,61 @@ components:
           - completed
           - failed
           - superseded
-        networkCount:
-          type: integer
-          minimum: 0
-        unitCount:
-          type: integer
-          minimum: 0
+        scope:
+          $ref: '#/components/schemas/CorrectionScope'
         processed:
           type: integer
           minimum: 0
+          description: Transmissions with a target inside the scope that already carry the scope's revision or a newer one.
         remaining:
           type: integer
           minimum: 0
+          description: Transmissions with a target inside the scope that still await re-resolution.
         failureCode:
           type: string
           description: Platform error code of the last failure. Omitted when there is none.
+    CorrectionScope:
+      type: object
+      description: The targets a correction re-resolves. Kind `address-rules` carries `networkId`, `protocol`
+        and either an address range (`addressFrom`, `addressTo`) or an `addressText`, with an optional
+        validity window; kind `unit` carries `unitId`; kind `target` carries `transmissionId` and `targetPosition`.
+      required:
+      - kind
+      properties:
+        kind:
+          type: string
+          enum:
+          - address-rules
+          - unit
+          - target
+        networkId:
+          type: string
+          format: uuid
+        protocol:
+          type: string
+        addressFrom:
+          type: integer
+          minimum: 0
+        addressTo:
+          type: integer
+          minimum: 0
+        addressText:
+          type: string
+        validFrom:
+          type: string
+          format: date-time
+        validUntil:
+          type: string
+          format: date-time
+        unitId:
+          type: string
+          format: uuid
+        transmissionId:
+          type: string
+          format: uuid
+        targetPosition:
+          type: integer
+          minimum: 0
     CorrectionResponse:
       type: object
       required:

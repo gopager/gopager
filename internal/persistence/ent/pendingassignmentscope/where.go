@@ -60,24 +60,54 @@ func AssignmentRevision(v int64) predicate.PendingAssignmentScope {
 	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldAssignmentRevision, v))
 }
 
+// NetworkID applies equality check predicate on the "network_id" field. It's identical to NetworkIDEQ.
+func NetworkID(v uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldNetworkID, v))
+}
+
+// AddressFrom applies equality check predicate on the "address_from" field. It's identical to AddressFromEQ.
+func AddressFrom(v int64) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldAddressFrom, v))
+}
+
+// AddressTo applies equality check predicate on the "address_to" field. It's identical to AddressToEQ.
+func AddressTo(v int64) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldAddressTo, v))
+}
+
+// AddressText applies equality check predicate on the "address_text" field. It's identical to AddressTextEQ.
+func AddressText(v string) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldAddressText, v))
+}
+
+// ValidFrom applies equality check predicate on the "valid_from" field. It's identical to ValidFromEQ.
+func ValidFrom(v time.Time) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldValidFrom, v))
+}
+
+// ValidUntil applies equality check predicate on the "valid_until" field. It's identical to ValidUntilEQ.
+func ValidUntil(v time.Time) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldValidUntil, v))
+}
+
 // UnitID applies equality check predicate on the "unit_id" field. It's identical to UnitIDEQ.
 func UnitID(v uuid.UUID) predicate.PendingAssignmentScope {
 	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldUnitID, v))
 }
 
+// TransmissionID applies equality check predicate on the "transmission_id" field. It's identical to TransmissionIDEQ.
+func TransmissionID(v uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldTransmissionID, v))
+}
+
+// TargetPosition applies equality check predicate on the "target_position" field. It's identical to TargetPositionEQ.
+func TargetPosition(v int) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldTargetPosition, v))
+}
+
 // RecordedAt applies equality check predicate on the "recorded_at" field. It's identical to RecordedAtEQ.
 func RecordedAt(v time.Time) predicate.PendingAssignmentScope {
 	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldRecordedAt, v))
-}
-
-// HighWaterAcceptedAt applies equality check predicate on the "high_water_accepted_at" field. It's identical to HighWaterAcceptedAtEQ.
-func HighWaterAcceptedAt(v time.Time) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldHighWaterAcceptedAt, v))
-}
-
-// HighWaterTransmissionID applies equality check predicate on the "high_water_transmission_id" field. It's identical to HighWaterTransmissionIDEQ.
-func HighWaterTransmissionID(v uuid.UUID) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldHighWaterTransmissionID, v))
 }
 
 // CursorAcceptedAt applies equality check predicate on the "cursor_accepted_at" field. It's identical to CursorAcceptedAtEQ.
@@ -155,6 +185,381 @@ func AssignmentRevisionLTE(v int64) predicate.PendingAssignmentScope {
 	return predicate.PendingAssignmentScope(sql.FieldLTE(FieldAssignmentRevision, v))
 }
 
+// ReasonEQ applies the EQ predicate on the "reason" field.
+func ReasonEQ(v Reason) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldReason, v))
+}
+
+// ReasonNEQ applies the NEQ predicate on the "reason" field.
+func ReasonNEQ(v Reason) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNEQ(FieldReason, v))
+}
+
+// ReasonIn applies the In predicate on the "reason" field.
+func ReasonIn(vs ...Reason) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldIn(FieldReason, vs...))
+}
+
+// ReasonNotIn applies the NotIn predicate on the "reason" field.
+func ReasonNotIn(vs ...Reason) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNotIn(FieldReason, vs...))
+}
+
+// NetworkIDEQ applies the EQ predicate on the "network_id" field.
+func NetworkIDEQ(v uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldNetworkID, v))
+}
+
+// NetworkIDNEQ applies the NEQ predicate on the "network_id" field.
+func NetworkIDNEQ(v uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNEQ(FieldNetworkID, v))
+}
+
+// NetworkIDIn applies the In predicate on the "network_id" field.
+func NetworkIDIn(vs ...uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldIn(FieldNetworkID, vs...))
+}
+
+// NetworkIDNotIn applies the NotIn predicate on the "network_id" field.
+func NetworkIDNotIn(vs ...uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNotIn(FieldNetworkID, vs...))
+}
+
+// NetworkIDGT applies the GT predicate on the "network_id" field.
+func NetworkIDGT(v uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldGT(FieldNetworkID, v))
+}
+
+// NetworkIDGTE applies the GTE predicate on the "network_id" field.
+func NetworkIDGTE(v uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldGTE(FieldNetworkID, v))
+}
+
+// NetworkIDLT applies the LT predicate on the "network_id" field.
+func NetworkIDLT(v uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldLT(FieldNetworkID, v))
+}
+
+// NetworkIDLTE applies the LTE predicate on the "network_id" field.
+func NetworkIDLTE(v uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldLTE(FieldNetworkID, v))
+}
+
+// NetworkIDIsNil applies the IsNil predicate on the "network_id" field.
+func NetworkIDIsNil() predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldIsNull(FieldNetworkID))
+}
+
+// NetworkIDNotNil applies the NotNil predicate on the "network_id" field.
+func NetworkIDNotNil() predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNotNull(FieldNetworkID))
+}
+
+// ProtocolEQ applies the EQ predicate on the "protocol" field.
+func ProtocolEQ(v Protocol) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldProtocol, v))
+}
+
+// ProtocolNEQ applies the NEQ predicate on the "protocol" field.
+func ProtocolNEQ(v Protocol) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNEQ(FieldProtocol, v))
+}
+
+// ProtocolIn applies the In predicate on the "protocol" field.
+func ProtocolIn(vs ...Protocol) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldIn(FieldProtocol, vs...))
+}
+
+// ProtocolNotIn applies the NotIn predicate on the "protocol" field.
+func ProtocolNotIn(vs ...Protocol) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNotIn(FieldProtocol, vs...))
+}
+
+// ProtocolIsNil applies the IsNil predicate on the "protocol" field.
+func ProtocolIsNil() predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldIsNull(FieldProtocol))
+}
+
+// ProtocolNotNil applies the NotNil predicate on the "protocol" field.
+func ProtocolNotNil() predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNotNull(FieldProtocol))
+}
+
+// AddressFromEQ applies the EQ predicate on the "address_from" field.
+func AddressFromEQ(v int64) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldAddressFrom, v))
+}
+
+// AddressFromNEQ applies the NEQ predicate on the "address_from" field.
+func AddressFromNEQ(v int64) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNEQ(FieldAddressFrom, v))
+}
+
+// AddressFromIn applies the In predicate on the "address_from" field.
+func AddressFromIn(vs ...int64) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldIn(FieldAddressFrom, vs...))
+}
+
+// AddressFromNotIn applies the NotIn predicate on the "address_from" field.
+func AddressFromNotIn(vs ...int64) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNotIn(FieldAddressFrom, vs...))
+}
+
+// AddressFromGT applies the GT predicate on the "address_from" field.
+func AddressFromGT(v int64) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldGT(FieldAddressFrom, v))
+}
+
+// AddressFromGTE applies the GTE predicate on the "address_from" field.
+func AddressFromGTE(v int64) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldGTE(FieldAddressFrom, v))
+}
+
+// AddressFromLT applies the LT predicate on the "address_from" field.
+func AddressFromLT(v int64) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldLT(FieldAddressFrom, v))
+}
+
+// AddressFromLTE applies the LTE predicate on the "address_from" field.
+func AddressFromLTE(v int64) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldLTE(FieldAddressFrom, v))
+}
+
+// AddressFromIsNil applies the IsNil predicate on the "address_from" field.
+func AddressFromIsNil() predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldIsNull(FieldAddressFrom))
+}
+
+// AddressFromNotNil applies the NotNil predicate on the "address_from" field.
+func AddressFromNotNil() predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNotNull(FieldAddressFrom))
+}
+
+// AddressToEQ applies the EQ predicate on the "address_to" field.
+func AddressToEQ(v int64) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldAddressTo, v))
+}
+
+// AddressToNEQ applies the NEQ predicate on the "address_to" field.
+func AddressToNEQ(v int64) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNEQ(FieldAddressTo, v))
+}
+
+// AddressToIn applies the In predicate on the "address_to" field.
+func AddressToIn(vs ...int64) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldIn(FieldAddressTo, vs...))
+}
+
+// AddressToNotIn applies the NotIn predicate on the "address_to" field.
+func AddressToNotIn(vs ...int64) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNotIn(FieldAddressTo, vs...))
+}
+
+// AddressToGT applies the GT predicate on the "address_to" field.
+func AddressToGT(v int64) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldGT(FieldAddressTo, v))
+}
+
+// AddressToGTE applies the GTE predicate on the "address_to" field.
+func AddressToGTE(v int64) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldGTE(FieldAddressTo, v))
+}
+
+// AddressToLT applies the LT predicate on the "address_to" field.
+func AddressToLT(v int64) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldLT(FieldAddressTo, v))
+}
+
+// AddressToLTE applies the LTE predicate on the "address_to" field.
+func AddressToLTE(v int64) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldLTE(FieldAddressTo, v))
+}
+
+// AddressToIsNil applies the IsNil predicate on the "address_to" field.
+func AddressToIsNil() predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldIsNull(FieldAddressTo))
+}
+
+// AddressToNotNil applies the NotNil predicate on the "address_to" field.
+func AddressToNotNil() predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNotNull(FieldAddressTo))
+}
+
+// AddressTextEQ applies the EQ predicate on the "address_text" field.
+func AddressTextEQ(v string) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldAddressText, v))
+}
+
+// AddressTextNEQ applies the NEQ predicate on the "address_text" field.
+func AddressTextNEQ(v string) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNEQ(FieldAddressText, v))
+}
+
+// AddressTextIn applies the In predicate on the "address_text" field.
+func AddressTextIn(vs ...string) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldIn(FieldAddressText, vs...))
+}
+
+// AddressTextNotIn applies the NotIn predicate on the "address_text" field.
+func AddressTextNotIn(vs ...string) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNotIn(FieldAddressText, vs...))
+}
+
+// AddressTextGT applies the GT predicate on the "address_text" field.
+func AddressTextGT(v string) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldGT(FieldAddressText, v))
+}
+
+// AddressTextGTE applies the GTE predicate on the "address_text" field.
+func AddressTextGTE(v string) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldGTE(FieldAddressText, v))
+}
+
+// AddressTextLT applies the LT predicate on the "address_text" field.
+func AddressTextLT(v string) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldLT(FieldAddressText, v))
+}
+
+// AddressTextLTE applies the LTE predicate on the "address_text" field.
+func AddressTextLTE(v string) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldLTE(FieldAddressText, v))
+}
+
+// AddressTextContains applies the Contains predicate on the "address_text" field.
+func AddressTextContains(v string) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldContains(FieldAddressText, v))
+}
+
+// AddressTextHasPrefix applies the HasPrefix predicate on the "address_text" field.
+func AddressTextHasPrefix(v string) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldHasPrefix(FieldAddressText, v))
+}
+
+// AddressTextHasSuffix applies the HasSuffix predicate on the "address_text" field.
+func AddressTextHasSuffix(v string) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldHasSuffix(FieldAddressText, v))
+}
+
+// AddressTextIsNil applies the IsNil predicate on the "address_text" field.
+func AddressTextIsNil() predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldIsNull(FieldAddressText))
+}
+
+// AddressTextNotNil applies the NotNil predicate on the "address_text" field.
+func AddressTextNotNil() predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNotNull(FieldAddressText))
+}
+
+// AddressTextEqualFold applies the EqualFold predicate on the "address_text" field.
+func AddressTextEqualFold(v string) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldEqualFold(FieldAddressText, v))
+}
+
+// AddressTextContainsFold applies the ContainsFold predicate on the "address_text" field.
+func AddressTextContainsFold(v string) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldContainsFold(FieldAddressText, v))
+}
+
+// ValidFromEQ applies the EQ predicate on the "valid_from" field.
+func ValidFromEQ(v time.Time) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldValidFrom, v))
+}
+
+// ValidFromNEQ applies the NEQ predicate on the "valid_from" field.
+func ValidFromNEQ(v time.Time) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNEQ(FieldValidFrom, v))
+}
+
+// ValidFromIn applies the In predicate on the "valid_from" field.
+func ValidFromIn(vs ...time.Time) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldIn(FieldValidFrom, vs...))
+}
+
+// ValidFromNotIn applies the NotIn predicate on the "valid_from" field.
+func ValidFromNotIn(vs ...time.Time) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNotIn(FieldValidFrom, vs...))
+}
+
+// ValidFromGT applies the GT predicate on the "valid_from" field.
+func ValidFromGT(v time.Time) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldGT(FieldValidFrom, v))
+}
+
+// ValidFromGTE applies the GTE predicate on the "valid_from" field.
+func ValidFromGTE(v time.Time) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldGTE(FieldValidFrom, v))
+}
+
+// ValidFromLT applies the LT predicate on the "valid_from" field.
+func ValidFromLT(v time.Time) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldLT(FieldValidFrom, v))
+}
+
+// ValidFromLTE applies the LTE predicate on the "valid_from" field.
+func ValidFromLTE(v time.Time) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldLTE(FieldValidFrom, v))
+}
+
+// ValidFromIsNil applies the IsNil predicate on the "valid_from" field.
+func ValidFromIsNil() predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldIsNull(FieldValidFrom))
+}
+
+// ValidFromNotNil applies the NotNil predicate on the "valid_from" field.
+func ValidFromNotNil() predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNotNull(FieldValidFrom))
+}
+
+// ValidUntilEQ applies the EQ predicate on the "valid_until" field.
+func ValidUntilEQ(v time.Time) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldValidUntil, v))
+}
+
+// ValidUntilNEQ applies the NEQ predicate on the "valid_until" field.
+func ValidUntilNEQ(v time.Time) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNEQ(FieldValidUntil, v))
+}
+
+// ValidUntilIn applies the In predicate on the "valid_until" field.
+func ValidUntilIn(vs ...time.Time) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldIn(FieldValidUntil, vs...))
+}
+
+// ValidUntilNotIn applies the NotIn predicate on the "valid_until" field.
+func ValidUntilNotIn(vs ...time.Time) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNotIn(FieldValidUntil, vs...))
+}
+
+// ValidUntilGT applies the GT predicate on the "valid_until" field.
+func ValidUntilGT(v time.Time) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldGT(FieldValidUntil, v))
+}
+
+// ValidUntilGTE applies the GTE predicate on the "valid_until" field.
+func ValidUntilGTE(v time.Time) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldGTE(FieldValidUntil, v))
+}
+
+// ValidUntilLT applies the LT predicate on the "valid_until" field.
+func ValidUntilLT(v time.Time) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldLT(FieldValidUntil, v))
+}
+
+// ValidUntilLTE applies the LTE predicate on the "valid_until" field.
+func ValidUntilLTE(v time.Time) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldLTE(FieldValidUntil, v))
+}
+
+// ValidUntilIsNil applies the IsNil predicate on the "valid_until" field.
+func ValidUntilIsNil() predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldIsNull(FieldValidUntil))
+}
+
+// ValidUntilNotNil applies the NotNil predicate on the "valid_until" field.
+func ValidUntilNotNil() predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNotNull(FieldValidUntil))
+}
+
 // UnitIDEQ applies the EQ predicate on the "unit_id" field.
 func UnitIDEQ(v uuid.UUID) predicate.PendingAssignmentScope {
 	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldUnitID, v))
@@ -205,24 +610,104 @@ func UnitIDNotNil() predicate.PendingAssignmentScope {
 	return predicate.PendingAssignmentScope(sql.FieldNotNull(FieldUnitID))
 }
 
-// ReasonEQ applies the EQ predicate on the "reason" field.
-func ReasonEQ(v Reason) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldReason, v))
+// TransmissionIDEQ applies the EQ predicate on the "transmission_id" field.
+func TransmissionIDEQ(v uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldTransmissionID, v))
 }
 
-// ReasonNEQ applies the NEQ predicate on the "reason" field.
-func ReasonNEQ(v Reason) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldNEQ(FieldReason, v))
+// TransmissionIDNEQ applies the NEQ predicate on the "transmission_id" field.
+func TransmissionIDNEQ(v uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNEQ(FieldTransmissionID, v))
 }
 
-// ReasonIn applies the In predicate on the "reason" field.
-func ReasonIn(vs ...Reason) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldIn(FieldReason, vs...))
+// TransmissionIDIn applies the In predicate on the "transmission_id" field.
+func TransmissionIDIn(vs ...uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldIn(FieldTransmissionID, vs...))
 }
 
-// ReasonNotIn applies the NotIn predicate on the "reason" field.
-func ReasonNotIn(vs ...Reason) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldNotIn(FieldReason, vs...))
+// TransmissionIDNotIn applies the NotIn predicate on the "transmission_id" field.
+func TransmissionIDNotIn(vs ...uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNotIn(FieldTransmissionID, vs...))
+}
+
+// TransmissionIDGT applies the GT predicate on the "transmission_id" field.
+func TransmissionIDGT(v uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldGT(FieldTransmissionID, v))
+}
+
+// TransmissionIDGTE applies the GTE predicate on the "transmission_id" field.
+func TransmissionIDGTE(v uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldGTE(FieldTransmissionID, v))
+}
+
+// TransmissionIDLT applies the LT predicate on the "transmission_id" field.
+func TransmissionIDLT(v uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldLT(FieldTransmissionID, v))
+}
+
+// TransmissionIDLTE applies the LTE predicate on the "transmission_id" field.
+func TransmissionIDLTE(v uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldLTE(FieldTransmissionID, v))
+}
+
+// TransmissionIDIsNil applies the IsNil predicate on the "transmission_id" field.
+func TransmissionIDIsNil() predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldIsNull(FieldTransmissionID))
+}
+
+// TransmissionIDNotNil applies the NotNil predicate on the "transmission_id" field.
+func TransmissionIDNotNil() predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNotNull(FieldTransmissionID))
+}
+
+// TargetPositionEQ applies the EQ predicate on the "target_position" field.
+func TargetPositionEQ(v int) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldTargetPosition, v))
+}
+
+// TargetPositionNEQ applies the NEQ predicate on the "target_position" field.
+func TargetPositionNEQ(v int) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNEQ(FieldTargetPosition, v))
+}
+
+// TargetPositionIn applies the In predicate on the "target_position" field.
+func TargetPositionIn(vs ...int) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldIn(FieldTargetPosition, vs...))
+}
+
+// TargetPositionNotIn applies the NotIn predicate on the "target_position" field.
+func TargetPositionNotIn(vs ...int) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNotIn(FieldTargetPosition, vs...))
+}
+
+// TargetPositionGT applies the GT predicate on the "target_position" field.
+func TargetPositionGT(v int) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldGT(FieldTargetPosition, v))
+}
+
+// TargetPositionGTE applies the GTE predicate on the "target_position" field.
+func TargetPositionGTE(v int) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldGTE(FieldTargetPosition, v))
+}
+
+// TargetPositionLT applies the LT predicate on the "target_position" field.
+func TargetPositionLT(v int) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldLT(FieldTargetPosition, v))
+}
+
+// TargetPositionLTE applies the LTE predicate on the "target_position" field.
+func TargetPositionLTE(v int) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldLTE(FieldTargetPosition, v))
+}
+
+// TargetPositionIsNil applies the IsNil predicate on the "target_position" field.
+func TargetPositionIsNil() predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldIsNull(FieldTargetPosition))
+}
+
+// TargetPositionNotNil applies the NotNil predicate on the "target_position" field.
+func TargetPositionNotNil() predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNotNull(FieldTargetPosition))
 }
 
 // RecordedAtEQ applies the EQ predicate on the "recorded_at" field.
@@ -283,106 +768,6 @@ func StateIn(vs ...State) predicate.PendingAssignmentScope {
 // StateNotIn applies the NotIn predicate on the "state" field.
 func StateNotIn(vs ...State) predicate.PendingAssignmentScope {
 	return predicate.PendingAssignmentScope(sql.FieldNotIn(FieldState, vs...))
-}
-
-// HighWaterAcceptedAtEQ applies the EQ predicate on the "high_water_accepted_at" field.
-func HighWaterAcceptedAtEQ(v time.Time) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldHighWaterAcceptedAt, v))
-}
-
-// HighWaterAcceptedAtNEQ applies the NEQ predicate on the "high_water_accepted_at" field.
-func HighWaterAcceptedAtNEQ(v time.Time) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldNEQ(FieldHighWaterAcceptedAt, v))
-}
-
-// HighWaterAcceptedAtIn applies the In predicate on the "high_water_accepted_at" field.
-func HighWaterAcceptedAtIn(vs ...time.Time) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldIn(FieldHighWaterAcceptedAt, vs...))
-}
-
-// HighWaterAcceptedAtNotIn applies the NotIn predicate on the "high_water_accepted_at" field.
-func HighWaterAcceptedAtNotIn(vs ...time.Time) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldNotIn(FieldHighWaterAcceptedAt, vs...))
-}
-
-// HighWaterAcceptedAtGT applies the GT predicate on the "high_water_accepted_at" field.
-func HighWaterAcceptedAtGT(v time.Time) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldGT(FieldHighWaterAcceptedAt, v))
-}
-
-// HighWaterAcceptedAtGTE applies the GTE predicate on the "high_water_accepted_at" field.
-func HighWaterAcceptedAtGTE(v time.Time) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldGTE(FieldHighWaterAcceptedAt, v))
-}
-
-// HighWaterAcceptedAtLT applies the LT predicate on the "high_water_accepted_at" field.
-func HighWaterAcceptedAtLT(v time.Time) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldLT(FieldHighWaterAcceptedAt, v))
-}
-
-// HighWaterAcceptedAtLTE applies the LTE predicate on the "high_water_accepted_at" field.
-func HighWaterAcceptedAtLTE(v time.Time) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldLTE(FieldHighWaterAcceptedAt, v))
-}
-
-// HighWaterAcceptedAtIsNil applies the IsNil predicate on the "high_water_accepted_at" field.
-func HighWaterAcceptedAtIsNil() predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldIsNull(FieldHighWaterAcceptedAt))
-}
-
-// HighWaterAcceptedAtNotNil applies the NotNil predicate on the "high_water_accepted_at" field.
-func HighWaterAcceptedAtNotNil() predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldNotNull(FieldHighWaterAcceptedAt))
-}
-
-// HighWaterTransmissionIDEQ applies the EQ predicate on the "high_water_transmission_id" field.
-func HighWaterTransmissionIDEQ(v uuid.UUID) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldHighWaterTransmissionID, v))
-}
-
-// HighWaterTransmissionIDNEQ applies the NEQ predicate on the "high_water_transmission_id" field.
-func HighWaterTransmissionIDNEQ(v uuid.UUID) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldNEQ(FieldHighWaterTransmissionID, v))
-}
-
-// HighWaterTransmissionIDIn applies the In predicate on the "high_water_transmission_id" field.
-func HighWaterTransmissionIDIn(vs ...uuid.UUID) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldIn(FieldHighWaterTransmissionID, vs...))
-}
-
-// HighWaterTransmissionIDNotIn applies the NotIn predicate on the "high_water_transmission_id" field.
-func HighWaterTransmissionIDNotIn(vs ...uuid.UUID) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldNotIn(FieldHighWaterTransmissionID, vs...))
-}
-
-// HighWaterTransmissionIDGT applies the GT predicate on the "high_water_transmission_id" field.
-func HighWaterTransmissionIDGT(v uuid.UUID) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldGT(FieldHighWaterTransmissionID, v))
-}
-
-// HighWaterTransmissionIDGTE applies the GTE predicate on the "high_water_transmission_id" field.
-func HighWaterTransmissionIDGTE(v uuid.UUID) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldGTE(FieldHighWaterTransmissionID, v))
-}
-
-// HighWaterTransmissionIDLT applies the LT predicate on the "high_water_transmission_id" field.
-func HighWaterTransmissionIDLT(v uuid.UUID) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldLT(FieldHighWaterTransmissionID, v))
-}
-
-// HighWaterTransmissionIDLTE applies the LTE predicate on the "high_water_transmission_id" field.
-func HighWaterTransmissionIDLTE(v uuid.UUID) predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldLTE(FieldHighWaterTransmissionID, v))
-}
-
-// HighWaterTransmissionIDIsNil applies the IsNil predicate on the "high_water_transmission_id" field.
-func HighWaterTransmissionIDIsNil() predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldIsNull(FieldHighWaterTransmissionID))
-}
-
-// HighWaterTransmissionIDNotNil applies the NotNil predicate on the "high_water_transmission_id" field.
-func HighWaterTransmissionIDNotNil() predicate.PendingAssignmentScope {
-	return predicate.PendingAssignmentScope(sql.FieldNotNull(FieldHighWaterTransmissionID))
 }
 
 // CursorAcceptedAtEQ applies the EQ predicate on the "cursor_accepted_at" field.

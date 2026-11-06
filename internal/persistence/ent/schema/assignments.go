@@ -234,8 +234,9 @@ func (AssignmentControl) Fields() []ent.Field {
 }
 
 // PendingAssignmentScope defines the assignment_pending_scopes table: a durable, leased
-// correction run that re-resolves stored targets for given Networks/Unit after an Assignment
-// change, scanning up to a high-water mark with a fenced cursor.
+// correction run that re-resolves the stored targets of one selector (an address selector on a
+// Network and Protocol with an optional validity window, one Unit, or one target) with a fenced
+// cursor; see the migration for the exclusive-form check.
 type PendingAssignmentScope struct{ ent.Schema }
 
 // Policy returns the privacy policy that guards queries and mutations of the PendingAssignmentScope schema.
@@ -251,13 +252,19 @@ func (PendingAssignmentScope) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.UUID{}).Default(uuid.New),
 		field.Int64("assignment_revision").Positive(),
-		field.JSON("network_ids", []uuid.UUID{}),
-		field.UUID("unit_id", uuid.UUID{}).Optional().Nillable(),
 		field.Enum("reason").Values("rule-change", "unit-deleted", "suppression-change"),
+		field.UUID("network_id", uuid.UUID{}).Optional().Nillable(),
+		field.Enum("protocol").Values("pocsag", "flex", "zvei", "eas").Optional().Nillable(),
+		field.Int64("address_from").Optional().Nillable(),
+		field.Int64("address_to").Optional().Nillable(),
+		field.String("address_text").Optional().Nillable(),
+		field.Time("valid_from").Optional().Nillable(),
+		field.Time("valid_until").Optional().Nillable(),
+		field.UUID("unit_id", uuid.UUID{}).Optional().Nillable(),
+		field.UUID("transmission_id", uuid.UUID{}).Optional().Nillable(),
+		field.Int("target_position").Optional().Nillable().NonNegative(),
 		field.Time("recorded_at"),
 		field.Enum("state").Values("queued", "running", "completed", "failed", "superseded").Default("queued"),
-		field.Time("high_water_accepted_at").Optional().Nillable(),
-		field.UUID("high_water_transmission_id", uuid.UUID{}).Optional().Nillable(),
 		field.Time("cursor_accepted_at").Optional().Nillable(),
 		field.UUID("cursor_transmission_id", uuid.UUID{}).Optional().Nillable(),
 		field.Int("attempts").Default(0).NonNegative(),

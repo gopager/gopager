@@ -274,7 +274,7 @@ func (s *Service) CreateRule(ctx context.Context, proof identity.Proof, command 
 		if err := s.repository.SaveRule(tx.Context(), tx, authority, value, 0, now); err != nil {
 			return err
 		}
-		if _, err := s.repository.MarkPending(tx.Context(), tx, []uuid.UUID{value.NetworkID}, nil, "rule-change"); err != nil {
+		if _, err := s.repository.MarkPending(tx.Context(), tx, []CorrectionScope{RuleScope(value)}, "rule-change"); err != nil {
 			return err
 		}
 		if err := s.record(tx.Context(), tx, authority, value, "created", "address-rule.create", &command, now); err != nil {
@@ -316,7 +316,7 @@ func (s *Service) UpdateRule(ctx context.Context, proof identity.Proof, id uuid.
 		if err := s.repository.SaveRule(tx.Context(), tx, authority, value, expected, now); err != nil {
 			return err
 		}
-		if _, err := s.repository.MarkPending(tx.Context(), tx, []uuid.UUID{before.NetworkID, value.NetworkID}, nil, "rule-change"); err != nil {
+		if _, err := s.repository.MarkPending(tx.Context(), tx, []CorrectionScope{RuleScope(before), RuleScope(value)}, "rule-change"); err != nil {
 			return err
 		}
 		if err := s.record(tx.Context(), tx, authority, value, "updated", "address-rule.update", nil, now); err != nil {
@@ -352,7 +352,7 @@ func (s *Service) DeleteRule(ctx context.Context, proof identity.Proof, id uuid.
 		if err := s.repository.DeleteRule(tx.Context(), tx, authority, value, now); err != nil {
 			return err
 		}
-		if _, err := s.repository.MarkPending(tx.Context(), tx, []uuid.UUID{value.NetworkID}, nil, "rule-change"); err != nil {
+		if _, err := s.repository.MarkPending(tx.Context(), tx, []CorrectionScope{RuleScope(value)}, "rule-change"); err != nil {
 			return err
 		}
 		value.Revision = next

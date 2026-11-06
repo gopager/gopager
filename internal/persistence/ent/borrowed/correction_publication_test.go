@@ -240,8 +240,8 @@ func TestCorrectionReadmitsProcessingForChangedTargets(t *testing.T) {
 	}
 	expect("evidence stays visible before correction", corrected, state{status: "completed",
 		unit: uuid.NullUUID{UUID: unitA.ID, Valid: true}, completed: 1, currentContext: initial, published: 1})
-	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
-		t.Fatalf("correction did not run: worked=%t err=%v", worked, err)
+	if drainCorrections(t, runner) == 0 {
+		t.Fatal("correction did not run")
 	}
 	expect("readmitted after correction", corrected, state{status: "pending", unit: uuid.NullUUID{UUID: unitB.ID, Valid: true},
 		superseded: 1, pending: 1, currentContext: changed, published: 1})
@@ -271,7 +271,7 @@ func TestCorrectionExhaustionFailsSafelyAndRetryCreatesCurrentWork(t *testing.T)
 	var revision int64
 	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		var err error
-		revision, err = f.ruleStore.MarkPending(tx.Context(), tx, []uuid.UUID{f.networks[0]}, nil, "rule-change")
+		revision, err = f.ruleStore.MarkPending(tx.Context(), tx, []assignments.CorrectionScope{networkScope(f.networks[0])}, "rule-change")
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -330,7 +330,8 @@ func TestCorrectionExhaustionFailsSafelyAndRetryCreatesCurrentWork(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, private := range []string{f.networks[0].String(), "fencing", "lease", "injected"} {
+	// The scope (Network, selector) is exposed to readers authorized for it; fences and leases are not.
+	for _, private := range []string{"fencing", "lease", "injected"} {
 		if strings.Contains(strings.ToLower(string(encoded)), strings.ToLower(private)) {
 			t.Fatalf("correction status exposed %q: %s", private, encoded)
 		}
@@ -374,8 +375,8 @@ func TestCorrectionExhaustionFailsSafelyAndRetryCreatesCurrentWork(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
-		t.Fatalf("retried correction did not run: worked=%t err=%v", worked, err)
+	if drainCorrections(t, runner) == 0 {
+		t.Fatal("retried correction did not run")
 	}
 	completed, err := f.rules.ReadCorrection(t.Context(), f.proof, retried.ID)
 	if err != nil || completed.State != "completed" {

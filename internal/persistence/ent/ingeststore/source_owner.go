@@ -341,7 +341,8 @@ func (o *ProcessingSourceOwner) ReconcileCandidate(ctx context.Context, tx platf
 // admits a candidate for every currently selected Workflow without one and refreshes the
 // processing status, in the caller's transaction. The correction runner calls it for every
 // Transmission whose target resolution it changed. It fails with a revision conflict while the
-// stored targets differ from the current matching.
+// stored targets differ from the current matching. It also returns the Transmission's processing
+// context: the highest assignment revision stamped on its targets, or 1 without targets.
 func (o *ProcessingSourceOwner) ReadmitProcessing(ctx context.Context, tx platform.TransactionContext,
 	transmission uuid.UUID,
 ) error {
@@ -523,11 +524,15 @@ func (o *ProcessingSourceOwner) readSource(ctx context.Context, tx platform.Tran
 	if err != nil {
 		return sourceSnapshot{}, err
 	}
-	snapshot.targetsCurrent, err = o.targetsMatch(ctx, tx, snapshot)
+	var contextRevision int64
+	snapshot.targetsCurrent, contextRevision, err = o.targetsMatch(ctx, tx, snapshot)
 	if err != nil {
 		return sourceSnapshot{}, err
 	}
 	projectedMatch := snapshot.matched
+	// The processing context follows the Transmission's own targets, not the global revision,
+	// so a rule change elsewhere does not invalidate this Transmission's candidates.
+	projectedMatch.Revision = contextRevision
 	projectedMatch.Resolutions = slices.Clone(snapshot.matched.Resolutions)
 	for position := range projectedMatch.Resolutions {
 		if snapshot.suppressed[position] {
@@ -575,50 +580,52 @@ func (o *ProcessingSourceOwner) suppressedTargets(ctx context.Context, tx platfo
 
 func (o *ProcessingSourceOwner) targetsMatch(ctx context.Context, tx platform.TransactionContext,
 	snapshot sourceSnapshot,
-) (bool, error) {
+) (bool, int64, error) {
 	executor, err := o.store.primary.Resolve(tx)
 	if err != nil {
-		return false, err
+		return false, 0, err
 	}
 	rows, err := executor.QueryContext(ctx, `SELECT position,resolution_status,unit_id::text,matched_rule_id::text,
 		assignment_revision FROM transmission_targets WHERE transmission_id=$1 ORDER BY position FOR UPDATE`,
 		snapshot.transmission)
 	if err != nil {
-		return false, err
+		return false, 0, err
 	}
 	defer rows.Close()
 	position := 0
+	contextRevision := int64(1)
 	for rows.Next() {
 		var actualPosition int
 		var status string
 		var unitID, ruleID sql.NullString
 		var revision int64
 		if err := rows.Scan(&actualPosition, &status, &unitID, &ruleID, &revision); err != nil {
-			return false, err
+			return false, 0, err
 		}
 		if position >= len(snapshot.matched.Resolutions) {
-			return false, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("stored target count exceeds original"))
+			return false, 0, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("stored target count exceeds original"))
 		}
 		expected := snapshot.matched.Resolutions[position]
 		actualUnit, err := parseNullableUUID(unitID)
 		if err != nil {
-			return false, err
+			return false, 0, err
 		}
 		actualRule, err := parseNullableUUID(ruleID)
 		if err != nil {
-			return false, err
+			return false, 0, err
 		}
 		if actualPosition != position || expected.TargetPosition != position ||
 			status != expected.Status || !equalUUIDPointer(actualUnit, expected.UnitID) ||
 			!equalUUIDPointer(actualRule, expected.AddressRuleID) || revision <= 0 {
-			return false, nil
+			return false, 0, nil
 		}
+		contextRevision = max(contextRevision, revision)
 		position++
 	}
 	if err := rows.Err(); err != nil {
-		return false, err
+		return false, 0, err
 	}
-	return position == len(snapshot.matched.Resolutions), nil
+	return position == len(snapshot.matched.Resolutions), contextRevision, nil
 }
 
 func parseNullableUUID(value sql.NullString) (*uuid.UUID, error) {

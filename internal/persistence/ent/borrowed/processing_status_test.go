@@ -372,24 +372,24 @@ func TestMergeMovesPublishedResultsToSurvivor(t *testing.T) {
 
 // TestReconcileReadmitsAfterContextRevisionChange expects the worker to replace a candidate
 // whose Assignment context is stale by a current one in the same dispatch, instead of
-// leaving the Transmission without current work.
+// leaving the Transmission without current work. The context is the assignment revision of
+// the Transmission's own targets, so the test restamps them as a correction batch would.
 func TestReconcileReadmitsAfterContextRevisionChange(t *testing.T) {
 	f := newProcessingSourceFixture(t)
 	f.seedWorkflow(t, "context", protocolSelectorDefinition(t))
-	receipt := f.accept(t, "stale-context", f.now, toneOnlyPayload, nil)
+	function := uint8(1)
+	receipt := f.accept(t, "stale-context", f.now, toneOnlyPayload,
+		[]protocols.Target{{Address: protocols.NumericAddress(10), Function: &function}})
 	candidates := f.dueCandidates(t)
 	if len(candidates) != 1 {
 		t.Fatalf("due candidates=%d want 1", len(candidates))
 	}
 	stale := candidates[0]
 	var revision int64
-	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		var err error
-		revision, err = f.assignments.MarkPending(tx.Context(), tx, []uuid.UUID{uuid.New()}, nil, "rule-change")
-		return err
-	}); err != nil {
-		t.Fatal(err)
-	}
+	f.exec(t, `UPDATE assignment_control SET revision=revision+1 WHERE id=1`)
+	f.exec(t, `UPDATE transmission_targets SET assignment_revision=(SELECT revision FROM assignment_control WHERE id=1)
+		WHERE transmission_id=$1`, receipt.TransmissionID)
+	f.queryRow(t, `SELECT revision FROM assignment_control WHERE id=1`, nil, &revision)
 	if err := f.worker.ExecuteWork(t.Context(), stale); err != nil {
 		t.Fatalf("dispatch of a stale candidate failed instead of readmitting: %v", err)
 	}

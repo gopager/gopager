@@ -304,13 +304,13 @@ func TestManagementHTTPAndTLSReverseProxyWithHTTPUpstream(t *testing.T) {
 			unknownTransmission := uuid.NewString()
 			missingTarget := managementRequest(t, client, origin, "POST", "/api/v1/suppressions",
 				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","transmissionId":"`+unknownTransmission+
-					`","targetPosition":0,"expectedAssignmentRevision":"1"}`, login.CSRFToken, "", http.StatusNotFound)
+					`","targetPosition":0}`, login.CSRFToken, "", http.StatusNotFound)
 			if missingTarget.Code != "NOT_FOUND" || strings.Contains(string(missingTarget.Data), unknownTransmission) {
 				t.Fatalf("unknown suppression target was not a safe NOT_FOUND: %+v", missingTarget)
 			}
 			unknownField := managementRequest(t, client, origin, "POST", "/api/v1/suppressions",
 				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","transmissionId":"`+unknownTransmission+
-					`","targetPosition":0,"expectedAssignmentRevision":"1","selector":"*"}`,
+					`","targetPosition":0,"selector":"*"}`,
 				login.CSRFToken, "", http.StatusBadRequest)
 			if unknownField.Code != "INVALID_INPUT" {
 				t.Fatalf("broad suppression selector was not rejected: %+v", unknownField)

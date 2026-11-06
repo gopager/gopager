@@ -3,7 +3,6 @@
 package ent
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -21,20 +20,32 @@ type PendingAssignmentScope struct {
 	ID uuid.UUID `json:"id,omitempty"`
 	// AssignmentRevision holds the value of the "assignment_revision" field.
 	AssignmentRevision int64 `json:"assignment_revision,omitempty"`
-	// NetworkIds holds the value of the "network_ids" field.
-	NetworkIds []uuid.UUID `json:"network_ids,omitempty"`
-	// UnitID holds the value of the "unit_id" field.
-	UnitID *uuid.UUID `json:"unit_id,omitempty"`
 	// Reason holds the value of the "reason" field.
 	Reason pendingassignmentscope.Reason `json:"reason,omitempty"`
+	// NetworkID holds the value of the "network_id" field.
+	NetworkID *uuid.UUID `json:"network_id,omitempty"`
+	// Protocol holds the value of the "protocol" field.
+	Protocol *pendingassignmentscope.Protocol `json:"protocol,omitempty"`
+	// AddressFrom holds the value of the "address_from" field.
+	AddressFrom *int64 `json:"address_from,omitempty"`
+	// AddressTo holds the value of the "address_to" field.
+	AddressTo *int64 `json:"address_to,omitempty"`
+	// AddressText holds the value of the "address_text" field.
+	AddressText *string `json:"address_text,omitempty"`
+	// ValidFrom holds the value of the "valid_from" field.
+	ValidFrom *time.Time `json:"valid_from,omitempty"`
+	// ValidUntil holds the value of the "valid_until" field.
+	ValidUntil *time.Time `json:"valid_until,omitempty"`
+	// UnitID holds the value of the "unit_id" field.
+	UnitID *uuid.UUID `json:"unit_id,omitempty"`
+	// TransmissionID holds the value of the "transmission_id" field.
+	TransmissionID *uuid.UUID `json:"transmission_id,omitempty"`
+	// TargetPosition holds the value of the "target_position" field.
+	TargetPosition *int `json:"target_position,omitempty"`
 	// RecordedAt holds the value of the "recorded_at" field.
 	RecordedAt time.Time `json:"recorded_at,omitempty"`
 	// State holds the value of the "state" field.
 	State pendingassignmentscope.State `json:"state,omitempty"`
-	// HighWaterAcceptedAt holds the value of the "high_water_accepted_at" field.
-	HighWaterAcceptedAt *time.Time `json:"high_water_accepted_at,omitempty"`
-	// HighWaterTransmissionID holds the value of the "high_water_transmission_id" field.
-	HighWaterTransmissionID *uuid.UUID `json:"high_water_transmission_id,omitempty"`
 	// CursorAcceptedAt holds the value of the "cursor_accepted_at" field.
 	CursorAcceptedAt *time.Time `json:"cursor_accepted_at,omitempty"`
 	// CursorTransmissionID holds the value of the "cursor_transmission_id" field.
@@ -57,15 +68,13 @@ func (*PendingAssignmentScope) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case pendingassignmentscope.FieldUnitID, pendingassignmentscope.FieldHighWaterTransmissionID, pendingassignmentscope.FieldCursorTransmissionID:
+		case pendingassignmentscope.FieldNetworkID, pendingassignmentscope.FieldUnitID, pendingassignmentscope.FieldTransmissionID, pendingassignmentscope.FieldCursorTransmissionID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
-		case pendingassignmentscope.FieldNetworkIds:
-			values[i] = new([]byte)
-		case pendingassignmentscope.FieldAssignmentRevision, pendingassignmentscope.FieldAttempts, pendingassignmentscope.FieldFencingToken, pendingassignmentscope.FieldAccessRevision:
+		case pendingassignmentscope.FieldAssignmentRevision, pendingassignmentscope.FieldAddressFrom, pendingassignmentscope.FieldAddressTo, pendingassignmentscope.FieldTargetPosition, pendingassignmentscope.FieldAttempts, pendingassignmentscope.FieldFencingToken, pendingassignmentscope.FieldAccessRevision:
 			values[i] = new(sql.NullInt64)
-		case pendingassignmentscope.FieldReason, pendingassignmentscope.FieldState, pendingassignmentscope.FieldFailureCode:
+		case pendingassignmentscope.FieldReason, pendingassignmentscope.FieldProtocol, pendingassignmentscope.FieldAddressText, pendingassignmentscope.FieldState, pendingassignmentscope.FieldFailureCode:
 			values[i] = new(sql.NullString)
-		case pendingassignmentscope.FieldRecordedAt, pendingassignmentscope.FieldHighWaterAcceptedAt, pendingassignmentscope.FieldCursorAcceptedAt, pendingassignmentscope.FieldLeaseUntil:
+		case pendingassignmentscope.FieldValidFrom, pendingassignmentscope.FieldValidUntil, pendingassignmentscope.FieldRecordedAt, pendingassignmentscope.FieldCursorAcceptedAt, pendingassignmentscope.FieldLeaseUntil:
 			values[i] = new(sql.NullTime)
 		case pendingassignmentscope.FieldID:
 			values[i] = new(uuid.UUID)
@@ -96,13 +105,60 @@ func (_m *PendingAssignmentScope) assignValues(columns []string, values []any) e
 			} else if value.Valid {
 				_m.AssignmentRevision = value.Int64
 			}
-		case pendingassignmentscope.FieldNetworkIds:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field network_ids", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &_m.NetworkIds); err != nil {
-					return fmt.Errorf("unmarshal field network_ids: %w", err)
-				}
+		case pendingassignmentscope.FieldReason:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field reason", values[i])
+			} else if value.Valid {
+				_m.Reason = pendingassignmentscope.Reason(value.String)
+			}
+		case pendingassignmentscope.FieldNetworkID:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field network_id", values[i])
+			} else if value.Valid {
+				_m.NetworkID = new(uuid.UUID)
+				*_m.NetworkID = *value.S.(*uuid.UUID)
+			}
+		case pendingassignmentscope.FieldProtocol:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field protocol", values[i])
+			} else if value.Valid {
+				_m.Protocol = new(pendingassignmentscope.Protocol)
+				*_m.Protocol = pendingassignmentscope.Protocol(value.String)
+			}
+		case pendingassignmentscope.FieldAddressFrom:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field address_from", values[i])
+			} else if value.Valid {
+				_m.AddressFrom = new(int64)
+				*_m.AddressFrom = value.Int64
+			}
+		case pendingassignmentscope.FieldAddressTo:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field address_to", values[i])
+			} else if value.Valid {
+				_m.AddressTo = new(int64)
+				*_m.AddressTo = value.Int64
+			}
+		case pendingassignmentscope.FieldAddressText:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field address_text", values[i])
+			} else if value.Valid {
+				_m.AddressText = new(string)
+				*_m.AddressText = value.String
+			}
+		case pendingassignmentscope.FieldValidFrom:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field valid_from", values[i])
+			} else if value.Valid {
+				_m.ValidFrom = new(time.Time)
+				*_m.ValidFrom = value.Time
+			}
+		case pendingassignmentscope.FieldValidUntil:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field valid_until", values[i])
+			} else if value.Valid {
+				_m.ValidUntil = new(time.Time)
+				*_m.ValidUntil = value.Time
 			}
 		case pendingassignmentscope.FieldUnitID:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
@@ -111,11 +167,19 @@ func (_m *PendingAssignmentScope) assignValues(columns []string, values []any) e
 				_m.UnitID = new(uuid.UUID)
 				*_m.UnitID = *value.S.(*uuid.UUID)
 			}
-		case pendingassignmentscope.FieldReason:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field reason", values[i])
+		case pendingassignmentscope.FieldTransmissionID:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field transmission_id", values[i])
 			} else if value.Valid {
-				_m.Reason = pendingassignmentscope.Reason(value.String)
+				_m.TransmissionID = new(uuid.UUID)
+				*_m.TransmissionID = *value.S.(*uuid.UUID)
+			}
+		case pendingassignmentscope.FieldTargetPosition:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field target_position", values[i])
+			} else if value.Valid {
+				_m.TargetPosition = new(int)
+				*_m.TargetPosition = int(value.Int64)
 			}
 		case pendingassignmentscope.FieldRecordedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -128,20 +192,6 @@ func (_m *PendingAssignmentScope) assignValues(columns []string, values []any) e
 				return fmt.Errorf("unexpected type %T for field state", values[i])
 			} else if value.Valid {
 				_m.State = pendingassignmentscope.State(value.String)
-			}
-		case pendingassignmentscope.FieldHighWaterAcceptedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field high_water_accepted_at", values[i])
-			} else if value.Valid {
-				_m.HighWaterAcceptedAt = new(time.Time)
-				*_m.HighWaterAcceptedAt = value.Time
-			}
-		case pendingassignmentscope.FieldHighWaterTransmissionID:
-			if value, ok := values[i].(*sql.NullScanner); !ok {
-				return fmt.Errorf("unexpected type %T for field high_water_transmission_id", values[i])
-			} else if value.Valid {
-				_m.HighWaterTransmissionID = new(uuid.UUID)
-				*_m.HighWaterTransmissionID = *value.S.(*uuid.UUID)
 			}
 		case pendingassignmentscope.FieldCursorAcceptedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -227,32 +277,64 @@ func (_m *PendingAssignmentScope) String() string {
 	builder.WriteString("assignment_revision=")
 	builder.WriteString(fmt.Sprintf("%v", _m.AssignmentRevision))
 	builder.WriteString(", ")
-	builder.WriteString("network_ids=")
-	builder.WriteString(fmt.Sprintf("%v", _m.NetworkIds))
+	builder.WriteString("reason=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Reason))
+	builder.WriteString(", ")
+	if v := _m.NetworkID; v != nil {
+		builder.WriteString("network_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.Protocol; v != nil {
+		builder.WriteString("protocol=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.AddressFrom; v != nil {
+		builder.WriteString("address_from=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.AddressTo; v != nil {
+		builder.WriteString("address_to=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.AddressText; v != nil {
+		builder.WriteString("address_text=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ValidFrom; v != nil {
+		builder.WriteString("valid_from=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.ValidUntil; v != nil {
+		builder.WriteString("valid_until=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	if v := _m.UnitID; v != nil {
 		builder.WriteString("unit_id=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	builder.WriteString("reason=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Reason))
+	if v := _m.TransmissionID; v != nil {
+		builder.WriteString("transmission_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.TargetPosition; v != nil {
+		builder.WriteString("target_position=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("recorded_at=")
 	builder.WriteString(_m.RecordedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("state=")
 	builder.WriteString(fmt.Sprintf("%v", _m.State))
-	builder.WriteString(", ")
-	if v := _m.HighWaterAcceptedAt; v != nil {
-		builder.WriteString("high_water_accepted_at=")
-		builder.WriteString(v.Format(time.ANSIC))
-	}
-	builder.WriteString(", ")
-	if v := _m.HighWaterTransmissionID; v != nil {
-		builder.WriteString("high_water_transmission_id=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
 	builder.WriteString(", ")
 	if v := _m.CursorAcceptedAt; v != nil {
 		builder.WriteString("cursor_accepted_at=")

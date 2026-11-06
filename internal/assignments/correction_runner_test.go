@@ -81,8 +81,8 @@ func (f *runnerFixture) CompleteCorrection(context.Context, platform.Transaction
 	return true, nil
 }
 
-func (f *runnerFixture) FailCorrection(context.Context, platform.TransactionContext, CorrectionLease, string, time.Duration) error {
-	return nil
+func (f *runnerFixture) FailCorrection(context.Context, platform.TransactionContext, CorrectionLease, string, time.Duration) (bool, error) {
+	return false, nil
 }
 
 func (f *runnerFixture) AppendCorrectionFact(context.Context, platform.TransactionContext, events.CorrectionFact) (uuid.UUID, error) {

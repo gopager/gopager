@@ -279,30 +279,6 @@ func (f ConsumerOffsetMutationRuleFunc) EvalMutation(ctx context.Context, m ent.
 	return Denyf("ent/privacy: unexpected mutation type %T, expect *ent.ConsumerOffsetMutation", m)
 }
 
-// The CorrectionDirtyTransmissionQueryRuleFunc type is an adapter to allow the use of ordinary
-// functions as a query rule.
-type CorrectionDirtyTransmissionQueryRuleFunc func(context.Context, *ent.CorrectionDirtyTransmissionQuery) error
-
-// EvalQuery return f(ctx, q).
-func (f CorrectionDirtyTransmissionQueryRuleFunc) EvalQuery(ctx context.Context, q ent.Query) error {
-	if q, ok := q.(*ent.CorrectionDirtyTransmissionQuery); ok {
-		return f(ctx, q)
-	}
-	return Denyf("ent/privacy: unexpected query type %T, expect *ent.CorrectionDirtyTransmissionQuery", q)
-}
-
-// The CorrectionDirtyTransmissionMutationRuleFunc type is an adapter to allow the use of ordinary
-// functions as a mutation rule.
-type CorrectionDirtyTransmissionMutationRuleFunc func(context.Context, *ent.CorrectionDirtyTransmissionMutation) error
-
-// EvalMutation calls f(ctx, m).
-func (f CorrectionDirtyTransmissionMutationRuleFunc) EvalMutation(ctx context.Context, m ent.Mutation) error {
-	if m, ok := m.(*ent.CorrectionDirtyTransmissionMutation); ok {
-		return f(ctx, m)
-	}
-	return Denyf("ent/privacy: unexpected mutation type %T, expect *ent.CorrectionDirtyTransmissionMutation", m)
-}
-
 // The CredentialQueryRuleFunc type is an adapter to allow the use of ordinary
 // functions as a query rule.
 type CredentialQueryRuleFunc func(context.Context, *ent.CredentialQuery) error
@@ -1096,8 +1072,6 @@ func queryFilter(q ent.Query) (Filter, error) {
 		return q.Filter(), nil
 	case *ent.ConsumerOffsetQuery:
 		return q.Filter(), nil
-	case *ent.CorrectionDirtyTransmissionQuery:
-		return q.Filter(), nil
 	case *ent.CredentialQuery:
 		return q.Filter(), nil
 	case *ent.DomainEventQuery:
@@ -1180,8 +1154,6 @@ func mutationFilter(m ent.Mutation) (Filter, error) {
 	case *ent.CommandReceiptMutation:
 		return m.Filter(), nil
 	case *ent.ConsumerOffsetMutation:
-		return m.Filter(), nil
-	case *ent.CorrectionDirtyTransmissionMutation:
 		return m.Filter(), nil
 	case *ent.CredentialMutation:
 		return m.Filter(), nil

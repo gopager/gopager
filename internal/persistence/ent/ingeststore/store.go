@@ -445,13 +445,19 @@ func (s *Store) admitProcessing(ctx context.Context, executor postgres.Executor,
 	if err := rows.Close(); err != nil {
 		return "", err
 	}
+	// The processing context is the assignment revision stamped on the Transmission's own targets;
+	// a targetless Transmission has none to re-resolve and keeps the constant context 1.
+	contextRevision := match.Revision
+	if len(match.Resolutions) == 0 {
+		contextRevision = 1
+	}
 	for _, workflow := range selected {
 		if _, err := executor.ExecContext(ctx, `INSERT INTO processing_candidates
 			(id,transmission_id,workflow_id,definition_version_id,workflow_revision,configuration_revision,
 			 source_revision,context_revision,state,due_at,created_at,updated_at)
 			VALUES($1,$2,$3,$4,$5,$6,1,$7,'pending',$8,$8,$8)`,
 			uuid.New(), transmission, workflow.id, workflow.version, workflow.revision,
-			configurationRevision, match.Revision, now); err != nil {
+			configurationRevision, contextRevision, now); err != nil {
 			return "", err
 		}
 	}
@@ -556,9 +562,6 @@ func (s *Store) groupMessage(ctx context.Context, executor postgres.Executor, re
 func (s *Store) storeTargets(ctx context.Context, tx platform.TransactionContext, executor postgres.Executor,
 	transmission, message uuid.UUID, messageRevision int64, submission ingest.ValidatedSubmission,
 	accepted time.Time, match assignments.MatchResult) error {
-	if err := s.captureCorrectionDirty(ctx, executor, transmission, submission.ResolvedNetwork, accepted, match.Revision); err != nil {
-		return err
-	}
 	for position, target := range submission.TransmissionTargets {
 		original, err := json.Marshal(target)
 		if err != nil {
@@ -640,19 +643,6 @@ func typedTarget(target protocols.Target) (*int64, *string, *int16, error) {
 		function = &value
 	}
 	return addressNumber, addressText, function, nil
-}
-
-func (s *Store) captureCorrectionDirty(ctx context.Context, executor postgres.Executor,
-	transmission, network uuid.UUID, accepted time.Time, assignmentRevision int64,
-) error {
-	_, err := executor.ExecContext(ctx, `INSERT INTO correction_dirty_transmissions
-		(scope_id,transmission_id,accepted_at,recorded_at)
-		SELECT scope.id,$1,$2,$2 FROM assignment_pending_scopes scope
-		WHERE scope.assignment_revision=$3 AND scope.state IN ('queued','running')
-		AND (jsonb_array_length(scope.network_ids)=0 OR scope.network_ids @> jsonb_build_array($4::text))
-		ON CONFLICT (scope_id,accepted_at,transmission_id) DO NOTHING`,
-		transmission, accepted, assignmentRevision, network)
-	return err
 }
 
 // mergeMessageUnits folds the cache rows of an absorbed Message into the survivor: equal rows

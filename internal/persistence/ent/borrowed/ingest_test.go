@@ -1367,7 +1367,7 @@ func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		_, err := assignmentRepository.MarkPending(tx.Context(), tx, []uuid.UUID{network}, nil, "rule-change")
+		_, err := assignmentRepository.MarkPending(tx.Context(), tx, []assignments.CorrectionScope{networkScope(network)}, "rule-change")
 		return err
 	}); err != nil {
 		t.Fatal(err)

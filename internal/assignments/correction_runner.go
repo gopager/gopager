@@ -152,7 +152,7 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 				if err != nil {
 					return err
 				}
-				if matched.Revision != lease.AssignmentRev || len(matched.Resolutions) != len(item.Targets) {
+				if matched.Revision < lease.AssignmentRev || len(matched.Resolutions) != len(item.Targets) {
 					return platform.NewFailure(platform.CodeRevisionConflict, errors.New("correction source revision changed"))
 				}
 				updates[i] = CorrectionUpdate{Item: item, Match: matched}
@@ -191,15 +191,11 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 			return nil
 		})
 		if err != nil {
-			delay := correctionBackoff(lease.Attempts)
 			code := string(platform.FailureCode(err))
 			if code == "" || code == string(platform.CodeInternalError) {
 				code = "CORRECTION_FAILED"
 			}
-			rescheduleErr := r.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-				return r.repository.FailCorrection(tx.Context(), tx, lease, code, delay)
-			})
-			if rescheduleErr != nil {
+			if rescheduleErr := r.fail(ctx, lease, code); rescheduleErr != nil {
 				return true, errors.Join(rescheduleErr, err)
 			}
 			return true, nil
@@ -214,11 +210,7 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 			return err
 		})
 		if err != nil {
-			delay := correctionBackoff(lease.Attempts)
-			rescheduleErr := r.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-				return r.repository.FailCorrection(tx.Context(), tx, lease, "CORRECTION_FAILED", delay)
-			})
-			if rescheduleErr != nil {
+			if rescheduleErr := r.fail(ctx, lease, "CORRECTION_FAILED"); rescheduleErr != nil {
 				return true, errors.Join(rescheduleErr, err)
 			}
 			return true, nil
@@ -227,6 +219,28 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 			return true, nil
 		}
 	}
+}
+
+// fail reschedules the leased scope with backoff and, once the scope has used up its attempts,
+// records the final failure as an operational fact; nothing waits for a failed scope, its
+// Messages simply keep their correcting status until a later correction refreshes them.
+func (r *CorrectionRunner) fail(ctx context.Context, lease CorrectionLease, code string) error {
+	return r.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
+		final, err := r.repository.FailCorrection(tx.Context(), tx, lease, code, correctionBackoff(lease.Attempts))
+		if err != nil || !final {
+			return err
+		}
+		now, err := r.clock.Now(tx.Context(), tx)
+		if err != nil {
+			return err
+		}
+		_, err = r.facts.AppendCorrectionFact(tx.Context(), tx, events.CorrectionFact{
+			ID: uuid.New(), Type: "correction.failed",
+			Aggregate: events.EntityRef{Type: "correction", ID: lease.ID},
+			Revision:  int64(lease.Attempts), OccurredAt: now, Reason: lease.Reason, FailureCode: code,
+		})
+		return err
+	})
 }
 
 func correctionBackoff(attempt int) time.Duration {

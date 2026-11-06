@@ -310,7 +310,7 @@ Rules:
 - Revision-based updates (`PUT`, most `DELETE`s) and `POST /units/bulk/preview` and
   `POST /address-rules/preview` must **not** send a `commandId`. Sending a non-nil value
   returns `400`.
-- `POST /suppressions` checks the receipt before `expectedAssignmentRevision` and the
+- `POST /suppressions` checks the receipt before the
   active-suppression rule. A successful create advances the assignment revision, but
   re-sending the identical request (for example after `COMMIT_UNCERTAIN`) still returns
   the stored result and makes no second change.
@@ -327,11 +327,12 @@ Gateway submissions use `submissionId` instead; see [Transmissions](#ingest-gate
   absent or `"0"`.
 - `DELETE` requests carry a JSON body: `{"schemaVersion":1,"expectedRevision":"N"}`,
   plus `commandId` for Gateway credentials.
-- Suppressions use the global assignment revision as well:
-  - Create sends `expectedAssignmentRevision`.
-  - Lift (`DELETE`) sends both `expectedRevision` and `expectedAssignmentRevision`.
-  - The current assignment revision is returned as `assignmentRevision` by suppression
-    commands and correction reads.
+- Suppressions need no assignment revision token: a suppression concerns exactly one target,
+  so a rule change elsewhere never invalidates the command.
+  - Create sends `transmissionId` and `targetPosition`.
+  - Lift (`DELETE`) sends the suppression's `expectedRevision`.
+  - The assignment revision a correction was recorded at is returned as `assignmentRevision`
+    by suppression commands and correction reads.
 - The Gateway revision covers Network assignments and credentials. It also changes when
   a pending credential is promoted.
 
@@ -425,7 +426,7 @@ or `unset`). Create and update commands return `{"id","revision"}`.
 | POST | `/suppressions` | `suppression.create` | **202** | Suppress one transmission target (`transmissionId`, `targetPosition`) |
 | GET | `/suppressions/{id}` | `suppression.read` | 200 | Read |
 | DELETE | `/suppressions/{id}` | `suppression.delete` | **202** | Lift a suppression |
-| GET | `/assignment-corrections/{id}` | `assignment-correction.read` | 200 | Progress: `state` (`pending`, `running`, `completed`, `failed`, `superseded`), counts |
+| GET | `/assignment-corrections/{id}` | `assignment-correction.read` | 200 | Progress: `state` (`pending`, `running`, `completed`, `failed`, `superseded`), `scope` (kind `address-rules`, `unit` or `target`) and the processed/remaining Transmission counts |
 | POST | `/assignment-corrections/{id}/retry` | `assignment-correction.retry` | **202** | Reschedule a failed correction (`commandId`) |
 
 On create and update, `selector`, `enabled` and `protocol` are required, and `id` must

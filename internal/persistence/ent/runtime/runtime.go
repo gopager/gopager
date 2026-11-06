@@ -14,7 +14,6 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/auditrecord"
 	"github.com/gopager/gopager/internal/persistence/ent/commandreceipt"
 	"github.com/gopager/gopager/internal/persistence/ent/consumeroffset"
-	"github.com/gopager/gopager/internal/persistence/ent/correctiondirtytransmission"
 	"github.com/gopager/gopager/internal/persistence/ent/credential"
 	"github.com/gopager/gopager/internal/persistence/ent/domainevent"
 	"github.com/gopager/gopager/internal/persistence/ent/fieldpermission"
@@ -245,15 +244,6 @@ func init() {
 	consumeroffsetDescLastSeq := consumeroffsetFields[1].Descriptor()
 	// consumeroffset.LastSeqValidator is a validator for the "last_seq" field. It is called by the builders before save.
 	consumeroffset.LastSeqValidator = consumeroffsetDescLastSeq.Validators[0].(func(int64) error)
-	correctiondirtytransmission.Policy = privacy.NewPolicies(schema.CorrectionDirtyTransmission{})
-	correctiondirtytransmission.Hooks[0] = func(next ent.Mutator) ent.Mutator {
-		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-			if err := correctiondirtytransmission.Policy.EvalMutation(ctx, m); err != nil {
-				return nil, err
-			}
-			return next.Mutate(ctx, m)
-		})
-	}
 	credentialMixin := schema.Credential{}.Mixin()
 	credential.Policy = privacy.NewPolicies(schema.Credential{})
 	credential.Hooks[0] = func(next ent.Mutator) ent.Mutator {
@@ -633,26 +623,30 @@ func init() {
 	pendingassignmentscopeDescAssignmentRevision := pendingassignmentscopeFields[1].Descriptor()
 	// pendingassignmentscope.AssignmentRevisionValidator is a validator for the "assignment_revision" field. It is called by the builders before save.
 	pendingassignmentscope.AssignmentRevisionValidator = pendingassignmentscopeDescAssignmentRevision.Validators[0].(func(int64) error)
+	// pendingassignmentscopeDescTargetPosition is the schema descriptor for target_position field.
+	pendingassignmentscopeDescTargetPosition := pendingassignmentscopeFields[12].Descriptor()
+	// pendingassignmentscope.TargetPositionValidator is a validator for the "target_position" field. It is called by the builders before save.
+	pendingassignmentscope.TargetPositionValidator = pendingassignmentscopeDescTargetPosition.Validators[0].(func(int) error)
 	// pendingassignmentscopeDescAttempts is the schema descriptor for attempts field.
-	pendingassignmentscopeDescAttempts := pendingassignmentscopeFields[11].Descriptor()
+	pendingassignmentscopeDescAttempts := pendingassignmentscopeFields[17].Descriptor()
 	// pendingassignmentscope.DefaultAttempts holds the default value on creation for the attempts field.
 	pendingassignmentscope.DefaultAttempts = pendingassignmentscopeDescAttempts.Default.(int)
 	// pendingassignmentscope.AttemptsValidator is a validator for the "attempts" field. It is called by the builders before save.
 	pendingassignmentscope.AttemptsValidator = pendingassignmentscopeDescAttempts.Validators[0].(func(int) error)
 	// pendingassignmentscopeDescFencingToken is the schema descriptor for fencing_token field.
-	pendingassignmentscopeDescFencingToken := pendingassignmentscopeFields[13].Descriptor()
+	pendingassignmentscopeDescFencingToken := pendingassignmentscopeFields[19].Descriptor()
 	// pendingassignmentscope.DefaultFencingToken holds the default value on creation for the fencing_token field.
 	pendingassignmentscope.DefaultFencingToken = pendingassignmentscopeDescFencingToken.Default.(int64)
 	// pendingassignmentscope.FencingTokenValidator is a validator for the "fencing_token" field. It is called by the builders before save.
 	pendingassignmentscope.FencingTokenValidator = pendingassignmentscopeDescFencingToken.Validators[0].(func(int64) error)
 	// pendingassignmentscopeDescAccessRevision is the schema descriptor for access_revision field.
-	pendingassignmentscopeDescAccessRevision := pendingassignmentscopeFields[14].Descriptor()
+	pendingassignmentscopeDescAccessRevision := pendingassignmentscopeFields[20].Descriptor()
 	// pendingassignmentscope.DefaultAccessRevision holds the default value on creation for the access_revision field.
 	pendingassignmentscope.DefaultAccessRevision = pendingassignmentscopeDescAccessRevision.Default.(int64)
 	// pendingassignmentscope.AccessRevisionValidator is a validator for the "access_revision" field. It is called by the builders before save.
 	pendingassignmentscope.AccessRevisionValidator = pendingassignmentscopeDescAccessRevision.Validators[0].(func(int64) error)
 	// pendingassignmentscopeDescFailureCode is the schema descriptor for failure_code field.
-	pendingassignmentscopeDescFailureCode := pendingassignmentscopeFields[15].Descriptor()
+	pendingassignmentscopeDescFailureCode := pendingassignmentscopeFields[21].Descriptor()
 	// pendingassignmentscope.FailureCodeValidator is a validator for the "failure_code" field. It is called by the builders before save.
 	pendingassignmentscope.FailureCodeValidator = pendingassignmentscopeDescFailureCode.Validators[0].(func(string) error)
 	// pendingassignmentscopeDescID is the schema descriptor for id field.

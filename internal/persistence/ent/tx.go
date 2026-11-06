@@ -26,8 +26,6 @@ type Tx struct {
 	CommandReceipt *CommandReceiptClient
 	// ConsumerOffset is the client for interacting with the ConsumerOffset builders.
 	ConsumerOffset *ConsumerOffsetClient
-	// CorrectionDirtyTransmission is the client for interacting with the CorrectionDirtyTransmission builders.
-	CorrectionDirtyTransmission *CorrectionDirtyTransmissionClient
 	// Credential is the client for interacting with the Credential builders.
 	Credential *CredentialClient
 	// DomainEvent is the client for interacting with the DomainEvent builders.
@@ -228,7 +226,6 @@ func (tx *Tx) init() {
 	tx.AuditRecord = NewAuditRecordClient(tx.config)
 	tx.CommandReceipt = NewCommandReceiptClient(tx.config)
 	tx.ConsumerOffset = NewConsumerOffsetClient(tx.config)
-	tx.CorrectionDirtyTransmission = NewCorrectionDirtyTransmissionClient(tx.config)
 	tx.Credential = NewCredentialClient(tx.config)
 	tx.DomainEvent = NewDomainEventClient(tx.config)
 	tx.FieldPermission = NewFieldPermissionClient(tx.config)

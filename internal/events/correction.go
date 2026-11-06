@@ -14,7 +14,8 @@ import (
 // selects the vocabulary: "assignment.changed" records that a correction run
 // changed a stored message target's resolution (Aggregate is the message;
 // Before and After are required and must differ; Reason must be "corrected"),
-// and "suppression.changed" records that an operator created or lifted a
+// "correction.failed" records a correction scope that used up its attempts, and
+// "suppression.changed" records that an operator created or lifted a
 // suppression (Aggregate is the suppression; ChangeKind is created or lifted).
 type CorrectionFact struct {
 	ID             uuid.UUID
@@ -32,6 +33,7 @@ type CorrectionFact struct {
 	After          *IntakeResolution
 	ChangeKind     string
 	Reason         string
+	FailureCode    string
 }
 
 // CorrectionData is the data payload of a correction envelope; only the fields
@@ -46,6 +48,7 @@ type CorrectionData struct {
 	After          *IntakeResolution `json:"after,omitempty"`
 	ChangeKind     string            `json:"changeKind,omitempty"`
 	Reason         string            `json:"reason,omitempty"`
+	FailureCode    string            `json:"failureCode,omitempty"`
 }
 
 // CorrectionEnvelope is the persisted serialization of a CorrectionFact,
@@ -107,6 +110,12 @@ func (fact CorrectionFact) Envelope(recordedAt time.Time) (CorrectionEnvelope, e
 		}
 		envelope.Data = CorrectionData{TargetPosition: fact.TargetPosition, TransmissionID: fact.TransmissionID,
 			NetworkID: fact.NetworkID, UnitID: fact.UnitID, ChangeKind: fact.ChangeKind}
+	case "correction.failed":
+		if fact.Aggregate.Type != "correction" || fact.Aggregate.ID == uuid.Nil || fact.FailureCode == "" ||
+			!slices.Contains([]string{"rule-change", "unit-deleted", "suppression-change"}, fact.Reason) {
+			return CorrectionEnvelope{}, ErrInvalidFact
+		}
+		envelope.Data = CorrectionData{Reason: fact.Reason, FailureCode: fact.FailureCode}
 	default:
 		return CorrectionEnvelope{}, errors.Join(ErrInvalidFact, errors.New("unknown correction fact type"))
 	}

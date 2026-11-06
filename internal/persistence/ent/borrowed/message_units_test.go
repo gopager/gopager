@@ -178,8 +178,8 @@ func TestMessageUnitCacheFollowsIntakeAndCorrection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if worked, err := runner.RunOnce(t.Context()); err != nil || !worked {
-		t.Fatalf("correction did not run: worked=%t err=%v", worked, err)
+	if drainCorrections(t, runner) == 0 {
+		t.Fatal("correction did not run")
 	}
 	rows = readMessageUnits(t, f, later.MessageID)
 	if len(rows) != 2 || rows[0].unit.Valid || rows[0].agency != f.agency ||

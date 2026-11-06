@@ -24,7 +24,6 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/auditrecord"
 	"github.com/gopager/gopager/internal/persistence/ent/commandreceipt"
 	"github.com/gopager/gopager/internal/persistence/ent/consumeroffset"
-	"github.com/gopager/gopager/internal/persistence/ent/correctiondirtytransmission"
 	"github.com/gopager/gopager/internal/persistence/ent/credential"
 	"github.com/gopager/gopager/internal/persistence/ent/domainevent"
 	"github.com/gopager/gopager/internal/persistence/ent/fieldpermission"
@@ -69,45 +68,44 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
-	TypeAccount                     = "Account"
-	TypeAddressRule                 = "AddressRule"
-	TypeAgency                      = "Agency"
-	TypeAssignmentControl           = "AssignmentControl"
-	TypeAuditRecord                 = "AuditRecord"
-	TypeCommandReceipt              = "CommandReceipt"
-	TypeConsumerOffset              = "ConsumerOffset"
-	TypeCorrectionDirtyTransmission = "CorrectionDirtyTransmission"
-	TypeCredential                  = "Credential"
-	TypeDomainEvent                 = "DomainEvent"
-	TypeFieldPermission             = "FieldPermission"
-	TypeGateway                     = "Gateway"
-	TypeGatewayCredential           = "GatewayCredential"
-	TypeGatewayNetwork              = "GatewayNetwork"
-	TypeGrant                       = "Grant"
-	TypeGroupingControl             = "GroupingControl"
-	TypeIdentityControl             = "IdentityControl"
-	TypeLoginAttempt                = "LoginAttempt"
-	TypeMembership                  = "Membership"
-	TypeMessage                     = "Message"
-	TypeMessageUnit                 = "MessageUnit"
-	TypeNetwork                     = "Network"
-	TypeOrganization                = "Organization"
-	TypePendingAssignmentScope      = "PendingAssignmentScope"
-	TypeProcessingCandidate         = "ProcessingCandidate"
-	TypeProcessingControl           = "ProcessingControl"
-	TypeProcessingInstance          = "ProcessingInstance"
-	TypeProcessingInstanceVersion   = "ProcessingInstanceVersion"
-	TypeProcessingResult            = "ProcessingResult"
-	TypeTargetSuppression           = "TargetSuppression"
-	TypeTransmission                = "Transmission"
-	TypeTransmissionTarget          = "TransmissionTarget"
-	TypeUnit                        = "Unit"
-	TypeUnitCollection              = "UnitCollection"
-	TypeUnitTemplate                = "UnitTemplate"
-	TypeUserGroup                   = "UserGroup"
-	TypeWorkflow                    = "Workflow"
-	TypeWorkflowScopeReference      = "WorkflowScopeReference"
-	TypeWorkflowVersion             = "WorkflowVersion"
+	TypeAccount                   = "Account"
+	TypeAddressRule               = "AddressRule"
+	TypeAgency                    = "Agency"
+	TypeAssignmentControl         = "AssignmentControl"
+	TypeAuditRecord               = "AuditRecord"
+	TypeCommandReceipt            = "CommandReceipt"
+	TypeConsumerOffset            = "ConsumerOffset"
+	TypeCredential                = "Credential"
+	TypeDomainEvent               = "DomainEvent"
+	TypeFieldPermission           = "FieldPermission"
+	TypeGateway                   = "Gateway"
+	TypeGatewayCredential         = "GatewayCredential"
+	TypeGatewayNetwork            = "GatewayNetwork"
+	TypeGrant                     = "Grant"
+	TypeGroupingControl           = "GroupingControl"
+	TypeIdentityControl           = "IdentityControl"
+	TypeLoginAttempt              = "LoginAttempt"
+	TypeMembership                = "Membership"
+	TypeMessage                   = "Message"
+	TypeMessageUnit               = "MessageUnit"
+	TypeNetwork                   = "Network"
+	TypeOrganization              = "Organization"
+	TypePendingAssignmentScope    = "PendingAssignmentScope"
+	TypeProcessingCandidate       = "ProcessingCandidate"
+	TypeProcessingControl         = "ProcessingControl"
+	TypeProcessingInstance        = "ProcessingInstance"
+	TypeProcessingInstanceVersion = "ProcessingInstanceVersion"
+	TypeProcessingResult          = "ProcessingResult"
+	TypeTargetSuppression         = "TargetSuppression"
+	TypeTransmission              = "Transmission"
+	TypeTransmissionTarget        = "TransmissionTarget"
+	TypeUnit                      = "Unit"
+	TypeUnitCollection            = "UnitCollection"
+	TypeUnitTemplate              = "UnitTemplate"
+	TypeUserGroup                 = "UserGroup"
+	TypeWorkflow                  = "Workflow"
+	TypeWorkflowScopeReference    = "WorkflowScopeReference"
+	TypeWorkflowVersion           = "WorkflowVersion"
 )
 
 // AccountMutation represents an operation that mutates the Account nodes in the graph.
@@ -4662,494 +4660,6 @@ func (m *ConsumerOffsetMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *ConsumerOffsetMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown ConsumerOffset edge %s", name)
-}
-
-// CorrectionDirtyTransmissionMutation represents an operation that mutates the CorrectionDirtyTransmission nodes in the graph.
-type CorrectionDirtyTransmissionMutation struct {
-	config
-	op              Op
-	typ             string
-	id              *int
-	scope_id        *uuid.UUID
-	transmission_id *uuid.UUID
-	accepted_at     *time.Time
-	recorded_at     *time.Time
-	clearedFields   map[string]struct{}
-	done            bool
-	oldValue        func(context.Context) (*CorrectionDirtyTransmission, error)
-	predicates      []predicate.CorrectionDirtyTransmission
-}
-
-var _ ent.Mutation = (*CorrectionDirtyTransmissionMutation)(nil)
-
-// correctiondirtytransmissionOption allows management of the mutation configuration using functional options.
-type correctiondirtytransmissionOption func(*CorrectionDirtyTransmissionMutation)
-
-// newCorrectionDirtyTransmissionMutation creates new mutation for the CorrectionDirtyTransmission entity.
-func newCorrectionDirtyTransmissionMutation(c config, op Op, opts ...correctiondirtytransmissionOption) *CorrectionDirtyTransmissionMutation {
-	m := &CorrectionDirtyTransmissionMutation{
-		config:        c,
-		op:            op,
-		typ:           TypeCorrectionDirtyTransmission,
-		clearedFields: make(map[string]struct{}),
-	}
-	for _, opt := range opts {
-		opt(m)
-	}
-	return m
-}
-
-// withCorrectionDirtyTransmissionID sets the ID field of the mutation.
-func withCorrectionDirtyTransmissionID(id int) correctiondirtytransmissionOption {
-	return func(m *CorrectionDirtyTransmissionMutation) {
-		var (
-			err   error
-			once  sync.Once
-			value *CorrectionDirtyTransmission
-		)
-		m.oldValue = func(ctx context.Context) (*CorrectionDirtyTransmission, error) {
-			once.Do(func() {
-				if m.done {
-					err = errors.New("querying old values post mutation is not allowed")
-				} else {
-					value, err = m.Client().CorrectionDirtyTransmission.Get(ctx, id)
-				}
-			})
-			return value, err
-		}
-		m.id = &id
-	}
-}
-
-// withCorrectionDirtyTransmission sets the old CorrectionDirtyTransmission of the mutation.
-func withCorrectionDirtyTransmission(node *CorrectionDirtyTransmission) correctiondirtytransmissionOption {
-	return func(m *CorrectionDirtyTransmissionMutation) {
-		m.oldValue = func(context.Context) (*CorrectionDirtyTransmission, error) {
-			return node, nil
-		}
-		m.id = &node.ID
-	}
-}
-
-// Client returns a new `ent.Client` from the mutation. If the mutation was
-// executed in a transaction (ent.Tx), a transactional client is returned.
-func (m CorrectionDirtyTransmissionMutation) Client() *Client {
-	client := &Client{config: m.config}
-	client.init()
-	return client
-}
-
-// Tx returns an `ent.Tx` for mutations that were executed in transactions;
-// it returns an error otherwise.
-func (m CorrectionDirtyTransmissionMutation) Tx() (*Tx, error) {
-	if _, ok := m.driver.(*txDriver); !ok {
-		return nil, errors.New("ent: mutation is not running in a transaction")
-	}
-	tx := &Tx{config: m.config}
-	tx.init()
-	return tx, nil
-}
-
-// ID returns the ID value in the mutation. Note that the ID is only available
-// if it was provided to the builder or after it was returned from the database.
-func (m *CorrectionDirtyTransmissionMutation) ID() (id int, exists bool) {
-	if m.id == nil {
-		return
-	}
-	return *m.id, true
-}
-
-// IDs queries the database and returns the entity ids that match the mutation's predicate.
-// That means, if the mutation is applied within a transaction with an isolation level such
-// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
-// or updated by the mutation.
-func (m *CorrectionDirtyTransmissionMutation) IDs(ctx context.Context) ([]int, error) {
-	switch {
-	case m.op.Is(OpUpdateOne | OpDeleteOne):
-		id, exists := m.ID()
-		if exists {
-			return []int{id}, nil
-		}
-		fallthrough
-	case m.op.Is(OpUpdate | OpDelete):
-		return m.Client().CorrectionDirtyTransmission.Query().Where(m.predicates...).IDs(ctx)
-	default:
-		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
-	}
-}
-
-// SetScopeID sets the "scope_id" field.
-func (m *CorrectionDirtyTransmissionMutation) SetScopeID(u uuid.UUID) {
-	m.scope_id = &u
-}
-
-// ScopeID returns the value of the "scope_id" field in the mutation.
-func (m *CorrectionDirtyTransmissionMutation) ScopeID() (r uuid.UUID, exists bool) {
-	v := m.scope_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldScopeID returns the old "scope_id" field's value of the CorrectionDirtyTransmission entity.
-// If the CorrectionDirtyTransmission object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CorrectionDirtyTransmissionMutation) OldScopeID(ctx context.Context) (v uuid.UUID, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldScopeID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldScopeID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldScopeID: %w", err)
-	}
-	return oldValue.ScopeID, nil
-}
-
-// ResetScopeID resets all changes to the "scope_id" field.
-func (m *CorrectionDirtyTransmissionMutation) ResetScopeID() {
-	m.scope_id = nil
-}
-
-// SetTransmissionID sets the "transmission_id" field.
-func (m *CorrectionDirtyTransmissionMutation) SetTransmissionID(u uuid.UUID) {
-	m.transmission_id = &u
-}
-
-// TransmissionID returns the value of the "transmission_id" field in the mutation.
-func (m *CorrectionDirtyTransmissionMutation) TransmissionID() (r uuid.UUID, exists bool) {
-	v := m.transmission_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldTransmissionID returns the old "transmission_id" field's value of the CorrectionDirtyTransmission entity.
-// If the CorrectionDirtyTransmission object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CorrectionDirtyTransmissionMutation) OldTransmissionID(ctx context.Context) (v uuid.UUID, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTransmissionID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTransmissionID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTransmissionID: %w", err)
-	}
-	return oldValue.TransmissionID, nil
-}
-
-// ResetTransmissionID resets all changes to the "transmission_id" field.
-func (m *CorrectionDirtyTransmissionMutation) ResetTransmissionID() {
-	m.transmission_id = nil
-}
-
-// SetAcceptedAt sets the "accepted_at" field.
-func (m *CorrectionDirtyTransmissionMutation) SetAcceptedAt(t time.Time) {
-	m.accepted_at = &t
-}
-
-// AcceptedAt returns the value of the "accepted_at" field in the mutation.
-func (m *CorrectionDirtyTransmissionMutation) AcceptedAt() (r time.Time, exists bool) {
-	v := m.accepted_at
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldAcceptedAt returns the old "accepted_at" field's value of the CorrectionDirtyTransmission entity.
-// If the CorrectionDirtyTransmission object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CorrectionDirtyTransmissionMutation) OldAcceptedAt(ctx context.Context) (v time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldAcceptedAt is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldAcceptedAt requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldAcceptedAt: %w", err)
-	}
-	return oldValue.AcceptedAt, nil
-}
-
-// ResetAcceptedAt resets all changes to the "accepted_at" field.
-func (m *CorrectionDirtyTransmissionMutation) ResetAcceptedAt() {
-	m.accepted_at = nil
-}
-
-// SetRecordedAt sets the "recorded_at" field.
-func (m *CorrectionDirtyTransmissionMutation) SetRecordedAt(t time.Time) {
-	m.recorded_at = &t
-}
-
-// RecordedAt returns the value of the "recorded_at" field in the mutation.
-func (m *CorrectionDirtyTransmissionMutation) RecordedAt() (r time.Time, exists bool) {
-	v := m.recorded_at
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldRecordedAt returns the old "recorded_at" field's value of the CorrectionDirtyTransmission entity.
-// If the CorrectionDirtyTransmission object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CorrectionDirtyTransmissionMutation) OldRecordedAt(ctx context.Context) (v time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldRecordedAt is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldRecordedAt requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldRecordedAt: %w", err)
-	}
-	return oldValue.RecordedAt, nil
-}
-
-// ResetRecordedAt resets all changes to the "recorded_at" field.
-func (m *CorrectionDirtyTransmissionMutation) ResetRecordedAt() {
-	m.recorded_at = nil
-}
-
-// Where appends a list predicates to the CorrectionDirtyTransmissionMutation builder.
-func (m *CorrectionDirtyTransmissionMutation) Where(ps ...predicate.CorrectionDirtyTransmission) {
-	m.predicates = append(m.predicates, ps...)
-}
-
-// WhereP appends storage-level predicates to the CorrectionDirtyTransmissionMutation builder. Using this method,
-// users can use type-assertion to append predicates that do not depend on any generated package.
-func (m *CorrectionDirtyTransmissionMutation) WhereP(ps ...func(*sql.Selector)) {
-	p := make([]predicate.CorrectionDirtyTransmission, len(ps))
-	for i := range ps {
-		p[i] = ps[i]
-	}
-	m.Where(p...)
-}
-
-// Op returns the operation name.
-func (m *CorrectionDirtyTransmissionMutation) Op() Op {
-	return m.op
-}
-
-// SetOp allows setting the mutation operation.
-func (m *CorrectionDirtyTransmissionMutation) SetOp(op Op) {
-	m.op = op
-}
-
-// Type returns the node type of this mutation (CorrectionDirtyTransmission).
-func (m *CorrectionDirtyTransmissionMutation) Type() string {
-	return m.typ
-}
-
-// Fields returns all fields that were changed during this mutation. Note that in
-// order to get all numeric fields that were incremented/decremented, call
-// AddedFields().
-func (m *CorrectionDirtyTransmissionMutation) Fields() []string {
-	fields := make([]string, 0, 4)
-	if m.scope_id != nil {
-		fields = append(fields, correctiondirtytransmission.FieldScopeID)
-	}
-	if m.transmission_id != nil {
-		fields = append(fields, correctiondirtytransmission.FieldTransmissionID)
-	}
-	if m.accepted_at != nil {
-		fields = append(fields, correctiondirtytransmission.FieldAcceptedAt)
-	}
-	if m.recorded_at != nil {
-		fields = append(fields, correctiondirtytransmission.FieldRecordedAt)
-	}
-	return fields
-}
-
-// Field returns the value of a field with the given name. The second boolean
-// return value indicates that this field was not set, or was not defined in the
-// schema.
-func (m *CorrectionDirtyTransmissionMutation) Field(name string) (ent.Value, bool) {
-	switch name {
-	case correctiondirtytransmission.FieldScopeID:
-		return m.ScopeID()
-	case correctiondirtytransmission.FieldTransmissionID:
-		return m.TransmissionID()
-	case correctiondirtytransmission.FieldAcceptedAt:
-		return m.AcceptedAt()
-	case correctiondirtytransmission.FieldRecordedAt:
-		return m.RecordedAt()
-	}
-	return nil, false
-}
-
-// OldField returns the old value of the field from the database. An error is
-// returned if the mutation operation is not UpdateOne, or the query to the
-// database failed.
-func (m *CorrectionDirtyTransmissionMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
-	switch name {
-	case correctiondirtytransmission.FieldScopeID:
-		return m.OldScopeID(ctx)
-	case correctiondirtytransmission.FieldTransmissionID:
-		return m.OldTransmissionID(ctx)
-	case correctiondirtytransmission.FieldAcceptedAt:
-		return m.OldAcceptedAt(ctx)
-	case correctiondirtytransmission.FieldRecordedAt:
-		return m.OldRecordedAt(ctx)
-	}
-	return nil, fmt.Errorf("unknown CorrectionDirtyTransmission field %s", name)
-}
-
-// SetField sets the value of a field with the given name. It returns an error if
-// the field is not defined in the schema, or if the type mismatched the field
-// type.
-func (m *CorrectionDirtyTransmissionMutation) SetField(name string, value ent.Value) error {
-	switch name {
-	case correctiondirtytransmission.FieldScopeID:
-		v, ok := value.(uuid.UUID)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetScopeID(v)
-		return nil
-	case correctiondirtytransmission.FieldTransmissionID:
-		v, ok := value.(uuid.UUID)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetTransmissionID(v)
-		return nil
-	case correctiondirtytransmission.FieldAcceptedAt:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetAcceptedAt(v)
-		return nil
-	case correctiondirtytransmission.FieldRecordedAt:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetRecordedAt(v)
-		return nil
-	}
-	return fmt.Errorf("unknown CorrectionDirtyTransmission field %s", name)
-}
-
-// AddedFields returns all numeric fields that were incremented/decremented during
-// this mutation.
-func (m *CorrectionDirtyTransmissionMutation) AddedFields() []string {
-	return nil
-}
-
-// AddedField returns the numeric value that was incremented/decremented on a field
-// with the given name. The second boolean return value indicates that this field
-// was not set, or was not defined in the schema.
-func (m *CorrectionDirtyTransmissionMutation) AddedField(name string) (ent.Value, bool) {
-	return nil, false
-}
-
-// AddField adds the value to the field with the given name. It returns an error if
-// the field is not defined in the schema, or if the type mismatched the field
-// type.
-func (m *CorrectionDirtyTransmissionMutation) AddField(name string, value ent.Value) error {
-	switch name {
-	}
-	return fmt.Errorf("unknown CorrectionDirtyTransmission numeric field %s", name)
-}
-
-// ClearedFields returns all nullable fields that were cleared during this
-// mutation.
-func (m *CorrectionDirtyTransmissionMutation) ClearedFields() []string {
-	return nil
-}
-
-// FieldCleared returns a boolean indicating if a field with the given name was
-// cleared in this mutation.
-func (m *CorrectionDirtyTransmissionMutation) FieldCleared(name string) bool {
-	_, ok := m.clearedFields[name]
-	return ok
-}
-
-// ClearField clears the value of the field with the given name. It returns an
-// error if the field is not defined in the schema.
-func (m *CorrectionDirtyTransmissionMutation) ClearField(name string) error {
-	return fmt.Errorf("unknown CorrectionDirtyTransmission nullable field %s", name)
-}
-
-// ResetField resets all changes in the mutation for the field with the given name.
-// It returns an error if the field is not defined in the schema.
-func (m *CorrectionDirtyTransmissionMutation) ResetField(name string) error {
-	switch name {
-	case correctiondirtytransmission.FieldScopeID:
-		m.ResetScopeID()
-		return nil
-	case correctiondirtytransmission.FieldTransmissionID:
-		m.ResetTransmissionID()
-		return nil
-	case correctiondirtytransmission.FieldAcceptedAt:
-		m.ResetAcceptedAt()
-		return nil
-	case correctiondirtytransmission.FieldRecordedAt:
-		m.ResetRecordedAt()
-		return nil
-	}
-	return fmt.Errorf("unknown CorrectionDirtyTransmission field %s", name)
-}
-
-// AddedEdges returns all edge names that were set/added in this mutation.
-func (m *CorrectionDirtyTransmissionMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
-	return edges
-}
-
-// AddedIDs returns all IDs (to other nodes) that were added for the given edge
-// name in this mutation.
-func (m *CorrectionDirtyTransmissionMutation) AddedIDs(name string) []ent.Value {
-	return nil
-}
-
-// RemovedEdges returns all edge names that were removed in this mutation.
-func (m *CorrectionDirtyTransmissionMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
-	return edges
-}
-
-// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
-// the given name in this mutation.
-func (m *CorrectionDirtyTransmissionMutation) RemovedIDs(name string) []ent.Value {
-	return nil
-}
-
-// ClearedEdges returns all edge names that were cleared in this mutation.
-func (m *CorrectionDirtyTransmissionMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
-	return edges
-}
-
-// EdgeCleared returns a boolean which indicates if the edge with the given name
-// was cleared in this mutation.
-func (m *CorrectionDirtyTransmissionMutation) EdgeCleared(name string) bool {
-	return false
-}
-
-// ClearEdge clears the value of the edge with the given name. It returns an error
-// if that edge is not defined in the schema.
-func (m *CorrectionDirtyTransmissionMutation) ClearEdge(name string) error {
-	return fmt.Errorf("unknown CorrectionDirtyTransmission unique edge %s", name)
-}
-
-// ResetEdge resets all changes to the edge with the given name in this mutation.
-// It returns an error if the edge is not defined in the schema.
-func (m *CorrectionDirtyTransmissionMutation) ResetEdge(name string) error {
-	return fmt.Errorf("unknown CorrectionDirtyTransmission edge %s", name)
 }
 
 // CredentialMutation represents an operation that mutates the Credential nodes in the graph.
@@ -14487,33 +13997,41 @@ func (m *OrganizationMutation) ResetEdge(name string) error {
 // PendingAssignmentScopeMutation represents an operation that mutates the PendingAssignmentScope nodes in the graph.
 type PendingAssignmentScopeMutation struct {
 	config
-	op                         Op
-	typ                        string
-	id                         *uuid.UUID
-	assignment_revision        *int64
-	addassignment_revision     *int64
-	network_ids                *[]uuid.UUID
-	appendnetwork_ids          []uuid.UUID
-	unit_id                    *uuid.UUID
-	reason                     *pendingassignmentscope.Reason
-	recorded_at                *time.Time
-	state                      *pendingassignmentscope.State
-	high_water_accepted_at     *time.Time
-	high_water_transmission_id *uuid.UUID
-	cursor_accepted_at         *time.Time
-	cursor_transmission_id     *uuid.UUID
-	attempts                   *int
-	addattempts                *int
-	lease_until                *time.Time
-	fencing_token              *int64
-	addfencing_token           *int64
-	access_revision            *int64
-	addaccess_revision         *int64
-	failure_code               *string
-	clearedFields              map[string]struct{}
-	done                       bool
-	oldValue                   func(context.Context) (*PendingAssignmentScope, error)
-	predicates                 []predicate.PendingAssignmentScope
+	op                     Op
+	typ                    string
+	id                     *uuid.UUID
+	assignment_revision    *int64
+	addassignment_revision *int64
+	reason                 *pendingassignmentscope.Reason
+	network_id             *uuid.UUID
+	protocol               *pendingassignmentscope.Protocol
+	address_from           *int64
+	addaddress_from        *int64
+	address_to             *int64
+	addaddress_to          *int64
+	address_text           *string
+	valid_from             *time.Time
+	valid_until            *time.Time
+	unit_id                *uuid.UUID
+	transmission_id        *uuid.UUID
+	target_position        *int
+	addtarget_position     *int
+	recorded_at            *time.Time
+	state                  *pendingassignmentscope.State
+	cursor_accepted_at     *time.Time
+	cursor_transmission_id *uuid.UUID
+	attempts               *int
+	addattempts            *int
+	lease_until            *time.Time
+	fencing_token          *int64
+	addfencing_token       *int64
+	access_revision        *int64
+	addaccess_revision     *int64
+	failure_code           *string
+	clearedFields          map[string]struct{}
+	done                   bool
+	oldValue               func(context.Context) (*PendingAssignmentScope, error)
+	predicates             []predicate.PendingAssignmentScope
 }
 
 var _ ent.Mutation = (*PendingAssignmentScopeMutation)(nil)
@@ -14676,55 +14194,425 @@ func (m *PendingAssignmentScopeMutation) ResetAssignmentRevision() {
 	m.addassignment_revision = nil
 }
 
-// SetNetworkIds sets the "network_ids" field.
-func (m *PendingAssignmentScopeMutation) SetNetworkIds(u []uuid.UUID) {
-	m.network_ids = &u
-	m.appendnetwork_ids = nil
+// SetReason sets the "reason" field.
+func (m *PendingAssignmentScopeMutation) SetReason(pe pendingassignmentscope.Reason) {
+	m.reason = &pe
 }
 
-// NetworkIds returns the value of the "network_ids" field in the mutation.
-func (m *PendingAssignmentScopeMutation) NetworkIds() (r []uuid.UUID, exists bool) {
-	v := m.network_ids
+// Reason returns the value of the "reason" field in the mutation.
+func (m *PendingAssignmentScopeMutation) Reason() (r pendingassignmentscope.Reason, exists bool) {
+	v := m.reason
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldNetworkIds returns the old "network_ids" field's value of the PendingAssignmentScope entity.
+// OldReason returns the old "reason" field's value of the PendingAssignmentScope entity.
 // If the PendingAssignmentScope object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PendingAssignmentScopeMutation) OldNetworkIds(ctx context.Context) (v []uuid.UUID, err error) {
+func (m *PendingAssignmentScopeMutation) OldReason(ctx context.Context) (v pendingassignmentscope.Reason, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldNetworkIds is only allowed on UpdateOne operations")
+		return v, errors.New("OldReason is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldNetworkIds requires an ID field in the mutation")
+		return v, errors.New("OldReason requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldNetworkIds: %w", err)
+		return v, fmt.Errorf("querying old value for OldReason: %w", err)
 	}
-	return oldValue.NetworkIds, nil
+	return oldValue.Reason, nil
 }
 
-// AppendNetworkIds adds u to the "network_ids" field.
-func (m *PendingAssignmentScopeMutation) AppendNetworkIds(u []uuid.UUID) {
-	m.appendnetwork_ids = append(m.appendnetwork_ids, u...)
+// ResetReason resets all changes to the "reason" field.
+func (m *PendingAssignmentScopeMutation) ResetReason() {
+	m.reason = nil
 }
 
-// AppendedNetworkIds returns the list of values that were appended to the "network_ids" field in this mutation.
-func (m *PendingAssignmentScopeMutation) AppendedNetworkIds() ([]uuid.UUID, bool) {
-	if len(m.appendnetwork_ids) == 0 {
-		return nil, false
+// SetNetworkID sets the "network_id" field.
+func (m *PendingAssignmentScopeMutation) SetNetworkID(u uuid.UUID) {
+	m.network_id = &u
+}
+
+// NetworkID returns the value of the "network_id" field in the mutation.
+func (m *PendingAssignmentScopeMutation) NetworkID() (r uuid.UUID, exists bool) {
+	v := m.network_id
+	if v == nil {
+		return
 	}
-	return m.appendnetwork_ids, true
+	return *v, true
 }
 
-// ResetNetworkIds resets all changes to the "network_ids" field.
-func (m *PendingAssignmentScopeMutation) ResetNetworkIds() {
-	m.network_ids = nil
-	m.appendnetwork_ids = nil
+// OldNetworkID returns the old "network_id" field's value of the PendingAssignmentScope entity.
+// If the PendingAssignmentScope object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PendingAssignmentScopeMutation) OldNetworkID(ctx context.Context) (v *uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNetworkID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNetworkID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNetworkID: %w", err)
+	}
+	return oldValue.NetworkID, nil
+}
+
+// ClearNetworkID clears the value of the "network_id" field.
+func (m *PendingAssignmentScopeMutation) ClearNetworkID() {
+	m.network_id = nil
+	m.clearedFields[pendingassignmentscope.FieldNetworkID] = struct{}{}
+}
+
+// NetworkIDCleared returns if the "network_id" field was cleared in this mutation.
+func (m *PendingAssignmentScopeMutation) NetworkIDCleared() bool {
+	_, ok := m.clearedFields[pendingassignmentscope.FieldNetworkID]
+	return ok
+}
+
+// ResetNetworkID resets all changes to the "network_id" field.
+func (m *PendingAssignmentScopeMutation) ResetNetworkID() {
+	m.network_id = nil
+	delete(m.clearedFields, pendingassignmentscope.FieldNetworkID)
+}
+
+// SetProtocol sets the "protocol" field.
+func (m *PendingAssignmentScopeMutation) SetProtocol(pe pendingassignmentscope.Protocol) {
+	m.protocol = &pe
+}
+
+// Protocol returns the value of the "protocol" field in the mutation.
+func (m *PendingAssignmentScopeMutation) Protocol() (r pendingassignmentscope.Protocol, exists bool) {
+	v := m.protocol
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProtocol returns the old "protocol" field's value of the PendingAssignmentScope entity.
+// If the PendingAssignmentScope object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PendingAssignmentScopeMutation) OldProtocol(ctx context.Context) (v *pendingassignmentscope.Protocol, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProtocol is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProtocol requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProtocol: %w", err)
+	}
+	return oldValue.Protocol, nil
+}
+
+// ClearProtocol clears the value of the "protocol" field.
+func (m *PendingAssignmentScopeMutation) ClearProtocol() {
+	m.protocol = nil
+	m.clearedFields[pendingassignmentscope.FieldProtocol] = struct{}{}
+}
+
+// ProtocolCleared returns if the "protocol" field was cleared in this mutation.
+func (m *PendingAssignmentScopeMutation) ProtocolCleared() bool {
+	_, ok := m.clearedFields[pendingassignmentscope.FieldProtocol]
+	return ok
+}
+
+// ResetProtocol resets all changes to the "protocol" field.
+func (m *PendingAssignmentScopeMutation) ResetProtocol() {
+	m.protocol = nil
+	delete(m.clearedFields, pendingassignmentscope.FieldProtocol)
+}
+
+// SetAddressFrom sets the "address_from" field.
+func (m *PendingAssignmentScopeMutation) SetAddressFrom(i int64) {
+	m.address_from = &i
+	m.addaddress_from = nil
+}
+
+// AddressFrom returns the value of the "address_from" field in the mutation.
+func (m *PendingAssignmentScopeMutation) AddressFrom() (r int64, exists bool) {
+	v := m.address_from
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAddressFrom returns the old "address_from" field's value of the PendingAssignmentScope entity.
+// If the PendingAssignmentScope object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PendingAssignmentScopeMutation) OldAddressFrom(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAddressFrom is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAddressFrom requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAddressFrom: %w", err)
+	}
+	return oldValue.AddressFrom, nil
+}
+
+// AddAddressFrom adds i to the "address_from" field.
+func (m *PendingAssignmentScopeMutation) AddAddressFrom(i int64) {
+	if m.addaddress_from != nil {
+		*m.addaddress_from += i
+	} else {
+		m.addaddress_from = &i
+	}
+}
+
+// AddedAddressFrom returns the value that was added to the "address_from" field in this mutation.
+func (m *PendingAssignmentScopeMutation) AddedAddressFrom() (r int64, exists bool) {
+	v := m.addaddress_from
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearAddressFrom clears the value of the "address_from" field.
+func (m *PendingAssignmentScopeMutation) ClearAddressFrom() {
+	m.address_from = nil
+	m.addaddress_from = nil
+	m.clearedFields[pendingassignmentscope.FieldAddressFrom] = struct{}{}
+}
+
+// AddressFromCleared returns if the "address_from" field was cleared in this mutation.
+func (m *PendingAssignmentScopeMutation) AddressFromCleared() bool {
+	_, ok := m.clearedFields[pendingassignmentscope.FieldAddressFrom]
+	return ok
+}
+
+// ResetAddressFrom resets all changes to the "address_from" field.
+func (m *PendingAssignmentScopeMutation) ResetAddressFrom() {
+	m.address_from = nil
+	m.addaddress_from = nil
+	delete(m.clearedFields, pendingassignmentscope.FieldAddressFrom)
+}
+
+// SetAddressTo sets the "address_to" field.
+func (m *PendingAssignmentScopeMutation) SetAddressTo(i int64) {
+	m.address_to = &i
+	m.addaddress_to = nil
+}
+
+// AddressTo returns the value of the "address_to" field in the mutation.
+func (m *PendingAssignmentScopeMutation) AddressTo() (r int64, exists bool) {
+	v := m.address_to
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAddressTo returns the old "address_to" field's value of the PendingAssignmentScope entity.
+// If the PendingAssignmentScope object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PendingAssignmentScopeMutation) OldAddressTo(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAddressTo is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAddressTo requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAddressTo: %w", err)
+	}
+	return oldValue.AddressTo, nil
+}
+
+// AddAddressTo adds i to the "address_to" field.
+func (m *PendingAssignmentScopeMutation) AddAddressTo(i int64) {
+	if m.addaddress_to != nil {
+		*m.addaddress_to += i
+	} else {
+		m.addaddress_to = &i
+	}
+}
+
+// AddedAddressTo returns the value that was added to the "address_to" field in this mutation.
+func (m *PendingAssignmentScopeMutation) AddedAddressTo() (r int64, exists bool) {
+	v := m.addaddress_to
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearAddressTo clears the value of the "address_to" field.
+func (m *PendingAssignmentScopeMutation) ClearAddressTo() {
+	m.address_to = nil
+	m.addaddress_to = nil
+	m.clearedFields[pendingassignmentscope.FieldAddressTo] = struct{}{}
+}
+
+// AddressToCleared returns if the "address_to" field was cleared in this mutation.
+func (m *PendingAssignmentScopeMutation) AddressToCleared() bool {
+	_, ok := m.clearedFields[pendingassignmentscope.FieldAddressTo]
+	return ok
+}
+
+// ResetAddressTo resets all changes to the "address_to" field.
+func (m *PendingAssignmentScopeMutation) ResetAddressTo() {
+	m.address_to = nil
+	m.addaddress_to = nil
+	delete(m.clearedFields, pendingassignmentscope.FieldAddressTo)
+}
+
+// SetAddressText sets the "address_text" field.
+func (m *PendingAssignmentScopeMutation) SetAddressText(s string) {
+	m.address_text = &s
+}
+
+// AddressText returns the value of the "address_text" field in the mutation.
+func (m *PendingAssignmentScopeMutation) AddressText() (r string, exists bool) {
+	v := m.address_text
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAddressText returns the old "address_text" field's value of the PendingAssignmentScope entity.
+// If the PendingAssignmentScope object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PendingAssignmentScopeMutation) OldAddressText(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAddressText is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAddressText requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAddressText: %w", err)
+	}
+	return oldValue.AddressText, nil
+}
+
+// ClearAddressText clears the value of the "address_text" field.
+func (m *PendingAssignmentScopeMutation) ClearAddressText() {
+	m.address_text = nil
+	m.clearedFields[pendingassignmentscope.FieldAddressText] = struct{}{}
+}
+
+// AddressTextCleared returns if the "address_text" field was cleared in this mutation.
+func (m *PendingAssignmentScopeMutation) AddressTextCleared() bool {
+	_, ok := m.clearedFields[pendingassignmentscope.FieldAddressText]
+	return ok
+}
+
+// ResetAddressText resets all changes to the "address_text" field.
+func (m *PendingAssignmentScopeMutation) ResetAddressText() {
+	m.address_text = nil
+	delete(m.clearedFields, pendingassignmentscope.FieldAddressText)
+}
+
+// SetValidFrom sets the "valid_from" field.
+func (m *PendingAssignmentScopeMutation) SetValidFrom(t time.Time) {
+	m.valid_from = &t
+}
+
+// ValidFrom returns the value of the "valid_from" field in the mutation.
+func (m *PendingAssignmentScopeMutation) ValidFrom() (r time.Time, exists bool) {
+	v := m.valid_from
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldValidFrom returns the old "valid_from" field's value of the PendingAssignmentScope entity.
+// If the PendingAssignmentScope object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PendingAssignmentScopeMutation) OldValidFrom(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldValidFrom is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldValidFrom requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldValidFrom: %w", err)
+	}
+	return oldValue.ValidFrom, nil
+}
+
+// ClearValidFrom clears the value of the "valid_from" field.
+func (m *PendingAssignmentScopeMutation) ClearValidFrom() {
+	m.valid_from = nil
+	m.clearedFields[pendingassignmentscope.FieldValidFrom] = struct{}{}
+}
+
+// ValidFromCleared returns if the "valid_from" field was cleared in this mutation.
+func (m *PendingAssignmentScopeMutation) ValidFromCleared() bool {
+	_, ok := m.clearedFields[pendingassignmentscope.FieldValidFrom]
+	return ok
+}
+
+// ResetValidFrom resets all changes to the "valid_from" field.
+func (m *PendingAssignmentScopeMutation) ResetValidFrom() {
+	m.valid_from = nil
+	delete(m.clearedFields, pendingassignmentscope.FieldValidFrom)
+}
+
+// SetValidUntil sets the "valid_until" field.
+func (m *PendingAssignmentScopeMutation) SetValidUntil(t time.Time) {
+	m.valid_until = &t
+}
+
+// ValidUntil returns the value of the "valid_until" field in the mutation.
+func (m *PendingAssignmentScopeMutation) ValidUntil() (r time.Time, exists bool) {
+	v := m.valid_until
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldValidUntil returns the old "valid_until" field's value of the PendingAssignmentScope entity.
+// If the PendingAssignmentScope object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PendingAssignmentScopeMutation) OldValidUntil(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldValidUntil is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldValidUntil requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldValidUntil: %w", err)
+	}
+	return oldValue.ValidUntil, nil
+}
+
+// ClearValidUntil clears the value of the "valid_until" field.
+func (m *PendingAssignmentScopeMutation) ClearValidUntil() {
+	m.valid_until = nil
+	m.clearedFields[pendingassignmentscope.FieldValidUntil] = struct{}{}
+}
+
+// ValidUntilCleared returns if the "valid_until" field was cleared in this mutation.
+func (m *PendingAssignmentScopeMutation) ValidUntilCleared() bool {
+	_, ok := m.clearedFields[pendingassignmentscope.FieldValidUntil]
+	return ok
+}
+
+// ResetValidUntil resets all changes to the "valid_until" field.
+func (m *PendingAssignmentScopeMutation) ResetValidUntil() {
+	m.valid_until = nil
+	delete(m.clearedFields, pendingassignmentscope.FieldValidUntil)
 }
 
 // SetUnitID sets the "unit_id" field.
@@ -14776,40 +14664,123 @@ func (m *PendingAssignmentScopeMutation) ResetUnitID() {
 	delete(m.clearedFields, pendingassignmentscope.FieldUnitID)
 }
 
-// SetReason sets the "reason" field.
-func (m *PendingAssignmentScopeMutation) SetReason(pe pendingassignmentscope.Reason) {
-	m.reason = &pe
+// SetTransmissionID sets the "transmission_id" field.
+func (m *PendingAssignmentScopeMutation) SetTransmissionID(u uuid.UUID) {
+	m.transmission_id = &u
 }
 
-// Reason returns the value of the "reason" field in the mutation.
-func (m *PendingAssignmentScopeMutation) Reason() (r pendingassignmentscope.Reason, exists bool) {
-	v := m.reason
+// TransmissionID returns the value of the "transmission_id" field in the mutation.
+func (m *PendingAssignmentScopeMutation) TransmissionID() (r uuid.UUID, exists bool) {
+	v := m.transmission_id
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldReason returns the old "reason" field's value of the PendingAssignmentScope entity.
+// OldTransmissionID returns the old "transmission_id" field's value of the PendingAssignmentScope entity.
 // If the PendingAssignmentScope object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PendingAssignmentScopeMutation) OldReason(ctx context.Context) (v pendingassignmentscope.Reason, err error) {
+func (m *PendingAssignmentScopeMutation) OldTransmissionID(ctx context.Context) (v *uuid.UUID, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldReason is only allowed on UpdateOne operations")
+		return v, errors.New("OldTransmissionID is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldReason requires an ID field in the mutation")
+		return v, errors.New("OldTransmissionID requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldReason: %w", err)
+		return v, fmt.Errorf("querying old value for OldTransmissionID: %w", err)
 	}
-	return oldValue.Reason, nil
+	return oldValue.TransmissionID, nil
 }
 
-// ResetReason resets all changes to the "reason" field.
-func (m *PendingAssignmentScopeMutation) ResetReason() {
-	m.reason = nil
+// ClearTransmissionID clears the value of the "transmission_id" field.
+func (m *PendingAssignmentScopeMutation) ClearTransmissionID() {
+	m.transmission_id = nil
+	m.clearedFields[pendingassignmentscope.FieldTransmissionID] = struct{}{}
+}
+
+// TransmissionIDCleared returns if the "transmission_id" field was cleared in this mutation.
+func (m *PendingAssignmentScopeMutation) TransmissionIDCleared() bool {
+	_, ok := m.clearedFields[pendingassignmentscope.FieldTransmissionID]
+	return ok
+}
+
+// ResetTransmissionID resets all changes to the "transmission_id" field.
+func (m *PendingAssignmentScopeMutation) ResetTransmissionID() {
+	m.transmission_id = nil
+	delete(m.clearedFields, pendingassignmentscope.FieldTransmissionID)
+}
+
+// SetTargetPosition sets the "target_position" field.
+func (m *PendingAssignmentScopeMutation) SetTargetPosition(i int) {
+	m.target_position = &i
+	m.addtarget_position = nil
+}
+
+// TargetPosition returns the value of the "target_position" field in the mutation.
+func (m *PendingAssignmentScopeMutation) TargetPosition() (r int, exists bool) {
+	v := m.target_position
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTargetPosition returns the old "target_position" field's value of the PendingAssignmentScope entity.
+// If the PendingAssignmentScope object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PendingAssignmentScopeMutation) OldTargetPosition(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTargetPosition is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTargetPosition requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTargetPosition: %w", err)
+	}
+	return oldValue.TargetPosition, nil
+}
+
+// AddTargetPosition adds i to the "target_position" field.
+func (m *PendingAssignmentScopeMutation) AddTargetPosition(i int) {
+	if m.addtarget_position != nil {
+		*m.addtarget_position += i
+	} else {
+		m.addtarget_position = &i
+	}
+}
+
+// AddedTargetPosition returns the value that was added to the "target_position" field in this mutation.
+func (m *PendingAssignmentScopeMutation) AddedTargetPosition() (r int, exists bool) {
+	v := m.addtarget_position
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearTargetPosition clears the value of the "target_position" field.
+func (m *PendingAssignmentScopeMutation) ClearTargetPosition() {
+	m.target_position = nil
+	m.addtarget_position = nil
+	m.clearedFields[pendingassignmentscope.FieldTargetPosition] = struct{}{}
+}
+
+// TargetPositionCleared returns if the "target_position" field was cleared in this mutation.
+func (m *PendingAssignmentScopeMutation) TargetPositionCleared() bool {
+	_, ok := m.clearedFields[pendingassignmentscope.FieldTargetPosition]
+	return ok
+}
+
+// ResetTargetPosition resets all changes to the "target_position" field.
+func (m *PendingAssignmentScopeMutation) ResetTargetPosition() {
+	m.target_position = nil
+	m.addtarget_position = nil
+	delete(m.clearedFields, pendingassignmentscope.FieldTargetPosition)
 }
 
 // SetRecordedAt sets the "recorded_at" field.
@@ -14882,104 +14853,6 @@ func (m *PendingAssignmentScopeMutation) OldState(ctx context.Context) (v pendin
 // ResetState resets all changes to the "state" field.
 func (m *PendingAssignmentScopeMutation) ResetState() {
 	m.state = nil
-}
-
-// SetHighWaterAcceptedAt sets the "high_water_accepted_at" field.
-func (m *PendingAssignmentScopeMutation) SetHighWaterAcceptedAt(t time.Time) {
-	m.high_water_accepted_at = &t
-}
-
-// HighWaterAcceptedAt returns the value of the "high_water_accepted_at" field in the mutation.
-func (m *PendingAssignmentScopeMutation) HighWaterAcceptedAt() (r time.Time, exists bool) {
-	v := m.high_water_accepted_at
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldHighWaterAcceptedAt returns the old "high_water_accepted_at" field's value of the PendingAssignmentScope entity.
-// If the PendingAssignmentScope object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PendingAssignmentScopeMutation) OldHighWaterAcceptedAt(ctx context.Context) (v *time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldHighWaterAcceptedAt is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldHighWaterAcceptedAt requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldHighWaterAcceptedAt: %w", err)
-	}
-	return oldValue.HighWaterAcceptedAt, nil
-}
-
-// ClearHighWaterAcceptedAt clears the value of the "high_water_accepted_at" field.
-func (m *PendingAssignmentScopeMutation) ClearHighWaterAcceptedAt() {
-	m.high_water_accepted_at = nil
-	m.clearedFields[pendingassignmentscope.FieldHighWaterAcceptedAt] = struct{}{}
-}
-
-// HighWaterAcceptedAtCleared returns if the "high_water_accepted_at" field was cleared in this mutation.
-func (m *PendingAssignmentScopeMutation) HighWaterAcceptedAtCleared() bool {
-	_, ok := m.clearedFields[pendingassignmentscope.FieldHighWaterAcceptedAt]
-	return ok
-}
-
-// ResetHighWaterAcceptedAt resets all changes to the "high_water_accepted_at" field.
-func (m *PendingAssignmentScopeMutation) ResetHighWaterAcceptedAt() {
-	m.high_water_accepted_at = nil
-	delete(m.clearedFields, pendingassignmentscope.FieldHighWaterAcceptedAt)
-}
-
-// SetHighWaterTransmissionID sets the "high_water_transmission_id" field.
-func (m *PendingAssignmentScopeMutation) SetHighWaterTransmissionID(u uuid.UUID) {
-	m.high_water_transmission_id = &u
-}
-
-// HighWaterTransmissionID returns the value of the "high_water_transmission_id" field in the mutation.
-func (m *PendingAssignmentScopeMutation) HighWaterTransmissionID() (r uuid.UUID, exists bool) {
-	v := m.high_water_transmission_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldHighWaterTransmissionID returns the old "high_water_transmission_id" field's value of the PendingAssignmentScope entity.
-// If the PendingAssignmentScope object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PendingAssignmentScopeMutation) OldHighWaterTransmissionID(ctx context.Context) (v *uuid.UUID, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldHighWaterTransmissionID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldHighWaterTransmissionID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldHighWaterTransmissionID: %w", err)
-	}
-	return oldValue.HighWaterTransmissionID, nil
-}
-
-// ClearHighWaterTransmissionID clears the value of the "high_water_transmission_id" field.
-func (m *PendingAssignmentScopeMutation) ClearHighWaterTransmissionID() {
-	m.high_water_transmission_id = nil
-	m.clearedFields[pendingassignmentscope.FieldHighWaterTransmissionID] = struct{}{}
-}
-
-// HighWaterTransmissionIDCleared returns if the "high_water_transmission_id" field was cleared in this mutation.
-func (m *PendingAssignmentScopeMutation) HighWaterTransmissionIDCleared() bool {
-	_, ok := m.clearedFields[pendingassignmentscope.FieldHighWaterTransmissionID]
-	return ok
-}
-
-// ResetHighWaterTransmissionID resets all changes to the "high_water_transmission_id" field.
-func (m *PendingAssignmentScopeMutation) ResetHighWaterTransmissionID() {
-	m.high_water_transmission_id = nil
-	delete(m.clearedFields, pendingassignmentscope.FieldHighWaterTransmissionID)
 }
 
 // SetCursorAcceptedAt sets the "cursor_accepted_at" field.
@@ -15380,30 +15253,48 @@ func (m *PendingAssignmentScopeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PendingAssignmentScopeMutation) Fields() []string {
-	fields := make([]string, 0, 15)
+	fields := make([]string, 0, 21)
 	if m.assignment_revision != nil {
 		fields = append(fields, pendingassignmentscope.FieldAssignmentRevision)
 	}
-	if m.network_ids != nil {
-		fields = append(fields, pendingassignmentscope.FieldNetworkIds)
+	if m.reason != nil {
+		fields = append(fields, pendingassignmentscope.FieldReason)
+	}
+	if m.network_id != nil {
+		fields = append(fields, pendingassignmentscope.FieldNetworkID)
+	}
+	if m.protocol != nil {
+		fields = append(fields, pendingassignmentscope.FieldProtocol)
+	}
+	if m.address_from != nil {
+		fields = append(fields, pendingassignmentscope.FieldAddressFrom)
+	}
+	if m.address_to != nil {
+		fields = append(fields, pendingassignmentscope.FieldAddressTo)
+	}
+	if m.address_text != nil {
+		fields = append(fields, pendingassignmentscope.FieldAddressText)
+	}
+	if m.valid_from != nil {
+		fields = append(fields, pendingassignmentscope.FieldValidFrom)
+	}
+	if m.valid_until != nil {
+		fields = append(fields, pendingassignmentscope.FieldValidUntil)
 	}
 	if m.unit_id != nil {
 		fields = append(fields, pendingassignmentscope.FieldUnitID)
 	}
-	if m.reason != nil {
-		fields = append(fields, pendingassignmentscope.FieldReason)
+	if m.transmission_id != nil {
+		fields = append(fields, pendingassignmentscope.FieldTransmissionID)
+	}
+	if m.target_position != nil {
+		fields = append(fields, pendingassignmentscope.FieldTargetPosition)
 	}
 	if m.recorded_at != nil {
 		fields = append(fields, pendingassignmentscope.FieldRecordedAt)
 	}
 	if m.state != nil {
 		fields = append(fields, pendingassignmentscope.FieldState)
-	}
-	if m.high_water_accepted_at != nil {
-		fields = append(fields, pendingassignmentscope.FieldHighWaterAcceptedAt)
-	}
-	if m.high_water_transmission_id != nil {
-		fields = append(fields, pendingassignmentscope.FieldHighWaterTransmissionID)
 	}
 	if m.cursor_accepted_at != nil {
 		fields = append(fields, pendingassignmentscope.FieldCursorAcceptedAt)
@@ -15436,20 +15327,32 @@ func (m *PendingAssignmentScopeMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case pendingassignmentscope.FieldAssignmentRevision:
 		return m.AssignmentRevision()
-	case pendingassignmentscope.FieldNetworkIds:
-		return m.NetworkIds()
-	case pendingassignmentscope.FieldUnitID:
-		return m.UnitID()
 	case pendingassignmentscope.FieldReason:
 		return m.Reason()
+	case pendingassignmentscope.FieldNetworkID:
+		return m.NetworkID()
+	case pendingassignmentscope.FieldProtocol:
+		return m.Protocol()
+	case pendingassignmentscope.FieldAddressFrom:
+		return m.AddressFrom()
+	case pendingassignmentscope.FieldAddressTo:
+		return m.AddressTo()
+	case pendingassignmentscope.FieldAddressText:
+		return m.AddressText()
+	case pendingassignmentscope.FieldValidFrom:
+		return m.ValidFrom()
+	case pendingassignmentscope.FieldValidUntil:
+		return m.ValidUntil()
+	case pendingassignmentscope.FieldUnitID:
+		return m.UnitID()
+	case pendingassignmentscope.FieldTransmissionID:
+		return m.TransmissionID()
+	case pendingassignmentscope.FieldTargetPosition:
+		return m.TargetPosition()
 	case pendingassignmentscope.FieldRecordedAt:
 		return m.RecordedAt()
 	case pendingassignmentscope.FieldState:
 		return m.State()
-	case pendingassignmentscope.FieldHighWaterAcceptedAt:
-		return m.HighWaterAcceptedAt()
-	case pendingassignmentscope.FieldHighWaterTransmissionID:
-		return m.HighWaterTransmissionID()
 	case pendingassignmentscope.FieldCursorAcceptedAt:
 		return m.CursorAcceptedAt()
 	case pendingassignmentscope.FieldCursorTransmissionID:
@@ -15475,20 +15378,32 @@ func (m *PendingAssignmentScopeMutation) OldField(ctx context.Context, name stri
 	switch name {
 	case pendingassignmentscope.FieldAssignmentRevision:
 		return m.OldAssignmentRevision(ctx)
-	case pendingassignmentscope.FieldNetworkIds:
-		return m.OldNetworkIds(ctx)
-	case pendingassignmentscope.FieldUnitID:
-		return m.OldUnitID(ctx)
 	case pendingassignmentscope.FieldReason:
 		return m.OldReason(ctx)
+	case pendingassignmentscope.FieldNetworkID:
+		return m.OldNetworkID(ctx)
+	case pendingassignmentscope.FieldProtocol:
+		return m.OldProtocol(ctx)
+	case pendingassignmentscope.FieldAddressFrom:
+		return m.OldAddressFrom(ctx)
+	case pendingassignmentscope.FieldAddressTo:
+		return m.OldAddressTo(ctx)
+	case pendingassignmentscope.FieldAddressText:
+		return m.OldAddressText(ctx)
+	case pendingassignmentscope.FieldValidFrom:
+		return m.OldValidFrom(ctx)
+	case pendingassignmentscope.FieldValidUntil:
+		return m.OldValidUntil(ctx)
+	case pendingassignmentscope.FieldUnitID:
+		return m.OldUnitID(ctx)
+	case pendingassignmentscope.FieldTransmissionID:
+		return m.OldTransmissionID(ctx)
+	case pendingassignmentscope.FieldTargetPosition:
+		return m.OldTargetPosition(ctx)
 	case pendingassignmentscope.FieldRecordedAt:
 		return m.OldRecordedAt(ctx)
 	case pendingassignmentscope.FieldState:
 		return m.OldState(ctx)
-	case pendingassignmentscope.FieldHighWaterAcceptedAt:
-		return m.OldHighWaterAcceptedAt(ctx)
-	case pendingassignmentscope.FieldHighWaterTransmissionID:
-		return m.OldHighWaterTransmissionID(ctx)
 	case pendingassignmentscope.FieldCursorAcceptedAt:
 		return m.OldCursorAcceptedAt(ctx)
 	case pendingassignmentscope.FieldCursorTransmissionID:
@@ -15519,12 +15434,61 @@ func (m *PendingAssignmentScopeMutation) SetField(name string, value ent.Value) 
 		}
 		m.SetAssignmentRevision(v)
 		return nil
-	case pendingassignmentscope.FieldNetworkIds:
-		v, ok := value.([]uuid.UUID)
+	case pendingassignmentscope.FieldReason:
+		v, ok := value.(pendingassignmentscope.Reason)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetNetworkIds(v)
+		m.SetReason(v)
+		return nil
+	case pendingassignmentscope.FieldNetworkID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNetworkID(v)
+		return nil
+	case pendingassignmentscope.FieldProtocol:
+		v, ok := value.(pendingassignmentscope.Protocol)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProtocol(v)
+		return nil
+	case pendingassignmentscope.FieldAddressFrom:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAddressFrom(v)
+		return nil
+	case pendingassignmentscope.FieldAddressTo:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAddressTo(v)
+		return nil
+	case pendingassignmentscope.FieldAddressText:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAddressText(v)
+		return nil
+	case pendingassignmentscope.FieldValidFrom:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetValidFrom(v)
+		return nil
+	case pendingassignmentscope.FieldValidUntil:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetValidUntil(v)
 		return nil
 	case pendingassignmentscope.FieldUnitID:
 		v, ok := value.(uuid.UUID)
@@ -15533,12 +15497,19 @@ func (m *PendingAssignmentScopeMutation) SetField(name string, value ent.Value) 
 		}
 		m.SetUnitID(v)
 		return nil
-	case pendingassignmentscope.FieldReason:
-		v, ok := value.(pendingassignmentscope.Reason)
+	case pendingassignmentscope.FieldTransmissionID:
+		v, ok := value.(uuid.UUID)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetReason(v)
+		m.SetTransmissionID(v)
+		return nil
+	case pendingassignmentscope.FieldTargetPosition:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTargetPosition(v)
 		return nil
 	case pendingassignmentscope.FieldRecordedAt:
 		v, ok := value.(time.Time)
@@ -15553,20 +15524,6 @@ func (m *PendingAssignmentScopeMutation) SetField(name string, value ent.Value) 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetState(v)
-		return nil
-	case pendingassignmentscope.FieldHighWaterAcceptedAt:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetHighWaterAcceptedAt(v)
-		return nil
-	case pendingassignmentscope.FieldHighWaterTransmissionID:
-		v, ok := value.(uuid.UUID)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetHighWaterTransmissionID(v)
 		return nil
 	case pendingassignmentscope.FieldCursorAcceptedAt:
 		v, ok := value.(time.Time)
@@ -15628,6 +15585,15 @@ func (m *PendingAssignmentScopeMutation) AddedFields() []string {
 	if m.addassignment_revision != nil {
 		fields = append(fields, pendingassignmentscope.FieldAssignmentRevision)
 	}
+	if m.addaddress_from != nil {
+		fields = append(fields, pendingassignmentscope.FieldAddressFrom)
+	}
+	if m.addaddress_to != nil {
+		fields = append(fields, pendingassignmentscope.FieldAddressTo)
+	}
+	if m.addtarget_position != nil {
+		fields = append(fields, pendingassignmentscope.FieldTargetPosition)
+	}
 	if m.addattempts != nil {
 		fields = append(fields, pendingassignmentscope.FieldAttempts)
 	}
@@ -15647,6 +15613,12 @@ func (m *PendingAssignmentScopeMutation) AddedField(name string) (ent.Value, boo
 	switch name {
 	case pendingassignmentscope.FieldAssignmentRevision:
 		return m.AddedAssignmentRevision()
+	case pendingassignmentscope.FieldAddressFrom:
+		return m.AddedAddressFrom()
+	case pendingassignmentscope.FieldAddressTo:
+		return m.AddedAddressTo()
+	case pendingassignmentscope.FieldTargetPosition:
+		return m.AddedTargetPosition()
 	case pendingassignmentscope.FieldAttempts:
 		return m.AddedAttempts()
 	case pendingassignmentscope.FieldFencingToken:
@@ -15668,6 +15640,27 @@ func (m *PendingAssignmentScopeMutation) AddField(name string, value ent.Value) 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddAssignmentRevision(v)
+		return nil
+	case pendingassignmentscope.FieldAddressFrom:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAddressFrom(v)
+		return nil
+	case pendingassignmentscope.FieldAddressTo:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAddressTo(v)
+		return nil
+	case pendingassignmentscope.FieldTargetPosition:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTargetPosition(v)
 		return nil
 	case pendingassignmentscope.FieldAttempts:
 		v, ok := value.(int)
@@ -15698,14 +15691,35 @@ func (m *PendingAssignmentScopeMutation) AddField(name string, value ent.Value) 
 // mutation.
 func (m *PendingAssignmentScopeMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(pendingassignmentscope.FieldNetworkID) {
+		fields = append(fields, pendingassignmentscope.FieldNetworkID)
+	}
+	if m.FieldCleared(pendingassignmentscope.FieldProtocol) {
+		fields = append(fields, pendingassignmentscope.FieldProtocol)
+	}
+	if m.FieldCleared(pendingassignmentscope.FieldAddressFrom) {
+		fields = append(fields, pendingassignmentscope.FieldAddressFrom)
+	}
+	if m.FieldCleared(pendingassignmentscope.FieldAddressTo) {
+		fields = append(fields, pendingassignmentscope.FieldAddressTo)
+	}
+	if m.FieldCleared(pendingassignmentscope.FieldAddressText) {
+		fields = append(fields, pendingassignmentscope.FieldAddressText)
+	}
+	if m.FieldCleared(pendingassignmentscope.FieldValidFrom) {
+		fields = append(fields, pendingassignmentscope.FieldValidFrom)
+	}
+	if m.FieldCleared(pendingassignmentscope.FieldValidUntil) {
+		fields = append(fields, pendingassignmentscope.FieldValidUntil)
+	}
 	if m.FieldCleared(pendingassignmentscope.FieldUnitID) {
 		fields = append(fields, pendingassignmentscope.FieldUnitID)
 	}
-	if m.FieldCleared(pendingassignmentscope.FieldHighWaterAcceptedAt) {
-		fields = append(fields, pendingassignmentscope.FieldHighWaterAcceptedAt)
+	if m.FieldCleared(pendingassignmentscope.FieldTransmissionID) {
+		fields = append(fields, pendingassignmentscope.FieldTransmissionID)
 	}
-	if m.FieldCleared(pendingassignmentscope.FieldHighWaterTransmissionID) {
-		fields = append(fields, pendingassignmentscope.FieldHighWaterTransmissionID)
+	if m.FieldCleared(pendingassignmentscope.FieldTargetPosition) {
+		fields = append(fields, pendingassignmentscope.FieldTargetPosition)
 	}
 	if m.FieldCleared(pendingassignmentscope.FieldCursorAcceptedAt) {
 		fields = append(fields, pendingassignmentscope.FieldCursorAcceptedAt)
@@ -15733,14 +15747,35 @@ func (m *PendingAssignmentScopeMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *PendingAssignmentScopeMutation) ClearField(name string) error {
 	switch name {
+	case pendingassignmentscope.FieldNetworkID:
+		m.ClearNetworkID()
+		return nil
+	case pendingassignmentscope.FieldProtocol:
+		m.ClearProtocol()
+		return nil
+	case pendingassignmentscope.FieldAddressFrom:
+		m.ClearAddressFrom()
+		return nil
+	case pendingassignmentscope.FieldAddressTo:
+		m.ClearAddressTo()
+		return nil
+	case pendingassignmentscope.FieldAddressText:
+		m.ClearAddressText()
+		return nil
+	case pendingassignmentscope.FieldValidFrom:
+		m.ClearValidFrom()
+		return nil
+	case pendingassignmentscope.FieldValidUntil:
+		m.ClearValidUntil()
+		return nil
 	case pendingassignmentscope.FieldUnitID:
 		m.ClearUnitID()
 		return nil
-	case pendingassignmentscope.FieldHighWaterAcceptedAt:
-		m.ClearHighWaterAcceptedAt()
+	case pendingassignmentscope.FieldTransmissionID:
+		m.ClearTransmissionID()
 		return nil
-	case pendingassignmentscope.FieldHighWaterTransmissionID:
-		m.ClearHighWaterTransmissionID()
+	case pendingassignmentscope.FieldTargetPosition:
+		m.ClearTargetPosition()
 		return nil
 	case pendingassignmentscope.FieldCursorAcceptedAt:
 		m.ClearCursorAcceptedAt()
@@ -15765,26 +15800,44 @@ func (m *PendingAssignmentScopeMutation) ResetField(name string) error {
 	case pendingassignmentscope.FieldAssignmentRevision:
 		m.ResetAssignmentRevision()
 		return nil
-	case pendingassignmentscope.FieldNetworkIds:
-		m.ResetNetworkIds()
+	case pendingassignmentscope.FieldReason:
+		m.ResetReason()
+		return nil
+	case pendingassignmentscope.FieldNetworkID:
+		m.ResetNetworkID()
+		return nil
+	case pendingassignmentscope.FieldProtocol:
+		m.ResetProtocol()
+		return nil
+	case pendingassignmentscope.FieldAddressFrom:
+		m.ResetAddressFrom()
+		return nil
+	case pendingassignmentscope.FieldAddressTo:
+		m.ResetAddressTo()
+		return nil
+	case pendingassignmentscope.FieldAddressText:
+		m.ResetAddressText()
+		return nil
+	case pendingassignmentscope.FieldValidFrom:
+		m.ResetValidFrom()
+		return nil
+	case pendingassignmentscope.FieldValidUntil:
+		m.ResetValidUntil()
 		return nil
 	case pendingassignmentscope.FieldUnitID:
 		m.ResetUnitID()
 		return nil
-	case pendingassignmentscope.FieldReason:
-		m.ResetReason()
+	case pendingassignmentscope.FieldTransmissionID:
+		m.ResetTransmissionID()
+		return nil
+	case pendingassignmentscope.FieldTargetPosition:
+		m.ResetTargetPosition()
 		return nil
 	case pendingassignmentscope.FieldRecordedAt:
 		m.ResetRecordedAt()
 		return nil
 	case pendingassignmentscope.FieldState:
 		m.ResetState()
-		return nil
-	case pendingassignmentscope.FieldHighWaterAcceptedAt:
-		m.ResetHighWaterAcceptedAt()
-		return nil
-	case pendingassignmentscope.FieldHighWaterTransmissionID:
-		m.ResetHighWaterTransmissionID()
 		return nil
 	case pendingassignmentscope.FieldCursorAcceptedAt:
 		m.ResetCursorAcceptedAt()

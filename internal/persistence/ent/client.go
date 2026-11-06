@@ -23,7 +23,6 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/auditrecord"
 	"github.com/gopager/gopager/internal/persistence/ent/commandreceipt"
 	"github.com/gopager/gopager/internal/persistence/ent/consumeroffset"
-	"github.com/gopager/gopager/internal/persistence/ent/correctiondirtytransmission"
 	"github.com/gopager/gopager/internal/persistence/ent/credential"
 	"github.com/gopager/gopager/internal/persistence/ent/domainevent"
 	"github.com/gopager/gopager/internal/persistence/ent/fieldpermission"
@@ -76,8 +75,6 @@ type Client struct {
 	CommandReceipt *CommandReceiptClient
 	// ConsumerOffset is the client for interacting with the ConsumerOffset builders.
 	ConsumerOffset *ConsumerOffsetClient
-	// CorrectionDirtyTransmission is the client for interacting with the CorrectionDirtyTransmission builders.
-	CorrectionDirtyTransmission *CorrectionDirtyTransmissionClient
 	// Credential is the client for interacting with the Credential builders.
 	Credential *CredentialClient
 	// DomainEvent is the client for interacting with the DomainEvent builders.
@@ -158,7 +155,6 @@ func (c *Client) init() {
 	c.AuditRecord = NewAuditRecordClient(c.config)
 	c.CommandReceipt = NewCommandReceiptClient(c.config)
 	c.ConsumerOffset = NewConsumerOffsetClient(c.config)
-	c.CorrectionDirtyTransmission = NewCorrectionDirtyTransmissionClient(c.config)
 	c.Credential = NewCredentialClient(c.config)
 	c.DomainEvent = NewDomainEventClient(c.config)
 	c.FieldPermission = NewFieldPermissionClient(c.config)
@@ -280,47 +276,46 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:                         ctx,
-		config:                      cfg,
-		Account:                     NewAccountClient(cfg),
-		AddressRule:                 NewAddressRuleClient(cfg),
-		Agency:                      NewAgencyClient(cfg),
-		AssignmentControl:           NewAssignmentControlClient(cfg),
-		AuditRecord:                 NewAuditRecordClient(cfg),
-		CommandReceipt:              NewCommandReceiptClient(cfg),
-		ConsumerOffset:              NewConsumerOffsetClient(cfg),
-		CorrectionDirtyTransmission: NewCorrectionDirtyTransmissionClient(cfg),
-		Credential:                  NewCredentialClient(cfg),
-		DomainEvent:                 NewDomainEventClient(cfg),
-		FieldPermission:             NewFieldPermissionClient(cfg),
-		Gateway:                     NewGatewayClient(cfg),
-		GatewayCredential:           NewGatewayCredentialClient(cfg),
-		GatewayNetwork:              NewGatewayNetworkClient(cfg),
-		Grant:                       NewGrantClient(cfg),
-		GroupingControl:             NewGroupingControlClient(cfg),
-		IdentityControl:             NewIdentityControlClient(cfg),
-		LoginAttempt:                NewLoginAttemptClient(cfg),
-		Membership:                  NewMembershipClient(cfg),
-		Message:                     NewMessageClient(cfg),
-		MessageUnit:                 NewMessageUnitClient(cfg),
-		Network:                     NewNetworkClient(cfg),
-		Organization:                NewOrganizationClient(cfg),
-		PendingAssignmentScope:      NewPendingAssignmentScopeClient(cfg),
-		ProcessingCandidate:         NewProcessingCandidateClient(cfg),
-		ProcessingControl:           NewProcessingControlClient(cfg),
-		ProcessingInstance:          NewProcessingInstanceClient(cfg),
-		ProcessingInstanceVersion:   NewProcessingInstanceVersionClient(cfg),
-		ProcessingResult:            NewProcessingResultClient(cfg),
-		TargetSuppression:           NewTargetSuppressionClient(cfg),
-		Transmission:                NewTransmissionClient(cfg),
-		TransmissionTarget:          NewTransmissionTargetClient(cfg),
-		Unit:                        NewUnitClient(cfg),
-		UnitCollection:              NewUnitCollectionClient(cfg),
-		UnitTemplate:                NewUnitTemplateClient(cfg),
-		UserGroup:                   NewUserGroupClient(cfg),
-		Workflow:                    NewWorkflowClient(cfg),
-		WorkflowScopeReference:      NewWorkflowScopeReferenceClient(cfg),
-		WorkflowVersion:             NewWorkflowVersionClient(cfg),
+		ctx:                       ctx,
+		config:                    cfg,
+		Account:                   NewAccountClient(cfg),
+		AddressRule:               NewAddressRuleClient(cfg),
+		Agency:                    NewAgencyClient(cfg),
+		AssignmentControl:         NewAssignmentControlClient(cfg),
+		AuditRecord:               NewAuditRecordClient(cfg),
+		CommandReceipt:            NewCommandReceiptClient(cfg),
+		ConsumerOffset:            NewConsumerOffsetClient(cfg),
+		Credential:                NewCredentialClient(cfg),
+		DomainEvent:               NewDomainEventClient(cfg),
+		FieldPermission:           NewFieldPermissionClient(cfg),
+		Gateway:                   NewGatewayClient(cfg),
+		GatewayCredential:         NewGatewayCredentialClient(cfg),
+		GatewayNetwork:            NewGatewayNetworkClient(cfg),
+		Grant:                     NewGrantClient(cfg),
+		GroupingControl:           NewGroupingControlClient(cfg),
+		IdentityControl:           NewIdentityControlClient(cfg),
+		LoginAttempt:              NewLoginAttemptClient(cfg),
+		Membership:                NewMembershipClient(cfg),
+		Message:                   NewMessageClient(cfg),
+		MessageUnit:               NewMessageUnitClient(cfg),
+		Network:                   NewNetworkClient(cfg),
+		Organization:              NewOrganizationClient(cfg),
+		PendingAssignmentScope:    NewPendingAssignmentScopeClient(cfg),
+		ProcessingCandidate:       NewProcessingCandidateClient(cfg),
+		ProcessingControl:         NewProcessingControlClient(cfg),
+		ProcessingInstance:        NewProcessingInstanceClient(cfg),
+		ProcessingInstanceVersion: NewProcessingInstanceVersionClient(cfg),
+		ProcessingResult:          NewProcessingResultClient(cfg),
+		TargetSuppression:         NewTargetSuppressionClient(cfg),
+		Transmission:              NewTransmissionClient(cfg),
+		TransmissionTarget:        NewTransmissionTargetClient(cfg),
+		Unit:                      NewUnitClient(cfg),
+		UnitCollection:            NewUnitCollectionClient(cfg),
+		UnitTemplate:              NewUnitTemplateClient(cfg),
+		UserGroup:                 NewUserGroupClient(cfg),
+		Workflow:                  NewWorkflowClient(cfg),
+		WorkflowScopeReference:    NewWorkflowScopeReferenceClient(cfg),
+		WorkflowVersion:           NewWorkflowVersionClient(cfg),
 	}, nil
 }
 
@@ -338,47 +333,46 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:                         ctx,
-		config:                      cfg,
-		Account:                     NewAccountClient(cfg),
-		AddressRule:                 NewAddressRuleClient(cfg),
-		Agency:                      NewAgencyClient(cfg),
-		AssignmentControl:           NewAssignmentControlClient(cfg),
-		AuditRecord:                 NewAuditRecordClient(cfg),
-		CommandReceipt:              NewCommandReceiptClient(cfg),
-		ConsumerOffset:              NewConsumerOffsetClient(cfg),
-		CorrectionDirtyTransmission: NewCorrectionDirtyTransmissionClient(cfg),
-		Credential:                  NewCredentialClient(cfg),
-		DomainEvent:                 NewDomainEventClient(cfg),
-		FieldPermission:             NewFieldPermissionClient(cfg),
-		Gateway:                     NewGatewayClient(cfg),
-		GatewayCredential:           NewGatewayCredentialClient(cfg),
-		GatewayNetwork:              NewGatewayNetworkClient(cfg),
-		Grant:                       NewGrantClient(cfg),
-		GroupingControl:             NewGroupingControlClient(cfg),
-		IdentityControl:             NewIdentityControlClient(cfg),
-		LoginAttempt:                NewLoginAttemptClient(cfg),
-		Membership:                  NewMembershipClient(cfg),
-		Message:                     NewMessageClient(cfg),
-		MessageUnit:                 NewMessageUnitClient(cfg),
-		Network:                     NewNetworkClient(cfg),
-		Organization:                NewOrganizationClient(cfg),
-		PendingAssignmentScope:      NewPendingAssignmentScopeClient(cfg),
-		ProcessingCandidate:         NewProcessingCandidateClient(cfg),
-		ProcessingControl:           NewProcessingControlClient(cfg),
-		ProcessingInstance:          NewProcessingInstanceClient(cfg),
-		ProcessingInstanceVersion:   NewProcessingInstanceVersionClient(cfg),
-		ProcessingResult:            NewProcessingResultClient(cfg),
-		TargetSuppression:           NewTargetSuppressionClient(cfg),
-		Transmission:                NewTransmissionClient(cfg),
-		TransmissionTarget:          NewTransmissionTargetClient(cfg),
-		Unit:                        NewUnitClient(cfg),
-		UnitCollection:              NewUnitCollectionClient(cfg),
-		UnitTemplate:                NewUnitTemplateClient(cfg),
-		UserGroup:                   NewUserGroupClient(cfg),
-		Workflow:                    NewWorkflowClient(cfg),
-		WorkflowScopeReference:      NewWorkflowScopeReferenceClient(cfg),
-		WorkflowVersion:             NewWorkflowVersionClient(cfg),
+		ctx:                       ctx,
+		config:                    cfg,
+		Account:                   NewAccountClient(cfg),
+		AddressRule:               NewAddressRuleClient(cfg),
+		Agency:                    NewAgencyClient(cfg),
+		AssignmentControl:         NewAssignmentControlClient(cfg),
+		AuditRecord:               NewAuditRecordClient(cfg),
+		CommandReceipt:            NewCommandReceiptClient(cfg),
+		ConsumerOffset:            NewConsumerOffsetClient(cfg),
+		Credential:                NewCredentialClient(cfg),
+		DomainEvent:               NewDomainEventClient(cfg),
+		FieldPermission:           NewFieldPermissionClient(cfg),
+		Gateway:                   NewGatewayClient(cfg),
+		GatewayCredential:         NewGatewayCredentialClient(cfg),
+		GatewayNetwork:            NewGatewayNetworkClient(cfg),
+		Grant:                     NewGrantClient(cfg),
+		GroupingControl:           NewGroupingControlClient(cfg),
+		IdentityControl:           NewIdentityControlClient(cfg),
+		LoginAttempt:              NewLoginAttemptClient(cfg),
+		Membership:                NewMembershipClient(cfg),
+		Message:                   NewMessageClient(cfg),
+		MessageUnit:               NewMessageUnitClient(cfg),
+		Network:                   NewNetworkClient(cfg),
+		Organization:              NewOrganizationClient(cfg),
+		PendingAssignmentScope:    NewPendingAssignmentScopeClient(cfg),
+		ProcessingCandidate:       NewProcessingCandidateClient(cfg),
+		ProcessingControl:         NewProcessingControlClient(cfg),
+		ProcessingInstance:        NewProcessingInstanceClient(cfg),
+		ProcessingInstanceVersion: NewProcessingInstanceVersionClient(cfg),
+		ProcessingResult:          NewProcessingResultClient(cfg),
+		TargetSuppression:         NewTargetSuppressionClient(cfg),
+		Transmission:              NewTransmissionClient(cfg),
+		TransmissionTarget:        NewTransmissionTargetClient(cfg),
+		Unit:                      NewUnitClient(cfg),
+		UnitCollection:            NewUnitCollectionClient(cfg),
+		UnitTemplate:              NewUnitTemplateClient(cfg),
+		UserGroup:                 NewUserGroupClient(cfg),
+		Workflow:                  NewWorkflowClient(cfg),
+		WorkflowScopeReference:    NewWorkflowScopeReferenceClient(cfg),
+		WorkflowVersion:           NewWorkflowVersionClient(cfg),
 	}, nil
 }
 
@@ -409,15 +403,14 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.Account, c.AddressRule, c.Agency, c.AssignmentControl, c.AuditRecord,
-		c.CommandReceipt, c.ConsumerOffset, c.CorrectionDirtyTransmission,
-		c.Credential, c.DomainEvent, c.FieldPermission, c.Gateway, c.GatewayCredential,
-		c.GatewayNetwork, c.Grant, c.GroupingControl, c.IdentityControl,
-		c.LoginAttempt, c.Membership, c.Message, c.MessageUnit, c.Network,
-		c.Organization, c.PendingAssignmentScope, c.ProcessingCandidate,
-		c.ProcessingControl, c.ProcessingInstance, c.ProcessingInstanceVersion,
-		c.ProcessingResult, c.TargetSuppression, c.Transmission, c.TransmissionTarget,
-		c.Unit, c.UnitCollection, c.UnitTemplate, c.UserGroup, c.Workflow,
-		c.WorkflowScopeReference, c.WorkflowVersion,
+		c.CommandReceipt, c.ConsumerOffset, c.Credential, c.DomainEvent,
+		c.FieldPermission, c.Gateway, c.GatewayCredential, c.GatewayNetwork, c.Grant,
+		c.GroupingControl, c.IdentityControl, c.LoginAttempt, c.Membership, c.Message,
+		c.MessageUnit, c.Network, c.Organization, c.PendingAssignmentScope,
+		c.ProcessingCandidate, c.ProcessingControl, c.ProcessingInstance,
+		c.ProcessingInstanceVersion, c.ProcessingResult, c.TargetSuppression,
+		c.Transmission, c.TransmissionTarget, c.Unit, c.UnitCollection, c.UnitTemplate,
+		c.UserGroup, c.Workflow, c.WorkflowScopeReference, c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
 	}
@@ -428,15 +421,14 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.Account, c.AddressRule, c.Agency, c.AssignmentControl, c.AuditRecord,
-		c.CommandReceipt, c.ConsumerOffset, c.CorrectionDirtyTransmission,
-		c.Credential, c.DomainEvent, c.FieldPermission, c.Gateway, c.GatewayCredential,
-		c.GatewayNetwork, c.Grant, c.GroupingControl, c.IdentityControl,
-		c.LoginAttempt, c.Membership, c.Message, c.MessageUnit, c.Network,
-		c.Organization, c.PendingAssignmentScope, c.ProcessingCandidate,
-		c.ProcessingControl, c.ProcessingInstance, c.ProcessingInstanceVersion,
-		c.ProcessingResult, c.TargetSuppression, c.Transmission, c.TransmissionTarget,
-		c.Unit, c.UnitCollection, c.UnitTemplate, c.UserGroup, c.Workflow,
-		c.WorkflowScopeReference, c.WorkflowVersion,
+		c.CommandReceipt, c.ConsumerOffset, c.Credential, c.DomainEvent,
+		c.FieldPermission, c.Gateway, c.GatewayCredential, c.GatewayNetwork, c.Grant,
+		c.GroupingControl, c.IdentityControl, c.LoginAttempt, c.Membership, c.Message,
+		c.MessageUnit, c.Network, c.Organization, c.PendingAssignmentScope,
+		c.ProcessingCandidate, c.ProcessingControl, c.ProcessingInstance,
+		c.ProcessingInstanceVersion, c.ProcessingResult, c.TargetSuppression,
+		c.Transmission, c.TransmissionTarget, c.Unit, c.UnitCollection, c.UnitTemplate,
+		c.UserGroup, c.Workflow, c.WorkflowScopeReference, c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -459,8 +451,6 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.CommandReceipt.mutate(ctx, m)
 	case *ConsumerOffsetMutation:
 		return c.ConsumerOffset.mutate(ctx, m)
-	case *CorrectionDirtyTransmissionMutation:
-		return c.CorrectionDirtyTransmission.mutate(ctx, m)
 	case *CredentialMutation:
 		return c.Credential.mutate(ctx, m)
 	case *DomainEventMutation:
@@ -1527,140 +1517,6 @@ func (c *ConsumerOffsetClient) mutate(ctx context.Context, m *ConsumerOffsetMuta
 		return (&ConsumerOffsetDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown ConsumerOffset mutation op: %q", m.Op())
-	}
-}
-
-// CorrectionDirtyTransmissionClient is a client for the CorrectionDirtyTransmission schema.
-type CorrectionDirtyTransmissionClient struct {
-	config
-}
-
-// NewCorrectionDirtyTransmissionClient returns a client for the CorrectionDirtyTransmission from the given config.
-func NewCorrectionDirtyTransmissionClient(c config) *CorrectionDirtyTransmissionClient {
-	return &CorrectionDirtyTransmissionClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `correctiondirtytransmission.Hooks(f(g(h())))`.
-func (c *CorrectionDirtyTransmissionClient) Use(hooks ...Hook) {
-	c.hooks.CorrectionDirtyTransmission = append(c.hooks.CorrectionDirtyTransmission, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `correctiondirtytransmission.Intercept(f(g(h())))`.
-func (c *CorrectionDirtyTransmissionClient) Intercept(interceptors ...Interceptor) {
-	c.inters.CorrectionDirtyTransmission = append(c.inters.CorrectionDirtyTransmission, interceptors...)
-}
-
-// Create returns a builder for creating a CorrectionDirtyTransmission entity.
-func (c *CorrectionDirtyTransmissionClient) Create() *CorrectionDirtyTransmissionCreate {
-	mutation := newCorrectionDirtyTransmissionMutation(c.config, OpCreate)
-	return &CorrectionDirtyTransmissionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of CorrectionDirtyTransmission entities.
-func (c *CorrectionDirtyTransmissionClient) CreateBulk(builders ...*CorrectionDirtyTransmissionCreate) *CorrectionDirtyTransmissionCreateBulk {
-	return &CorrectionDirtyTransmissionCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *CorrectionDirtyTransmissionClient) MapCreateBulk(slice any, setFunc func(*CorrectionDirtyTransmissionCreate, int)) *CorrectionDirtyTransmissionCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &CorrectionDirtyTransmissionCreateBulk{err: fmt.Errorf("calling to CorrectionDirtyTransmissionClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*CorrectionDirtyTransmissionCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &CorrectionDirtyTransmissionCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for CorrectionDirtyTransmission.
-func (c *CorrectionDirtyTransmissionClient) Update() *CorrectionDirtyTransmissionUpdate {
-	mutation := newCorrectionDirtyTransmissionMutation(c.config, OpUpdate)
-	return &CorrectionDirtyTransmissionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *CorrectionDirtyTransmissionClient) UpdateOne(_m *CorrectionDirtyTransmission) *CorrectionDirtyTransmissionUpdateOne {
-	mutation := newCorrectionDirtyTransmissionMutation(c.config, OpUpdateOne, withCorrectionDirtyTransmission(_m))
-	return &CorrectionDirtyTransmissionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *CorrectionDirtyTransmissionClient) UpdateOneID(id int) *CorrectionDirtyTransmissionUpdateOne {
-	mutation := newCorrectionDirtyTransmissionMutation(c.config, OpUpdateOne, withCorrectionDirtyTransmissionID(id))
-	return &CorrectionDirtyTransmissionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for CorrectionDirtyTransmission.
-func (c *CorrectionDirtyTransmissionClient) Delete() *CorrectionDirtyTransmissionDelete {
-	mutation := newCorrectionDirtyTransmissionMutation(c.config, OpDelete)
-	return &CorrectionDirtyTransmissionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *CorrectionDirtyTransmissionClient) DeleteOne(_m *CorrectionDirtyTransmission) *CorrectionDirtyTransmissionDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *CorrectionDirtyTransmissionClient) DeleteOneID(id int) *CorrectionDirtyTransmissionDeleteOne {
-	builder := c.Delete().Where(correctiondirtytransmission.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &CorrectionDirtyTransmissionDeleteOne{builder}
-}
-
-// Query returns a query builder for CorrectionDirtyTransmission.
-func (c *CorrectionDirtyTransmissionClient) Query() *CorrectionDirtyTransmissionQuery {
-	return &CorrectionDirtyTransmissionQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeCorrectionDirtyTransmission},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a CorrectionDirtyTransmission entity by its id.
-func (c *CorrectionDirtyTransmissionClient) Get(ctx context.Context, id int) (*CorrectionDirtyTransmission, error) {
-	return c.Query().Where(correctiondirtytransmission.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *CorrectionDirtyTransmissionClient) GetX(ctx context.Context, id int) *CorrectionDirtyTransmission {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// Hooks returns the client hooks.
-func (c *CorrectionDirtyTransmissionClient) Hooks() []Hook {
-	hooks := c.hooks.CorrectionDirtyTransmission
-	return append(hooks[:len(hooks):len(hooks)], correctiondirtytransmission.Hooks[:]...)
-}
-
-// Interceptors returns the client interceptors.
-func (c *CorrectionDirtyTransmissionClient) Interceptors() []Interceptor {
-	return c.inters.CorrectionDirtyTransmission
-}
-
-func (c *CorrectionDirtyTransmissionClient) mutate(ctx context.Context, m *CorrectionDirtyTransmissionMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&CorrectionDirtyTransmissionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&CorrectionDirtyTransmissionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&CorrectionDirtyTransmissionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&CorrectionDirtyTransmissionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown CorrectionDirtyTransmission mutation op: %q", m.Op())
 	}
 }
 
@@ -6078,24 +5934,24 @@ func (c *WorkflowVersionClient) mutate(ctx context.Context, m *WorkflowVersionMu
 type (
 	hooks struct {
 		Account, AddressRule, Agency, AssignmentControl, AuditRecord, CommandReceipt,
-		ConsumerOffset, CorrectionDirtyTransmission, Credential, DomainEvent,
-		FieldPermission, Gateway, GatewayCredential, GatewayNetwork, Grant,
-		GroupingControl, IdentityControl, LoginAttempt, Membership, Message,
-		MessageUnit, Network, Organization, PendingAssignmentScope,
-		ProcessingCandidate, ProcessingControl, ProcessingInstance,
-		ProcessingInstanceVersion, ProcessingResult, TargetSuppression, Transmission,
-		TransmissionTarget, Unit, UnitCollection, UnitTemplate, UserGroup, Workflow,
-		WorkflowScopeReference, WorkflowVersion []ent.Hook
+		ConsumerOffset, Credential, DomainEvent, FieldPermission, Gateway,
+		GatewayCredential, GatewayNetwork, Grant, GroupingControl, IdentityControl,
+		LoginAttempt, Membership, Message, MessageUnit, Network, Organization,
+		PendingAssignmentScope, ProcessingCandidate, ProcessingControl,
+		ProcessingInstance, ProcessingInstanceVersion, ProcessingResult,
+		TargetSuppression, Transmission, TransmissionTarget, Unit, UnitCollection,
+		UnitTemplate, UserGroup, Workflow, WorkflowScopeReference,
+		WorkflowVersion []ent.Hook
 	}
 	inters struct {
 		Account, AddressRule, Agency, AssignmentControl, AuditRecord, CommandReceipt,
-		ConsumerOffset, CorrectionDirtyTransmission, Credential, DomainEvent,
-		FieldPermission, Gateway, GatewayCredential, GatewayNetwork, Grant,
-		GroupingControl, IdentityControl, LoginAttempt, Membership, Message,
-		MessageUnit, Network, Organization, PendingAssignmentScope,
-		ProcessingCandidate, ProcessingControl, ProcessingInstance,
-		ProcessingInstanceVersion, ProcessingResult, TargetSuppression, Transmission,
-		TransmissionTarget, Unit, UnitCollection, UnitTemplate, UserGroup, Workflow,
-		WorkflowScopeReference, WorkflowVersion []ent.Interceptor
+		ConsumerOffset, Credential, DomainEvent, FieldPermission, Gateway,
+		GatewayCredential, GatewayNetwork, Grant, GroupingControl, IdentityControl,
+		LoginAttempt, Membership, Message, MessageUnit, Network, Organization,
+		PendingAssignmentScope, ProcessingCandidate, ProcessingControl,
+		ProcessingInstance, ProcessingInstanceVersion, ProcessingResult,
+		TargetSuppression, Transmission, TransmissionTarget, Unit, UnitCollection,
+		UnitTemplate, UserGroup, Workflow, WorkflowScopeReference,
+		WorkflowVersion []ent.Interceptor
 	}
 )

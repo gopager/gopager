@@ -148,32 +148,6 @@ var (
 		Columns:    ConsumerOffsetsColumns,
 		PrimaryKey: []*schema.Column{ConsumerOffsetsColumns[0]},
 	}
-	// CorrectionDirtyTransmissionsColumns holds the columns for the "correction_dirty_transmissions" table.
-	CorrectionDirtyTransmissionsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "scope_id", Type: field.TypeUUID},
-		{Name: "transmission_id", Type: field.TypeUUID},
-		{Name: "accepted_at", Type: field.TypeTime},
-		{Name: "recorded_at", Type: field.TypeTime},
-	}
-	// CorrectionDirtyTransmissionsTable holds the schema information for the "correction_dirty_transmissions" table.
-	CorrectionDirtyTransmissionsTable = &schema.Table{
-		Name:       "correction_dirty_transmissions",
-		Columns:    CorrectionDirtyTransmissionsColumns,
-		PrimaryKey: []*schema.Column{CorrectionDirtyTransmissionsColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "correctiondirtytransmission_scope_id_accepted_at_transmission_id",
-				Unique:  true,
-				Columns: []*schema.Column{CorrectionDirtyTransmissionsColumns[1], CorrectionDirtyTransmissionsColumns[3], CorrectionDirtyTransmissionsColumns[2]},
-			},
-			{
-				Name:    "correctiondirtytransmission_transmission_id",
-				Unique:  false,
-				Columns: []*schema.Column{CorrectionDirtyTransmissionsColumns[2]},
-			},
-		},
-	}
 	// IdentityCredentialsColumns holds the columns for the "identity_credentials" table.
 	IdentityCredentialsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -529,13 +503,19 @@ var (
 	AssignmentPendingScopesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "assignment_revision", Type: field.TypeInt64},
-		{Name: "network_ids", Type: field.TypeJSON},
-		{Name: "unit_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "reason", Type: field.TypeEnum, Enums: []string{"rule-change", "unit-deleted", "suppression-change"}},
+		{Name: "network_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "protocol", Type: field.TypeEnum, Nullable: true, Enums: []string{"pocsag", "flex", "zvei", "eas"}},
+		{Name: "address_from", Type: field.TypeInt64, Nullable: true},
+		{Name: "address_to", Type: field.TypeInt64, Nullable: true},
+		{Name: "address_text", Type: field.TypeString, Nullable: true},
+		{Name: "valid_from", Type: field.TypeTime, Nullable: true},
+		{Name: "valid_until", Type: field.TypeTime, Nullable: true},
+		{Name: "unit_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "transmission_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "target_position", Type: field.TypeInt, Nullable: true},
 		{Name: "recorded_at", Type: field.TypeTime},
 		{Name: "state", Type: field.TypeEnum, Enums: []string{"queued", "running", "completed", "failed", "superseded"}, Default: "queued"},
-		{Name: "high_water_accepted_at", Type: field.TypeTime, Nullable: true},
-		{Name: "high_water_transmission_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "cursor_accepted_at", Type: field.TypeTime, Nullable: true},
 		{Name: "cursor_transmission_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "attempts", Type: field.TypeInt, Default: 0},
@@ -1007,7 +987,6 @@ var (
 		IdentityAuditTable,
 		CommandReceiptsTable,
 		ConsumerOffsetsTable,
-		CorrectionDirtyTransmissionsTable,
 		IdentityCredentialsTable,
 		DomainEventsTable,
 		IdentityFieldPermissionsTable,
@@ -1066,9 +1045,6 @@ func init() {
 	}
 	ConsumerOffsetsTable.Annotation = &entsql.Annotation{
 		Table: "consumer_offsets",
-	}
-	CorrectionDirtyTransmissionsTable.Annotation = &entsql.Annotation{
-		Table: "correction_dirty_transmissions",
 	}
 	IdentityCredentialsTable.Annotation = &entsql.Annotation{
 		Table: "identity_credentials",

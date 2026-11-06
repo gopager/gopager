@@ -27,7 +27,7 @@ type Repository interface {
 	ListRules(context.Context, platform.TransactionContext, authz.Authority, units.PageInput, time.Time) (units.Page[Rule], error)
 	SaveRule(context.Context, platform.TransactionContext, authz.Authority, Rule, int64, time.Time) error
 	DeleteRule(context.Context, platform.TransactionContext, authz.Authority, Rule, time.Time) error
-	MarkPending(context.Context, platform.TransactionContext, []uuid.UUID, *uuid.UUID, string) (int64, error)
+	MarkPending(context.Context, platform.TransactionContext, []CorrectionScope, string) (int64, error)
 	RecordChange(context.Context, platform.TransactionContext, uuid.UUID, uuid.UUID, string, time.Time) error
 }
 
