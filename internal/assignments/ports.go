@@ -21,6 +21,7 @@ type NetworkOwner interface {
 // Repository owns current rules and durable invalidation, not historical Message/support tables.
 type Repository interface {
 	LockRevision(context.Context, platform.TransactionContext) (int64, error)
+	LockRevisionForChange(context.Context, platform.TransactionContext) (int64, error)
 	CurrentRules(context.Context, platform.TransactionContext, []uuid.UUID) ([]Rule, error)
 	ReadRule(context.Context, platform.TransactionContext, authz.Authority, string, uuid.UUID, time.Time) (Rule, error)
 	ListRules(context.Context, platform.TransactionContext, authz.Authority, units.PageInput, time.Time) (units.Page[Rule], error)

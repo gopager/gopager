@@ -49,7 +49,7 @@ func TestExecutionPrincipalHoldsPrimaryAuthorityLockAndRejectsSuspension(t *test
 				return err
 			}
 			pids <- pid
-			if _, err := f.owners.identity.LockAccess(tx.Context(), tx); err != nil {
+			if _, err := f.owners.identity.LockAccessForChange(tx.Context(), tx); err != nil {
 				return err
 			}
 			driver, err := borrowed.New(f.store, tx)

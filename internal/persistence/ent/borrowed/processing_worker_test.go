@@ -289,7 +289,7 @@ func TestProcessingWorkerPrivateEvaluationAndCurrentSourceRecheck(t *testing.T) 
 			default:
 				if err != nil || completed.State != "completed" || completed.Selected == nil ||
 					*completed.Selected != (name == "selected" || name == "dispatch") || (result != nil) != (name == "selected" || name == "dispatch") ||
-					completed.BarrierAppliedAt != nil || completed.Attempts != 1 {
+					completed.Attempts != 1 {
 					t.Fatalf("incorrect private worker outcome: %+v result=%+v err=%v", completed, result, err)
 				}
 			}

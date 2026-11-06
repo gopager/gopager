@@ -20,8 +20,6 @@ const (
 	FieldContributionTime = "contribution_time"
 	// FieldAgeAnchor holds the string denoting the age_anchor field in the database.
 	FieldAgeAnchor = "age_anchor"
-	// FieldReady holds the string denoting the ready field in the database.
-	FieldReady = "ready"
 	// Table holds the table name of the messagecontribution in the database.
 	Table = "message_contributions"
 )
@@ -33,7 +31,6 @@ var Columns = []string{
 	FieldUnitID,
 	FieldContributionTime,
 	FieldAgeAnchor,
-	FieldReady,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -54,8 +51,6 @@ func ValidColumn(column string) bool {
 var (
 	Hooks  [1]ent.Hook
 	Policy ent.Policy
-	// DefaultReady holds the default value on creation for the "ready" field.
-	DefaultReady bool
 )
 
 // OrderOption defines the ordering options for the MessageContribution queries.
@@ -84,9 +79,4 @@ func ByContributionTime(opts ...sql.OrderTermOption) OrderOption {
 // ByAgeAnchor orders the results by the age_anchor field.
 func ByAgeAnchor(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAgeAnchor, opts...).ToFunc()
-}
-
-// ByReady orders the results by the ready field.
-func ByReady(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldReady, opts...).ToFunc()
 }

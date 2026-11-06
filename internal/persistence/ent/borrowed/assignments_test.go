@@ -789,15 +789,15 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO messages
-			(id,identity_form,identity_subtype,identity_value,first_observed_at,last_observed_at,publication_status)
-			VALUES($1,$2,$3,$4,$5,$5,'ready')`, messageID, identitySubmission.Identity.Form,
+			(id,identity_form,identity_subtype,identity_value,first_observed_at,last_observed_at)
+			VALUES($1,$2,$3,$4,$5,$5)`, messageID, identitySubmission.Identity.Form,
 			identitySubmission.Identity.Subtype, identitySubmission.Identity.Value, observed); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO transmissions
 			(id,gateway_id,network_id,submission_id,submission_fingerprint,network_resolution,protocol,payload,targets,
-			 observed_at,observation_offset_seconds,accepted_at,source_revision,message_id,processing_status,publication_status)
-			VALUES($1,$2,$3,$4,$5,'declared','pocsag','{}',$6,$7,0,$8,1,$9,'completed','ready')`,
+			 observed_at,observation_offset_seconds,accepted_at,source_revision,message_id,processing_status)
+			VALUES($1,$2,$3,$4,$5,'declared','pocsag','{}',$6,$7,0,$8,1,$9,'none')`,
 			transmissionID, gatewayID, networkID, uuid.NewString(), make([]byte, 32), string(targets),
 			observed, accepted, messageID); err != nil {
 			return err
@@ -810,7 +810,7 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 		}
 		var contributionID = uuid.New()
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO message_contributions
-			(id,message_id,unit_id,contribution_time,age_anchor,ready) VALUES($1,$2,$3,$4,$4,true)`,
+			(id,message_id,unit_id,contribution_time,age_anchor) VALUES($1,$2,$3,$4,$4)`,
 			contributionID, messageID, unitA.ID, observed); err != nil {
 			return err
 		}
@@ -950,7 +950,7 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 	if !errors.Is(err, authz.ErrRevisionConflict) {
 		t.Fatalf("superseded r2 worker was not fenced: %v", err)
 	}
-	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, f.ruleStore, f.facts, noCorrectionPublication{})
+	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, f.ruleStore, f.facts, noProcessingReadmission{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1107,14 +1107,14 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 				currentRevision, revision)
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO messages
-			(id,identity_form,identity_value,first_observed_at,last_observed_at,publication_status)
-			VALUES($1,'test',$2,$3,$3,'ready')`, unassignedMessageID, []byte{2}, observed.Add(3*time.Second)); err != nil {
+			(id,identity_form,identity_value,first_observed_at,last_observed_at)
+			VALUES($1,'test',$2,$3,$3)`, unassignedMessageID, []byte{2}, observed.Add(3*time.Second)); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO transmissions
 			(id,gateway_id,network_id,submission_id,submission_fingerprint,network_resolution,protocol,payload,targets,
-			 observed_at,observation_offset_seconds,accepted_at,source_revision,message_id,processing_status,publication_status)
-			VALUES($1,$2,$3,$4,$5,'declared','pocsag','{}',$6,$7,0,$8,1,$9,'completed','ready')`,
+			 observed_at,observation_offset_seconds,accepted_at,source_revision,message_id,processing_status)
+			VALUES($1,$2,$3,$4,$5,'declared','pocsag','{}',$6,$7,0,$8,1,$9,'none')`,
 			unassignedTransmissionID, gatewayID, networkID, uuid.NewString(), unassignedFingerprint,
 			string(unassignedTargets), observed.Add(3*time.Second), accepted.Add(3*time.Second), unassignedMessageID); err != nil {
 			return err
@@ -1373,30 +1373,44 @@ func verifyCurrentMatcherSerialization(t *testing.T, deleting bool) {
 	case err := <-deleteDone:
 		t.Fatalf("deletion failed before coordinated invalidation: %v", err)
 	}
-	waitForAuthorityLock(t, f.store, deleterPID)
-	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		executor, err := f.store.Resolve(tx)
+	if deleting {
+		waitForAuthorityLock(t, f.store, deleterPID)
+		err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+			executor, err := f.store.Resolve(tx)
+			if err != nil {
+				return err
+			}
+			var blocked bool
+			if err := executor.QueryRowContext(tx.Context(), "SELECT $1::integer = ANY(pg_blocking_pids($2::integer))", matcherPID, deleterPID).Scan(&blocked); err != nil {
+				return err
+			}
+			if !blocked {
+				return errors.New("Unit deletion was not blocked by the captured configuration")
+			}
+			return nil
+		})
 		if err != nil {
-			return err
+			t.Fatal(err)
 		}
-		var blocked bool
-		if err := executor.QueryRowContext(tx.Context(), "SELECT $1::integer = ANY(pg_blocking_pids($2::integer))", matcherPID, deleterPID).Scan(&blocked); err != nil {
-			return err
+	} else {
+		// An edit changes nothing the evaluation depends on, so it must not wait for it.
+		select {
+		case err := <-deleteDone:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("Unit edit waited for an in-flight evaluation")
 		}
-		if !blocked {
-			return errors.New("Unit deletion was not blocked by the captured configuration")
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
 	unlock()
 	if err := <-matchDone; err != nil {
 		t.Fatal(err)
 	}
-	if err := <-deleteDone; err != nil {
-		t.Fatal(err)
+	if deleting {
+		if err := <-deleteDone; err != nil {
+			t.Fatal(err)
+		}
 	}
 	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		result, err := f.rules.MatchTargets(tx.Context(), tx, f.networks[0], protocols.POCSAG, observed, targets)
@@ -1417,7 +1431,10 @@ func verifyCurrentMatcherSerialization(t *testing.T, deleting bool) {
 	}
 }
 
-func TestCurrentMatcherEvaluationSerializesWithUnitChanges(t *testing.T) {
+// TestCurrentMatcherEvaluationSerializesWithUnitDeletionNotEdits expects a Unit deletion,
+// which invalidates rules, to wait for an in-flight evaluation under the shared assignment
+// lock, while a Unit edit commits meanwhile; a later evaluation sees the current Unit either way.
+func TestCurrentMatcherEvaluationSerializesWithUnitDeletionNotEdits(t *testing.T) {
 	t.Run("edit", func(t *testing.T) { verifyCurrentMatcherSerialization(t, false) })
 	t.Run("delete", func(t *testing.T) { verifyCurrentMatcherSerialization(t, true) })
 }

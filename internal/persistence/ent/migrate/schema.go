@@ -411,7 +411,6 @@ var (
 		{Name: "identity_value", Type: field.TypeBytes},
 		{Name: "first_observed_at", Type: field.TypeTime},
 		{Name: "last_observed_at", Type: field.TypeTime},
-		{Name: "publication_status", Type: field.TypeEnum, Enums: []string{"pending", "ready", "failed"}, Default: "pending"},
 	}
 	// MessagesTable holds the schema information for the "messages" table.
 	MessagesTable = &schema.Table{
@@ -433,7 +432,6 @@ var (
 		{Name: "unit_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "contribution_time", Type: field.TypeTime},
 		{Name: "age_anchor", Type: field.TypeTime},
-		{Name: "ready", Type: field.TypeBool, Default: false},
 	}
 	// MessageContributionsTable holds the schema information for the "message_contributions" table.
 	MessageContributionsTable = &schema.Table{
@@ -539,7 +537,6 @@ var (
 		{Name: "due_at", Type: field.TypeTime},
 		{Name: "failure_code", Type: field.TypeString, Nullable: true},
 		{Name: "failure_step", Type: field.TypeString, Nullable: true},
-		{Name: "barrier_applied_at", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
@@ -558,11 +555,6 @@ var (
 				Name:    "processingcandidate_state_due_at_id",
 				Unique:  false,
 				Columns: []*schema.Column{ProcessingCandidatesColumns[9], ProcessingCandidatesColumns[17], ProcessingCandidatesColumns[0]},
-			},
-			{
-				Name:    "processingcandidate_transmission_id_barrier_applied_at",
-				Unique:  false,
-				Columns: []*schema.Column{ProcessingCandidatesColumns[2], ProcessingCandidatesColumns[20]},
 			},
 		},
 	}
@@ -677,8 +669,7 @@ var (
 		{Name: "incomplete", Type: field.TypeBool, Default: false},
 		{Name: "quality_metrics", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "json"}},
 		{Name: "message_id", Type: field.TypeUUID},
-		{Name: "processing_status", Type: field.TypeEnum, Enums: []string{"pending", "completed", "failed"}, Default: "pending"},
-		{Name: "publication_status", Type: field.TypeEnum, Enums: []string{"pending", "ready", "failed"}, Default: "pending"},
+		{Name: "processing_status", Type: field.TypeEnum, Enums: []string{"none", "pending", "completed", "failed"}, Default: "pending"},
 	}
 	// TransmissionsTable holds the schema information for the "transmissions" table.
 	TransmissionsTable = &schema.Table{
@@ -700,14 +691,6 @@ var (
 				Name:    "transmission_message_id_observed_at_id",
 				Unique:  false,
 				Columns: []*schema.Column{TransmissionsColumns[15], TransmissionsColumns[9], TransmissionsColumns[0]},
-			},
-			{
-				Name:    "transmissions_unpublished",
-				Unique:  false,
-				Columns: []*schema.Column{TransmissionsColumns[11], TransmissionsColumns[0]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "processing_status = 'pending' AND publication_status = 'pending'",
-				},
 			},
 		},
 	}

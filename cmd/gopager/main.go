@@ -127,7 +127,7 @@ func run() (result error) {
 			result = errors.Join(result, runtime.Close(context.Background()))
 		}()
 		runners = append(runners, runtime.dispatcher)
-		correctionRunner, err := composeCorrectionRunner(store, processingRuntime.correctionPublication)
+		correctionRunner, err := composeCorrectionRunner(store, processingRuntime.correctionReadmission)
 		if err != nil {
 			return errors.Join(err, store.Close())
 		}
@@ -149,7 +149,7 @@ func run() (result error) {
 	return handle.Shutdown(context.Background())
 }
 
-func composeCorrectionRunner(store *postgres.Store, publication assignments.CorrectionPublication,
+func composeCorrectionRunner(store *postgres.Store, readmission assignments.ProcessingReadmission,
 ) (*assignments.CorrectionRunner, error) {
 	identityRepository, err := identitystore.New(store)
 	if err != nil {
@@ -186,7 +186,7 @@ func composeCorrectionRunner(store *postgres.Store, publication assignments.Corr
 	if err != nil {
 		return nil, err
 	}
-	return assignments.NewCorrectionRunner(store, store, matcher, assignmentRepository, facts, publication)
+	return assignments.NewCorrectionRunner(store, store, matcher, assignmentRepository, facts, readmission)
 }
 
 // parseConfig binds only the platform's explicit flags and secret environment input.

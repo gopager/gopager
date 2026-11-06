@@ -67,11 +67,6 @@ func TestCandidateReselectionRejectsIdentitySubstitutionStalePinsAndPublishedWor
 		"transmission":   func(_ *Candidate, b *CandidateBinding) { b.TransmissionID = uuid.New() },
 		"stale-config":   func(_ *Candidate, b *CandidateBinding) { b.ConfigurationRevision = 1 },
 		"stale-workflow": func(_ *Candidate, b *CandidateBinding) { b.WorkflowRevision = 1 },
-		"published": func(c *Candidate, b *CandidateBinding) {
-			selected := true
-			c.State, c.Selected, c.BarrierAppliedAt = "completed", &selected, &c.UpdatedAt
-			b.WorkflowRevision++
-		},
 	}
 	for name, change := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -322,9 +317,9 @@ func TestCandidateSupersessionPreservesHistoryAndRejectsPublishedOrStaleWork(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	completed.BarrierAppliedAt = &completed.UpdatedAt
-	if _, err := completed.Supersede(completed.Revision, completed.UpdatedAt); !errors.Is(err, authz.ErrRevisionConflict) {
-		t.Fatalf("published work superseded: %v", err)
+	// Completed work with a published result stays supersedable: a newer selection replaces it.
+	if superseded, err := completed.Supersede(completed.Revision, completed.UpdatedAt); err != nil || superseded.State != "superseded" {
+		t.Fatalf("completed work was not supersedable: %+v err=%v", superseded, err)
 	}
 }
 

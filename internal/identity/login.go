@@ -45,7 +45,7 @@ func (s SessionCreation) LogValue() slog.Value {
 }
 
 // LoginRepository owns bounded persistent throttling and Session/audit persistence.
-// TakeLoginAttempt is called under the shared authority lock and returns a safe retry delay.
+// TakeLoginAttempt serializes its own accounting and returns a safe retry delay.
 type LoginRepository interface {
 	TakeLoginAttempt(context.Context, platform.TransactionContext, [32]byte, time.Time, LoginRateLimits) (time.Duration, error)
 	LoginAccount(context.Context, platform.TransactionContext, string) (LoginAccount, error)
@@ -128,14 +128,57 @@ func NewLoginService(transactions Transactions, resolver *Resolver, repository L
 }
 
 // AuthenticateLocal verifies current credentials/rights and commits one new Session.
-// Rejected attempts still commit throttle accounting; infrastructure failures never become login success.
+// Attempt accounting commits in its own short transaction even when the attempt is
+// rejected; password verification runs outside any transaction so that the Argon2id work
+// holds no lock; the Session is created in a second transaction under the shared access
+// lock after the account state was re-read. Infrastructure failures never become login
+// success.
 func (s *LoginService) AuthenticateLocal(ctx context.Context, username, password string) (SessionResult, error) {
 	key, err := UsernameKey(username)
 	if err != nil {
 		return SessionResult{}, err
 	}
-	var result SessionResult
+	accountKey := sha256.Sum256([]byte(key))
+	var account LoginAccount
 	var rejection error
+	err = s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
+		now, err := s.resolver.clock.Now(tx.Context(), tx)
+		if err != nil {
+			return err
+		}
+		retry, err := s.repository.TakeLoginAttempt(tx.Context(), tx, accountKey, now, s.limits)
+		if err != nil {
+			return err
+		}
+		if retry > 0 {
+			rejection = &RateLimited{RetryAfter: retry}
+			return nil
+		}
+		account, err = s.repository.LoginAccount(tx.Context(), tx, key)
+		if err != nil && !errors.Is(err, ErrLoginRequired) {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return SessionResult{}, err
+	}
+	if rejection != nil {
+		return SessionResult{}, rejection
+	}
+	hash := account.PasswordHash
+	if hash == "" {
+		hash = s.dummyHash
+	}
+	valid, err := VerifyPassword(hash, password)
+	if err != nil {
+		return SessionResult{}, platform.NewFailure(platform.CodeAuthorityUnavailable, err)
+	}
+	if !valid || account.ID == uuid.Nil || account.Kind != "human" ||
+		account.State != "active" || account.PasswordHash == "" {
+		return SessionResult{}, ErrLoginRequired
+	}
+	var result SessionResult
 	err = s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
 		revision, err := s.resolver.repository.LockAccess(tx.Context(), tx)
 		if err != nil {
@@ -145,28 +188,12 @@ func (s *LoginService) AuthenticateLocal(ctx context.Context, username, password
 		if err != nil {
 			return err
 		}
-		retry, err := s.repository.TakeLoginAttempt(tx.Context(), tx, sha256.Sum256([]byte(key)), now, s.limits)
-		if err != nil {
-			return err
-		}
-		if retry > 0 {
-			rejection = &RateLimited{RetryAfter: retry}
-			return nil
-		}
-		account, err := s.repository.LoginAccount(tx.Context(), tx, key)
+		current, err := s.repository.LoginAccount(tx.Context(), tx, key)
 		if err != nil && !errors.Is(err, ErrLoginRequired) {
 			return err
 		}
-		hash := account.PasswordHash
-		if hash == "" {
-			hash = s.dummyHash
-		}
-		valid, err := VerifyPassword(hash, password)
-		if err != nil {
-			return platform.NewFailure(platform.CodeAuthorityUnavailable, err)
-		}
-		if !valid || account.ID == uuid.Nil || account.Kind != "human" ||
-			account.State != "active" || account.PasswordHash == "" {
+		if err != nil || current.ID != account.ID || current.Kind != "human" ||
+			current.State != "active" || current.PasswordHash != account.PasswordHash {
 			rejection = ErrLoginRequired
 			return nil
 		}
@@ -213,7 +240,9 @@ func (s *LoginService) AuthenticateLocal(ctx context.Context, username, password
 	return result, nil
 }
 
-// Logout revokes the current Session with current own-session authority.
+// Logout revokes the current Session with current own-session authority. It is an
+// access change: it takes the exclusive access lock before resolving the Session, so it
+// waits for in-flight authority readers and never deadlocks with another access change.
 // The transport must check Origin/CSRF against the authentication inside this transaction.
 func (s *LoginService) Logout(ctx context.Context, proof Proof, check func(Authentication) error) error {
 	if proof.Kind != SessionProof || check == nil {
@@ -221,6 +250,9 @@ func (s *LoginService) Logout(ctx context.Context, proof Proof, check func(Authe
 	}
 	var rejection error
 	err := s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
+		if _, err := s.resolver.repository.LockAccessForChange(tx.Context(), tx); err != nil {
+			return err
+		}
 		authentication, err := s.resolver.Resolve(tx.Context(), tx, proof)
 		if err != nil {
 			if errors.Is(err, ErrLoginRequired) {

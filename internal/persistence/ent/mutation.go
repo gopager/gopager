@@ -11022,21 +11022,20 @@ func (m *MembershipMutation) ResetEdge(name string) error {
 // MessageMutation represents an operation that mutates the Message nodes in the graph.
 type MessageMutation struct {
 	config
-	op                 Op
-	typ                string
-	id                 *uuid.UUID
-	revision           *int64
-	addrevision        *int64
-	identity_form      *string
-	identity_subtype   *string
-	identity_value     *[]byte
-	first_observed_at  *time.Time
-	last_observed_at   *time.Time
-	publication_status *message.PublicationStatus
-	clearedFields      map[string]struct{}
-	done               bool
-	oldValue           func(context.Context) (*Message, error)
-	predicates         []predicate.Message
+	op                Op
+	typ               string
+	id                *uuid.UUID
+	revision          *int64
+	addrevision       *int64
+	identity_form     *string
+	identity_subtype  *string
+	identity_value    *[]byte
+	first_observed_at *time.Time
+	last_observed_at  *time.Time
+	clearedFields     map[string]struct{}
+	done              bool
+	oldValue          func(context.Context) (*Message, error)
+	predicates        []predicate.Message
 }
 
 var _ ent.Mutation = (*MessageMutation)(nil)
@@ -11379,42 +11378,6 @@ func (m *MessageMutation) ResetLastObservedAt() {
 	m.last_observed_at = nil
 }
 
-// SetPublicationStatus sets the "publication_status" field.
-func (m *MessageMutation) SetPublicationStatus(ms message.PublicationStatus) {
-	m.publication_status = &ms
-}
-
-// PublicationStatus returns the value of the "publication_status" field in the mutation.
-func (m *MessageMutation) PublicationStatus() (r message.PublicationStatus, exists bool) {
-	v := m.publication_status
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldPublicationStatus returns the old "publication_status" field's value of the Message entity.
-// If the Message object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *MessageMutation) OldPublicationStatus(ctx context.Context) (v message.PublicationStatus, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldPublicationStatus is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldPublicationStatus requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldPublicationStatus: %w", err)
-	}
-	return oldValue.PublicationStatus, nil
-}
-
-// ResetPublicationStatus resets all changes to the "publication_status" field.
-func (m *MessageMutation) ResetPublicationStatus() {
-	m.publication_status = nil
-}
-
 // Where appends a list predicates to the MessageMutation builder.
 func (m *MessageMutation) Where(ps ...predicate.Message) {
 	m.predicates = append(m.predicates, ps...)
@@ -11449,7 +11412,7 @@ func (m *MessageMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *MessageMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 6)
 	if m.revision != nil {
 		fields = append(fields, message.FieldRevision)
 	}
@@ -11467,9 +11430,6 @@ func (m *MessageMutation) Fields() []string {
 	}
 	if m.last_observed_at != nil {
 		fields = append(fields, message.FieldLastObservedAt)
-	}
-	if m.publication_status != nil {
-		fields = append(fields, message.FieldPublicationStatus)
 	}
 	return fields
 }
@@ -11491,8 +11451,6 @@ func (m *MessageMutation) Field(name string) (ent.Value, bool) {
 		return m.FirstObservedAt()
 	case message.FieldLastObservedAt:
 		return m.LastObservedAt()
-	case message.FieldPublicationStatus:
-		return m.PublicationStatus()
 	}
 	return nil, false
 }
@@ -11514,8 +11472,6 @@ func (m *MessageMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldFirstObservedAt(ctx)
 	case message.FieldLastObservedAt:
 		return m.OldLastObservedAt(ctx)
-	case message.FieldPublicationStatus:
-		return m.OldPublicationStatus(ctx)
 	}
 	return nil, fmt.Errorf("unknown Message field %s", name)
 }
@@ -11566,13 +11522,6 @@ func (m *MessageMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetLastObservedAt(v)
-		return nil
-	case message.FieldPublicationStatus:
-		v, ok := value.(message.PublicationStatus)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetPublicationStatus(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Message field %s", name)
@@ -11656,9 +11605,6 @@ func (m *MessageMutation) ResetField(name string) error {
 	case message.FieldLastObservedAt:
 		m.ResetLastObservedAt()
 		return nil
-	case message.FieldPublicationStatus:
-		m.ResetPublicationStatus()
-		return nil
 	}
 	return fmt.Errorf("unknown Message field %s", name)
 }
@@ -11721,7 +11667,6 @@ type MessageContributionMutation struct {
 	unit_id           *uuid.UUID
 	contribution_time *time.Time
 	age_anchor        *time.Time
-	ready             *bool
 	clearedFields     map[string]struct{}
 	done              bool
 	oldValue          func(context.Context) (*MessageContribution, error)
@@ -11989,42 +11934,6 @@ func (m *MessageContributionMutation) ResetAgeAnchor() {
 	m.age_anchor = nil
 }
 
-// SetReady sets the "ready" field.
-func (m *MessageContributionMutation) SetReady(b bool) {
-	m.ready = &b
-}
-
-// Ready returns the value of the "ready" field in the mutation.
-func (m *MessageContributionMutation) Ready() (r bool, exists bool) {
-	v := m.ready
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldReady returns the old "ready" field's value of the MessageContribution entity.
-// If the MessageContribution object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *MessageContributionMutation) OldReady(ctx context.Context) (v bool, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldReady is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldReady requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldReady: %w", err)
-	}
-	return oldValue.Ready, nil
-}
-
-// ResetReady resets all changes to the "ready" field.
-func (m *MessageContributionMutation) ResetReady() {
-	m.ready = nil
-}
-
 // Where appends a list predicates to the MessageContributionMutation builder.
 func (m *MessageContributionMutation) Where(ps ...predicate.MessageContribution) {
 	m.predicates = append(m.predicates, ps...)
@@ -12059,7 +11968,7 @@ func (m *MessageContributionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *MessageContributionMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 4)
 	if m.message_id != nil {
 		fields = append(fields, messagecontribution.FieldMessageID)
 	}
@@ -12071,9 +11980,6 @@ func (m *MessageContributionMutation) Fields() []string {
 	}
 	if m.age_anchor != nil {
 		fields = append(fields, messagecontribution.FieldAgeAnchor)
-	}
-	if m.ready != nil {
-		fields = append(fields, messagecontribution.FieldReady)
 	}
 	return fields
 }
@@ -12091,8 +11997,6 @@ func (m *MessageContributionMutation) Field(name string) (ent.Value, bool) {
 		return m.ContributionTime()
 	case messagecontribution.FieldAgeAnchor:
 		return m.AgeAnchor()
-	case messagecontribution.FieldReady:
-		return m.Ready()
 	}
 	return nil, false
 }
@@ -12110,8 +12014,6 @@ func (m *MessageContributionMutation) OldField(ctx context.Context, name string)
 		return m.OldContributionTime(ctx)
 	case messagecontribution.FieldAgeAnchor:
 		return m.OldAgeAnchor(ctx)
-	case messagecontribution.FieldReady:
-		return m.OldReady(ctx)
 	}
 	return nil, fmt.Errorf("unknown MessageContribution field %s", name)
 }
@@ -12148,13 +12050,6 @@ func (m *MessageContributionMutation) SetField(name string, value ent.Value) err
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAgeAnchor(v)
-		return nil
-	case messagecontribution.FieldReady:
-		v, ok := value.(bool)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetReady(v)
 		return nil
 	}
 	return fmt.Errorf("unknown MessageContribution field %s", name)
@@ -12225,9 +12120,6 @@ func (m *MessageContributionMutation) ResetField(name string) error {
 		return nil
 	case messagecontribution.FieldAgeAnchor:
 		m.ResetAgeAnchor()
-		return nil
-	case messagecontribution.FieldReady:
-		m.ResetReady()
 		return nil
 	}
 	return fmt.Errorf("unknown MessageContribution field %s", name)
@@ -14925,7 +14817,6 @@ type ProcessingCandidateMutation struct {
 	due_at                    *time.Time
 	failure_code              *string
 	failure_step              *string
-	barrier_applied_at        *time.Time
 	created_at                *time.Time
 	updated_at                *time.Time
 	clearedFields             map[string]struct{}
@@ -15947,55 +15838,6 @@ func (m *ProcessingCandidateMutation) ResetFailureStep() {
 	delete(m.clearedFields, processingcandidate.FieldFailureStep)
 }
 
-// SetBarrierAppliedAt sets the "barrier_applied_at" field.
-func (m *ProcessingCandidateMutation) SetBarrierAppliedAt(t time.Time) {
-	m.barrier_applied_at = &t
-}
-
-// BarrierAppliedAt returns the value of the "barrier_applied_at" field in the mutation.
-func (m *ProcessingCandidateMutation) BarrierAppliedAt() (r time.Time, exists bool) {
-	v := m.barrier_applied_at
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldBarrierAppliedAt returns the old "barrier_applied_at" field's value of the ProcessingCandidate entity.
-// If the ProcessingCandidate object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ProcessingCandidateMutation) OldBarrierAppliedAt(ctx context.Context) (v *time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldBarrierAppliedAt is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldBarrierAppliedAt requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldBarrierAppliedAt: %w", err)
-	}
-	return oldValue.BarrierAppliedAt, nil
-}
-
-// ClearBarrierAppliedAt clears the value of the "barrier_applied_at" field.
-func (m *ProcessingCandidateMutation) ClearBarrierAppliedAt() {
-	m.barrier_applied_at = nil
-	m.clearedFields[processingcandidate.FieldBarrierAppliedAt] = struct{}{}
-}
-
-// BarrierAppliedAtCleared returns if the "barrier_applied_at" field was cleared in this mutation.
-func (m *ProcessingCandidateMutation) BarrierAppliedAtCleared() bool {
-	_, ok := m.clearedFields[processingcandidate.FieldBarrierAppliedAt]
-	return ok
-}
-
-// ResetBarrierAppliedAt resets all changes to the "barrier_applied_at" field.
-func (m *ProcessingCandidateMutation) ResetBarrierAppliedAt() {
-	m.barrier_applied_at = nil
-	delete(m.clearedFields, processingcandidate.FieldBarrierAppliedAt)
-}
-
 // SetCreatedAt sets the "created_at" field.
 func (m *ProcessingCandidateMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -16102,7 +15944,7 @@ func (m *ProcessingCandidateMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProcessingCandidateMutation) Fields() []string {
-	fields := make([]string, 0, 22)
+	fields := make([]string, 0, 21)
 	if m.revision != nil {
 		fields = append(fields, processingcandidate.FieldRevision)
 	}
@@ -16160,9 +16002,6 @@ func (m *ProcessingCandidateMutation) Fields() []string {
 	if m.failure_step != nil {
 		fields = append(fields, processingcandidate.FieldFailureStep)
 	}
-	if m.barrier_applied_at != nil {
-		fields = append(fields, processingcandidate.FieldBarrierAppliedAt)
-	}
 	if m.created_at != nil {
 		fields = append(fields, processingcandidate.FieldCreatedAt)
 	}
@@ -16215,8 +16054,6 @@ func (m *ProcessingCandidateMutation) Field(name string) (ent.Value, bool) {
 		return m.FailureCode()
 	case processingcandidate.FieldFailureStep:
 		return m.FailureStep()
-	case processingcandidate.FieldBarrierAppliedAt:
-		return m.BarrierAppliedAt()
 	case processingcandidate.FieldCreatedAt:
 		return m.CreatedAt()
 	case processingcandidate.FieldUpdatedAt:
@@ -16268,8 +16105,6 @@ func (m *ProcessingCandidateMutation) OldField(ctx context.Context, name string)
 		return m.OldFailureCode(ctx)
 	case processingcandidate.FieldFailureStep:
 		return m.OldFailureStep(ctx)
-	case processingcandidate.FieldBarrierAppliedAt:
-		return m.OldBarrierAppliedAt(ctx)
 	case processingcandidate.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case processingcandidate.FieldUpdatedAt:
@@ -16415,13 +16250,6 @@ func (m *ProcessingCandidateMutation) SetField(name string, value ent.Value) err
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetFailureStep(v)
-		return nil
-	case processingcandidate.FieldBarrierAppliedAt:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetBarrierAppliedAt(v)
 		return nil
 	case processingcandidate.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -16581,9 +16409,6 @@ func (m *ProcessingCandidateMutation) ClearedFields() []string {
 	if m.FieldCleared(processingcandidate.FieldFailureStep) {
 		fields = append(fields, processingcandidate.FieldFailureStep)
 	}
-	if m.FieldCleared(processingcandidate.FieldBarrierAppliedAt) {
-		fields = append(fields, processingcandidate.FieldBarrierAppliedAt)
-	}
 	return fields
 }
 
@@ -16612,9 +16437,6 @@ func (m *ProcessingCandidateMutation) ClearField(name string) error {
 		return nil
 	case processingcandidate.FieldFailureStep:
 		m.ClearFailureStep()
-		return nil
-	case processingcandidate.FieldBarrierAppliedAt:
-		m.ClearBarrierAppliedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown ProcessingCandidate nullable field %s", name)
@@ -16680,9 +16502,6 @@ func (m *ProcessingCandidateMutation) ResetField(name string) error {
 		return nil
 	case processingcandidate.FieldFailureStep:
 		m.ResetFailureStep()
-		return nil
-	case processingcandidate.FieldBarrierAppliedAt:
-		m.ResetBarrierAppliedAt()
 		return nil
 	case processingcandidate.FieldCreatedAt:
 		m.ResetCreatedAt()
@@ -19513,7 +19332,6 @@ type TransmissionMutation struct {
 	appendquality_metrics         json.RawMessage
 	message_id                    *uuid.UUID
 	processing_status             *transmission.ProcessingStatus
-	publication_status            *transmission.PublicationStatus
 	clearedFields                 map[string]struct{}
 	done                          bool
 	oldValue                      func(context.Context) (*Transmission, error)
@@ -20299,42 +20117,6 @@ func (m *TransmissionMutation) ResetProcessingStatus() {
 	m.processing_status = nil
 }
 
-// SetPublicationStatus sets the "publication_status" field.
-func (m *TransmissionMutation) SetPublicationStatus(ts transmission.PublicationStatus) {
-	m.publication_status = &ts
-}
-
-// PublicationStatus returns the value of the "publication_status" field in the mutation.
-func (m *TransmissionMutation) PublicationStatus() (r transmission.PublicationStatus, exists bool) {
-	v := m.publication_status
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldPublicationStatus returns the old "publication_status" field's value of the Transmission entity.
-// If the Transmission object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TransmissionMutation) OldPublicationStatus(ctx context.Context) (v transmission.PublicationStatus, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldPublicationStatus is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldPublicationStatus requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldPublicationStatus: %w", err)
-	}
-	return oldValue.PublicationStatus, nil
-}
-
-// ResetPublicationStatus resets all changes to the "publication_status" field.
-func (m *TransmissionMutation) ResetPublicationStatus() {
-	m.publication_status = nil
-}
-
 // Where appends a list predicates to the TransmissionMutation builder.
 func (m *TransmissionMutation) Where(ps ...predicate.Transmission) {
 	m.predicates = append(m.predicates, ps...)
@@ -20369,7 +20151,7 @@ func (m *TransmissionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TransmissionMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 16)
 	if m.gateway_id != nil {
 		fields = append(fields, transmission.FieldGatewayID)
 	}
@@ -20418,9 +20200,6 @@ func (m *TransmissionMutation) Fields() []string {
 	if m.processing_status != nil {
 		fields = append(fields, transmission.FieldProcessingStatus)
 	}
-	if m.publication_status != nil {
-		fields = append(fields, transmission.FieldPublicationStatus)
-	}
 	return fields
 }
 
@@ -20461,8 +20240,6 @@ func (m *TransmissionMutation) Field(name string) (ent.Value, bool) {
 		return m.MessageID()
 	case transmission.FieldProcessingStatus:
 		return m.ProcessingStatus()
-	case transmission.FieldPublicationStatus:
-		return m.PublicationStatus()
 	}
 	return nil, false
 }
@@ -20504,8 +20281,6 @@ func (m *TransmissionMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldMessageID(ctx)
 	case transmission.FieldProcessingStatus:
 		return m.OldProcessingStatus(ctx)
-	case transmission.FieldPublicationStatus:
-		return m.OldPublicationStatus(ctx)
 	}
 	return nil, fmt.Errorf("unknown Transmission field %s", name)
 }
@@ -20626,13 +20401,6 @@ func (m *TransmissionMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetProcessingStatus(v)
-		return nil
-	case transmission.FieldPublicationStatus:
-		v, ok := value.(transmission.PublicationStatus)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetPublicationStatus(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Transmission field %s", name)
@@ -20766,9 +20534,6 @@ func (m *TransmissionMutation) ResetField(name string) error {
 		return nil
 	case transmission.FieldProcessingStatus:
 		m.ResetProcessingStatus()
-		return nil
-	case transmission.FieldPublicationStatus:
-		m.ResetPublicationStatus()
 		return nil
 	}
 	return fmt.Errorf("unknown Transmission field %s", name)

@@ -25,9 +25,7 @@ type MessageContribution struct {
 	// ContributionTime holds the value of the "contribution_time" field.
 	ContributionTime time.Time `json:"contribution_time,omitempty"`
 	// AgeAnchor holds the value of the "age_anchor" field.
-	AgeAnchor time.Time `json:"age_anchor,omitempty"`
-	// Ready holds the value of the "ready" field.
-	Ready        bool `json:"ready,omitempty"`
+	AgeAnchor    time.Time `json:"age_anchor,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -38,8 +36,6 @@ func (*MessageContribution) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case messagecontribution.FieldUnitID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
-		case messagecontribution.FieldReady:
-			values[i] = new(sql.NullBool)
 		case messagecontribution.FieldContributionTime, messagecontribution.FieldAgeAnchor:
 			values[i] = new(sql.NullTime)
 		case messagecontribution.FieldID, messagecontribution.FieldMessageID:
@@ -90,12 +86,6 @@ func (_m *MessageContribution) assignValues(columns []string, values []any) erro
 			} else if value.Valid {
 				_m.AgeAnchor = value.Time
 			}
-		case messagecontribution.FieldReady:
-			if value, ok := values[i].(*sql.NullBool); !ok {
-				return fmt.Errorf("unexpected type %T for field ready", values[i])
-			} else if value.Valid {
-				_m.Ready = value.Bool
-			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -145,9 +135,6 @@ func (_m *MessageContribution) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("age_anchor=")
 	builder.WriteString(_m.AgeAnchor.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("ready=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Ready))
 	builder.WriteByte(')')
 	return builder.String()
 }

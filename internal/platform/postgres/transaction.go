@@ -51,7 +51,10 @@ func (s *Store) Resolve(capability platform.TransactionContext) (Executor, error
 }
 
 // WithinTransaction executes a synchronous callback once with the same transaction
-// for all participating repositories. It never retries an uncertain commit.
+// for all participating repositories. It never retries an uncertain commit. When a
+// migration collection is registered, the transaction's first statement compares the
+// applied schema version with the version recorded by Migrate and fails with
+// CodeIncompatibleVersion on a difference; it does not take the migration lock.
 func (s *Store) WithinTransaction(ctx context.Context, callback platform.TxFunc) error {
 	if callback == nil || ctx.Value(transactionKey{}) != nil {
 		return platform.NewFailure(platform.CodeInvalidInput, errors.New("nil callback or nested transaction"))
@@ -59,25 +62,29 @@ func (s *Store) WithinTransaction(ctx context.Context, callback platform.TxFunc)
 	ctx, cancel := context.WithTimeout(ctx, platform.DefaultCallTimeout)
 	defer cancel()
 	s.mu.RLock()
-	registered := s.registered
-	migrations := s.migrations
+	registered, expected := s.registered, s.schemaVersion
 	s.mu.RUnlock()
-	if registered {
-		if err := s.Migrate(ctx, migrations, platform.MigrationCheck); err != nil {
-			return err
-		}
-	}
 	return s.withinTransaction(ctx, callback, func(ctx context.Context) (databaseTransaction, error) {
 		tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 		if err != nil {
 			return nil, err
 		}
 		var primary bool
-		if err := tx.QueryRowContext(ctx, "SELECT NOT pg_is_in_recovery() AND NOT current_setting('transaction_read_only')::boolean").Scan(&primary); err != nil {
+		var applied int64
+		if registered {
+			err = tx.QueryRowContext(ctx, `SELECT NOT pg_is_in_recovery() AND NOT current_setting('transaction_read_only')::boolean,
+				(SELECT coalesce(max(version_id), 0) FROM platform_schema_migrations WHERE is_applied)`).Scan(&primary, &applied)
+		} else {
+			err = tx.QueryRowContext(ctx, "SELECT NOT pg_is_in_recovery() AND NOT current_setting('transaction_read_only')::boolean").Scan(&primary)
+		}
+		if err != nil {
 			return nil, errors.Join(platform.NewFailure(platform.CodeAuthorityUnavailable, err), rollback(tx))
 		}
 		if !primary {
 			return nil, errors.Join(platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("write authority unavailable")), rollback(tx))
+		}
+		if registered && applied != expected {
+			return nil, errors.Join(platform.NewFailure(platform.CodeIncompatibleVersion, errors.New("applied schema version differs from the registered collection")), rollback(tx))
 		}
 		return tx, nil
 	})

@@ -142,15 +142,12 @@ type CorrectionWorkRepository interface {
 	FailCorrection(context.Context, platform.TransactionContext, CorrectionLease, string, time.Duration) error
 }
 
-// CorrectionPublication hands transmissions whose publication was held back
-// while a correction was pending back to the publication pipeline once
-// correction has finished. PublicationReentries selects up to n eligible
-// transmissions; eligibility is derived from durable rows, so a failed
-// re-entry is retried on a later pass.
-type CorrectionPublication interface {
-	PublicationReentries(context.Context, platform.TransactionContext, int) ([]uuid.UUID, error)
-	// ReenterPublication reports whether it admitted current Processing work or published the Transmission.
-	ReenterPublication(context.Context, platform.TransactionContext, uuid.UUID) (bool, error)
+// ProcessingReadmission re-admits Processing for a Transmission whose target
+// resolution a correction changed: it supersedes candidates bound to the old
+// Assignment context, admits current ones and refreshes the Transmission's
+// processing status in the correction's batch transaction.
+type ProcessingReadmission interface {
+	ReadmitProcessing(context.Context, platform.TransactionContext, uuid.UUID) error
 }
 
 // SuppressionResult is a suppression together with the correction scope its

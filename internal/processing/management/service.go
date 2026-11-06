@@ -68,8 +68,10 @@ func (s *Service) within(ctx context.Context, proof identity.Proof, mutation boo
 		if err != nil {
 			return err
 		}
-		if _, err := s.repository.LockRevision(tx.Context(), tx); err != nil {
-			return err
+		if mutation {
+			if _, err := s.repository.LockRevisionForChange(tx.Context(), tx); err != nil {
+				return err
+			}
 		}
 		now, err := s.clock.Now(tx.Context(), tx)
 		if err != nil {

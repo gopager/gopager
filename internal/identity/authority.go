@@ -65,9 +65,14 @@ func (c CredentialRecord) LogValue() slog.Value {
 	return slog.GroupValue(slog.String("id", c.ID.String()), slog.String("kind", string(c.Kind)))
 }
 
-// AuthorityRepository loads primary identity state under the shared revocation lock.
+// AuthorityRepository loads primary identity state under the access lock. LockAccess is the
+// shared lock that authority resolution holds; configuration changes bump the access
+// revision without waiting for it. LockAccessForChange is the exclusive lock for commands
+// that change grants, field permissions, credentials or account state; such a command takes
+// it before it resolves authority, so two of them never wait for each other's shared lock.
 type AuthorityRepository interface {
 	LockAccess(context.Context, platform.TransactionContext) (int64, error)
+	LockAccessForChange(context.Context, platform.TransactionContext) (int64, error)
 	Account(context.Context, platform.TransactionContext, uuid.UUID) (AccountRecord, error)
 	Guest(context.Context, platform.TransactionContext) (AccountRecord, error)
 	Credential(context.Context, platform.TransactionContext, [32]byte) (CredentialRecord, error)
@@ -118,7 +123,8 @@ func NewResolver(repository AuthorityRepository, clock platform.Clock, reference
 
 // Resolve derives current authority inside the caller's transaction. It takes
 // the shared access (revocation) lock, which is held until the transaction
-// ends, so the authority cannot be revoked during the protected operation.
+// ends, so an access-changing command commits either before this operation
+// resolved its authority or after the operation completed.
 // It returns ErrLoginRequired for an unknown, wrong-kind, revoked, consumed or
 // expired credential (sessions also expire 30 days after creation or 7 days
 // after last use), an inactive account, or an access key restricted to a

@@ -73,7 +73,7 @@ func TestIngestHTTPSubmissionAndGatewayStateRoutes(t *testing.T) {
 		Data ingest.Receipt `json:"data"`
 	}
 	if err := json.Unmarshal(accepted, &receiptResponse); err != nil || receiptResponse.Data.TransmissionID == uuid.Nil ||
-		receiptResponse.Data.ProcessingStatus != "completed" || receiptResponse.Data.SubmissionID != "http-submission" {
+		receiptResponse.Data.ProcessingStatus != "none" || receiptResponse.Data.SubmissionID != "http-submission" {
 		t.Fatalf("accepted Submission response = %s, error=%v", accepted, err)
 	}
 	retry := fixture.request(t, http.MethodPost, submissionPath, submission, "", bearer, http.StatusOK)

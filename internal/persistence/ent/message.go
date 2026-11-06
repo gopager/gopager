@@ -30,9 +30,7 @@ type Message struct {
 	FirstObservedAt time.Time `json:"first_observed_at,omitempty"`
 	// LastObservedAt holds the value of the "last_observed_at" field.
 	LastObservedAt time.Time `json:"last_observed_at,omitempty"`
-	// PublicationStatus holds the value of the "publication_status" field.
-	PublicationStatus message.PublicationStatus `json:"publication_status,omitempty"`
-	selectValues      sql.SelectValues
+	selectValues   sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -44,7 +42,7 @@ func (*Message) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case message.FieldRevision:
 			values[i] = new(sql.NullInt64)
-		case message.FieldIdentityForm, message.FieldIdentitySubtype, message.FieldPublicationStatus:
+		case message.FieldIdentityForm, message.FieldIdentitySubtype:
 			values[i] = new(sql.NullString)
 		case message.FieldFirstObservedAt, message.FieldLastObservedAt:
 			values[i] = new(sql.NullTime)
@@ -107,12 +105,6 @@ func (_m *Message) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.LastObservedAt = value.Time
 			}
-		case message.FieldPublicationStatus:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field publication_status", values[i])
-			} else if value.Valid {
-				_m.PublicationStatus = message.PublicationStatus(value.String)
-			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -165,9 +157,6 @@ func (_m *Message) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("last_observed_at=")
 	builder.WriteString(_m.LastObservedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("publication_status=")
-	builder.WriteString(fmt.Sprintf("%v", _m.PublicationStatus))
 	builder.WriteByte(')')
 	return builder.String()
 }

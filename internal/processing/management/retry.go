@@ -12,10 +12,12 @@ import (
 	"github.com/gopager/gopager/internal/processing"
 )
 
-// RetrySource verifies unpublished source eligibility and current source/execution-Principal pins.
-// Missing or stale owners must return an explicit error, never assume an eligible original.
+// RetrySource verifies current source eligibility and source/execution-Principal pins, and
+// refreshes the Transmission's processing status after the retry through Publish. Missing or
+// stale owners must return an explicit error, never assume an eligible original.
 type RetrySource interface {
 	CheckRetrySource(context.Context, platform.TransactionContext, processing.Candidate) error
+	Publish(context.Context, platform.TransactionContext, uuid.UUID) error
 }
 
 // RetryService performs operator-requested manual retries of failed processing
@@ -53,7 +55,10 @@ func (s *RetryService) RetryFailed(ctx context.Context, proof identity.Proof, pa
 			return err
 		}
 		result, err = s.repository.RetryCandidate(tx.Context(), tx, authority, parent, id, expected)
-		return err
+		if err != nil {
+			return err
+		}
+		return s.source.Publish(tx.Context(), tx, result.TransmissionID)
 	})
 	return result, err
 }

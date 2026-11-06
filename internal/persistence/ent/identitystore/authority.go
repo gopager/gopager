@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/entql"
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
@@ -15,6 +16,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/borrowed"
 	"github.com/gopager/gopager/internal/persistence/ent/credential"
 	"github.com/gopager/gopager/internal/persistence/ent/guard"
+	"github.com/gopager/gopager/internal/persistence/ent/identitycontrol"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
 )
@@ -44,8 +46,34 @@ func (s *Store) client(ctx context.Context, tx platform.TransactionContext, enti
 	return ent.NewClient(ent.Driver(driver)), scope, nil
 }
 
-// LockAccess serializes private authority decisions with all access-changing commands.
+// LockAccess takes the shared access lock (FOR KEY SHARE on the control row) that
+// authority resolution holds until its transaction ends. Readers hold it together, and
+// configuration changes that only bump the access revision (RecordConfigurationChange)
+// are not blocked by it; an access-changing command (LockAccessForChange) waits for all
+// holders and they wait for it. It returns the current access revision.
 func (s *Store) LockAccess(ctx context.Context, tx platform.TransactionContext) (int64, error) {
+	client, scope, err := s.client(ctx, tx, "IdentityControl", entql.FieldEQ("id", 1))
+	if err != nil {
+		return 0, err
+	}
+	var revisions []int64
+	if err := client.IdentityControl.Query().Modify(func(s *sql.Selector) {
+		s.Select(identitycontrol.FieldAccessRevision).For(sql.LockKeyShare)
+	}).Scan(scope, &revisions); err != nil {
+		return 0, err
+	}
+	if len(revisions) != 1 {
+		return 0, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("identity control row missing"))
+	}
+	return revisions[0], nil
+}
+
+// LockAccessForChange takes the exclusive access lock (FOR UPDATE on the control row)
+// for a command that changes grants, field permissions, credentials or account state and
+// will bump the access revision. A command takes it before it resolves its own authority:
+// two transactions that both hold the shared lock and then request the exclusive one
+// deadlock, which the store would report as REVISION_CONFLICT.
+func (s *Store) LockAccessForChange(ctx context.Context, tx platform.TransactionContext) (int64, error) {
 	client, scope, err := s.client(ctx, tx, "IdentityControl", entql.FieldEQ("id", 1))
 	if err != nil {
 		return 0, err

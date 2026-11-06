@@ -17,11 +17,24 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
-// TakeLoginAttempt accounts for login attempts across all API processes under LockAccess.
-// The instance limit bounds persisted rows, including attempts against unknown accounts.
+// loginAccountingLockKey serializes attempt accounting across all API processes for the
+// duration of the caller's transaction without touching the access lock.
+const loginAccountingLockKey int64 = 0x47504D4947520002
+
+// TakeLoginAttempt accounts for login attempts across all API processes. It serializes the
+// count-and-insert with a transaction advisory lock so that concurrent attempts cannot slip
+// past the limits; the instance limit bounds persisted rows, including attempts against
+// unknown accounts.
 func (s *Store) TakeLoginAttempt(ctx context.Context, tx platform.TransactionContext, key [32]byte, now time.Time, limits identity.LoginRateLimits) (time.Duration, error) {
 	if limits.AccountAttempts <= 0 || limits.InstanceAttempts <= 0 {
 		return 0, identity.ErrInvalidInput
+	}
+	executor, err := s.primary.Resolve(tx)
+	if err != nil {
+		return 0, err
+	}
+	if _, err := executor.ExecContext(ctx, "SELECT pg_advisory_xact_lock($1)", loginAccountingLockKey); err != nil {
+		return 0, err
 	}
 	client, scope, err := s.client(ctx, tx, "LoginAttempt", entql.FieldLTE("attempted_at", now.Add(-time.Minute)))
 	if err != nil {
@@ -134,6 +147,9 @@ func (s *Store) RevokeSession(ctx context.Context, tx platform.TransactionContex
 	}
 	client, scope, err = s.client(ctx, tx, "IdentityControl", entql.FieldEQ("id", 1))
 	if err != nil {
+		return 0, err
+	}
+	if _, err := client.IdentityControl.Query().ForUpdate().Only(scope); err != nil {
 		return 0, err
 	}
 	if err := client.IdentityControl.UpdateOneID(1).AddAccessRevision(1).Exec(scope); err != nil {

@@ -95,6 +95,10 @@ func (ingestTestArtifacts) PrepareInstalled(context.Context, uuid.UUID, int64) (
 	return nil, errors.New("unexpected installed artifact request")
 }
 
+func (ingestTestArtifacts) LoadInstalled(context.Context, processing.InstanceConfiguration) (*processing.InstalledArtifact, error) {
+	return nil, errors.New("unexpected installed artifact request")
+}
+
 type ingestTestProcessingAppender struct {
 	events.ProcessingAppender
 	fail bool
@@ -304,10 +308,10 @@ func TestTransmissionGroupingMergeRollbackAndOffsetPersistence(t *testing.T) {
 	second := submit("second", base.Add(50*time.Second))
 	third := submit("bridge", base.Add(25*time.Second))
 	if first.MessageID == second.MessageID || third.MessageID != minMessageID(first.MessageID, second.MessageID) ||
-		first.ProcessingStatus != "completed" || third.ProcessingStatus != "completed" {
+		first.ProcessingStatus != "none" || third.ProcessingStatus != "none" {
 		t.Fatalf("grouping receipts first=%+v second=%+v bridge=%+v", first, second, third)
 	}
-	var transmissionCount, messageCount, mergedFacts, readyTransmissions, readyMessages, readyContributions, offset int
+	var transmissionCount, messageCount, mergedFacts, unprocessedTransmissions, contributions, offset int
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		executor, err := store.Resolve(tx)
 		if err != nil {
@@ -324,15 +328,10 @@ func TestTransmissionGroupingMergeRollbackAndOffsetPersistence(t *testing.T) {
 			return err
 		}
 		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM transmissions
-			WHERE processing_status='completed' AND publication_status='ready'`).Scan(&readyTransmissions); err != nil {
+			WHERE processing_status='none'`).Scan(&unprocessedTransmissions); err != nil {
 			return err
 		}
-		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM messages
-			WHERE publication_status='ready'`).Scan(&readyMessages); err != nil {
-			return err
-		}
-		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM message_contributions
-			WHERE ready=true`).Scan(&readyContributions); err != nil {
+		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM message_contributions`).Scan(&contributions); err != nil {
 			return err
 		}
 		return executor.QueryRowContext(tx.Context(), `SELECT observation_offset_seconds FROM transmissions
@@ -340,10 +339,10 @@ func TestTransmissionGroupingMergeRollbackAndOffsetPersistence(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if transmissionCount != 3 || messageCount != 1 || mergedFacts != 1 || readyTransmissions != 3 ||
-		readyMessages != 1 || readyContributions != 1 || offset != 19800 {
-		t.Fatalf("rows transmissions=%d messages=%d merged=%d ready transmissions/messages/contributions=%d/%d/%d offset=%d",
-			transmissionCount, messageCount, mergedFacts, readyTransmissions, readyMessages, readyContributions, offset)
+	if transmissionCount != 3 || messageCount != 1 || mergedFacts != 1 || unprocessedTransmissions != 3 ||
+		contributions != 1 || offset != 19800 {
+		t.Fatalf("rows transmissions=%d messages=%d merged=%d unprocessed=%d contributions=%d offset=%d",
+			transmissionCount, messageCount, mergedFacts, unprocessedTransmissions, contributions, offset)
 	}
 	receipt, fingerprint, found := receiptInStore(t, store, repository, gateway, "bridge")
 	if !found || receipt.TransmissionID != third.TransmissionID || fingerprint == [32]byte{} {
@@ -387,7 +386,7 @@ func TestTransmissionGroupingMergeRollbackAndOffsetPersistence(t *testing.T) {
 	if !errors.Is(err, abort) {
 		t.Fatalf("rollback error=%v", err)
 	}
-	var afterTransmissions, afterMessages, afterEvents, afterReadyContributions int
+	var afterTransmissions, afterMessages, afterEvents, afterContributions int
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		executor, err := store.Resolve(tx)
 		if err != nil {
@@ -402,16 +401,15 @@ func TestTransmissionGroupingMergeRollbackAndOffsetPersistence(t *testing.T) {
 		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM domain_events`).Scan(&afterEvents); err != nil {
 			return err
 		}
-		return executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM message_contributions
-			WHERE ready=true`).Scan(&afterReadyContributions)
+		return executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM message_contributions`).Scan(&afterContributions)
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if afterTransmissions != 3 || afterMessages != messageCount || afterEvents != beforeEvents ||
-		afterReadyContributions != readyContributions {
-		t.Fatalf("rollback altered published evidence: transmissions/messages/events/contributions=%d/%d/%d/%d, expected 3/%d/%d/%d",
-			afterTransmissions, afterMessages, afterEvents, afterReadyContributions,
-			messageCount, beforeEvents, readyContributions)
+		afterContributions != contributions {
+		t.Fatalf("rollback altered accepted evidence: transmissions/messages/events/contributions=%d/%d/%d/%d, expected 3/%d/%d/%d",
+			afterTransmissions, afterMessages, afterEvents, afterContributions,
+			messageCount, beforeEvents, contributions)
 	}
 }
 
@@ -870,7 +868,7 @@ func TestSubmissionRetryAfterKnownRollbackAndLostCommitAcknowledgment(t *testing
 	}
 }
 
-func TestSelectedWorkflowKeepsTransmissionUnpublished(t *testing.T) {
+func TestSelectedWorkflowKeepsProcessingPending(t *testing.T) {
 	store := newStore(t)
 	facts, err := eventstore.New(store)
 	if err != nil {
@@ -954,8 +952,7 @@ func TestSelectedWorkflowKeepsTransmissionUnpublished(t *testing.T) {
 	if receipt.ProcessingStatus != "pending" {
 		t.Fatalf("selected Workflow receipt status=%q want pending", receipt.ProcessingStatus)
 	}
-	var candidateState, transmissionStatus, transmissionPublication, messagePublication string
-	var contributionReady bool
+	var candidateState, transmissionStatus string
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		executor, err := store.Resolve(tx)
 		if err != nil {
@@ -965,23 +962,13 @@ func TestSelectedWorkflowKeepsTransmissionUnpublished(t *testing.T) {
 			WHERE transmission_id=$1 AND workflow_id=$2`, receipt.TransmissionID, workflow).Scan(&candidateState); err != nil {
 			return err
 		}
-		if err := executor.QueryRowContext(tx.Context(), `SELECT processing_status,publication_status
-			FROM transmissions WHERE id=$1`, receipt.TransmissionID).Scan(&transmissionStatus, &transmissionPublication); err != nil {
-			return err
-		}
-		if err := executor.QueryRowContext(tx.Context(), `SELECT publication_status FROM messages WHERE id=$1`,
-			receipt.MessageID).Scan(&messagePublication); err != nil {
-			return err
-		}
-		return executor.QueryRowContext(tx.Context(), `SELECT ready FROM message_contributions
-			WHERE message_id=$1`, receipt.MessageID).Scan(&contributionReady)
+		return executor.QueryRowContext(tx.Context(), `SELECT processing_status
+			FROM transmissions WHERE id=$1`, receipt.TransmissionID).Scan(&transmissionStatus)
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if candidateState != "pending" || transmissionStatus != "pending" || transmissionPublication != "pending" ||
-		messagePublication != "pending" || contributionReady {
-		t.Fatalf("candidate/transmission/message/contribution state=%s/%s/%s/%s/%t",
-			candidateState, transmissionStatus, transmissionPublication, messagePublication, contributionReady)
+	if candidateState != "pending" || transmissionStatus != "pending" {
+		t.Fatalf("candidate/transmission state=%s/%s, want pending/pending", candidateState, transmissionStatus)
 	}
 }
 
@@ -1142,17 +1129,14 @@ func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
 		t.Fatal(err)
 	}
 	firstCandidate, retryCandidate := selected[0], selected[1]
-	if err := service.ExecuteWork(t.Context(), firstCandidate); err != nil {
-		t.Fatal(err)
-	}
-	if err := service.ExecuteWork(t.Context(), retryCandidate); err == nil {
+	// The injected fact failure rolls the first completion back together with its publication.
+	if err := service.ExecuteWork(t.Context(), firstCandidate); err == nil {
 		t.Fatal("injected publication failure was not returned")
 	}
-
 	var pending, running, completed int
-	var processingStatus, publicationStatus string
+	var processingStatus string
 	var results, completionFacts int
-	assertState := func(wantPending, wantRunning, wantCompleted int, wantProcessing, wantPublication string,
+	assertState := func(wantPending, wantRunning, wantCompleted int, wantProcessing string,
 		wantResults, wantFacts int) {
 		t.Helper()
 		if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
@@ -1168,8 +1152,8 @@ func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
 				Scan(&pending, &running, &completed); err != nil {
 				return err
 			}
-			if err := executor.QueryRowContext(tx.Context(), `SELECT processing_status,publication_status
-				FROM transmissions WHERE id=$1`, receipt.TransmissionID).Scan(&processingStatus, &publicationStatus); err != nil {
+			if err := executor.QueryRowContext(tx.Context(), `SELECT processing_status
+				FROM transmissions WHERE id=$1`, receipt.TransmissionID).Scan(&processingStatus); err != nil {
 				return err
 			}
 			if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM processing_results
@@ -1183,14 +1167,13 @@ func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
 			t.Fatal(err)
 		}
 		if pending != wantPending || running != wantRunning || completed != wantCompleted ||
-			processingStatus != wantProcessing || publicationStatus != wantPublication ||
-			results != wantResults || completionFacts != wantFacts {
-			t.Fatalf("candidate states=%d/%d/%d transmission=%s/%s results/facts=%d/%d; want %d/%d/%d %s/%s %d/%d",
-				pending, running, completed, processingStatus, publicationStatus, results, completionFacts,
-				wantPending, wantRunning, wantCompleted, wantProcessing, wantPublication, wantResults, wantFacts)
+			processingStatus != wantProcessing || results != wantResults || completionFacts != wantFacts {
+			t.Fatalf("candidate states=%d/%d/%d transmission=%s results/facts=%d/%d; want %d/%d/%d %s %d/%d",
+				pending, running, completed, processingStatus, results, completionFacts,
+				wantPending, wantRunning, wantCompleted, wantProcessing, wantResults, wantFacts)
 		}
 	}
-	assertState(0, 1, 1, "pending", "pending", 0, 0)
+	assertState(1, 1, 0, "pending", 0, 0)
 
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		executor, err := store.Resolve(tx)
@@ -1199,49 +1182,61 @@ func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
 		}
 		_, err = executor.ExecContext(tx.Context(), `UPDATE processing_candidates
 			SET updated_at=created_at, lease_until=created_at + interval '1 microsecond' WHERE id=$1`,
-			retryCandidate.ID)
+			firstCandidate.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
 	appender.fail = false
-	if err := service.ExecuteWork(t.Context(), retryCandidate); err != nil {
+	if err := service.ExecuteWork(t.Context(), firstCandidate); err != nil {
 		t.Fatal(err)
 	}
-	assertState(1, 0, 1, "pending", "pending", 0, 0)
-	var retry processing.Candidate
+	assertState(2, 0, 0, "pending", 0, 0)
+	var recovered processing.Candidate
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		executor, err := store.Resolve(tx)
 		if err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `UPDATE processing_candidates
-			SET due_at=clock_timestamp() WHERE id=$1`, retryCandidate.ID); err != nil {
+			SET due_at=clock_timestamp() WHERE id=$1`, firstCandidate.ID); err != nil {
 			return err
 		}
 		page, err := processingRepository.ListCandidateWork(tx.Context(), tx, processing.PageInput{Limit: 10})
 		if err != nil {
 			return err
 		}
-		if page.Total != 1 || len(page.Items) != 1 {
-			t.Fatalf("recovered candidate was not selected for retry: %+v", page)
+		for _, candidate := range page.Items {
+			if candidate.ID == firstCandidate.ID {
+				recovered = candidate
+				return nil
+			}
 		}
-		retry = page.Items[0]
+		t.Fatalf("recovered candidate was not selected for retry: %+v", page)
 		return nil
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := service.ExecuteWork(t.Context(), retry); err != nil {
+	// The recovered completion publishes its own result while the second Workflow is still pending.
+	if err := service.ExecuteWork(t.Context(), recovered); err != nil {
 		t.Fatal(err)
 	}
-	assertState(0, 0, 2, "completed", "ready", 2, 2)
-	if err := service.ExecuteWork(t.Context(), firstCandidate); platform.FailureCode(err) != platform.CodeRevisionConflict {
-		t.Fatalf("stale retry was not fenced: %v", err)
+	assertState(1, 0, 1, "pending", 1, 1)
+	if err := service.ExecuteWork(t.Context(), retryCandidate); err != nil {
+		t.Fatal(err)
 	}
-	if err := service.ExecuteWork(t.Context(), retryCandidate); platform.FailureCode(err) != platform.CodeRevisionConflict {
-		t.Fatalf("stale retry was not fenced: %v", err)
+	assertState(0, 0, 2, "completed", 2, 2)
+	// Dispatching stale candidate values of completed work is a no-op; a stale claim is fenced by the revision.
+	if err := service.ExecuteWork(t.Context(), firstCandidate); err != nil {
+		t.Fatalf("stale dispatch of completed work failed: %v", err)
 	}
-	assertState(0, 0, 2, "completed", "ready", 2, 2)
+	if err := service.ExecuteWork(t.Context(), retryCandidate); err != nil {
+		t.Fatalf("stale dispatch of completed work failed: %v", err)
+	}
+	if _, _, err := service.Run(t.Context(), retryCandidate); !errors.Is(err, authz.ErrRevisionConflict) {
+		t.Fatalf("stale claim was not fenced: %s", causeChain(err))
+	}
+	assertState(0, 0, 2, "completed", 2, 2)
 
 	failedWorkflow, failedVersion := uuid.New(), uuid.New()
 	missingField := processing.FieldRef{Namespace: "source", Path: []string{"not-declared"}}
@@ -1323,7 +1318,7 @@ func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
 			return err
 		}
 		var pendingCandidates, failedCandidates int
-		var processingStatus, publicationStatus, messagePublication string
+		var processingStatus string
 		var publishedResults, completionEvents int
 		if err := executor.QueryRowContext(tx.Context(), `SELECT
 			count(*) FILTER (WHERE state='pending'),count(*) FILTER (WHERE state='failed')
@@ -1331,9 +1326,8 @@ func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
 			Scan(&pendingCandidates, &failedCandidates); err != nil {
 			return err
 		}
-		if err := executor.QueryRowContext(tx.Context(), `SELECT t.processing_status,t.publication_status,
-			m.publication_status FROM transmissions t JOIN messages m ON m.id=t.message_id WHERE t.id=$1`,
-			failedReceipt.TransmissionID).Scan(&processingStatus, &publicationStatus, &messagePublication); err != nil {
+		if err := executor.QueryRowContext(tx.Context(), `SELECT processing_status FROM transmissions WHERE id=$1`,
+			failedReceipt.TransmissionID).Scan(&processingStatus); err != nil {
 			return err
 		}
 		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM processing_results
@@ -1348,11 +1342,9 @@ func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
 			return err
 		}
 		if pendingCandidates != 2 || failedCandidates != 1 || processingStatus != "pending" ||
-			publicationStatus != "pending" || messagePublication != "pending" ||
 			publishedResults != 0 || completionEvents != 0 {
-			t.Fatalf("failed work leaked publication: candidates=%d/%d transmission=%s/%s message=%s results/facts=%d/%d",
-				pendingCandidates, failedCandidates, processingStatus, publicationStatus,
-				messagePublication, publishedResults, completionEvents)
+			t.Fatalf("failed work leaked publication: candidates=%d/%d transmission=%s results/facts=%d/%d",
+				pendingCandidates, failedCandidates, processingStatus, publishedResults, completionEvents)
 		}
 		return nil
 	}); err != nil {
@@ -1364,26 +1356,22 @@ func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	// A pending correction in the Network no longer gates a Transmission whose targets are current.
 	err = store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		return sourceOwner.Publish(tx.Context(), tx, receipt.TransmissionID)
 	})
-	if platform.FailureCode(err) != platform.CodeRevisionConflict {
-		t.Fatalf("Processing publication ignored pending correction: %v", err)
+	if err != nil {
+		t.Fatalf("publication during an unrelated pending correction failed: %v", err)
 	}
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		executor, err := store.Resolve(tx)
 		if err != nil {
 			return err
 		}
-		var processingStatus, publicationStatus, messagePublication string
+		var processingStatus string
 		var publishedResults, completionFacts int
-		if err := executor.QueryRowContext(tx.Context(), `SELECT processing_status,publication_status
-			FROM transmissions WHERE id=$1`, receipt.TransmissionID).
-			Scan(&processingStatus, &publicationStatus); err != nil {
-			return err
-		}
-		if err := executor.QueryRowContext(tx.Context(), `SELECT publication_status FROM messages WHERE id=$1`,
-			receipt.MessageID).Scan(&messagePublication); err != nil {
+		if err := executor.QueryRowContext(tx.Context(), `SELECT processing_status
+			FROM transmissions WHERE id=$1`, receipt.TransmissionID).Scan(&processingStatus); err != nil {
 			return err
 		}
 		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM processing_results
@@ -1396,10 +1384,9 @@ func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
 			Scan(&completionFacts); err != nil {
 			return err
 		}
-		if processingStatus != "pending" || publicationStatus != "pending" ||
-			messagePublication != "pending" || publishedResults != 2 || completionFacts != 2 {
-			t.Fatalf("correction restored stale Processing publication: transmission=%s/%s message=%s results/facts=%d/%d",
-				processingStatus, publicationStatus, messagePublication, publishedResults, completionFacts)
+		if processingStatus != "completed" || publishedResults != 2 || completionFacts != 2 {
+			t.Fatalf("publication changed completed evidence: transmission=%s results/facts=%d/%d",
+				processingStatus, publishedResults, completionFacts)
 		}
 		return nil
 	}); err != nil {

@@ -373,9 +373,9 @@ type processingAPIRuntime struct {
 	routes          processingAPIRoutes
 	workerSource    worker.WorkSourceOwner
 	workerPublisher worker.Publisher
-	// correctionPublication is the same source owner; it re-enters corrected
-	// Transmissions into Processing and presentation.
-	correctionPublication assignments.CorrectionPublication
+	// correctionReadmission is the same source owner; it re-admits Processing for
+	// Transmissions whose target resolution a correction changed.
+	correctionReadmission assignments.ProcessingReadmission
 }
 
 func composeProcessingAPIRuntime(ctx context.Context, store *postgres.Store,
@@ -511,7 +511,7 @@ func composeProcessingAPIRuntime(ctx context.Context, store *postgres.Store,
 		return nil, err
 	}
 	return &processingAPIRuntime{host: host, root: root, executions: executions,
-		workerSource: workerSource, workerPublisher: workerSource, correctionPublication: workerSource,
+		workerSource: workerSource, workerPublisher: workerSource, correctionReadmission: workerSource,
 		routes: processingAPIRoutes{workflows: workflows, reads: reads, retries: retries,
 			preview: preview, instances: instances},
 	}, nil

@@ -54,8 +54,9 @@ func (api ingestAPI) submitTransmission(w http.ResponseWriter, r *http.Request) 
 		writeManagementError(w, err)
 		return
 	}
+	// 202 only while Processing is pending; none, completed and failed are final for the receipt.
 	status := http.StatusAccepted
-	if receipt.ProcessingStatus == "completed" {
+	if receipt.ProcessingStatus != "pending" {
 		status = http.StatusOK
 	}
 	writeManagementJSON(w, status, struct {

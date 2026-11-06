@@ -152,7 +152,7 @@ func (s *Service) CreateSuppression(ctx context.Context, proof identity.Proof, c
 	}
 	var result SuppressionResult
 	err = s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		currentRevision, err := s.repository.LockRevision(tx.Context(), tx)
+		currentRevision, err := s.repository.LockRevisionForChange(tx.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -286,7 +286,7 @@ func (s *Service) LiftSuppression(ctx context.Context, proof identity.Proof, id 
 	}
 	var result SuppressionResult
 	err = s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		currentRevision, err := s.repository.LockRevision(tx.Context(), tx)
+		currentRevision, err := s.repository.LockRevisionForChange(tx.Context(), tx)
 		if err != nil {
 			return err
 		}

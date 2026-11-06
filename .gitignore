@@ -1,0 +1,6 @@
+# Build output
+/gopager
+*.test
+/bin/
+# Local tooling scratch
+/.superpowers/

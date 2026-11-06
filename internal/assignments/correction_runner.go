@@ -29,7 +29,7 @@ type CorrectionMatcher interface {
 }
 
 // CorrectionRunner is the background worker that drains pending correction
-// scopes and re-enters held-back transmissions into publication. Create it
+// scopes and re-admits Processing for changed transmissions. Create it
 // with NewCorrectionRunner. Concurrent runners are safe: scopes are claimed
 // under a lease with a fencing token.
 type CorrectionRunner struct {
@@ -38,20 +38,20 @@ type CorrectionRunner struct {
 	matcher      CorrectionMatcher
 	repository   CorrectionWorkRepository
 	facts        events.CorrectionAppender
-	publication  CorrectionPublication
+	readmission  ProcessingReadmission
 }
 
 // NewCorrectionRunner returns a runner using the given ports. It returns
 // authz.ErrInvalidInput if any dependency is nil.
 func NewCorrectionRunner(transactions identity.Transactions, clock platform.Clock, matcher CorrectionMatcher,
-	repository CorrectionWorkRepository, facts events.CorrectionAppender, publication CorrectionPublication,
+	repository CorrectionWorkRepository, facts events.CorrectionAppender, readmission ProcessingReadmission,
 ) (*CorrectionRunner, error) {
 	if transactions == nil || clock == nil || matcher == nil || repository == nil || facts == nil ||
-		publication == nil {
+		readmission == nil {
 		return nil, authz.ErrInvalidInput
 	}
 	return &CorrectionRunner{transactions: transactions, clock: clock, matcher: matcher,
-		repository: repository, facts: facts, publication: publication}, nil
+		repository: repository, facts: facts, readmission: readmission}, nil
 }
 
 // Run calls RunOnce every 500ms until ctx is cancelled, returning ctx.Err().
@@ -109,14 +109,13 @@ func correctionRetryDelay(failures int) time.Duration {
 
 // RunOnce claims one due correction scope and processes it in batches of up to
 // 100 transmissions, each batch in its own transaction that re-matches the
-// targets, applies changed resolutions and appends an assignment.changed
-// correction fact per changed target. A batch or completion failure is
-// recorded on the scope with exponential backoff and is not returned; RunOnce
-// returns an error only when it cannot claim or reschedule. A reschedule
-// failure is joined ahead of the batch failure, so FailureCode reports why
-// the scope could not be rescheduled. When no scope is
-// due it instead re-enters one batch of held-back transmissions into
-// publication. The bool reports whether any work was done.
+// targets, applies changed resolutions, appends an assignment.changed
+// correction fact per changed target and re-admits Processing for every
+// changed transmission. A batch or completion failure is recorded on the scope
+// with exponential backoff and is not returned; RunOnce returns an error only
+// when it cannot claim or reschedule. A reschedule failure is joined ahead of
+// the batch failure, so FailureCode reports why the scope could not be
+// rescheduled. The bool reports whether any work was done.
 func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 	var lease CorrectionLease
 	var claimed bool
@@ -132,7 +131,7 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	if !claimed {
-		return r.reenterPublication(ctx), nil
+		return false, nil
 	}
 	for {
 		var changes []CorrectionChange
@@ -179,6 +178,16 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 					return err
 				}
 			}
+			readmitted := make(map[uuid.UUID]bool, len(changes))
+			for _, change := range changes {
+				if readmitted[change.TransmissionID] {
+					continue
+				}
+				readmitted[change.TransmissionID] = true
+				if err := r.readmission.ReadmitProcessing(tx.Context(), tx, change.TransmissionID); err != nil {
+					return err
+				}
+			}
 			return nil
 		})
 		if err != nil {
@@ -218,44 +227,6 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 			return true, nil
 		}
 	}
-}
-
-// reenterPublication hands at most one batch of unpublished Transmissions back to publication.
-// Each Transmission uses its own short transaction; failures stay eligible for a later pass.
-func (r *CorrectionRunner) reenterPublication(ctx context.Context) bool {
-	var transmissions []uuid.UUID
-	err := r.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-		var err error
-		transmissions, err = r.publication.PublicationReentries(tx.Context(), tx, correctionBatchSize)
-		return err
-	})
-	if err != nil {
-		if ctx.Err() == nil {
-			slog.Warn("correction publication re-entry selection failed", "code", platform.FailureCode(err))
-		}
-		return false
-	}
-	progressed := false
-	for _, transmission := range transmissions {
-		if ctx.Err() != nil {
-			return progressed
-		}
-		var changed bool
-		err := r.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-			var err error
-			changed, err = r.publication.ReenterPublication(tx.Context(), tx, transmission)
-			return err
-		})
-		if err != nil {
-			if ctx.Err() == nil {
-				slog.Warn("correction publication re-entry failed", "transmission", transmission,
-					"code", platform.FailureCode(err))
-			}
-			continue
-		}
-		progressed = progressed || changed
-	}
-	return progressed
 }
 
 func correctionBackoff(attempt int) time.Duration {

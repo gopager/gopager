@@ -387,13 +387,12 @@ var schemaGraph = func() *sqlgraph.Schema {
 		},
 		Type: "Message",
 		Fields: map[string]*sqlgraph.FieldSpec{
-			message.FieldRevision:          {Type: field.TypeInt64, Column: message.FieldRevision},
-			message.FieldIdentityForm:      {Type: field.TypeString, Column: message.FieldIdentityForm},
-			message.FieldIdentitySubtype:   {Type: field.TypeString, Column: message.FieldIdentitySubtype},
-			message.FieldIdentityValue:     {Type: field.TypeBytes, Column: message.FieldIdentityValue},
-			message.FieldFirstObservedAt:   {Type: field.TypeTime, Column: message.FieldFirstObservedAt},
-			message.FieldLastObservedAt:    {Type: field.TypeTime, Column: message.FieldLastObservedAt},
-			message.FieldPublicationStatus: {Type: field.TypeEnum, Column: message.FieldPublicationStatus},
+			message.FieldRevision:        {Type: field.TypeInt64, Column: message.FieldRevision},
+			message.FieldIdentityForm:    {Type: field.TypeString, Column: message.FieldIdentityForm},
+			message.FieldIdentitySubtype: {Type: field.TypeString, Column: message.FieldIdentitySubtype},
+			message.FieldIdentityValue:   {Type: field.TypeBytes, Column: message.FieldIdentityValue},
+			message.FieldFirstObservedAt: {Type: field.TypeTime, Column: message.FieldFirstObservedAt},
+			message.FieldLastObservedAt:  {Type: field.TypeTime, Column: message.FieldLastObservedAt},
 		},
 	}
 	graph.Nodes[19] = &sqlgraph.Node{
@@ -411,7 +410,6 @@ var schemaGraph = func() *sqlgraph.Schema {
 			messagecontribution.FieldUnitID:           {Type: field.TypeUUID, Column: messagecontribution.FieldUnitID},
 			messagecontribution.FieldContributionTime: {Type: field.TypeTime, Column: messagecontribution.FieldContributionTime},
 			messagecontribution.FieldAgeAnchor:        {Type: field.TypeTime, Column: messagecontribution.FieldAgeAnchor},
-			messagecontribution.FieldReady:            {Type: field.TypeBool, Column: messagecontribution.FieldReady},
 		},
 	}
 	graph.Nodes[20] = &sqlgraph.Node{
@@ -506,7 +504,6 @@ var schemaGraph = func() *sqlgraph.Schema {
 			processingcandidate.FieldDueAt:                 {Type: field.TypeTime, Column: processingcandidate.FieldDueAt},
 			processingcandidate.FieldFailureCode:           {Type: field.TypeString, Column: processingcandidate.FieldFailureCode},
 			processingcandidate.FieldFailureStep:           {Type: field.TypeString, Column: processingcandidate.FieldFailureStep},
-			processingcandidate.FieldBarrierAppliedAt:      {Type: field.TypeTime, Column: processingcandidate.FieldBarrierAppliedAt},
 			processingcandidate.FieldCreatedAt:             {Type: field.TypeTime, Column: processingcandidate.FieldCreatedAt},
 			processingcandidate.FieldUpdatedAt:             {Type: field.TypeTime, Column: processingcandidate.FieldUpdatedAt},
 		},
@@ -622,7 +619,6 @@ var schemaGraph = func() *sqlgraph.Schema {
 			transmission.FieldQualityMetrics:           {Type: field.TypeJSON, Column: transmission.FieldQualityMetrics},
 			transmission.FieldMessageID:                {Type: field.TypeUUID, Column: transmission.FieldMessageID},
 			transmission.FieldProcessingStatus:         {Type: field.TypeEnum, Column: transmission.FieldProcessingStatus},
-			transmission.FieldPublicationStatus:        {Type: field.TypeEnum, Column: transmission.FieldPublicationStatus},
 		},
 	}
 	graph.Nodes[30] = &sqlgraph.Node{
@@ -2184,11 +2180,6 @@ func (f *MessageFilter) WhereLastObservedAt(p entql.TimeP) {
 	f.Where(p.Field(message.FieldLastObservedAt))
 }
 
-// WherePublicationStatus applies the entql string predicate on the publication_status field.
-func (f *MessageFilter) WherePublicationStatus(p entql.StringP) {
-	f.Where(p.Field(message.FieldPublicationStatus))
-}
-
 // addPredicate implements the predicateAdder interface.
 func (_q *MessageContributionQuery) addPredicate(pred func(s *sql.Selector)) {
 	_q.predicates = append(_q.predicates, pred)
@@ -2247,11 +2238,6 @@ func (f *MessageContributionFilter) WhereContributionTime(p entql.TimeP) {
 // WhereAgeAnchor applies the entql time.Time predicate on the age_anchor field.
 func (f *MessageContributionFilter) WhereAgeAnchor(p entql.TimeP) {
 	f.Where(p.Field(messagecontribution.FieldAgeAnchor))
-}
-
-// WhereReady applies the entql bool predicate on the ready field.
-func (f *MessageContributionFilter) WhereReady(p entql.BoolP) {
-	f.Where(p.Field(messagecontribution.FieldReady))
 }
 
 // addPredicate implements the predicateAdder interface.
@@ -2650,11 +2636,6 @@ func (f *ProcessingCandidateFilter) WhereFailureCode(p entql.StringP) {
 // WhereFailureStep applies the entql string predicate on the failure_step field.
 func (f *ProcessingCandidateFilter) WhereFailureStep(p entql.StringP) {
 	f.Where(p.Field(processingcandidate.FieldFailureStep))
-}
-
-// WhereBarrierAppliedAt applies the entql time.Time predicate on the barrier_applied_at field.
-func (f *ProcessingCandidateFilter) WhereBarrierAppliedAt(p entql.TimeP) {
-	f.Where(p.Field(processingcandidate.FieldBarrierAppliedAt))
 }
 
 // WhereCreatedAt applies the entql time.Time predicate on the created_at field.
@@ -3080,11 +3061,6 @@ func (f *TransmissionFilter) WhereMessageID(p entql.ValueP) {
 // WhereProcessingStatus applies the entql string predicate on the processing_status field.
 func (f *TransmissionFilter) WhereProcessingStatus(p entql.StringP) {
 	f.Where(p.Field(transmission.FieldProcessingStatus))
-}
-
-// WherePublicationStatus applies the entql string predicate on the publication_status field.
-func (f *TransmissionFilter) WherePublicationStatus(p entql.StringP) {
-	f.Where(p.Field(transmission.FieldPublicationStatus))
 }
 
 // addPredicate implements the predicateAdder interface.

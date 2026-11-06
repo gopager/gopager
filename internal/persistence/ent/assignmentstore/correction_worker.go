@@ -11,7 +11,6 @@ import (
 	"github.com/gopager/gopager/internal/assignments"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/events"
-	"github.com/gopager/gopager/internal/persistence/ent/identitystore"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
 	"github.com/gopager/gopager/internal/protocols"
@@ -48,11 +47,7 @@ func (s *Store) ClaimCorrection(ctx context.Context, tx platform.TransactionCont
 	if err != nil {
 		return assignments.CorrectionLease{}, false, err
 	}
-	identity, err := identitystore.New(s.primary)
-	if err != nil {
-		return assignments.CorrectionLease{}, false, err
-	}
-	accessRevision, err := identity.LockAccess(ctx, tx)
+	accessRevision, err := s.accessRevision(ctx, tx)
 	if err != nil {
 		return assignments.CorrectionLease{}, false, err
 	}
@@ -232,11 +227,7 @@ func (s *Store) ApplyCorrectionBatch(ctx context.Context, tx platform.Transactio
 	if err != nil {
 		return nil, err
 	}
-	identity, err := identitystore.New(s.primary)
-	if err != nil {
-		return nil, err
-	}
-	accessRevision, err := identity.LockAccess(ctx, tx)
+	accessRevision, err := s.accessRevision(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -338,20 +329,10 @@ func (s *Store) ApplyCorrectionBatch(ctx context.Context, tx platform.Transactio
 		if err := rebuildMessageContributions(ctx, executor, message); err != nil {
 			return nil, err
 		}
-		// Rebuilt contributions are unready; keep the whole Message unpublished until the
-		// post-correction publication re-entry sweep processes and publishes it again.
-		if _, err := executor.ExecContext(ctx, `UPDATE transmissions SET processing_status='pending',
-			publication_status='pending' WHERE message_id=$1`, message); err != nil {
-			return nil, err
-		}
-		if _, err := executor.ExecContext(ctx, `UPDATE messages SET publication_status='pending'
-			WHERE id=$1`, message); err != nil {
-			return nil, err
-		}
 	}
 	for _, message := range changedMessages {
 		var revision int64
-		if err := executor.QueryRowContext(ctx, `UPDATE messages SET revision=revision+1,publication_status='pending'
+		if err := executor.QueryRowContext(ctx, `UPDATE messages SET revision=revision+1
 			WHERE id=$1 RETURNING revision`, message).Scan(&revision); err != nil {
 			return nil, err
 		}
@@ -405,9 +386,6 @@ func resolutionEqual(left, right assignments.Resolution) bool {
 }
 
 func rebuildMessageContributions(ctx context.Context, executor postgres.Executor, message uuid.UUID) error {
-	if _, err := executor.ExecContext(ctx, `UPDATE message_contributions SET ready=false WHERE message_id=$1`, message); err != nil {
-		return err
-	}
 	if _, err := executor.ExecContext(ctx, `DELETE FROM contribution_supports support USING transmissions t
 		WHERE support.transmission_id=t.id AND t.message_id=$1`, message); err != nil {
 		return err
@@ -445,10 +423,10 @@ func rebuildMessageContributions(ctx context.Context, executor postgres.Executor
 	}
 	for _, value := range aggregates {
 		if _, err := executor.ExecContext(ctx, `INSERT INTO message_contributions
-			(id,message_id,unit_id,contribution_time,age_anchor,ready)
-			VALUES($1,$2,$3,$4,$5,false)
+			(id,message_id,unit_id,contribution_time,age_anchor)
+			VALUES($1,$2,$3,$4,$5)
 			ON CONFLICT (message_id,unit_id) WHERE unit_id IS NOT NULL DO UPDATE SET
-				contribution_time=EXCLUDED.contribution_time,age_anchor=EXCLUDED.age_anchor,ready=false`,
+				contribution_time=EXCLUDED.contribution_time,age_anchor=EXCLUDED.age_anchor`,
 			uuid.New(), message, value.unit, value.observed, value.ageAnchor); err != nil {
 			return err
 		}
@@ -460,11 +438,11 @@ func rebuildMessageContributions(ctx context.Context, executor postgres.Executor
 	}
 	if targetless {
 		if _, err := executor.ExecContext(ctx, `INSERT INTO message_contributions
-			(id,message_id,unit_id,contribution_time,age_anchor,ready)
-			SELECT $1,$2,NULL,MIN(t.observed_at),MIN(LEAST(t.observed_at,t.accepted_at)),false
+			(id,message_id,unit_id,contribution_time,age_anchor)
+			SELECT $1,$2,NULL,MIN(t.observed_at),MIN(LEAST(t.observed_at,t.accepted_at))
 			FROM transmissions t WHERE t.message_id=$2 AND jsonb_array_length(t.targets::jsonb)=0
 			ON CONFLICT (message_id) WHERE unit_id IS NULL DO UPDATE SET
-				contribution_time=EXCLUDED.contribution_time,age_anchor=EXCLUDED.age_anchor,ready=false`,
+				contribution_time=EXCLUDED.contribution_time,age_anchor=EXCLUDED.age_anchor`,
 			uuid.New(), message); err != nil {
 			return err
 		}
@@ -568,11 +546,7 @@ func (s *Store) CompleteCorrection(ctx context.Context, tx platform.TransactionC
 	if err != nil {
 		return false, err
 	}
-	identity, err := identitystore.New(s.primary)
-	if err != nil {
-		return false, err
-	}
-	accessRevision, err := identity.LockAccess(ctx, tx)
+	accessRevision, err := s.accessRevision(ctx, tx)
 	if err != nil {
 		return false, err
 	}

@@ -1548,7 +1548,8 @@ paths:
         Network resolution uses only the Gateway's Networks, in order: the declared
         `gatewayNetworkIdentifier`, the only Network for the protocol, the only Network with a
         matching Address rule, the protocol's default Network; if none applies, 400 `INVALID_INPUT`.
-        The status is 200 only when the receipt's `processingStatus` is `completed`, else 202.
+        The status is 202 while the receipt's `processingStatus` is `pending`, else 200. Accepted evidence
+        is visible to readers in every case; Workflow results attach to the Message when they complete.
       security:
       - gatewayCredential: []
       requestBody:
@@ -1559,14 +1560,15 @@ paths:
               $ref: '#/components/schemas/Submission'
       responses:
         '202':
-          description: Accepted; intake committed and `processingStatus` is `pending` (grouping, assignment and
-            Processing may still be running).
+          description: Accepted; intake committed and `processingStatus` is `pending` (at least one Workflow
+            candidate is open).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReceiptResponse'
         '200':
-          description: Replay of an earlier submission whose `processingStatus` is `completed`.
+          description: Intake committed with `processingStatus` `none` (no Workflow selected), or a replay of
+            an earlier submission whose `processingStatus` is `none`, `completed` or `failed`.
           content:
             application/json:
               schema:
@@ -4681,9 +4683,13 @@ components:
           format: date-time
         processingStatus:
           type: string
+          description: none when no Workflow was selected, pending while Workflow candidates are open, else
+            completed or failed (derived from the candidates of the currently selected Workflows).
           enum:
+          - none
           - pending
           - completed
+          - failed
         messageId:
           type: string
           format: uuid

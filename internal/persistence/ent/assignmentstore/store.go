@@ -88,23 +88,49 @@ func ruleDTO(row *ent.AddressRule) assignments.Rule {
 }
 
 // LockRevision locks shared configuration before Assignment state, including current Unit context.
+// LockRevision takes the shared Assignment-control lock (matching, correction batches,
+// reads) and returns the current Assignment revision. Rule, Unit-deletion and Suppression
+// changes take the exclusive lock through LockRevisionForChange.
 func (s *Store) LockRevision(ctx context.Context, tx platform.TransactionContext) (int64, error) {
-	owner, err := identitystore.New(s.primary)
-	if err != nil {
-		return 0, err
-	}
-	if _, err := owner.LockAccess(ctx, tx); err != nil {
-		return 0, err
-	}
+	return s.lockRevision(ctx, tx, false)
+}
+
+// LockRevisionForChange takes the exclusive Assignment-control lock for a command that
+// changes current rules or Suppressions and will bump the Assignment revision.
+func (s *Store) LockRevisionForChange(ctx context.Context, tx platform.TransactionContext) (int64, error) {
+	return s.lockRevision(ctx, tx, true)
+}
+
+func (s *Store) lockRevision(ctx context.Context, tx platform.TransactionContext, exclusive bool) (int64, error) {
 	client, scope, err := s.client(ctx, tx, map[string]entql.P{"AssignmentControl": entql.FieldEQ("id", 1)}, nil)
 	if err != nil {
 		return 0, err
 	}
-	row, err := client.AssignmentControl.Query().ForUpdate().Only(scope)
+	query := client.AssignmentControl.Query()
+	if exclusive {
+		query = query.ForUpdate()
+	} else {
+		query = query.ForShare()
+	}
+	row, err := query.Only(scope)
 	if err != nil {
 		return 0, err
 	}
 	return row.Revision, nil
+}
+
+// accessRevision reads the current access revision without taking the access lock; the
+// correction scope records it as context, not as a serialization point.
+func (s *Store) accessRevision(ctx context.Context, tx platform.TransactionContext) (int64, error) {
+	executor, err := s.primary.Resolve(tx)
+	if err != nil {
+		return 0, err
+	}
+	var revision int64
+	if err := executor.QueryRowContext(ctx, `SELECT access_revision FROM identity_control WHERE id=1`).Scan(&revision); err != nil {
+		return 0, err
+	}
+	return revision, nil
 }
 
 // CurrentRules reads only the server-derived candidate Network set, including disabled configuration.
@@ -266,7 +292,7 @@ func (s *Store) MarkPending(ctx context.Context, tx platform.TransactionContext,
 		(unitID != nil && *unitID == uuid.Nil) {
 		return 0, authz.ErrInvalidInput
 	}
-	revision, err := s.LockRevision(ctx, tx)
+	revision, err := s.LockRevisionForChange(ctx, tx)
 	if err != nil {
 		return 0, err
 	}
@@ -281,11 +307,7 @@ func (s *Store) MarkPending(ctx context.Context, tx platform.TransactionContext,
 	if err != nil {
 		return 0, err
 	}
-	access, err := identitystore.New(s.primary)
-	if err != nil {
-		return 0, err
-	}
-	accessRevision, err := access.LockAccess(ctx, tx)
+	accessRevision, err := s.accessRevision(ctx, tx)
 	if err != nil {
 		return 0, err
 	}
@@ -326,30 +348,6 @@ func (s *Store) MarkPending(ctx context.Context, tx platform.TransactionContext,
 	textIDs := make([]string, len(ids))
 	for i, id := range ids {
 		textIDs[i] = id.String()
-	}
-	if _, err := executor.ExecContext(ctx, `UPDATE message_contributions SET ready=false
-		WHERE message_id IN (
-			SELECT DISTINCT t.message_id FROM transmissions t
-			WHERE (cardinality($1::uuid[])=0 OR t.network_id=ANY($1::uuid[]))
-			AND ($2::uuid IS NULL OR EXISTS (SELECT 1 FROM transmission_targets target
-				WHERE target.transmission_id=t.id AND target.unit_id=$2)))`, ids, unitID); err != nil {
-		return 0, err
-	}
-	if _, err := executor.ExecContext(ctx, `UPDATE messages SET revision=revision+1,publication_status='pending'
-		WHERE id IN (
-			SELECT DISTINCT t.message_id FROM transmissions t
-			WHERE (cardinality($1::uuid[])=0 OR t.network_id=ANY($1::uuid[]))
-			AND ($2::uuid IS NULL OR EXISTS (SELECT 1 FROM transmission_targets target
-				WHERE target.transmission_id=t.id AND target.unit_id=$2)))`, ids, unitID); err != nil {
-		return 0, err
-	}
-	if _, err := executor.ExecContext(ctx, `UPDATE transmissions SET processing_status='pending',publication_status='pending'
-		WHERE message_id IN (
-			SELECT DISTINCT t.message_id FROM transmissions t
-			WHERE (cardinality($1::uuid[])=0 OR t.network_id=ANY($1::uuid[]))
-			AND ($2::uuid IS NULL OR EXISTS (SELECT 1 FROM transmission_targets target
-				WHERE target.transmission_id=t.id AND target.unit_id=$2)))`, ids, unitID); err != nil {
-		return 0, err
 	}
 	if _, err := executor.ExecContext(ctx, `UPDATE assignment_pending_scopes SET state='superseded',lease_until=NULL
 		WHERE state IN ('queued','running','failed') AND assignment_revision < $1
@@ -431,7 +429,7 @@ func (s *Store) NetworksForUnit(ctx context.Context, tx platform.TransactionCont
 
 // InvalidateUnit disables its current rules and records pending correction in the same transaction.
 func (s *Store) InvalidateUnit(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) error {
-	if _, err := s.LockRevision(ctx, tx); err != nil {
+	if _, err := s.LockRevisionForChange(ctx, tx); err != nil {
 		return err
 	}
 	networks, err := s.NetworksForUnit(ctx, tx, id)

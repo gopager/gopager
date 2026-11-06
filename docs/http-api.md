@@ -465,9 +465,10 @@ Field rules:
   transmission.
 
 Receipt (`data`): `submissionId`, `transmissionId`, `acceptanceTime`,
-`processingStatus`, `messageId`. The status is `202` when `processingStatus` is
-`"pending"` and `200` when it is `"completed"`. `pending` means intake has committed;
-grouping, assignment and Processing may still be running.
+`processingStatus`, `messageId`. `processingStatus` is `"none"` when no Workflow was
+selected, `"pending"` while Workflow candidates are open, `"completed"` or `"failed"`.
+The HTTP status is `202` for `"pending"` and `200` otherwise. Intake has committed in
+every case; the accepted evidence is visible to readers while Processing runs.
 
 Gateway state: `{"schemaVersion":1,"operation":"degraded","reasonCode":"LOW_SIGNAL","detail":"…"}`.
 `reasonCode` is required for `degraded` and only allowed there: printable ASCII,

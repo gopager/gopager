@@ -167,9 +167,9 @@ func TestResolverLoadsDirectAndGroupGrantsAndRejectsRevokedSession(t *testing.T)
 	}
 }
 
-// revokeResolverCredential participates in the same authority lock as protected work.
+// revokeResolverCredential takes the exclusive access lock that waits for protected work.
 func revokeResolverCredential(ctx context.Context, tx platform.TransactionContext, store *postgres.Store, repository *identitystore.Store, id uuid.UUID) error {
-	if _, err := repository.LockAccess(tx.Context(), tx); err != nil {
+	if _, err := repository.LockAccessForChange(tx.Context(), tx); err != nil {
 		return err
 	}
 	driver, err := borrowed.New(store, tx)

@@ -53,20 +53,6 @@ func (_c *MessageContributionCreate) SetAgeAnchor(v time.Time) *MessageContribut
 	return _c
 }
 
-// SetReady sets the "ready" field.
-func (_c *MessageContributionCreate) SetReady(v bool) *MessageContributionCreate {
-	_c.mutation.SetReady(v)
-	return _c
-}
-
-// SetNillableReady sets the "ready" field if the given value is not nil.
-func (_c *MessageContributionCreate) SetNillableReady(v *bool) *MessageContributionCreate {
-	if v != nil {
-		_c.SetReady(*v)
-	}
-	return _c
-}
-
 // SetID sets the "id" field.
 func (_c *MessageContributionCreate) SetID(v uuid.UUID) *MessageContributionCreate {
 	_c.mutation.SetID(v)
@@ -80,9 +66,6 @@ func (_c *MessageContributionCreate) Mutation() *MessageContributionMutation {
 
 // Save creates the MessageContribution in the database.
 func (_c *MessageContributionCreate) Save(ctx context.Context) (*MessageContribution, error) {
-	if err := _c.defaults(); err != nil {
-		return nil, err
-	}
 	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
@@ -108,15 +91,6 @@ func (_c *MessageContributionCreate) ExecX(ctx context.Context) {
 	}
 }
 
-// defaults sets the default values of the builder before save.
-func (_c *MessageContributionCreate) defaults() error {
-	if _, ok := _c.mutation.Ready(); !ok {
-		v := messagecontribution.DefaultReady
-		_c.mutation.SetReady(v)
-	}
-	return nil
-}
-
 // check runs all checks and user-defined validators on the builder.
 func (_c *MessageContributionCreate) check() error {
 	if _, ok := _c.mutation.MessageID(); !ok {
@@ -127,9 +101,6 @@ func (_c *MessageContributionCreate) check() error {
 	}
 	if _, ok := _c.mutation.AgeAnchor(); !ok {
 		return &ValidationError{Name: "age_anchor", err: errors.New(`ent: missing required field "MessageContribution.age_anchor"`)}
-	}
-	if _, ok := _c.mutation.Ready(); !ok {
-		return &ValidationError{Name: "ready", err: errors.New(`ent: missing required field "MessageContribution.ready"`)}
 	}
 	return nil
 }
@@ -182,10 +153,6 @@ func (_c *MessageContributionCreate) createSpec() (*MessageContribution, *sqlgra
 		_spec.SetField(messagecontribution.FieldAgeAnchor, field.TypeTime, value)
 		_node.AgeAnchor = value
 	}
-	if value, ok := _c.mutation.Ready(); ok {
-		_spec.SetField(messagecontribution.FieldReady, field.TypeBool, value)
-		_node.Ready = value
-	}
 	return _node, _spec
 }
 
@@ -207,7 +174,6 @@ func (_c *MessageContributionCreateBulk) Save(ctx context.Context) ([]*MessageCo
 	for i := range _c.builders {
 		func(i int, root context.Context) {
 			builder := _c.builders[i]
-			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*MessageContributionMutation)
 				if !ok {

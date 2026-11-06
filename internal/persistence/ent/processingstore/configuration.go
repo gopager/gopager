@@ -13,7 +13,6 @@ import (
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/persistence/ent"
-	"github.com/gopager/gopager/internal/persistence/ent/assignmentstore"
 	"github.com/gopager/gopager/internal/persistence/ent/borrowed"
 	"github.com/gopager/gopager/internal/persistence/ent/guard"
 	"github.com/gopager/gopager/internal/persistence/ent/identitystore"
@@ -49,20 +48,31 @@ func (s *Store) client(ctx context.Context, tx platform.TransactionContext, pred
 	}), nil
 }
 
-// LockRevision preserves shared access, Assignment, then Processing control lock order.
+// LockRevision takes the shared Processing-control lock (candidate work, reads, intake
+// admission) and returns the current configuration revision; configuration changes take the
+// exclusive lock through LockRevisionForChange.
 func (s *Store) LockRevision(ctx context.Context, tx platform.TransactionContext) (int64, error) {
-	assignments, err := assignmentstore.New(s.primary)
-	if err != nil {
-		return 0, err
-	}
-	if _, err := assignments.LockRevision(ctx, tx); err != nil {
-		return 0, err
-	}
+	return s.lockRevision(ctx, tx, false)
+}
+
+// LockRevisionForChange takes the exclusive Processing-control lock for a command that
+// changes Workflow or instance configuration and will bump the configuration revision.
+func (s *Store) LockRevisionForChange(ctx context.Context, tx platform.TransactionContext) (int64, error) {
+	return s.lockRevision(ctx, tx, true)
+}
+
+func (s *Store) lockRevision(ctx context.Context, tx platform.TransactionContext, exclusive bool) (int64, error) {
 	client, scope, err := s.client(ctx, tx, map[string]entql.P{"ProcessingControl": entql.FieldEQ("id", 1)}, nil)
 	if err != nil {
 		return 0, err
 	}
-	row, err := client.ProcessingControl.Query().ForUpdate().Only(scope)
+	query := client.ProcessingControl.Query()
+	if exclusive {
+		query = query.ForUpdate()
+	} else {
+		query = query.ForShare()
+	}
+	row, err := query.Only(scope)
 	if err != nil {
 		return 0, err
 	}
@@ -364,7 +374,7 @@ func (s *Store) SaveVersion(ctx context.Context, tx platform.TransactionContext,
 
 // RecordChange increments Processing and shared configuration revisions with the safe existing audit.
 func (s *Store) RecordChange(ctx context.Context, tx platform.TransactionContext, actor, target uuid.UUID, action string, now time.Time) error {
-	current, err := s.LockRevision(ctx, tx)
+	current, err := s.LockRevisionForChange(ctx, tx)
 	if err != nil {
 		return err
 	}

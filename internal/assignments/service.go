@@ -209,7 +209,7 @@ func (s *Service) Preview(ctx context.Context, proof identity.Proof, id uuid.UUI
 		return authz.ErrInvalidInput
 	}
 	return s.within(ctx, proof, false, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		if _, err := s.repository.LockRevision(tx.Context(), tx); err != nil {
+		if _, err := s.repository.LockRevisionForChange(tx.Context(), tx); err != nil {
 			return err
 		}
 		action := "address-rule.create"
@@ -241,7 +241,7 @@ func (s *Service) CreateRule(ctx context.Context, proof identity.Proof, command 
 	}
 	var result commands.Result
 	err = s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		if _, err := s.repository.LockRevision(tx.Context(), tx); err != nil {
+		if _, err := s.repository.LockRevisionForChange(tx.Context(), tx); err != nil {
 			return err
 		}
 		actor, err := uuid.Parse(authority.PrincipalID)
@@ -297,7 +297,7 @@ func (s *Service) UpdateRule(ctx context.Context, proof identity.Proof, id uuid.
 	}
 	var result commands.Result
 	err = s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		if _, err := s.repository.LockRevision(tx.Context(), tx); err != nil {
+		if _, err := s.repository.LockRevisionForChange(tx.Context(), tx); err != nil {
 			return err
 		}
 		before, err := s.repository.ReadRule(tx.Context(), tx, authority, "address-rule.update", id, now)
@@ -337,7 +337,7 @@ func (s *Service) DeleteRule(ctx context.Context, proof identity.Proof, id uuid.
 	}
 	var result commands.Result
 	err := s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-		if _, err := s.repository.LockRevision(tx.Context(), tx); err != nil {
+		if _, err := s.repository.LockRevisionForChange(tx.Context(), tx); err != nil {
 			return err
 		}
 		value, err := s.repository.ReadRule(tx.Context(), tx, authority, "address-rule.delete", id, now)
@@ -398,6 +398,13 @@ func (s *Service) resolve(ctx context.Context, tx platform.TransactionContext, n
 		result.UnitContext[unit.ID] = unit
 	}
 	return result, nil
+}
+
+// HoldRevision takes the shared Assignment-control lock in the caller's transaction and
+// returns the current Assignment revision. The Processing worker calls it before locking a
+// Transmission row so that control rows are always locked first.
+func (s *Service) HoldRevision(ctx context.Context, tx platform.TransactionContext) (int64, error) {
+	return s.repository.LockRevision(ctx, tx)
 }
 
 // MatchTargets participates in authenticated ingest's transaction and preserves every original position.

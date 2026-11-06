@@ -8,7 +8,8 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
-// PrivateResult is immutable completed evaluation evidence, not a ready Message or completion fact.
+// PrivateResult is immutable completed evaluation evidence. PublishedAt and MessageID are set
+// once the result has been attached to its Transmission's Message and its completion fact appended.
 type PrivateResult struct {
 	ID             uuid.UUID
 	CandidateID    uuid.UUID
@@ -16,6 +17,8 @@ type PrivateResult struct {
 	ProducingFence int64
 	Evaluation     Evaluation
 	CompletedAt    time.Time
+	PublishedAt    *time.Time
+	MessageID      *uuid.UUID
 }
 
 // ResultRepository atomically commits a fenced outcome and optional private result in the caller transaction.

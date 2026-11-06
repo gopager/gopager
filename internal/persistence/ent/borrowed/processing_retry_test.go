@@ -19,9 +19,16 @@ import (
 )
 
 type processingRetrySourceFixture struct {
-	binding processing.CandidateBinding
-	failure error
-	calls   int
+	binding   processing.CandidateBinding
+	failure   error
+	calls     int
+	published int
+}
+
+// Publish records the status refresh request; the fixture owns no Transmission row.
+func (f *processingRetrySourceFixture) Publish(context.Context, platform.TransactionContext, uuid.UUID) error {
+	f.published++
+	return nil
 }
 
 // CheckRetrySource is explicit synthetic eligibility, not a production source/publication owner.

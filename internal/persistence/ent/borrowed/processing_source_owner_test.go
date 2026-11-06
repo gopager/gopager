@@ -195,9 +195,9 @@ func TestProcessingSourceOwnerMapsMissingMessageToNotFound(t *testing.T) {
 	}
 	if err := withoutMessage(func(tx platform.TransactionContext, binding processing.PublicationBinding,
 		_ []processing.CandidateBinding) error {
-		return owner.ApplyReadiness(tx.Context(), tx, binding)
+		return owner.ApplyProcessingStatus(tx.Context(), tx, binding)
 	}); !errors.Is(err, authz.ErrNotFound) {
-		t.Fatalf("ApplyReadiness with missing Message = %v, want not found", err)
+		t.Fatalf("ApplyProcessingStatus with missing Message = %v, want not found", err)
 	}
 }
 

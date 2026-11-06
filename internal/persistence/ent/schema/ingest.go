@@ -158,8 +158,7 @@ func (Transmission) Fields() []ent.Field {
 		field.Bool("incomplete").Default(false),
 		field.JSON("quality_metrics", json.RawMessage{}).SchemaType(map[string]string{dialect.Postgres: "json"}).Optional().Sensitive(),
 		field.UUID("message_id", uuid.UUID{}),
-		field.Enum("processing_status").Values("pending", "completed", "failed").Default("pending"),
-		field.Enum("publication_status").Values("pending", "ready", "failed").Default("pending"),
+		field.Enum("processing_status").Values("none", "pending", "completed", "failed").Default("pending"),
 	}
 }
 
@@ -169,14 +168,11 @@ func (Transmission) Indexes() []ent.Index {
 		index.Fields("gateway_id", "submission_id").Unique(),
 		index.Fields("protocol", "observed_at", "id"),
 		index.Fields("message_id", "observed_at", "id"),
-		// Supports the post-correction publication re-entry sweep over unpublished Transmissions.
-		index.Fields("accepted_at", "id").StorageKey("transmissions_unpublished").
-			Annotations(entsql.IndexWhere("processing_status = 'pending' AND publication_status = 'pending'")),
 	}
 }
 
 // Message defines the messages table: the logical Message that groups Transmissions with the
-// same identity within the grouping window, with its publication status.
+// same identity within the grouping window.
 type Message struct{ ent.Schema }
 
 // Policy returns the privacy policy that guards queries and mutations of the Message schema.
@@ -197,7 +193,6 @@ func (Message) Fields() []ent.Field {
 		field.Bytes("identity_value").Sensitive(),
 		field.Time("first_observed_at"),
 		field.Time("last_observed_at"),
-		field.Enum("publication_status").Values("pending", "ready", "failed").Default("pending"),
 	}
 }
 
@@ -255,7 +250,7 @@ func (TransmissionTarget) Indexes() []ent.Index {
 }
 
 // MessageContribution defines the message_contributions table: a Message's contribution to one
-// Unit, or the single Unit-less contribution, with its readiness for publication.
+// Unit, or the single Unit-less contribution.
 type MessageContribution struct{ ent.Schema }
 
 // Policy returns the privacy policy that guards queries and mutations of the MessageContribution schema.
@@ -274,7 +269,6 @@ func (MessageContribution) Fields() []ent.Field {
 		field.UUID("unit_id", uuid.UUID{}).Optional().Nillable(),
 		field.Time("contribution_time"),
 		field.Time("age_anchor"),
-		field.Bool("ready").Default(false),
 	}
 }
 

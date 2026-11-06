@@ -101,7 +101,7 @@ func (s *InstanceService) SaveInstance(ctx context.Context, proof identity.Proof
 		if _, err := s.management.resolver.ResolvePrincipalAuthority(tx.Context(), tx, detached.ExecutionPrincipalID); err != nil {
 			return err
 		}
-		control, err = s.management.repository.LockRevision(tx.Context(), tx)
+		control, err = s.management.repository.LockRevisionForChange(tx.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -145,7 +145,7 @@ func (s *InstanceService) SaveInstance(ctx context.Context, proof identity.Proof
 		if err := authz.Authorize(authority, "plugin.configure", nil, authz.Target{}, now); err != nil {
 			return err
 		}
-		current, err := s.management.repository.LockRevision(tx.Context(), tx)
+		current, err := s.management.repository.LockRevisionForChange(tx.Context(), tx)
 		if err != nil {
 			return err
 		}

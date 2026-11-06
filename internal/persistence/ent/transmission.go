@@ -51,9 +51,7 @@ type Transmission struct {
 	MessageID uuid.UUID `json:"message_id,omitempty"`
 	// ProcessingStatus holds the value of the "processing_status" field.
 	ProcessingStatus transmission.ProcessingStatus `json:"processing_status,omitempty"`
-	// PublicationStatus holds the value of the "publication_status" field.
-	PublicationStatus transmission.PublicationStatus `json:"publication_status,omitempty"`
-	selectValues      sql.SelectValues
+	selectValues     sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -67,7 +65,7 @@ func (*Transmission) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case transmission.FieldObservationOffsetSeconds, transmission.FieldSourceRevision:
 			values[i] = new(sql.NullInt64)
-		case transmission.FieldSubmissionID, transmission.FieldNetworkResolution, transmission.FieldProtocol, transmission.FieldProcessingStatus, transmission.FieldPublicationStatus:
+		case transmission.FieldSubmissionID, transmission.FieldNetworkResolution, transmission.FieldProtocol, transmission.FieldProcessingStatus:
 			values[i] = new(sql.NullString)
 		case transmission.FieldObservedAt, transmission.FieldAcceptedAt:
 			values[i] = new(sql.NullTime)
@@ -196,12 +194,6 @@ func (_m *Transmission) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ProcessingStatus = transmission.ProcessingStatus(value.String)
 			}
-		case transmission.FieldPublicationStatus:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field publication_status", values[i])
-			} else if value.Valid {
-				_m.PublicationStatus = transmission.PublicationStatus(value.String)
-			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -281,9 +273,6 @@ func (_m *Transmission) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("processing_status=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ProcessingStatus))
-	builder.WriteString(", ")
-	builder.WriteString("publication_status=")
-	builder.WriteString(fmt.Sprintf("%v", _m.PublicationStatus))
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -34,7 +34,7 @@ func candidateState(row *ent.ProcessingCandidate) (processing.Candidate, error) 
 		ManualRetryPending: row.ManualRetryPending, FencingToken: row.FencingToken,
 		WorkerID: row.WorkerID, LeaseUntil: row.LeaseUntil, DueAt: row.DueAt,
 		FailureCode: row.FailureCode, FailureStep: row.FailureStep,
-		BarrierAppliedAt: row.BarrierAppliedAt, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}
 	return value, value.Validate()
 }
@@ -102,7 +102,7 @@ func (s *Store) AdmitCandidate(ctx context.Context, tx platform.TransactionConte
 	}
 	update := client.ProcessingCandidate.Update().
 		Where(processingcandidate.ID(current.ID), processingcandidate.Revision(current.Revision),
-			processingcandidate.FencingToken(current.FencingToken), processingcandidate.BarrierAppliedAtIsNil()).
+			processingcandidate.FencingToken(current.FencingToken)).
 		SetRevision(next.Revision).SetWorkflowRevision(next.WorkflowRevision).
 		SetConfigurationRevision(next.ConfigurationRevision).SetFencingToken(next.FencingToken).
 		SetState(processingcandidate.State(next.State)).SetDueAt(now).SetUpdatedAt(now).

@@ -333,7 +333,7 @@ func TestProcessingCandidateNativeReselectionRetainsResultsAndAttempts(t *testin
 			if err != nil {
 				return err
 			}
-			if completed.State != "completed" || completed.BarrierAppliedAt != nil || result == nil ||
+			if completed.State != "completed" || result == nil ||
 				result.Revision != completed.Revision || result.ProducingFence != manual.FencingToken ||
 				result.CandidateID != manual.ID || completed.WorkerID != nil {
 				t.Fatalf("private completion fabricated readiness or lost fencing: %+v %+v", completed, result)
@@ -361,7 +361,7 @@ func TestProcessingCandidateNativeReselectionRetainsResultsAndAttempts(t *testin
 				return err
 			}
 			if private != nil || notSelected.Selected == nil || *notSelected.Selected ||
-				notSelected.State != "completed" || notSelected.BarrierAppliedAt != nil {
+				notSelected.State != "completed" {
 				t.Fatalf("not-selected completion made a namespace/readiness: %+v %+v", notSelected, private)
 			}
 			resultScope := guard.Bind(tx.Context(), guard.Access{Current: driver.Current,

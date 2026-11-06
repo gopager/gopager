@@ -23,7 +23,9 @@ type processingDefinitionArtifacts struct {
 	resolver   *identity.Resolver
 }
 
-// PrepareInstalled validates the enabled instance, configuration and current execution Principal.
+// PrepareInstalled validates the enabled instance, configuration and current execution Principal
+// in its own transaction and then loads the artifact; callers that already hold a transaction
+// validate the instance themselves and use LoadInstalled.
 func (p *processingDefinitionArtifacts) PrepareInstalled(ctx context.Context, id uuid.UUID,
 	revision int64) (*processing.InstalledArtifact, error) {
 	if p.root == nil {
@@ -44,6 +46,16 @@ func (p *processingDefinitionArtifacts) PrepareInstalled(ctx context.Context, id
 	})
 	if err != nil {
 		return nil, err
+	}
+	return p.LoadInstalled(ctx, configuration)
+}
+
+// LoadInstalled inspects and loads the main artifact of an already validated instance
+// configuration without touching storage.
+func (p *processingDefinitionArtifacts) LoadInstalled(ctx context.Context,
+	configuration processing.InstanceConfiguration) (*processing.InstalledArtifact, error) {
+	if p.root == nil {
+		return nil, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Processing artifact root unavailable"))
 	}
 	inspector, err := processing.NewLocalInstanceInspector(p.host, p.root)
 	if err != nil {

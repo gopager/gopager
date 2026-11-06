@@ -22,6 +22,20 @@ type InstalledArtifacts interface {
 	PrepareInstalled(context.Context, uuid.UUID, int64) (*InstalledArtifact, error)
 }
 
+// InstalledArtifactLoader loads the artifact of an instance configuration the caller has already
+// read and validated in its own primary transaction. It touches no storage, so a source owner
+// can call it inside that transaction without nesting another one.
+type InstalledArtifactLoader interface {
+	LoadInstalled(context.Context, InstanceConfiguration) (*InstalledArtifact, error)
+}
+
+// InstalledArtifactOwner serves both the worker's out-of-transaction preparation and the
+// source owner's in-transaction validation of installed steps.
+type InstalledArtifactOwner interface {
+	InstalledArtifacts
+	InstalledArtifactLoader
+}
+
 // InstalledPreviewArtifacts resolves an independently pinned optional preview implementation.
 // False explicitly means unconfigured; an invalid configured artifact returns an error.
 type InstalledPreviewArtifacts interface {

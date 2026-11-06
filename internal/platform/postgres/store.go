@@ -18,12 +18,15 @@ import (
 )
 
 // Store is the PostgreSQL platform.Store. It is safe for concurrent use; its
-// connection pool is limited to 10 open connections.
+// connection pool is limited to 10 open connections. After a successful Migrate it
+// remembers the applied schema version so that every transaction can verify it
+// with one statement instead of repeating the locked migration check.
 type Store struct {
 	db            *sql.DB
 	mu            sync.RWMutex
 	migrations    fs.FS
 	registered    bool
+	schemaVersion int64
 	migrationGate chan struct{}
 	migrationOnce sync.Once
 }

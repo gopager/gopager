@@ -112,20 +112,6 @@ func (_u *MessageUpdate) SetNillableLastObservedAt(v *time.Time) *MessageUpdate 
 	return _u
 }
 
-// SetPublicationStatus sets the "publication_status" field.
-func (_u *MessageUpdate) SetPublicationStatus(v message.PublicationStatus) *MessageUpdate {
-	_u.mutation.SetPublicationStatus(v)
-	return _u
-}
-
-// SetNillablePublicationStatus sets the "publication_status" field if the given value is not nil.
-func (_u *MessageUpdate) SetNillablePublicationStatus(v *message.PublicationStatus) *MessageUpdate {
-	if v != nil {
-		_u.SetPublicationStatus(*v)
-	}
-	return _u
-}
-
 // Mutation returns the MessageMutation object of the builder.
 func (_u *MessageUpdate) Mutation() *MessageMutation {
 	return _u.mutation
@@ -170,11 +156,6 @@ func (_u *MessageUpdate) check() error {
 			return &ValidationError{Name: "identity_form", err: fmt.Errorf(`ent: validator failed for field "Message.identity_form": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.PublicationStatus(); ok {
-		if err := message.PublicationStatusValidator(v); err != nil {
-			return &ValidationError{Name: "publication_status", err: fmt.Errorf(`ent: validator failed for field "Message.publication_status": %w`, err)}
-		}
-	}
 	return nil
 }
 
@@ -216,9 +197,6 @@ func (_u *MessageUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.LastObservedAt(); ok {
 		_spec.SetField(message.FieldLastObservedAt, field.TypeTime, value)
-	}
-	if value, ok := _u.mutation.PublicationStatus(); ok {
-		_spec.SetField(message.FieldPublicationStatus, field.TypeEnum, value)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
@@ -325,20 +303,6 @@ func (_u *MessageUpdateOne) SetNillableLastObservedAt(v *time.Time) *MessageUpda
 	return _u
 }
 
-// SetPublicationStatus sets the "publication_status" field.
-func (_u *MessageUpdateOne) SetPublicationStatus(v message.PublicationStatus) *MessageUpdateOne {
-	_u.mutation.SetPublicationStatus(v)
-	return _u
-}
-
-// SetNillablePublicationStatus sets the "publication_status" field if the given value is not nil.
-func (_u *MessageUpdateOne) SetNillablePublicationStatus(v *message.PublicationStatus) *MessageUpdateOne {
-	if v != nil {
-		_u.SetPublicationStatus(*v)
-	}
-	return _u
-}
-
 // Mutation returns the MessageMutation object of the builder.
 func (_u *MessageUpdateOne) Mutation() *MessageMutation {
 	return _u.mutation
@@ -394,11 +358,6 @@ func (_u *MessageUpdateOne) check() error {
 	if v, ok := _u.mutation.IdentityForm(); ok {
 		if err := message.IdentityFormValidator(v); err != nil {
 			return &ValidationError{Name: "identity_form", err: fmt.Errorf(`ent: validator failed for field "Message.identity_form": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.PublicationStatus(); ok {
-		if err := message.PublicationStatusValidator(v); err != nil {
-			return &ValidationError{Name: "publication_status", err: fmt.Errorf(`ent: validator failed for field "Message.publication_status": %w`, err)}
 		}
 	}
 	return nil
@@ -459,9 +418,6 @@ func (_u *MessageUpdateOne) sqlSave(ctx context.Context) (_node *Message, err er
 	}
 	if value, ok := _u.mutation.LastObservedAt(); ok {
 		_spec.SetField(message.FieldLastObservedAt, field.TypeTime, value)
-	}
-	if value, ok := _u.mutation.PublicationStatus(); ok {
-		_spec.SetField(message.FieldPublicationStatus, field.TypeEnum, value)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	_node = &Message{config: _u.config}

@@ -76,11 +76,12 @@ CREATE TABLE messages (
     identity_subtype varchar NOT NULL DEFAULT '',
     identity_value bytea NOT NULL,
     first_observed_at timestamptz NOT NULL,
-    last_observed_at timestamptz NOT NULL,
-    publication_status varchar NOT NULL DEFAULT 'pending'
-        CHECK (publication_status IN ('pending', 'ready', 'failed'))
+    last_observed_at timestamptz NOT NULL
 );
 CREATE INDEX messages_identity ON messages (identity_form, identity_subtype, identity_value);
+-- Published Processing results belong to the Message of their Transmission; a merge moves them.
+ALTER TABLE processing_results ADD CONSTRAINT processing_results_message
+    FOREIGN KEY (message_id) REFERENCES messages(id);
 CREATE TABLE transmissions (
     id uuid PRIMARY KEY,
     gateway_id uuid NOT NULL REFERENCES gateways(id),
@@ -99,17 +100,11 @@ CREATE TABLE transmissions (
     quality_metrics json,
     message_id uuid NOT NULL REFERENCES messages(id),
     processing_status varchar NOT NULL DEFAULT 'pending'
-        CHECK (processing_status IN ('pending', 'completed', 'failed')),
-    publication_status varchar NOT NULL DEFAULT 'pending'
-        CHECK (publication_status IN ('pending', 'ready', 'failed')),
+        CHECK (processing_status IN ('none', 'pending', 'completed', 'failed')),
     UNIQUE (gateway_id, submission_id)
 );
 CREATE INDEX transmissions_protocol_observed ON transmissions (protocol, observed_at, id);
 CREATE INDEX transmissions_message_observed ON transmissions (message_id, observed_at, id);
--- Supports the post-correction publication re-entry sweep over unpublished Transmissions.
-CREATE INDEX transmissions_unpublished
-    ON transmissions (accepted_at, id)
-    WHERE processing_status = 'pending' AND publication_status = 'pending';
 CREATE TABLE transmission_targets (
     transmission_id uuid NOT NULL REFERENCES transmissions(id) ON DELETE CASCADE,
     position integer NOT NULL CHECK (position >= 0),
@@ -126,8 +121,7 @@ CREATE TABLE message_contributions (
     message_id uuid NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
     unit_id uuid REFERENCES units(id),
     contribution_time timestamptz NOT NULL,
-    age_anchor timestamptz NOT NULL,
-    ready boolean NOT NULL DEFAULT false
+    age_anchor timestamptz NOT NULL
 );
 CREATE UNIQUE INDEX message_contributions_message_unit
     ON message_contributions (message_id, unit_id) WHERE unit_id IS NOT NULL;
@@ -149,6 +143,7 @@ CREATE UNIQUE INDEX contribution_support_targetless_transmission
 CREATE INDEX contribution_supports_contribution ON contribution_supports (contribution_id);
 
 -- +goose Down
+ALTER TABLE processing_results DROP CONSTRAINT processing_results_message;
 DROP TABLE contribution_supports;
 DROP TABLE message_contributions;
 DROP TABLE transmission_targets;

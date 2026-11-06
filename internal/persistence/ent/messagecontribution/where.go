@@ -75,11 +75,6 @@ func AgeAnchor(v time.Time) predicate.MessageContribution {
 	return predicate.MessageContribution(sql.FieldEQ(FieldAgeAnchor, v))
 }
 
-// Ready applies equality check predicate on the "ready" field. It's identical to ReadyEQ.
-func Ready(v bool) predicate.MessageContribution {
-	return predicate.MessageContribution(sql.FieldEQ(FieldReady, v))
-}
-
 // MessageIDEQ applies the EQ predicate on the "message_id" field.
 func MessageIDEQ(v uuid.UUID) predicate.MessageContribution {
 	return predicate.MessageContribution(sql.FieldEQ(FieldMessageID, v))
@@ -248,16 +243,6 @@ func AgeAnchorLT(v time.Time) predicate.MessageContribution {
 // AgeAnchorLTE applies the LTE predicate on the "age_anchor" field.
 func AgeAnchorLTE(v time.Time) predicate.MessageContribution {
 	return predicate.MessageContribution(sql.FieldLTE(FieldAgeAnchor, v))
-}
-
-// ReadyEQ applies the EQ predicate on the "ready" field.
-func ReadyEQ(v bool) predicate.MessageContribution {
-	return predicate.MessageContribution(sql.FieldEQ(FieldReady, v))
-}
-
-// ReadyNEQ applies the NEQ predicate on the "ready" field.
-func ReadyNEQ(v bool) predicate.MessageContribution {
-	return predicate.MessageContribution(sql.FieldNEQ(FieldReady, v))
 }
 
 // And groups predicates with the AND operator between them.

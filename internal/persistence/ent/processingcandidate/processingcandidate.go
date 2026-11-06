@@ -53,8 +53,6 @@ const (
 	FieldFailureCode = "failure_code"
 	// FieldFailureStep holds the string denoting the failure_step field in the database.
 	FieldFailureStep = "failure_step"
-	// FieldBarrierAppliedAt holds the string denoting the barrier_applied_at field in the database.
-	FieldBarrierAppliedAt = "barrier_applied_at"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -85,7 +83,6 @@ var Columns = []string{
 	FieldDueAt,
 	FieldFailureCode,
 	FieldFailureStep,
-	FieldBarrierAppliedAt,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -268,11 +265,6 @@ func ByFailureCode(opts ...sql.OrderTermOption) OrderOption {
 // ByFailureStep orders the results by the failure_step field.
 func ByFailureStep(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldFailureStep, opts...).ToFunc()
-}
-
-// ByBarrierAppliedAt orders the results by the barrier_applied_at field.
-func ByBarrierAppliedAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldBarrierAppliedAt, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

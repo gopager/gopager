@@ -1562,10 +1562,19 @@ func failProcessingCandidateTerminally(t *testing.T, store *postgres.Store, cand
 		client := ent.NewClient(ent.Driver(driver))
 		scope := guard.Bind(tx.Context(), guard.Access{Current: driver.Current,
 			Predicates: map[string]entql.P{"ProcessingCandidate": entql.FieldEQ("id", candidateID)}})
-		return client.ProcessingCandidate.UpdateOneID(candidateID).AddRevision(1).
+		if err := client.ProcessingCandidate.UpdateOneID(candidateID).AddRevision(1).
 			SetState(processingcandidate.StateFailed).SetAttempts(processing.MaxAutomaticAttempts).
 			SetAutomaticAttempts(processing.MaxAutomaticAttempts).
-			SetFailureCode(string(platform.CodeResourceLimit)).Exec(scope)
+			SetFailureCode(string(platform.CodeResourceLimit)).Exec(scope); err != nil {
+			return err
+		}
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		_, err = executor.ExecContext(tx.Context(), `UPDATE transmissions SET processing_status='failed'
+			WHERE id=(SELECT transmission_id FROM processing_candidates WHERE id=$1)`, candidateID)
+		return err
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1725,7 +1734,7 @@ func TestProcessingCandidateRetryHTTPUsesCurrentSourceOwner(t *testing.T) {
 	if _, nested := retryResult["schemaVersion"]; nested || string(retryResult["candidateId"]) != `"`+candidateID.String()+`"` {
 		t.Fatalf("retry response data = %s", retried.Data)
 	}
-	var retriedState string
+	var retriedState, transmissionStatus string
 	var retriedRevision int64
 	var runnable, manual bool
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
@@ -1733,15 +1742,17 @@ func TestProcessingCandidateRetryHTTPUsesCurrentSourceOwner(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		return executor.QueryRowContext(tx.Context(), `SELECT state,revision,due_at<=now() AND worker_id IS NULL,
-			manual_retry_pending FROM processing_candidates WHERE id=$1`, candidateID).
-			Scan(&retriedState, &retriedRevision, &runnable, &manual)
+		return executor.QueryRowContext(tx.Context(), `SELECT c.state,c.revision,c.due_at<=now() AND c.worker_id IS NULL,
+			c.manual_retry_pending,t.processing_status FROM processing_candidates c
+			JOIN transmissions t ON t.id=c.transmission_id WHERE c.id=$1`, candidateID).
+			Scan(&retriedState, &retriedRevision, &runnable, &manual, &transmissionStatus)
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if retriedState != "pending" || strconv.FormatInt(retriedRevision, 10) == revision || !runnable || !manual {
-		t.Fatalf("retried candidate state=%s revision=%d runnable=%v manualRetryPending=%v, want runnable pending manual retry",
-			retriedState, retriedRevision, runnable, manual)
+	if retriedState != "pending" || strconv.FormatInt(retriedRevision, 10) == revision || !runnable || !manual ||
+		transmissionStatus != "pending" {
+		t.Fatalf("retried candidate state=%s revision=%d runnable=%v manualRetryPending=%v transmission=%s, want runnable pending manual retry with a pending Transmission",
+			retriedState, retriedRevision, runnable, manual, transmissionStatus)
 	}
 
 	failProcessingCandidateTerminally(t, store, candidateID)

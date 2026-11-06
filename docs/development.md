@@ -175,7 +175,7 @@ Runtime check/apply semantics: [Operations](operations.md#database-migrations).
 ### Transactions
 
 - Services receive a transaction runner (`WithinTransaction(ctx, func(platform.TransactionContext) error) error`), not a database handle. All repositories called inside one callback share that transaction.
-- The PostgreSQL store runs `READ COMMITTED`, verifies write authority at transaction start, re-checks the schema version, bounds every transaction to 30 s, rejects nested transactions and never retries an uncertain commit.
+- The PostgreSQL store runs `READ COMMITTED`, verifies write authority at transaction start, compares the applied schema version with the one it started with, bounds every transaction to 30 s, rejects nested transactions and never retries an uncertain commit.
 - Repository adapters obtain the SQL executor with `store.Resolve(tx)` (or an Ent client via `borrowed.New(store, tx)`); a `TransactionContext` is invalid after its callback returns.
 - No plugin calls, provider I/O or long computation inside a write transaction.
 

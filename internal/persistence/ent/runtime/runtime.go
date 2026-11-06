@@ -484,12 +484,6 @@ func init() {
 			return next.Mutate(ctx, m)
 		})
 	}
-	messagecontributionFields := schema.MessageContribution{}.Fields()
-	_ = messagecontributionFields
-	// messagecontributionDescReady is the schema descriptor for ready field.
-	messagecontributionDescReady := messagecontributionFields[5].Descriptor()
-	// messagecontribution.DefaultReady holds the default value on creation for the ready field.
-	messagecontribution.DefaultReady = messagecontributionDescReady.Default.(bool)
 	network.Policy = privacy.NewPolicies(schema.Network{})
 	network.Hooks[0] = func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {

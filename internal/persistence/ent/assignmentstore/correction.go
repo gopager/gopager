@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/assignments"
 	"github.com/gopager/gopager/internal/authz"
-	"github.com/gopager/gopager/internal/persistence/ent/identitystore"
 	"github.com/gopager/gopager/internal/platform"
 )
 
@@ -269,11 +268,7 @@ func (s *Store) RetryCorrection(ctx context.Context, tx platform.TransactionCont
 	if err != nil {
 		return assignments.CorrectionStatus{}, err
 	}
-	access, err := identitystore.New(s.primary)
-	if err != nil {
-		return assignments.CorrectionStatus{}, err
-	}
-	accessRevision, err := access.LockAccess(ctx, tx)
+	accessRevision, err := s.accessRevision(ctx, tx)
 	if err != nil {
 		return assignments.CorrectionStatus{}, err
 	}

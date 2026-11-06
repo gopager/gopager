@@ -92,20 +92,6 @@ func (_u *MessageContributionUpdate) SetNillableAgeAnchor(v *time.Time) *Message
 	return _u
 }
 
-// SetReady sets the "ready" field.
-func (_u *MessageContributionUpdate) SetReady(v bool) *MessageContributionUpdate {
-	_u.mutation.SetReady(v)
-	return _u
-}
-
-// SetNillableReady sets the "ready" field if the given value is not nil.
-func (_u *MessageContributionUpdate) SetNillableReady(v *bool) *MessageContributionUpdate {
-	if v != nil {
-		_u.SetReady(*v)
-	}
-	return _u
-}
-
 // Mutation returns the MessageContributionMutation object of the builder.
 func (_u *MessageContributionUpdate) Mutation() *MessageContributionMutation {
 	return _u.mutation
@@ -167,9 +153,6 @@ func (_u *MessageContributionUpdate) sqlSave(ctx context.Context) (_node int, er
 	}
 	if value, ok := _u.mutation.AgeAnchor(); ok {
 		_spec.SetField(messagecontribution.FieldAgeAnchor, field.TypeTime, value)
-	}
-	if value, ok := _u.mutation.Ready(); ok {
-		_spec.SetField(messagecontribution.FieldReady, field.TypeBool, value)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
@@ -251,20 +234,6 @@ func (_u *MessageContributionUpdateOne) SetAgeAnchor(v time.Time) *MessageContri
 func (_u *MessageContributionUpdateOne) SetNillableAgeAnchor(v *time.Time) *MessageContributionUpdateOne {
 	if v != nil {
 		_u.SetAgeAnchor(*v)
-	}
-	return _u
-}
-
-// SetReady sets the "ready" field.
-func (_u *MessageContributionUpdateOne) SetReady(v bool) *MessageContributionUpdateOne {
-	_u.mutation.SetReady(v)
-	return _u
-}
-
-// SetNillableReady sets the "ready" field if the given value is not nil.
-func (_u *MessageContributionUpdateOne) SetNillableReady(v *bool) *MessageContributionUpdateOne {
-	if v != nil {
-		_u.SetReady(*v)
 	}
 	return _u
 }
@@ -360,9 +329,6 @@ func (_u *MessageContributionUpdateOne) sqlSave(ctx context.Context) (_node *Mes
 	}
 	if value, ok := _u.mutation.AgeAnchor(); ok {
 		_spec.SetField(messagecontribution.FieldAgeAnchor, field.TypeTime, value)
-	}
-	if value, ok := _u.mutation.Ready(); ok {
-		_spec.SetField(messagecontribution.FieldReady, field.TypeBool, value)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	_node = &MessageContribution{config: _u.config}

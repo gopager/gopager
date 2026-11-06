@@ -99,7 +99,7 @@ Migrations are embedded in the binary and tracked in the table `platform_schema_
 
 Each migration and its ledger row commit in one transaction; a failing migration rolls back and leaves earlier ones applied. Down migrations are never executed. If a commit outcome cannot be determined, the result is `COMMIT_UNCERTAIN`; restart with `apply` to re-check.
 
-Every transaction at runtime re-checks the schema. A running process stops accepting work (`INCOMPATIBLE_VERSION`, not ready) as soon as another process applies migrations it does not know.
+Every transaction compares the applied schema version with the version the process started with (one query, no lock). A running process therefore stops accepting work (`INCOMPATIBLE_VERSION`, not ready) as soon as another process applies migrations it does not know.
 
 ### Upgrade
 

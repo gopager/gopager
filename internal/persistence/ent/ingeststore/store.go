@@ -309,8 +309,13 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 			return ingest.Receipt{}, err
 		}
 	}
+	// Exact Grouping serializes per Payload identity; the control row is only read.
+	if _, err := executor.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1 || E'\x1f' || $2 || E'\x1f' || encode($3, 'hex'), 0))`,
+		submission.Identity.Form, submission.Identity.Subtype, submission.Identity.Value); err != nil {
+		return ingest.Receipt{}, err
+	}
 	var groupingRevision, window int64
-	if err := executor.QueryRowContext(ctx, `SELECT revision, window_seconds FROM grouping_control WHERE id=1 FOR UPDATE`).
+	if err := executor.QueryRowContext(ctx, `SELECT revision, window_seconds FROM grouping_control WHERE id=1 FOR SHARE`).
 		Scan(&groupingRevision, &window); err != nil {
 		return ingest.Receipt{}, err
 	}
@@ -334,8 +339,8 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 	if _, err := executor.ExecContext(ctx, `INSERT INTO transmissions
 		(id,gateway_id,network_id,submission_id,submission_fingerprint,network_resolution,protocol,payload,targets,
 		 observed_at,observation_offset_seconds,accepted_at,source_revision,incomplete,quality_metrics,message_id,
-		 processing_status,publication_status)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,1,$13,$14,$15,'pending','pending')`,
+		 processing_status)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,1,$13,$14,$15,'pending')`,
 		transmissionID, gateway, submission.ResolvedNetwork, submission.SubmissionID, submission.Fingerprint[:],
 		submission.Resolution, string(submission.Protocol), string(payload), string(targets),
 		submission.ObservedAt, observationOffset, accepted, incomplete, quality, messageID); err != nil {
@@ -372,6 +377,11 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 			WHERE message_id=ANY($2::uuid[])`, messageID, decision.AbsorbedMessage); err != nil {
 			return ingest.Receipt{}, err
 		}
+		// Published results follow their Transmissions into the surviving Message.
+		if _, err := executor.ExecContext(ctx, `UPDATE processing_results SET message_id=$1
+			WHERE message_id=ANY($2::uuid[])`, messageID, decision.AbsorbedMessage); err != nil {
+			return ingest.Receipt{}, err
+		}
 		if _, err := executor.ExecContext(ctx, `DELETE FROM messages WHERE id=ANY($1::uuid[])`, decision.AbsorbedMessage); err != nil {
 			return ingest.Receipt{}, err
 		}
@@ -399,26 +409,23 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 			return ingest.Receipt{}, err
 		}
 	}
-	completed, err := s.admitProcessing(ctx, executor, transmissionID, messageID, submission.ResolvedNetwork,
-		match, now)
+	status, err := s.admitProcessing(ctx, executor, transmissionID, submission.ResolvedNetwork, match, now)
 	if err != nil {
 		return ingest.Receipt{}, err
-	}
-	status := "pending"
-	if completed {
-		status = "completed"
 	}
 	receipt := ingest.Receipt{SubmissionID: submission.SubmissionID, TransmissionID: transmissionID,
 		AcceptanceTime: accepted, ProcessingStatus: status, MessageID: messageID}
 	return receipt, nil
 }
 
-func (s *Store) admitProcessing(ctx context.Context, executor postgres.Executor, transmission, message,
-	network uuid.UUID, match assignments.MatchResult, now time.Time) (bool, error) {
+// admitProcessing inserts one pending candidate per Workflow currently selected for the Transmission
+// and returns the resulting processing status: pending when work was admitted, none otherwise.
+func (s *Store) admitProcessing(ctx context.Context, executor postgres.Executor, transmission,
+	network uuid.UUID, match assignments.MatchResult, now time.Time) (string, error) {
 	var configurationRevision int64
-	if err := executor.QueryRowContext(ctx, `SELECT revision FROM processing_control WHERE id=1 FOR UPDATE`).
+	if err := executor.QueryRowContext(ctx, `SELECT revision FROM processing_control WHERE id=1 FOR SHARE`).
 		Scan(&configurationRevision); err != nil {
-		return false, err
+		return "", err
 	}
 	unitIDs := make([]uuid.UUID, 0, len(match.UnitContext))
 	for id := range match.UnitContext {
@@ -438,9 +445,9 @@ func (s *Store) admitProcessing(ctx context.Context, executor postgres.Executor,
 				WHERE r.workflow_id=w.id AND r.unit_id=ANY($2::uuid[])
 			))
 		)
-		ORDER BY w.id FOR UPDATE OF w`, network, unitIDs)
+		ORDER BY w.id FOR SHARE OF w`, network, unitIDs)
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	type selectedWorkflow struct {
 		id       uuid.UUID
@@ -452,16 +459,16 @@ func (s *Store) admitProcessing(ctx context.Context, executor postgres.Executor,
 		var workflow selectedWorkflow
 		if err := rows.Scan(&workflow.id, &workflow.version, &workflow.revision); err != nil {
 			rows.Close()
-			return false, err
+			return "", err
 		}
 		selected = append(selected, workflow)
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		return false, err
+		return "", err
 	}
 	if err := rows.Close(); err != nil {
-		return false, err
+		return "", err
 	}
 	for _, workflow := range selected {
 		if _, err := executor.ExecContext(ctx, `INSERT INTO processing_candidates
@@ -470,31 +477,18 @@ func (s *Store) admitProcessing(ctx context.Context, executor postgres.Executor,
 			VALUES($1,$2,$3,$4,$5,$6,1,$7,'pending',$8,$8,$8)`,
 			uuid.New(), transmission, workflow.id, workflow.version, workflow.revision,
 			configurationRevision, match.Revision, now); err != nil {
-			return false, err
+			return "", err
 		}
 	}
-	if len(selected) != 0 {
-		return false, nil
+	status := "pending"
+	if len(selected) == 0 {
+		status = "none"
 	}
-	if _, err := executor.ExecContext(ctx, `UPDATE transmissions SET
-		processing_status='completed',publication_status='ready' WHERE id=$1`, transmission); err != nil {
-		return false, err
+	if _, err := executor.ExecContext(ctx, `UPDATE transmissions SET processing_status=$2 WHERE id=$1`,
+		transmission, status); err != nil {
+		return "", err
 	}
-	var pending bool
-	if err := executor.QueryRowContext(ctx, `SELECT EXISTS(
-		SELECT 1 FROM transmissions WHERE message_id=$1 AND publication_status <> 'ready')`, message).Scan(&pending); err != nil {
-		return false, err
-	}
-	if pending {
-		return true, nil
-	}
-	if _, err := executor.ExecContext(ctx, `UPDATE messages SET publication_status='ready' WHERE id=$1`, message); err != nil {
-		return false, err
-	}
-	if _, err := executor.ExecContext(ctx, `UPDATE message_contributions SET ready=true WHERE message_id=$1`, message); err != nil {
-		return false, err
-	}
-	return true, nil
+	return status, nil
 }
 
 func (s *Store) groupMessage(ctx context.Context, executor postgres.Executor, revision, window int64,
@@ -532,8 +526,8 @@ func (s *Store) groupMessage(ctx context.Context, executor postgres.Executor, re
 	if len(ids) == 0 {
 		id := uuid.New()
 		if _, err := executor.ExecContext(ctx, `INSERT INTO messages
-			(id,identity_form,identity_subtype,identity_value,first_observed_at,last_observed_at,publication_status)
-			VALUES($1,$2,$3,$4,$5,$5,'pending')`, id, submission.Identity.Form, submission.Identity.Subtype,
+			(id,identity_form,identity_subtype,identity_value,first_observed_at,last_observed_at)
+			VALUES($1,$2,$3,$4,$5,$5)`, id, submission.Identity.Form, submission.Identity.Subtype,
 			submission.Identity.Value, submission.ObservedAt); err != nil {
 			return messages.Decision{}, err
 		}
@@ -570,7 +564,7 @@ func (s *Store) groupMessage(ctx context.Context, executor postgres.Executor, re
 		last = submission.ObservedAt
 	}
 	if err := executor.QueryRowContext(ctx, `UPDATE messages SET revision=revision+1,
-		first_observed_at=$2,last_observed_at=$3,publication_status='pending' WHERE id=$1
+		first_observed_at=$2,last_observed_at=$3 WHERE id=$1
 		RETURNING revision`, survivor, first, last).Scan(&messageRevision); err != nil {
 		return messages.Decision{}, err
 	}
@@ -623,14 +617,14 @@ func (s *Store) storeTargets(ctx context.Context, tx platform.TransactionContext
 				ageAnchor = accepted
 			}
 			if _, err := executor.ExecContext(ctx, `INSERT INTO message_contributions
-				(id,message_id,unit_id,contribution_time,age_anchor,ready)
-				VALUES($1,$2,$3,$4,$5,false)`, contributionID, message, *resolution.UnitID,
+				(id,message_id,unit_id,contribution_time,age_anchor)
+				VALUES($1,$2,$3,$4,$5)`, contributionID, message, *resolution.UnitID,
 				submission.ObservedAt, ageAnchor); err != nil {
 				return err
 			}
 		} else if err == nil {
 			if _, err := executor.ExecContext(ctx, `UPDATE message_contributions SET
-				contribution_time=LEAST(contribution_time,$2), age_anchor=LEAST(age_anchor,LEAST($2,$3)),ready=false
+				contribution_time=LEAST(contribution_time,$2), age_anchor=LEAST(age_anchor,LEAST($2,$3))
 				WHERE id=$1`, contributionID, submission.ObservedAt, accepted); err != nil {
 				return err
 			}
@@ -655,14 +649,14 @@ func (s *Store) storeTargets(ctx context.Context, tx platform.TransactionContext
 				ageAnchor = accepted
 			}
 			if _, err := executor.ExecContext(ctx, `INSERT INTO message_contributions
-				(id,message_id,unit_id,contribution_time,age_anchor,ready)
-				VALUES($1,$2,NULL,$3,$4,false)`, contributionID, message, submission.ObservedAt, ageAnchor); err != nil {
+				(id,message_id,unit_id,contribution_time,age_anchor)
+				VALUES($1,$2,NULL,$3,$4)`, contributionID, message, submission.ObservedAt, ageAnchor); err != nil {
 				return err
 			}
 		} else if err != nil {
 			return err
 		} else if _, err := executor.ExecContext(ctx, `UPDATE message_contributions SET
-			contribution_time=LEAST(contribution_time,$2),age_anchor=LEAST(age_anchor,LEAST($2,$3)),ready=false
+			contribution_time=LEAST(contribution_time,$2),age_anchor=LEAST(age_anchor,LEAST($2,$3))
 			WHERE id=$1`, contributionID, submission.ObservedAt, accepted); err != nil {
 			return err
 		}
@@ -738,7 +732,7 @@ func (s *Store) mergeContributions(ctx context.Context, executor postgres.Execut
 			return err
 		}
 		if _, err := executor.ExecContext(ctx, `UPDATE message_contributions SET
-			contribution_time=LEAST(contribution_time,$2),age_anchor=LEAST(age_anchor,$3),ready=false WHERE id=$1`,
+			contribution_time=LEAST(contribution_time,$2),age_anchor=LEAST(age_anchor,$3) WHERE id=$1`,
 			target, item.time, item.anchor); err != nil {
 			return err
 		}

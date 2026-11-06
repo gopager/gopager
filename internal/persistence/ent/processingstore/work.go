@@ -29,9 +29,9 @@ func (s *Store) ListCandidateWork(ctx context.Context, tx platform.TransactionCo
 		return processing.Page[processing.Candidate]{}, err
 	}
 	client, scope, err := s.client(ctx, tx, map[string]entql.P{
-		"ProcessingCandidate": entql.And(entql.FieldNil("barrier_applied_at"), entql.Or(
+		"ProcessingCandidate": entql.Or(
 			entql.And(entql.FieldEQ("state", "pending"), entql.FieldLTE("due_at", now)),
-			entql.And(entql.FieldEQ("state", "running"), entql.FieldLTE("lease_until", now)))),
+			entql.And(entql.FieldEQ("state", "running"), entql.FieldLTE("lease_until", now))),
 	}, nil)
 	if err != nil {
 		return processing.Page[processing.Candidate]{}, err
@@ -56,8 +56,9 @@ func (s *Store) ListCandidateWork(ctx context.Context, tx platform.TransactionCo
 	return result, nil
 }
 
-// SupersedeCandidate ends owner-confirmed obsolete unpublished work even when its configuration is old.
-// It retains immutable result rows and invalidates current ownership rather than using an expired lease.
+// SupersedeCandidate ends owner-confirmed obsolete work even when its configuration is old. It
+// retains immutable result rows (published ones stay attached to their Message) and invalidates
+// current ownership rather than using an expired lease.
 func (s *Store) SupersedeCandidate(ctx context.Context, tx platform.TransactionContext, id uuid.UUID, expected int64) (processing.Candidate, error) {
 	if id == uuid.Nil || expected <= 0 {
 		return processing.Candidate{}, authz.ErrInvalidInput
@@ -91,7 +92,7 @@ func (s *Store) SupersedeCandidate(ctx context.Context, tx platform.TransactionC
 		return next, err
 	}
 	changed, err := client.ProcessingCandidate.Update().Where(processingcandidate.Revision(expected),
-		processingcandidate.FencingToken(current.FencingToken), processingcandidate.BarrierAppliedAtIsNil()).
+		processingcandidate.FencingToken(current.FencingToken)).
 		SetRevision(next.Revision).SetFencingToken(next.FencingToken).SetState(processingcandidate.StateSuperseded).
 		SetUpdatedAt(now).ClearWorkerID().ClearLeaseUntil().ClearSelected().SetManualRetryPending(false).Save(scope)
 	if err != nil {

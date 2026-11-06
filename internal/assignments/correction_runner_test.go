@@ -89,12 +89,8 @@ func (f *runnerFixture) AppendCorrectionFact(context.Context, platform.Transacti
 	return uuid.Nil, errors.New("unexpected fact")
 }
 
-func (f *runnerFixture) PublicationReentries(context.Context, platform.TransactionContext, int) ([]uuid.UUID, error) {
-	return nil, nil
-}
-
-func (f *runnerFixture) ReenterPublication(context.Context, platform.TransactionContext, uuid.UUID) (bool, error) {
-	return false, nil
+func (f *runnerFixture) ReadmitProcessing(context.Context, platform.TransactionContext, uuid.UUID) error {
+	return errors.New("unexpected readmission")
 }
 
 func newFixtureRunner(t *testing.T, f *runnerFixture) *CorrectionRunner {

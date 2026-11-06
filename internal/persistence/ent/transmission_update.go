@@ -262,20 +262,6 @@ func (_u *TransmissionUpdate) SetNillableProcessingStatus(v *transmission.Proces
 	return _u
 }
 
-// SetPublicationStatus sets the "publication_status" field.
-func (_u *TransmissionUpdate) SetPublicationStatus(v transmission.PublicationStatus) *TransmissionUpdate {
-	_u.mutation.SetPublicationStatus(v)
-	return _u
-}
-
-// SetNillablePublicationStatus sets the "publication_status" field if the given value is not nil.
-func (_u *TransmissionUpdate) SetNillablePublicationStatus(v *transmission.PublicationStatus) *TransmissionUpdate {
-	if v != nil {
-		_u.SetPublicationStatus(*v)
-	}
-	return _u
-}
-
 // Mutation returns the TransmissionMutation object of the builder.
 func (_u *TransmissionUpdate) Mutation() *TransmissionMutation {
 	return _u.mutation
@@ -333,11 +319,6 @@ func (_u *TransmissionUpdate) check() error {
 	if v, ok := _u.mutation.ProcessingStatus(); ok {
 		if err := transmission.ProcessingStatusValidator(v); err != nil {
 			return &ValidationError{Name: "processing_status", err: fmt.Errorf(`ent: validator failed for field "Transmission.processing_status": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.PublicationStatus(); ok {
-		if err := transmission.PublicationStatusValidator(v); err != nil {
-			return &ValidationError{Name: "publication_status", err: fmt.Errorf(`ent: validator failed for field "Transmission.publication_status": %w`, err)}
 		}
 	}
 	return nil
@@ -432,9 +413,6 @@ func (_u *TransmissionUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if value, ok := _u.mutation.ProcessingStatus(); ok {
 		_spec.SetField(transmission.FieldProcessingStatus, field.TypeEnum, value)
-	}
-	if value, ok := _u.mutation.PublicationStatus(); ok {
-		_spec.SetField(transmission.FieldPublicationStatus, field.TypeEnum, value)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
@@ -688,20 +666,6 @@ func (_u *TransmissionUpdateOne) SetNillableProcessingStatus(v *transmission.Pro
 	return _u
 }
 
-// SetPublicationStatus sets the "publication_status" field.
-func (_u *TransmissionUpdateOne) SetPublicationStatus(v transmission.PublicationStatus) *TransmissionUpdateOne {
-	_u.mutation.SetPublicationStatus(v)
-	return _u
-}
-
-// SetNillablePublicationStatus sets the "publication_status" field if the given value is not nil.
-func (_u *TransmissionUpdateOne) SetNillablePublicationStatus(v *transmission.PublicationStatus) *TransmissionUpdateOne {
-	if v != nil {
-		_u.SetPublicationStatus(*v)
-	}
-	return _u
-}
-
 // Mutation returns the TransmissionMutation object of the builder.
 func (_u *TransmissionUpdateOne) Mutation() *TransmissionMutation {
 	return _u.mutation
@@ -772,11 +736,6 @@ func (_u *TransmissionUpdateOne) check() error {
 	if v, ok := _u.mutation.ProcessingStatus(); ok {
 		if err := transmission.ProcessingStatusValidator(v); err != nil {
 			return &ValidationError{Name: "processing_status", err: fmt.Errorf(`ent: validator failed for field "Transmission.processing_status": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.PublicationStatus(); ok {
-		if err := transmission.PublicationStatusValidator(v); err != nil {
-			return &ValidationError{Name: "publication_status", err: fmt.Errorf(`ent: validator failed for field "Transmission.publication_status": %w`, err)}
 		}
 	}
 	return nil
@@ -888,9 +847,6 @@ func (_u *TransmissionUpdateOne) sqlSave(ctx context.Context) (_node *Transmissi
 	}
 	if value, ok := _u.mutation.ProcessingStatus(); ok {
 		_spec.SetField(transmission.FieldProcessingStatus, field.TypeEnum, value)
-	}
-	if value, ok := _u.mutation.PublicationStatus(); ok {
-		_spec.SetField(transmission.FieldPublicationStatus, field.TypeEnum, value)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	_node = &Transmission{config: _u.config}

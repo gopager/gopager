@@ -49,7 +49,6 @@ type Candidate struct {
 	DueAt              time.Time
 	FailureCode        *string
 	FailureStep        *string
-	BarrierAppliedAt   *time.Time
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 }
@@ -68,7 +67,6 @@ func (c Candidate) Validate() error {
 		(c.LeaseUntil != nil && (c.LeaseUntil.IsZero() || !c.LeaseUntil.After(c.UpdatedAt))) ||
 		(c.State == "running" && (c.WorkerID == nil || c.FencingToken == 0)) ||
 		(c.State == "completed" && c.Selected == nil) ||
-		(c.BarrierAppliedAt != nil && c.State != "completed") ||
 		c.CreatedAt.IsZero() || c.UpdatedAt.Before(c.CreatedAt) || c.DueAt.IsZero() {
 		return invalid(errors.New("invalid candidate state"))
 	}
@@ -76,7 +74,8 @@ func (c Candidate) Validate() error {
 }
 
 // Reselect returns unchanged state for identical pins, or new pending state for current changed pins.
-// It retains identity, cumulative attempts and fencing history; published work cannot be reselected.
+// It retains identity, cumulative attempts and fencing history; an already published result stays
+// attached to the Message and the new run adds its own result revision.
 func (c Candidate) Reselect(binding CandidateBinding, primaryNow time.Time) (Candidate, bool, error) {
 	if err := c.Validate(); err != nil {
 		return Candidate{}, false, err
@@ -95,9 +94,6 @@ func (c Candidate) Reselect(binding CandidateBinding, primaryNow time.Time) (Can
 	}
 	if c.CandidateBinding == binding {
 		return c, false, nil
-	}
-	if c.BarrierAppliedAt != nil {
-		return Candidate{}, false, authz.ErrRevisionConflict
 	}
 	revision, err := commands.NextRevision(c.Revision, c.Revision)
 	if err != nil {
@@ -239,7 +235,7 @@ func (c Candidate) RetryFailed(expected int64, primaryNow time.Time) (Candidate,
 	if primaryNow.IsZero() || primaryNow.Nanosecond()%1000 != 0 || primaryNow.Before(c.UpdatedAt) {
 		return Candidate{}, invalid(errors.New("invalid retry primary time"))
 	}
-	if c.State != "failed" || c.BarrierAppliedAt != nil || c.Revision != expected {
+	if c.State != "failed" || c.Revision != expected {
 		return Candidate{}, authz.ErrRevisionConflict
 	}
 	revision, err := commands.NextRevision(c.Revision, expected)
@@ -286,7 +282,7 @@ func (c Candidate) RecoverExpired(lease CandidateLease, primaryNow time.Time) (C
 	}
 	if c.State != "running" || lease.CandidateID != c.ID || lease.Revision != c.Revision ||
 		lease.Fence != c.FencingToken || lease.WorkerID != *c.WorkerID ||
-		primaryNow.Before(*c.LeaseUntil) || c.BarrierAppliedAt != nil {
+		primaryNow.Before(*c.LeaseUntil) {
 		return Candidate{}, authz.ErrRevisionConflict
 	}
 	fence, err := commands.NextRevision(c.FencingToken, c.FencingToken)
@@ -356,7 +352,7 @@ func (c Candidate) Supersede(expected int64, primaryNow time.Time) (Candidate, e
 	if primaryNow.IsZero() || primaryNow.Nanosecond()%1000 != 0 || primaryNow.Before(c.UpdatedAt) {
 		return Candidate{}, invalid(errors.New("invalid supersession primary time"))
 	}
-	if c.Revision != expected || c.BarrierAppliedAt != nil {
+	if c.Revision != expected {
 		return Candidate{}, authz.ErrRevisionConflict
 	}
 	if c.State == "superseded" {

@@ -217,7 +217,6 @@ func (ProcessingCandidate) Fields() []ent.Field {
 		field.Time("due_at"),
 		field.String("failure_code").Optional().Nillable(),
 		field.String("failure_step").Optional().Nillable(),
-		field.Time("barrier_applied_at").Optional().Nillable(),
 		field.Time("created_at").Immutable(),
 		field.Time("updated_at"),
 	}
@@ -228,12 +227,11 @@ func (ProcessingCandidate) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("transmission_id", "workflow_id", "definition_version_id", "source_revision", "context_revision").Unique(),
 		index.Fields("state", "due_at", "id"),
-		index.Fields("transmission_id", "barrier_applied_at"),
 	}
 }
 
 // ProcessingResult defines the processing_results table: the private evaluation result of a
-// candidate, unique per candidate and revision, with its publication time once published.
+// candidate, unique per candidate and revision, with its publication time and Message once published.
 type ProcessingResult struct{ ent.Schema }
 
 // Policy returns the privacy policy that guards queries and mutations of the ProcessingResult schema.

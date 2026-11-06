@@ -14,6 +14,7 @@ import (
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/events"
 	"github.com/gopager/gopager/internal/platform"
+	"github.com/gopager/gopager/internal/platform/postgres"
 	"github.com/gopager/gopager/internal/processing"
 	processingmanagement "github.com/gopager/gopager/internal/processing/management"
 	"github.com/gopager/gopager/internal/processing/publication"
@@ -36,31 +37,30 @@ type ProcessingSourceOwner struct {
 	repository  processingSourceRepository
 	facts       events.ProcessingAppender
 	clock       platform.Clock
-	artifacts   processing.InstalledArtifacts
+	artifacts   processing.InstalledArtifactOwner
 	executions  *processing.InstanceExecutions
 	principals  processing.ExecutionPrincipalResolver
 	publication *publication.Service
 }
 
 type sourceSnapshot struct {
-	projection        processing.SourceProjection
-	captured          *processing.CapturedSource
-	identity          processing.SourceIdentity
-	transmission      uuid.UUID
-	network           uuid.UUID
-	message           uuid.UUID
-	messageRevision   int64
-	sourceRevision    int64
-	processingStatus  string
-	publicationStatus string
-	protocol          protocols.Protocol
-	payload           protocols.TransmissionPayload
-	targets           []protocols.Target
-	observedAt        time.Time
-	networkName       string
-	matched           assignments.MatchResult
-	targetsCurrent    bool
-	suppressed        map[int]bool
+	projection       processing.SourceProjection
+	captured         *processing.CapturedSource
+	identity         processing.SourceIdentity
+	transmission     uuid.UUID
+	network          uuid.UUID
+	message          uuid.UUID
+	messageRevision  int64
+	sourceRevision   int64
+	processingStatus string
+	protocol         protocols.Protocol
+	payload          protocols.TransmissionPayload
+	targets          []protocols.Target
+	observedAt       time.Time
+	networkName      string
+	matched          assignments.MatchResult
+	targetsCurrent   bool
+	suppressed       map[int]bool
 }
 
 type selectedWorkflow struct {
@@ -71,16 +71,16 @@ type selectedWorkflow struct {
 }
 
 type sourceCandidate struct {
-	id        uuid.UUID
-	revision  int64
-	binding   processing.CandidateBinding
-	state     string
-	barrierAt sql.NullTime
+	id       uuid.UUID
+	revision int64
+	binding  processing.CandidateBinding
+	state    string
 }
 
-// NewProcessingSourceOwner wires intake-owned source authority to the existing publication barrier.
+// NewProcessingSourceOwner wires intake-owned source authority to Processing admission, evidence
+// publication and the Transmission's processing status.
 func NewProcessingSourceOwner(store *Store, matcher *assignments.Service, repository processingSourceRepository,
-	facts events.ProcessingAppender, clock platform.Clock, artifacts processing.InstalledArtifacts,
+	facts events.ProcessingAppender, clock platform.Clock, artifacts processing.InstalledArtifactOwner,
 	executions *processing.InstanceExecutions, principals processing.ExecutionPrincipalResolver,
 ) (*ProcessingSourceOwner, error) {
 	if store == nil || matcher == nil || repository == nil || facts == nil || clock == nil ||
@@ -102,6 +102,7 @@ var _ worker.Publisher = (*ProcessingSourceOwner)(nil)
 var _ publication.SourceOwner = (*ProcessingSourceOwner)(nil)
 var _ processing.InvocationSourceOwner = (*ProcessingSourceOwner)(nil)
 var _ processingmanagement.RetrySource = (*ProcessingSourceOwner)(nil)
+var _ assignments.ProcessingReadmission = (*ProcessingSourceOwner)(nil)
 
 // CaptureCandidate returns a detached original source and a run-owned installed invocation boundary.
 func (o *ProcessingSourceOwner) CaptureCandidate(ctx context.Context, tx platform.TransactionContext,
@@ -231,7 +232,71 @@ func (o *ProcessingSourceOwner) CheckRetrySource(ctx context.Context, tx platfor
 	return o.checkDefinitionInstances(ctx, tx, definition)
 }
 
-// ReconcileCandidate supersedes obsolete bindings and admits the current selected Workflow set.
+// expectedBindings returns the current candidate binding per selected Workflow for a source snapshot.
+func expectedBindings(snapshot sourceSnapshot, configurationRevision int64, workflows []selectedWorkflow) map[uuid.UUID]processing.CandidateBinding {
+	expected := make(map[uuid.UUID]processing.CandidateBinding, len(workflows))
+	for _, workflow := range workflows {
+		expected[workflow.id] = processing.CandidateBinding{
+			TransmissionID: snapshot.transmission, WorkflowID: workflow.id,
+			DefinitionVersionID: workflow.version, SourceRevision: snapshot.identity.SourceRevision,
+			ContextRevision: snapshot.identity.ContextRevision, WorkflowRevision: workflow.revision,
+			ConfigurationRevision: configurationRevision,
+		}
+	}
+	return expected
+}
+
+// sameKey reports whether a stored candidate binding identifies the same durable candidate as the
+// expected one: same Workflow version and same source and Assignment context revisions.
+func sameKey(stored, expected processing.CandidateBinding) bool {
+	return stored.DefinitionVersionID == expected.DefinitionVersionID &&
+		stored.SourceRevision == expected.SourceRevision && stored.ContextRevision == expected.ContextRevision
+}
+
+// reconcileBindings supersedes every candidate whose binding is no longer current and admits a
+// candidate for every selected Workflow, reselecting an existing one whose Workflow or configuration
+// revision moved. It returns the resulting candidate per Workflow and the superseded candidates.
+func (o *ProcessingSourceOwner) reconcileBindings(ctx context.Context, tx platform.TransactionContext,
+	snapshot sourceSnapshot, configurationRevision int64, workflows []selectedWorkflow, candidates []sourceCandidate,
+) (map[uuid.UUID]processing.Candidate, []processing.Candidate, error) {
+	expected := expectedBindings(snapshot, configurationRevision, workflows)
+	current := make(map[uuid.UUID]processing.Candidate, len(expected))
+	var superseded []processing.Candidate
+	for _, row := range candidates {
+		if row.state == "superseded" {
+			continue
+		}
+		binding, active := expected[row.binding.WorkflowID]
+		if !active || !sameKey(row.binding, binding) {
+			candidate, err := o.repository.SupersedeCandidate(ctx, tx, row.id, row.revision)
+			if err != nil {
+				return nil, nil, err
+			}
+			superseded = append(superseded, candidate)
+			continue
+		}
+		candidate, err := o.repository.AdmitCandidate(ctx, tx, binding)
+		if err != nil {
+			return nil, nil, err
+		}
+		current[row.binding.WorkflowID] = candidate
+	}
+	for _, workflow := range workflows {
+		if _, admitted := current[workflow.id]; admitted {
+			continue
+		}
+		candidate, err := o.repository.AdmitCandidate(ctx, tx, expected[workflow.id])
+		if err != nil {
+			return nil, nil, err
+		}
+		current[workflow.id] = candidate
+	}
+	return current, superseded, nil
+}
+
+// ReconcileCandidate supersedes obsolete bindings, including the selected candidate's own when
+// its source or Assignment context moved, and admits the current selected Workflow set. It returns
+// the selected candidate's persisted state after that reconciliation.
 func (o *ProcessingSourceOwner) ReconcileCandidate(ctx context.Context, tx platform.TransactionContext,
 	selected processing.Candidate,
 ) (processing.Candidate, error) {
@@ -247,78 +312,44 @@ func (o *ProcessingSourceOwner) ReconcileCandidate(ctx context.Context, tx platf
 	if err != nil {
 		return processing.Candidate{}, err
 	}
-	if !snapshot.targetsCurrent || snapshot.identity.SourceRevision != selected.SourceRevision ||
-		snapshot.identity.ContextRevision != selected.ContextRevision {
+	if !snapshot.targetsCurrent {
 		return o.supersedeCandidates(ctx, tx, candidates, selected.ID)
 	}
 	workflows, err := o.selectWorkflows(ctx, tx, snapshot)
 	if err != nil {
 		return processing.Candidate{}, err
 	}
-	expected := make(map[uuid.UUID]processing.CandidateBinding, len(workflows))
-	for _, workflow := range workflows {
-		expected[workflow.id] = processing.CandidateBinding{
-			TransmissionID: selected.TransmissionID, WorkflowID: workflow.id,
-			DefinitionVersionID: workflow.version, SourceRevision: snapshot.identity.SourceRevision,
-			ContextRevision: snapshot.identity.ContextRevision, WorkflowRevision: workflow.revision,
-			ConfigurationRevision: configurationRevision,
-		}
+	current, superseded, err := o.reconcileBindings(ctx, tx, snapshot, configurationRevision, workflows, candidates)
+	if err != nil {
+		return processing.Candidate{}, err
 	}
-	var current processing.Candidate
-	var currentFound bool
-	for _, row := range candidates {
-		binding, active := expected[row.binding.WorkflowID]
-		if row.state == "superseded" {
-			continue
-		}
-		if !active || binding.DefinitionVersionID != row.binding.DefinitionVersionID ||
-			binding.SourceRevision != row.binding.SourceRevision ||
-			binding.ContextRevision != row.binding.ContextRevision {
-			superseded, err := o.repository.SupersedeCandidate(ctx, tx, row.id, row.revision)
-			if err != nil {
-				return processing.Candidate{}, err
-			}
-			if superseded.ID == selected.ID {
-				current, currentFound = superseded, true
-			}
-			continue
-		}
-		candidate, err := o.repository.AdmitCandidate(ctx, tx, binding)
-		if err != nil {
-			return processing.Candidate{}, err
-		}
-		delete(expected, row.binding.WorkflowID)
+	for _, candidate := range superseded {
 		if candidate.ID == selected.ID {
-			current, currentFound = candidate, true
+			return candidate, nil
 		}
 	}
-	for _, workflow := range workflows {
-		binding, remaining := expected[workflow.id]
-		if !remaining {
-			continue
-		}
-		candidate, err := o.repository.AdmitCandidate(ctx, tx, binding)
-		if err != nil {
-			return processing.Candidate{}, err
-		}
+	for _, candidate := range current {
 		if candidate.ID == selected.ID {
-			current, currentFound = candidate, true
+			return candidate, nil
 		}
 	}
-	if !currentFound {
-		return processing.Candidate{}, platform.NewFailure(platform.CodeRevisionConflict, errors.New("selected candidate was replaced"))
-	}
-	return current, nil
+	return processing.Candidate{}, platform.NewFailure(platform.CodeRevisionConflict, errors.New("selected candidate was replaced"))
 }
 
-// Publish waits for the full selected set, then invokes the existing atomic publication service.
-func (o *ProcessingSourceOwner) Publish(ctx context.Context, tx platform.TransactionContext, transmission uuid.UUID) error {
+// ReadmitProcessing supersedes the Transmission's candidates whose binding is no longer current,
+// admits a candidate for every currently selected Workflow without one and refreshes the
+// processing status, in the caller's transaction. The correction runner calls it for every
+// Transmission whose target resolution it changed. It fails with a revision conflict while the
+// stored targets differ from the current matching.
+func (o *ProcessingSourceOwner) ReadmitProcessing(ctx context.Context, tx platform.TransactionContext,
+	transmission uuid.UUID,
+) error {
 	snapshot, err := o.readSource(ctx, tx, transmission)
 	if err != nil {
 		return err
 	}
 	if !snapshot.targetsCurrent {
-		return platform.NewFailure(platform.CodeRevisionConflict, errors.New("current target context differs from accepted context"))
+		return platform.NewFailure(platform.CodeRevisionConflict, errors.New("stored targets differ from current matching"))
 	}
 	configurationRevision, err := o.repository.LockRevision(ctx, tx)
 	if err != nil {
@@ -332,25 +363,23 @@ func (o *ProcessingSourceOwner) Publish(ctx context.Context, tx platform.Transac
 	if err != nil {
 		return err
 	}
-	for _, workflow := range workflows {
-		binding := processing.CandidateBinding{TransmissionID: transmission, WorkflowID: workflow.id,
-			DefinitionVersionID: workflow.version, SourceRevision: snapshot.identity.SourceRevision,
-			ContextRevision: snapshot.identity.ContextRevision, WorkflowRevision: workflow.revision,
-			ConfigurationRevision: configurationRevision}
-		found := false
-		for _, candidate := range candidates {
-			if candidate.binding == binding && candidate.state != "superseded" {
-				found = true
-				if candidate.state != "completed" {
-					return nil
-				}
-				break
-			}
-		}
-		if !found {
-			return platform.NewFailure(platform.CodeRevisionConflict, errors.New("current Workflow candidate is missing"))
-		}
+	if _, _, err := o.reconcileBindings(ctx, tx, snapshot, configurationRevision, workflows, candidates); err != nil {
+		return err
 	}
+	candidates, err = o.readCandidates(ctx, tx, transmission)
+	if err != nil {
+		return err
+	}
+	executor, err := o.store.primary.Resolve(tx)
+	if err != nil {
+		return err
+	}
+	return o.refreshProcessingStatus(ctx, executor, snapshot, configurationRevision, workflows, candidates)
+}
+
+// Publish attaches the completed evidence of the Transmission's current candidates to its Message
+// and refreshes its processing status through the publication service.
+func (o *ProcessingSourceOwner) Publish(ctx context.Context, tx platform.TransactionContext, transmission uuid.UUID) error {
 	return o.publication.Publish(ctx, tx, transmission)
 }
 
@@ -448,25 +477,29 @@ func (o *ProcessingSourceOwner) readSource(ctx context.Context, tx platform.Tran
 	if err != nil {
 		return sourceSnapshot{}, err
 	}
+	// Control rows are locked before the Transmission row so that the worker and the
+	// correction runner acquire locks in the same order.
+	if _, err := o.matcher.HoldRevision(ctx, tx); err != nil {
+		return sourceSnapshot{}, err
+	}
 	var snapshot sourceSnapshot
 	var protocolValue, networkProtocol string
 	var payloadJSON, targetsJSON []byte
 	err = executor.QueryRowContext(ctx, `SELECT t.network_id,t.message_id,t.protocol,t.payload,t.targets,
-		t.observed_at,t.source_revision,t.processing_status,t.publication_status,n.name,n.protocol
+		t.observed_at,t.source_revision,t.processing_status,n.name,n.protocol
 		FROM transmissions t JOIN networks n ON n.id=t.network_id AND n.deleted=false
 		WHERE t.id=$1 FOR UPDATE OF t`, transmission).Scan(
 		&snapshot.network, &snapshot.message, &protocolValue, &payloadJSON, &targetsJSON,
 		&snapshot.observedAt, &snapshot.sourceRevision, &snapshot.processingStatus,
-		&snapshot.publicationStatus, &snapshot.networkName, &networkProtocol)
+		&snapshot.networkName, &networkProtocol)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return sourceSnapshot{}, authz.ErrNotFound
 		}
 		return sourceSnapshot{}, err
 	}
-	if snapshot.processingStatus != "pending" || snapshot.publicationStatus != "pending" ||
-		snapshot.sourceRevision <= 0 {
-		return sourceSnapshot{}, platform.NewFailure(platform.CodeRevisionConflict, errors.New("Transmission is not unpublished"))
+	if snapshot.sourceRevision <= 0 {
+		return sourceSnapshot{}, platform.NewFailure(platform.CodeRevisionConflict, errors.New("Transmission has no source revision"))
 	}
 	snapshot.transmission = transmission
 	snapshot.protocol = protocols.Protocol(protocolValue)
@@ -544,19 +577,6 @@ func (o *ProcessingSourceOwner) targetsMatch(ctx context.Context, tx platform.Tr
 	executor, err := o.store.primary.Resolve(tx)
 	if err != nil {
 		return false, err
-	}
-	var correctionPending bool
-	if err := executor.QueryRowContext(ctx, `SELECT EXISTS(
-		SELECT 1 FROM assignment_pending_scopes scope
-		WHERE scope.state IN ('queued','running','failed')
-		AND (jsonb_array_length(scope.network_ids)=0 OR scope.network_ids @> jsonb_build_array($1::text) OR EXISTS (
-			SELECT 1 FROM transmission_targets affected
-			WHERE affected.transmission_id=$2 AND affected.unit_id=scope.unit_id)))`,
-		snapshot.network, snapshot.transmission).Scan(&correctionPending); err != nil {
-		return false, err
-	}
-	if correctionPending {
-		return false, nil
 	}
 	rows, err := executor.QueryContext(ctx, `SELECT position,resolution_status,unit_id::text,matched_rule_id::text,
 		assignment_revision FROM transmission_targets WHERE transmission_id=$1 ORDER BY position FOR UPDATE`,
@@ -737,7 +757,7 @@ func (o *ProcessingSourceOwner) readCandidates(ctx context.Context, tx platform.
 	}
 	rows, err := executor.QueryContext(ctx, `SELECT id,revision,transmission_id,workflow_id,
 		definition_version_id,workflow_revision,configuration_revision,source_revision,context_revision,
-		state,barrier_applied_at FROM processing_candidates WHERE transmission_id=$1
+		state FROM processing_candidates WHERE transmission_id=$1
 		ORDER BY workflow_id,definition_version_id,id FOR UPDATE`, transmission)
 	if err != nil {
 		return nil, err
@@ -750,7 +770,7 @@ func (o *ProcessingSourceOwner) readCandidates(ctx context.Context, tx platform.
 			&candidate.binding.WorkflowID, &candidate.binding.DefinitionVersionID,
 			&candidate.binding.WorkflowRevision, &candidate.binding.ConfigurationRevision,
 			&candidate.binding.SourceRevision, &candidate.binding.ContextRevision,
-			&candidate.state, &candidate.barrierAt); err != nil {
+			&candidate.state); err != nil {
 			return nil, err
 		}
 		candidates = append(candidates, candidate)
@@ -764,9 +784,6 @@ func (o *ProcessingSourceOwner) supersedeCandidates(ctx context.Context, tx plat
 	var result processing.Candidate
 	var found bool
 	for _, row := range candidates {
-		if row.barrierAt.Valid {
-			continue
-		}
 		if row.state == "superseded" && row.id != selected {
 			continue
 		}
@@ -956,13 +973,10 @@ func (o *ProcessingSourceOwner) checkPublicationAuthority(ctx context.Context, t
 	return authorizeAll(item.Definition.Steps)
 }
 
-// ApplyReadiness is the publication barrier. It requires a completed, barrier-stamped
-// candidate for every currently selected Workflow (otherwise a revision conflict), then
-// marks the Transmission processed and ready. When this makes every Transmission of the
-// Message ready, the Message and all its contributions are marked ready as well. The
-// source identity and Message revision must still match binding; a missing Message is
-// authz.ErrNotFound.
-func (o *ProcessingSourceOwner) ApplyReadiness(ctx context.Context, tx platform.TransactionContext,
+// ApplyProcessingStatus rechecks the source identity, Message revision and configuration revision
+// of binding and derives the Transmission's processing status from its current candidates (see
+// refreshProcessingStatus). Staleness is a revision conflict; a missing Message is authz.ErrNotFound.
+func (o *ProcessingSourceOwner) ApplyProcessingStatus(ctx context.Context, tx platform.TransactionContext,
 	binding processing.PublicationBinding,
 ) error {
 	snapshot, err := o.readSource(ctx, tx, binding.Source.TransmissionID)
@@ -970,7 +984,7 @@ func (o *ProcessingSourceOwner) ApplyReadiness(ctx context.Context, tx platform.
 		return err
 	}
 	if !snapshot.targetsCurrent || snapshot.identity != binding.Source || snapshot.message != binding.MessageID {
-		return platform.NewFailure(platform.CodeRevisionConflict, errors.New("publication source changed before readiness"))
+		return platform.NewFailure(platform.CodeRevisionConflict, errors.New("publication source changed before the status refresh"))
 	}
 	executor, err := o.store.primary.Resolve(tx)
 	if err != nil {
@@ -999,52 +1013,52 @@ func (o *ProcessingSourceOwner) ApplyReadiness(ctx context.Context, tx platform.
 	if err != nil {
 		return err
 	}
-	for _, workflow := range workflows {
-		expected := processing.CandidateBinding{TransmissionID: binding.Source.TransmissionID,
-			WorkflowID: workflow.id, DefinitionVersionID: workflow.version,
-			SourceRevision: binding.Source.SourceRevision, ContextRevision: binding.Source.ContextRevision,
-			WorkflowRevision: workflow.revision, ConfigurationRevision: configurationRevision}
-		found := false
-		for _, candidate := range candidates {
-			if candidate.binding == expected && candidate.state == "completed" && candidate.barrierAt.Valid {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return platform.NewFailure(platform.CodeRevisionConflict, errors.New("publication barrier is incomplete"))
-		}
-	}
-	changed, err := executor.ExecContext(ctx, `UPDATE transmissions SET processing_status='completed',
-		publication_status='ready' WHERE id=$1 AND network_id=$2 AND message_id=$3 AND source_revision=$4
-		AND processing_status='pending' AND publication_status='pending'`,
-		binding.Source.TransmissionID, binding.Source.NetworkID, binding.MessageID, binding.Source.SourceRevision)
-	if err != nil {
-		return err
-	}
-	count, err := changed.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if count != 1 {
-		return platform.NewFailure(platform.CodeRevisionConflict, errors.New("Transmission readiness fence changed"))
-	}
-	var pending bool
-	if err := executor.QueryRowContext(ctx, `SELECT EXISTS(
-		SELECT 1 FROM transmissions WHERE message_id=$1 AND publication_status <> 'ready')`,
-		binding.MessageID).Scan(&pending); err != nil {
-		return err
-	}
-	if pending {
+	return o.refreshProcessingStatus(ctx, executor, snapshot, configurationRevision, workflows, candidates)
+}
+
+// refreshProcessingStatus derives the Transmission's processing status from the candidates of its
+// currently selected Workflows: pending while any is pending or running, failed when none is
+// pending and at least one failed, completed when all have completed. Candidates of bindings that
+// are no longer current are ignored, and a Transmission without a current candidate keeps its status.
+func (o *ProcessingSourceOwner) refreshProcessingStatus(ctx context.Context, executor postgres.Executor,
+	snapshot sourceSnapshot, configurationRevision int64, workflows []selectedWorkflow, candidates []sourceCandidate,
+) error {
+	status, decided := processingStatus(expectedBindings(snapshot, configurationRevision, workflows), candidates)
+	if !decided {
 		return nil
 	}
-	if _, err := executor.ExecContext(ctx, `UPDATE messages SET publication_status='ready' WHERE id=$1`,
-		binding.MessageID); err != nil {
-		return err
-	}
-	_, err = executor.ExecContext(ctx, `UPDATE message_contributions SET ready=true WHERE message_id=$1`,
-		binding.MessageID)
+	_, err := executor.ExecContext(ctx, `UPDATE transmissions SET processing_status=$2
+		WHERE id=$1 AND processing_status<>$2`, snapshot.transmission, status)
 	return err
+}
+
+// processingStatus folds the states of the current candidates into one Transmission status; the
+// bool is false when no current candidate exists.
+func processingStatus(expected map[uuid.UUID]processing.CandidateBinding, candidates []sourceCandidate) (string, bool) {
+	var current, pending, failed bool
+	for _, candidate := range candidates {
+		binding, active := expected[candidate.binding.WorkflowID]
+		if !active || !sameKey(candidate.binding, binding) || candidate.state == "superseded" {
+			continue
+		}
+		current = true
+		switch candidate.state {
+		case "pending", "running":
+			pending = true
+		case "failed":
+			failed = true
+		}
+	}
+	switch {
+	case !current:
+		return "", false
+	case pending:
+		return "pending", true
+	case failed:
+		return "failed", true
+	default:
+		return "completed", true
+	}
 }
 
 func (o *ProcessingSourceOwner) authorizationTarget(snapshot sourceSnapshot, position *uint32) (authz.Target, error) {
@@ -1088,8 +1102,7 @@ func (o *ProcessingSourceOwner) checkDefinitionInstances(ctx context.Context, tx
 				if _, err := o.principals.ResolvePrincipalAuthority(ctx, tx, configuration.ExecutionPrincipalID); err != nil {
 					return err
 				}
-				artifact, err := o.artifacts.PrepareInstalled(ctx, step.Installed.InstanceID,
-					step.Installed.ConfigurationRevision)
+				artifact, err := o.artifacts.LoadInstalled(ctx, configuration)
 				if err != nil {
 					return err
 				}

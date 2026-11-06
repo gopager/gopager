@@ -223,20 +223,6 @@ func (_c *ProcessingCandidateCreate) SetNillableFailureStep(v *string) *Processi
 	return _c
 }
 
-// SetBarrierAppliedAt sets the "barrier_applied_at" field.
-func (_c *ProcessingCandidateCreate) SetBarrierAppliedAt(v time.Time) *ProcessingCandidateCreate {
-	_c.mutation.SetBarrierAppliedAt(v)
-	return _c
-}
-
-// SetNillableBarrierAppliedAt sets the "barrier_applied_at" field if the given value is not nil.
-func (_c *ProcessingCandidateCreate) SetNillableBarrierAppliedAt(v *time.Time) *ProcessingCandidateCreate {
-	if v != nil {
-		_c.SetBarrierAppliedAt(*v)
-	}
-	return _c
-}
-
 // SetCreatedAt sets the "created_at" field.
 func (_c *ProcessingCandidateCreate) SetCreatedAt(v time.Time) *ProcessingCandidateCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -539,10 +525,6 @@ func (_c *ProcessingCandidateCreate) createSpec() (*ProcessingCandidate, *sqlgra
 	if value, ok := _c.mutation.FailureStep(); ok {
 		_spec.SetField(processingcandidate.FieldFailureStep, field.TypeString, value)
 		_node.FailureStep = &value
-	}
-	if value, ok := _c.mutation.BarrierAppliedAt(); ok {
-		_spec.SetField(processingcandidate.FieldBarrierAppliedAt, field.TypeTime, value)
-		_node.BarrierAppliedAt = &value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(processingcandidate.FieldCreatedAt, field.TypeTime, value)

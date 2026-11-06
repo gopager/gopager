@@ -31,6 +31,10 @@ func (f *authorityFixture) LockAccess(context.Context, platform.TransactionConte
 	return 7, f.failure
 }
 
+func (f *authorityFixture) LockAccessForChange(context.Context, platform.TransactionContext) (int64, error) {
+	return 7, f.failure
+}
+
 func (f *authorityFixture) Account(context.Context, platform.TransactionContext, uuid.UUID) (AccountRecord, error) {
 	return f.account, nil
 }

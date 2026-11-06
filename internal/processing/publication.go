@@ -9,7 +9,7 @@ import (
 )
 
 // PublicationBinding comes from the current source-publication owner, never a compute worker.
-// Its source fence must be rechecked atomically when the source owner applies readiness.
+// Its source fence is rechecked when the source owner refreshes the Transmission's processing status.
 type PublicationBinding struct {
 	Source      SourceIdentity
 	MessageID   uuid.UUID
@@ -26,16 +26,26 @@ func (b PublicationBinding) Validate() error {
 	return nil
 }
 
-// PublicationItem carries completed private work and its actually saved definition.
-// A false selection has no Result, but still participates in the source barrier.
+// PublicationItem carries one candidate's current state, its actually saved definition and, for a
+// selected completion, its private result. A candidate that is not completed, not selected or
+// whose result is already published has nothing left to publish.
 type PublicationItem struct {
 	Candidate  Candidate
 	Definition Definition
 	Result     *PrivateResult
 }
 
+// Publishable reports whether the item holds a completed selected result that has not been
+// attached to its Message yet.
+func (i PublicationItem) Publishable() bool {
+	return i.Candidate.State == "completed" && i.Candidate.Selected != nil && *i.Candidate.Selected &&
+		i.Result != nil && i.Result.PublishedAt == nil
+}
+
 // PublicationRepository reads and applies current private evidence in the caller's source transaction.
-// The coordinating source owner supplies the complete current eligible set and verifies its own fence.
+// ReadPublicationItem returns authz.ErrNotFound when no candidate exists for the binding and a
+// revision conflict when the binding's Workflow or configuration is no longer current; the
+// coordinating source owner supplies the current candidate set and verifies its own fence.
 type PublicationRepository interface {
 	ReadPublicationItem(context.Context, platform.TransactionContext, CandidateBinding) (PublicationItem, error)
 	ApplyPublicationItem(context.Context, platform.TransactionContext, PublicationBinding, PublicationItem) error

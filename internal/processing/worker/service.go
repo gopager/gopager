@@ -37,7 +37,8 @@ type WorkSourceOwner interface {
 	ReconcileCandidate(context.Context, platform.TransactionContext, processing.Candidate) (processing.Candidate, error)
 }
 
-// Publisher applies completed private evidence and source readiness in the same primary transaction.
+// Publisher attaches completed private evidence to the Message and refreshes the Transmission's
+// processing status in the same primary transaction as the candidate transition.
 type Publisher interface {
 	Publish(context.Context, platform.TransactionContext, uuid.UUID) error
 }
@@ -261,7 +262,8 @@ func (s *Service) run(ctx context.Context, pending processing.Candidate, publish
 	}
 }
 
-// finish revalidates current source authority before a fenced completion or classified failure.
+// finish revalidates current source authority before a fenced completion or classified failure;
+// with a publisher, either outcome also refreshes the Transmission's processing status.
 func (s *Service) finish(ctx context.Context, current processing.Candidate, captured Capture,
 	result outcome, publish bool) (processing.Candidate, *processing.PrivateResult, error) {
 	lease, err := current.Lease()
@@ -278,15 +280,21 @@ func (s *Service) finish(ctx context.Context, current processing.Candidate, capt
 			code, retryable := classifyFailure(result.err)
 			var err error
 			completed, err = s.repository.FailCandidate(tx.Context(), tx, lease, code, retryable)
-			return err
+			if err != nil {
+				return err
+			}
+		} else {
+			source, err := captured.Source.Identity()
+			if err != nil {
+				return err
+			}
+			completed, evidence, err = s.repository.CompleteCandidate(tx.Context(), tx, lease, source.OriginalTargetCount, result.evaluation)
+			if err != nil {
+				return err
+			}
 		}
-		source, err := captured.Source.Identity()
-		if err != nil {
-			return err
-		}
-		completed, evidence, err = s.repository.CompleteCandidate(tx.Context(), tx, lease, source.OriginalTargetCount, result.evaluation)
-		if err != nil || !publish {
-			return err
+		if !publish {
+			return nil
 		}
 		if s.publisher == nil {
 			return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Processing publication owner unavailable"))

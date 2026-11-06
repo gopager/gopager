@@ -71,7 +71,10 @@ func NewInstanceExecutions(host *PluginHost, root *os.Root, transactions Executi
 		resolver: resolver, runs: make(map[*InstanceExecution]map[uuid.UUID]int64), changed: make(chan struct{})}, nil
 }
 
-// Begin allocates an isolated run; callers evaluate with Context and close after all dependent work joins.
+// Begin allocates an isolated run; callers evaluate with Context and close after all dependent
+// work joins. The run's context is independent of ctx, which only has to be live at this call:
+// a run begun inside a primary transaction outlives that transaction and ends with Close, with
+// InstanceChanged for its instance, or with the manager's Close.
 func (m *InstanceExecutions) Begin(ctx context.Context, binding ExecutionBinding, source InvocationSourceOwner) (*InstanceExecution, error) {
 	if ctx == nil || source == nil || binding.WorkflowID == uuid.Nil || binding.DefinitionVersionID == uuid.Nil ||
 		binding.RunID == uuid.Nil || binding.Source.TransmissionID == uuid.Nil || binding.Source.NetworkID == uuid.Nil ||
@@ -86,8 +89,8 @@ func (m *InstanceExecutions) Begin(ctx context.Context, binding ExecutionBinding
 	if m.closed {
 		return nil, capabilityUnavailable(errors.New("installed execution manager closed"))
 	}
-	ctx, cancel := context.WithCancel(ctx)
-	run := &InstanceExecution{manager: m, binding: binding, source: source, ctx: ctx, cancel: cancel,
+	runCtx, cancel := context.WithCancel(context.Background())
+	run := &InstanceExecution{manager: m, binding: binding, source: source, ctx: runCtx, cancel: cancel,
 		prepared: make(map[uuid.UUID]preparedInstance)}
 	m.runs[run] = make(map[uuid.UUID]int64)
 	return run, nil

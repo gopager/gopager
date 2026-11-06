@@ -64,6 +64,7 @@ type Page[T any] struct {
 // Services own proof/CSRF/scope validation and atomically participate in receipts/audit/facts.
 type ConfigurationRepository interface {
 	LockRevision(context.Context, platform.TransactionContext) (int64, error)
+	LockRevisionForChange(context.Context, platform.TransactionContext) (int64, error)
 	ReadWorkflow(context.Context, platform.TransactionContext, authz.Authority, string, uuid.UUID, time.Time) (WorkflowConfiguration, error)
 	ListWorkflows(context.Context, platform.TransactionContext, authz.Authority, PageInput, time.Time) (Page[WorkflowConfiguration], error)
 	ReadVersion(context.Context, platform.TransactionContext, authz.Authority, uuid.UUID, uuid.UUID, time.Time) (Version, error)

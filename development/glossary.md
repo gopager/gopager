@@ -21,7 +21,7 @@ Fixed names of the architecture domains. Ownership and boundaries: [Domains and 
 | **Identity** | `identity` | Principals, credentials, sessions, User groups, grants and central authorization | Gateway identity |
 | **Query** | `query` | Search, feed, details and live projections | Projection |
 | **Delivery** | `delivery` | Domain event records/outbox, Subscriptions, Delivery targets, Delivery jobs and attempts | Delivery (one outbound send) |
-| **Processing** | `processing` | Workflows, Processing results, presentation configuration and the publication barrier | Processing of a Transmission in general, Workflow execution |
+| **Processing** | `processing` | Workflows, Processing results, presentation configuration and the Transmission processing status | Processing of a Transmission in general, Workflow execution |
 
 ## Radio and Gateway Side
 
@@ -144,7 +144,7 @@ The [D-125 term addition](authoritative-plan.md#ap-08-unit-template-ownership) s
 | **Extension field** | Plugin-namespaced, typed, versioned field attached to a supported Core entity (initially Unit), with explicit read/write permissions and no automatic rights. | Assignment, arbitrary database column |
 | **Workflow** | Versioned ingest-processing definition selecting Transmissions and composing bounded parsing/mapping/branching steps or trusted installed code steps. Multiple matching Workflows may run independently. | Subscription, Delivery |
 | **Workflow definition version** | Immutable saved selector/step/output-schema definition referenced by a Workflow's active pointer and source-bound Processing results. Saving is not activation or historical reprocessing. | Mutable Workflow revision, Address-rule validity |
-| **Ingest publication barrier** | Requirement that selected ingest Workflows and current target/contribution derivation are ready before their new evidence/results enter normal GUI/search/Delivery projections. It does not delay honest original-intake acknowledgement or erase previously ready evidence. | Provider acceptance, whole-Message retention |
+| **Processing status** | Per-Transmission marker (`none`, `pending`, `completed`, `failed`) derived from the candidates of the currently selected Workflows. Accepted evidence is visible from intake; Workflow results attach to the Message when they complete, and `processing.completed` is the trigger for result-dependent reactions. Replaces the ingest publication barrier under [D-135](authoritative-plan.md#foundation-redesign-after-the-2026-11-06-re-evaluation). | Provider acceptance, whole-Message retention |
 | **Workflow selector** | Explicit trigger and correlated domain/Payload predicate deciding whether a Workflow runs for a particular Transmission. | Grant |
 | **Workflow candidate work** | Durable evaluation work for a scope-eligible Workflow; its admission does not prove that the selector matched. The Processing and Delivery domains own its [approved lifecycle](contracts/c-08-events-jobs.md#processing-durable-selection-placement-review), introduced under D-75. | Selected Workflow execution, published Processing result |
 | **Execution generation proposal** | Unapproved D-77 alternative for separately identifiable evaluation work under the stable logical candidate key. The Processing and Delivery domains own the [reselection binding review](contracts/c-08-events-jobs.md#processing-same-input-reselection-review); it is not the current adopted schema or a second queue. | Candidate revision, Fencing token, automatically renewed retry budget |

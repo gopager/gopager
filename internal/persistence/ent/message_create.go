@@ -73,20 +73,6 @@ func (_c *MessageCreate) SetLastObservedAt(v time.Time) *MessageCreate {
 	return _c
 }
 
-// SetPublicationStatus sets the "publication_status" field.
-func (_c *MessageCreate) SetPublicationStatus(v message.PublicationStatus) *MessageCreate {
-	_c.mutation.SetPublicationStatus(v)
-	return _c
-}
-
-// SetNillablePublicationStatus sets the "publication_status" field if the given value is not nil.
-func (_c *MessageCreate) SetNillablePublicationStatus(v *message.PublicationStatus) *MessageCreate {
-	if v != nil {
-		_c.SetPublicationStatus(*v)
-	}
-	return _c
-}
-
 // SetID sets the "id" field.
 func (_c *MessageCreate) SetID(v uuid.UUID) *MessageCreate {
 	_c.mutation.SetID(v)
@@ -138,10 +124,6 @@ func (_c *MessageCreate) defaults() error {
 		v := message.DefaultIdentitySubtype
 		_c.mutation.SetIdentitySubtype(v)
 	}
-	if _, ok := _c.mutation.PublicationStatus(); !ok {
-		v := message.DefaultPublicationStatus
-		_c.mutation.SetPublicationStatus(v)
-	}
 	return nil
 }
 
@@ -174,14 +156,6 @@ func (_c *MessageCreate) check() error {
 	}
 	if _, ok := _c.mutation.LastObservedAt(); !ok {
 		return &ValidationError{Name: "last_observed_at", err: errors.New(`ent: missing required field "Message.last_observed_at"`)}
-	}
-	if _, ok := _c.mutation.PublicationStatus(); !ok {
-		return &ValidationError{Name: "publication_status", err: errors.New(`ent: missing required field "Message.publication_status"`)}
-	}
-	if v, ok := _c.mutation.PublicationStatus(); ok {
-		if err := message.PublicationStatusValidator(v); err != nil {
-			return &ValidationError{Name: "publication_status", err: fmt.Errorf(`ent: validator failed for field "Message.publication_status": %w`, err)}
-		}
 	}
 	return nil
 }
@@ -241,10 +215,6 @@ func (_c *MessageCreate) createSpec() (*Message, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.LastObservedAt(); ok {
 		_spec.SetField(message.FieldLastObservedAt, field.TypeTime, value)
 		_node.LastObservedAt = value
-	}
-	if value, ok := _c.mutation.PublicationStatus(); ok {
-		_spec.SetField(message.FieldPublicationStatus, field.TypeEnum, value)
-		_node.PublicationStatus = value
 	}
 	return _node, _spec
 }
