@@ -153,8 +153,8 @@ func TestInstalledWorkflowRunsOnProductionWiring(t *testing.T) {
 	}
 	var due []processing.Candidate
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		page, err := repository.ListCandidateWork(tx.Context(), tx, processing.PageInput{Limit: 10})
-		due = page.Items
+		page, err := repository.SelectDueWork(tx.Context(), tx, 10)
+		due = page
 		return err
 	}); err != nil {
 		t.Fatal(err)

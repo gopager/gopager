@@ -461,6 +461,8 @@ func (s *Store) admitProcessing(ctx context.Context, executor postgres.Executor,
 	status := "pending"
 	if len(selected) == 0 {
 		status = "none"
+	} else if _, err := executor.ExecContext(ctx, `SELECT pg_notify('gopager_processing_due', '')`); err != nil {
+		return "", err
 	}
 	if _, err := executor.ExecContext(ctx, `UPDATE transmissions SET processing_status=$2 WHERE id=$1`,
 		transmission, status); err != nil {

@@ -23,6 +23,7 @@ import (
 // with one statement instead of repeating the locked migration check.
 type Store struct {
 	db            *sql.DB
+	config        *pgx.ConnConfig // parsed once; Listen derives dedicated connections from it
 	mu            sync.RWMutex
 	migrations    fs.FS
 	registered    bool
@@ -55,7 +56,7 @@ func NewStore(databaseURL string, allowInsecureRemote bool) (*Store, bool, error
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(30 * time.Minute)
-	return &Store{db: db}, insecureRemote, nil
+	return &Store{db: db, config: config}, insecureRemote, nil
 }
 
 // Ping verifies database connectivity, failing with CodeStorageUnavailable.

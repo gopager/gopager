@@ -81,7 +81,7 @@ The response is `202` when the processing status is `pending` and `200` otherwis
 
 | Step | What happens | Package |
 | --- | --- | --- |
-| Due selection | Pages through due candidates with bounded concurrency, a poll interval and wake-ups | `processing/worker.Dispatcher` |
+| Due selection | Selects due candidates with `FOR UPDATE SKIP LOCKED` (no control-row lock, no paging) for bounded concurrency; wakes on a `gopager_processing_due` notification, with a poll interval as fallback | `processing/worker.Dispatcher`, `processingstore.SelectDueWork`, `postgres.Store.Listen` |
 | Reconcile | Supersede candidates whose workflow, version, source or assignment context changed, including the dispatched one. Admit current bindings. Recover expired leases. | `ingeststore.ProcessingSourceOwner.ReconcileCandidate` |
 | Capture and claim | In one transaction: capture a detached source projection (payload fields, targets, Units, Network) and claim the candidate (lease, fencing token, worker ID) | `worker.Service`, `ProcessingSourceOwner.CaptureCandidate`, `processingstore` |
 | Evaluate | Outside any SQL transaction: compile the definition (CEL predicates, Core regex extraction, map, branch, installed plugin steps) and evaluate within a compute budget | `processing` (`WorkflowProgram.EvaluateScoped`, `PluginHost`) |

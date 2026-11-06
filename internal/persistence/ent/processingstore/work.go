@@ -3,6 +3,7 @@ package processingstore
 import (
 	"context"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/entql"
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
@@ -14,19 +15,18 @@ import (
 
 var _ processing.CandidateWorkRepository = (*Store)(nil)
 
-// ListCandidateWork pages due/expired private work using primary time and deterministic ordering.
-// Selection is not a claim; each worker must recheck current owner authority before reserving work.
-func (s *Store) ListCandidateWork(ctx context.Context, tx platform.TransactionContext, input processing.PageInput) (processing.Page[processing.Candidate], error) {
-	input, err := page(input)
-	if err != nil {
-		return processing.Page[processing.Candidate]{}, err
-	}
-	if _, err := s.LockRevision(ctx, tx); err != nil {
-		return processing.Page[processing.Candidate]{}, err
+// SelectDueWork returns up to limit due or lease-expired candidates ordered by due time and id,
+// judged on the primary clock. It locks the selected rows with FOR UPDATE SKIP LOCKED instead of
+// the Processing-control row, so concurrent dispatchers receive disjoint rows and never wait on
+// each other or on configuration changes. Selection is not a claim; each worker must recheck
+// current owner authority before reserving work.
+func (s *Store) SelectDueWork(ctx context.Context, tx platform.TransactionContext, limit int) ([]processing.Candidate, error) {
+	if limit < 1 {
+		return nil, authz.ErrInvalidInput
 	}
 	now, err := s.primary.Now(ctx, tx)
 	if err != nil {
-		return processing.Page[processing.Candidate]{}, err
+		return nil, err
 	}
 	client, scope, err := s.client(ctx, tx, map[string]entql.P{
 		"ProcessingCandidate": entql.Or(
@@ -34,24 +34,20 @@ func (s *Store) ListCandidateWork(ctx context.Context, tx platform.TransactionCo
 			entql.And(entql.FieldEQ("state", "running"), entql.FieldLTE("lease_until", now))),
 	}, nil)
 	if err != nil {
-		return processing.Page[processing.Candidate]{}, err
-	}
-	total, err := client.ProcessingCandidate.Query().Count(scope)
-	if err != nil {
-		return processing.Page[processing.Candidate]{}, err
+		return nil, err
 	}
 	rows, err := client.ProcessingCandidate.Query().Order(processingcandidate.ByDueAt(), processingcandidate.ByID()).
-		Offset(input.Offset).Limit(input.Limit).All(scope)
+		Limit(limit).ForUpdate(sql.WithLockAction(sql.SkipLocked)).All(scope)
 	if err != nil {
-		return processing.Page[processing.Candidate]{}, err
+		return nil, err
 	}
-	result := processing.Page[processing.Candidate]{Total: total, Items: make([]processing.Candidate, 0, len(rows))}
+	result := make([]processing.Candidate, 0, len(rows))
 	for _, row := range rows {
 		value, err := candidateState(row)
 		if err != nil {
-			return processing.Page[processing.Candidate]{}, err
+			return nil, err
 		}
-		result.Items = append(result.Items, value)
+		result = append(result, value)
 	}
 	return result, nil
 }

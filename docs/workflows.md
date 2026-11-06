@@ -489,11 +489,14 @@ Each worker process runs one dispatcher:
 
 | Setting | Default |
 | --- | --- |
-| Concurrent evaluations | 2 |
-| Fallback poll interval | 5 s |
-| Due-work page size | 200 |
+| Concurrent evaluations (`--processing-concurrency`) | 2 |
+| Fallback poll interval (`--processing-poll-interval`) | 5 s |
 
-Work is selected by primary-database time. A candidate is due if it is `pending` with `due_at ≤ now`, or `running` with `lease_until ≤ now`. Due work is ordered by `due_at` and ID. Selection is round-robin across pages. A slot whose work failed to dispatch cools down until the next poll or wake-up.
+Work is selected by primary-database time. A candidate is due if it is `pending` with `due_at ≤ now`, or `running` with `lease_until ≤ now`. Due work is ordered by `due_at` and ID. One selection asks for at most the configured concurrency plus the number of failed candidates this process still tracks, locks the rows with `FOR UPDATE SKIP LOCKED` and takes no lock on the Processing control row. Dispatchers selecting at the same time therefore receive different rows and never wait for each other or for a configuration change. The selection transaction ends before execution, so the lock only separates concurrent selections; the revision-checked claim below remains the guard against double execution.
+
+A dispatcher selects when it starts, when a wake-up arrives and on every poll. Intake sends a PostgreSQL notification on channel `gopager_processing_due` in the transaction that admits candidates; every worker process listens on a dedicated connection, so new work starts without waiting for the poll. The listener reconnects with backoff and signals once after each reconnect, because notifications sent while it was disconnected are lost. The poll is the fallback for such losses and for work that becomes due by time (retry delays, expired leases).
+
+A candidate whose dispatch failed cools down until the next wake-up or poll and is then retried behind fresh due work, so a persistently rejected early candidate cannot starve later ones.
 
 For each selected candidate the worker:
 
@@ -507,7 +510,7 @@ For each selected candidate the worker:
    - Installed calls add their own 30 s bound each. Exceeding it fails the run with `RESOURCE_LIMIT`.
    - Worker shutdown or a lost lease cancels the evaluation. Nothing is stored for that attempt; the candidate is recovered after its lease expires.
    - The aggregate encoded input and intermediate data is bounded to 1 MiB.
-   - The lease is renewed every 20 s, after the source is checked again.
+   - The lease is renewed every 20 s, after the source is checked again. A transient renewal failure (`STORAGE_UNAVAILABLE`, `AUTHORITY_UNAVAILABLE`, `COMMIT_UNCERTAIN`) does not abort the evaluation while the lease would still outlive the next renewal attempt; the renewal is retried at the next tick. A `REVISION_CONFLICT`, any other failure, or a lease that would expire without a renewal aborts the evaluation.
 4. **Finishes.** It rechecks the source and configuration, then writes under the lease fence:
    - **Success:** the candidate becomes `completed` with `selected` set. A result row is stored if selected and published in the same transaction (see [Publication](#publication)).
    - **Failure:** the failure is classified, then retried or marked terminal. The transmission's processing status is refreshed in the same transaction.
@@ -632,5 +635,5 @@ Result metadata returns `{"id", "revision", "completedAt"}`. Source identity, ex
 | Candidate lease / renewal interval | 60 s / 20 s | — |
 | Automatic attempts | 5 | terminal `failed` |
 | Retry delays | 30 s, 2 min, 10 min, 30 min, ±20 % jitter | — |
-| Dispatcher concurrency / poll interval | 2 / 5 s | — |
+| Dispatcher concurrency / poll interval | 2 / 5 s (`--processing-concurrency`, `--processing-poll-interval`) | `INVALID_INPUT` at startup if not positive |
 | Page `limit` (workflow, candidate and instance lists) | 1–200, default 50 | `INVALID_INPUT` |

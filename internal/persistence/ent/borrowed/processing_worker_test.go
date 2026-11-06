@@ -120,11 +120,11 @@ func TestProcessingWorkerPrivateEvaluationAndCurrentSourceRecheck(t *testing.T) 
 				t.Fatal(err)
 			}
 			if err := primary.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-				work, err := repository.ListCandidateWork(tx.Context(), tx, processing.PageInput{Limit: 1})
+				work, err := repository.SelectDueWork(tx.Context(), tx, 1)
 				if err != nil {
 					return err
 				}
-				if work.Total != 1 || len(work.Items) != 1 || work.Items[0].ID != pending.ID {
+				if len(work) != 1 || work[0].ID != pending.ID {
 					t.Fatalf("private due selection included terminal/unexpired work: %+v", work)
 				}
 				return nil

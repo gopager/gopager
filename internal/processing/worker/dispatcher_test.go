@@ -26,6 +26,7 @@ type dispatchFixture struct {
 	release  chan struct{}
 	exited   int
 	requests int
+	limits   []int
 }
 
 type dispatchTransaction struct{ ctx context.Context }
@@ -38,18 +39,16 @@ func (f *dispatchFixture) WithinTransaction(ctx context.Context, callback platfo
 	return callback(dispatchTransaction{ctx: ctx})
 }
 
-// ListCandidateWork exposes a bounded fixture snapshot without claiming native due/clock validation.
-func (f *dispatchFixture) ListCandidateWork(_ context.Context, _ platform.TransactionContext, input processing.PageInput) (processing.Page[processing.Candidate], error) {
+// SelectDueWork exposes a bounded fixture snapshot without claiming native due/clock validation.
+func (f *dispatchFixture) SelectDueWork(_ context.Context, _ platform.TransactionContext, limit int) ([]processing.Candidate, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.requests++
+	f.limits = append(f.limits, limit)
 	if f.listErr != nil {
-		return processing.Page[processing.Candidate]{}, f.listErr
+		return nil, f.listErr
 	}
-	start := min(input.Offset, len(f.items))
-	size := min(input.Limit, len(f.items)-start)
-	return processing.Page[processing.Candidate]{Total: len(f.items),
-		Items: append([]processing.Candidate(nil), f.items[start:start+size]...)}, nil
+	return append([]processing.Candidate(nil), f.items[:min(limit, len(f.items))]...), nil
 }
 
 // SupersedeCandidate is not part of this fixture's dispatch path and fails explicitly.
@@ -237,7 +236,7 @@ func TestDispatcherConfigurationValidationAndCustomScheduling(t *testing.T) {
 		go func() { done <- dispatcher.Run(ctx) }()
 		synctest.Wait()
 		if starts, _, active, _, _ := f.counts(); starts != config.Concurrency || active != config.Concurrency {
-			t.Fatalf("custom concurrency/page traversal ignored: starts=%d active=%d", starts, active)
+			t.Fatalf("custom concurrency ignored: starts=%d active=%d", starts, active)
 		}
 		cancel()
 		synctest.Wait()
@@ -403,6 +402,31 @@ func TestDispatcherStopsPromptlyWhileBackingOff(t *testing.T) {
 		}
 		if time.Since(start) != 0 {
 			t.Fatal("cancellation waited for backoff")
+		}
+	})
+}
+
+func TestDispatcherSelectsAtMostConcurrencyRowsPerAttempt(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		f := newDispatchFixture(5)
+		f.release = make(chan struct{})
+		dispatcher := newTestDispatcher(t, f)
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan error, 1)
+		go func() { done <- dispatcher.Run(ctx) }()
+		synctest.Wait()
+		// Rows running locally stay due in storage; asking for the full concurrency keeps free
+		// slots reachable behind them without paging.
+		f.mu.Lock()
+		limits := append([]int(nil), f.limits...)
+		f.mu.Unlock()
+		if len(limits) != 1 || limits[0] != DefaultDispatchConcurrency {
+			t.Fatalf("selection limits=%v want [%d]", limits, DefaultDispatchConcurrency)
+		}
+		cancel()
+		synctest.Wait()
+		if err := <-done; err != nil {
+			t.Fatal(err)
 		}
 	})
 }

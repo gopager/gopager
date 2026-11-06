@@ -191,8 +191,8 @@ func TestCorrectionReadmitsProcessingForChangedTargets(t *testing.T) {
 		t.Helper()
 		var due []processing.Candidate
 		if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-			page, err := processingRepository.ListCandidateWork(tx.Context(), tx, processing.PageInput{Limit: 10})
-			due = page.Items
+			page, err := processingRepository.SelectDueWork(tx.Context(), tx, 10)
+			due = page
 			return err
 		}); err != nil {
 			t.Fatal(err)

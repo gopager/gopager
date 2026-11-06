@@ -199,8 +199,8 @@ func (f *processingSourceFixture) dueCandidates(t *testing.T) []processing.Candi
 	t.Helper()
 	var items []processing.Candidate
 	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		page, err := f.processing.ListCandidateWork(tx.Context(), tx, processing.PageInput{Limit: 50})
-		items = page.Items
+		page, err := f.processing.SelectDueWork(tx.Context(), tx, 50)
+		items = page
 		return err
 	}); err != nil {
 		t.Fatal(err)

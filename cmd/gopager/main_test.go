@@ -3,8 +3,10 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gopager/gopager/internal/platform"
+	"github.com/gopager/gopager/internal/processing/worker"
 )
 
 func TestParseConfigBindsExplicitInputs(t *testing.T) {
@@ -24,6 +26,12 @@ func TestParseConfigBindsExplicitInputs(t *testing.T) {
 		{"empty artifact root", []string{"--profile=full", "--roles=worker", "--processing-artifact-root="}, "synthetic-secret", false},
 		{"invalid artifact root", []string{"--profile=full", "--roles=worker", "--processing-artifact-root=/dev/null"}, "synthetic-secret", false},
 		{"invalid login limit", []string{"--profile=full", "--roles=worker", "--login-attempts-per-account=0"}, "synthetic-secret", false},
+		{"configured dispatch", []string{"--profile=full", "--roles=worker", "--processing-concurrency=8", "--processing-poll-interval=750ms"}, "synthetic-secret", true},
+		{"zero concurrency", []string{"--profile=full", "--roles=worker", "--processing-concurrency=0"}, "synthetic-secret", false},
+		{"negative concurrency", []string{"--profile=full", "--roles=worker", "--processing-concurrency=-1"}, "synthetic-secret", false},
+		{"zero poll interval", []string{"--profile=full", "--roles=worker", "--processing-poll-interval=0s"}, "synthetic-secret", false},
+		{"negative poll interval", []string{"--profile=full", "--roles=worker", "--processing-poll-interval=-1s"}, "synthetic-secret", false},
+		{"malformed poll interval", []string{"--profile=full", "--roles=worker", "--processing-poll-interval=soon"}, "synthetic-secret", false},
 		{"unsupported profile", []string{"--profile=lite", "--roles=worker"}, "synthetic-secret", false},
 		{"unknown role", []string{"--profile=full", "--roles=other"}, "synthetic-secret", false},
 		{"empty role", []string{"--profile=full", "--roles=worker,"}, "synthetic-secret", false},
@@ -55,6 +63,14 @@ func TestParseConfigBindsExplicitInputs(t *testing.T) {
 			}
 			if test.name == "configured login limits" && (config.LoginLimits.AccountAttempts != 2 || config.LoginLimits.InstanceAttempts != 20) {
 				t.Fatal("configured login limits were not bound")
+			}
+			if test.name == "configured dispatch" && (config.ProcessingDispatch.Concurrency != 8 ||
+				config.ProcessingDispatch.PollInterval != 750*time.Millisecond) {
+				t.Fatal("configured Processing dispatch was not bound")
+			}
+			if test.ok && test.name != "configured dispatch" && (config.ProcessingDispatch.Concurrency != worker.DefaultDispatchConcurrency ||
+				config.ProcessingDispatch.PollInterval != worker.DefaultDispatchPollInterval) {
+				t.Fatalf("Processing dispatch defaults not applied: %+v", config.ProcessingDispatch)
 			}
 			if test.name == "configured artifact root" && config.ProcessingArtifactRoot != "/" {
 				t.Fatal("Processing artifact root was not bound")
