@@ -45,7 +45,7 @@ func TestLocalBootstrapIsAtomicAndCreatesOnlyExplicitAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := login.AuthenticateLocal(t.Context(), "operator", "initial-password")
+	session, err := login.AuthenticateLocal(t.Context(), "test-source", "operator", "initial-password")
 	if err != nil {
 		t.Fatal(err)
 	}

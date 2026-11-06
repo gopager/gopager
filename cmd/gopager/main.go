@@ -201,6 +201,7 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 	processingArtifactRoot := flags.String("processing-artifact-root", "", "Optional operator-provisioned plugin directory (or GOPAGER_PROCESSING_ARTIFACT_ROOT)")
 	defaultLimits := identity.DefaultLoginRateLimits()
 	loginAccount := flags.Int("login-attempts-per-account", defaultLimits.AccountAttempts, "Per-minute login attempt limit per normalized username")
+	loginSource := flags.Int("login-attempts-per-source", defaultLimits.SourceAttempts, "Per-minute login attempt limit per client source (remote address host)")
 	loginInstance := flags.Int("login-attempts-per-instance", defaultLimits.InstanceAttempts, "Per-minute instance login attempt limit")
 	allowInsecure := flags.Bool("allow-insecure-db", false, "Operator approval for unverified remote database TLS")
 	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
@@ -236,7 +237,7 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 			return startupConfig{}, platform.NewFailure(platform.CodeInvalidInput, err)
 		}
 	}
-	if *loginAccount <= 0 || *loginInstance <= 0 {
+	if *loginAccount <= 0 || *loginSource <= 0 || *loginInstance <= 0 {
 		return startupConfig{}, platform.NewFailure(platform.CodeInvalidInput, identity.ErrInvalidInput)
 	}
 	if *processingArtifactRoot != "" {
@@ -253,7 +254,7 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 	}
 	return startupConfig{Config: config, PublicOrigin: *publicOrigin,
 		ProcessingArtifactRoot: *processingArtifactRoot,
-		LoginLimits:            identity.LoginRateLimits{AccountAttempts: *loginAccount, InstanceAttempts: *loginInstance},
+		LoginLimits:            identity.LoginRateLimits{AccountAttempts: *loginAccount, SourceAttempts: *loginSource, InstanceAttempts: *loginInstance},
 		ProcessingDispatch:     (worker.DispatchConfig{}).WithDefaults()}, nil
 }
 

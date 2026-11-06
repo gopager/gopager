@@ -756,20 +756,10 @@ func writeManagementError(w http.ResponseWriter, err error) {
 		code, fallback, status, retryable = "REVISION_CONFLICT", "This item changed. Reload before saving.", http.StatusConflict, true
 	case errors.As(err, &failure):
 		code, fallback, retryable = string(failure.Code()), failure.Error(), failure.Retryable()
-		switch failure.Code() {
-		case platform.CodeInvalidInput:
-			status = http.StatusBadRequest
-		case platform.CodeRevisionConflict, platform.CodeIncompatibleVersion:
-			status = http.StatusConflict
-		case platform.CodeResourceLimit:
-			status = http.StatusRequestEntityTooLarge
-		case platform.CodeAuthorityUnavailable, platform.CodeStorageUnavailable, platform.CodeCommitUncertain:
-			status = http.StatusServiceUnavailable
-		}
+		status = platform.HTTPStatus(failure.Code())
 	}
-	if status >= 500 {
-		slog.Error("management operation failed", "code", code)
-	}
+	requestID := uuid.NewString()
+	platform.LogErrorResponse(code, status, requestID)
 	writeManagementJSON(w, status, struct {
 		SchemaVersion int            `json:"schemaVersion"`
 		Code          string         `json:"code"`
@@ -778,5 +768,5 @@ func writeManagementError(w http.ResponseWriter, err error) {
 		Fallback      string         `json:"fallback"`
 		RequestID     string         `json:"requestId"`
 		Retryable     bool           `json:"retryable"`
-	}{1, code, map[string]any{}, "error." + code, fallback, uuid.NewString(), retryable})
+	}{1, code, map[string]any{}, "error." + code, fallback, requestID, retryable})
 }

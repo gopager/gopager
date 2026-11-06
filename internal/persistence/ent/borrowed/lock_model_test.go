@@ -175,7 +175,7 @@ func TestConcurrentLogoutsWaitForReadersWithoutConflict(t *testing.T) {
 	var proofs [2]identity.Proof
 	for i, name := range []string{"Alpha", "Bravo"} {
 		seedLoginAccount(t, store, name, true)
-		session, err := login.AuthenticateLocal(t.Context(), name, "correct-password")
+		session, err := login.AuthenticateLocal(t.Context(), "test-source", name, "correct-password")
 		if err != nil {
 			t.Fatal(err)
 		}

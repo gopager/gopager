@@ -58,8 +58,10 @@ func Fingerprint(input any) ([32]byte, error) {
 
 // ErrIdempotencyConflict reports that an actor reused a command ID for a
 // different operation or different input. It is not retryable: repeating the
-// same request cannot succeed, and the client must choose a new command ID.
-var ErrIdempotencyConflict = errors.New("command ID already used with different input")
+// same request cannot succeed, and the client must choose a new command ID. It is a
+// *platform.Failure with CodeIdempotencyConflict so the code survives a
+// transaction boundary.
+var ErrIdempotencyConflict error = platform.NewFailure(platform.CodeIdempotencyConflict, nil)
 
 // Check distinguishes the same operation/input from conflicting reuse by one
 // actor. It returns the stored Result for an identical replay and

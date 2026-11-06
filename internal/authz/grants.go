@@ -2,23 +2,26 @@
 package authz
 
 import (
-	"errors"
 	"slices"
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/platform"
 )
 
 // Sentinel authorization outcomes, compared with errors.Is. ErrInvalidInput
 // marks malformed requests or persisted grants, ErrForbidden a denied
 // decision, ErrNotFound a target that does not exist or must not be revealed,
 // and ErrRevisionConflict a stale expected revision or otherwise conflicting
-// current state. Their messages are safe to show to end users.
+// current state. They are *platform.Failure values carrying the public code
+// (INVALID_INPUT, FORBIDDEN, NOT_FOUND, REVISION_CONFLICT), so platform.FailureCode
+// stays correct when one crosses a transaction boundary; errors.Is still matches
+// them by identity. Their messages are the safe English fallbacks.
 var (
-	ErrInvalidInput     = errors.New("invalid authorization input")
-	ErrForbidden        = errors.New("this action is not permitted")
-	ErrNotFound         = errors.New("the requested item is not available")
-	ErrRevisionConflict = errors.New("this item changed; reload before saving")
+	ErrInvalidInput     error = platform.NewFailure(platform.CodeInvalidInput, nil)
+	ErrForbidden        error = platform.NewFailure(platform.CodeForbidden, nil)
+	ErrNotFound         error = platform.NewFailure(platform.CodeNotFound, nil)
+	ErrRevisionConflict error = platform.NewFailure(platform.CodeRevisionConflict, nil)
 )
 
 // Scope restricts a grant or key to a data area. Kind is one of "all",

@@ -23,6 +23,8 @@ func TestParseConfigBindsExplicitInputs(t *testing.T) {
 		{"configured artifact root", []string{"--profile=full", "--roles=worker", "--processing-artifact-root=/"}, "synthetic-secret", true},
 		{"empty artifact root", []string{"--profile=full", "--roles=worker", "--processing-artifact-root="}, "synthetic-secret", false},
 		{"invalid artifact root", []string{"--profile=full", "--roles=worker", "--processing-artifact-root=/dev/null"}, "synthetic-secret", false},
+		{"configured source limit", []string{"--profile=full", "--roles=worker", "--login-attempts-per-source=5"}, "synthetic-secret", true},
+		{"invalid source limit", []string{"--profile=full", "--roles=worker", "--login-attempts-per-source=0"}, "synthetic-secret", false},
 		{"invalid login limit", []string{"--profile=full", "--roles=worker", "--login-attempts-per-account=0"}, "synthetic-secret", false},
 		{"unsupported profile", []string{"--profile=lite", "--roles=worker"}, "synthetic-secret", false},
 		{"unknown role", []string{"--profile=full", "--roles=other"}, "synthetic-secret", false},
@@ -55,6 +57,12 @@ func TestParseConfigBindsExplicitInputs(t *testing.T) {
 			}
 			if test.name == "configured login limits" && (config.LoginLimits.AccountAttempts != 2 || config.LoginLimits.InstanceAttempts != 20) {
 				t.Fatal("configured login limits were not bound")
+			}
+			if test.name == "configured source limit" && config.LoginLimits.SourceAttempts != 5 {
+				t.Fatal("configured source login limit was not bound")
+			}
+			if test.ok && test.name != "configured source limit" && config.LoginLimits.SourceAttempts != 30 {
+				t.Fatalf("default source login limit = %d, want 30", config.LoginLimits.SourceAttempts)
 			}
 			if test.name == "configured artifact root" && config.ProcessingArtifactRoot != "/" {
 				t.Fatal("Processing artifact root was not bound")

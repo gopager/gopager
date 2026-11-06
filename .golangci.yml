@@ -1,0 +1,36 @@
+# golangci-lint v1 configuration (version pinned in the Makefile).
+# A conservative set: correctness findings only, no style linters.
+run:
+  timeout: 10m
+
+linters:
+  disable-all: true
+  enable:
+    - govet
+    - staticcheck
+    - errcheck
+    - ineffassign
+    - unused
+    - misspell
+
+issues:
+  # Pre-existing findings in processing code, which this change must not touch. Remove
+  # an entry when its finding is fixed; new findings in these files of any other
+  # linter still fail.
+  exclude-rules:
+    - path: cmd/gopager/processing_management\.go
+      linters: [unused]
+      text: unavailableInstanceLifecycle
+    - path: cmd/gopager/processing\.go
+      linters: [ineffassign, staticcheck]
+      text: ineffectual assignment to ctx|SA4006
+    - path: internal/processing/workflow_test\.go
+      linters: [ineffassign, staticcheck]
+      text: ineffectual assignment to source|SA4006
+    - path: internal/processing/workflow\.go
+      linters: [staticcheck]
+      text: SA4009
+  # Generated Ent code is excluded by its "Code generated" header; the paths below
+  # are an extra guard.
+  exclude-dirs:
+    - internal/persistence/ent/enttest

@@ -10164,6 +10164,7 @@ type LoginAttemptMutation struct {
 	typ           string
 	id            *uuid.UUID
 	account_key   *[]byte
+	source_key    *[]byte
 	attempted_at  *time.Time
 	clearedFields map[string]struct{}
 	done          bool
@@ -10311,6 +10312,42 @@ func (m *LoginAttemptMutation) ResetAccountKey() {
 	m.account_key = nil
 }
 
+// SetSourceKey sets the "source_key" field.
+func (m *LoginAttemptMutation) SetSourceKey(b []byte) {
+	m.source_key = &b
+}
+
+// SourceKey returns the value of the "source_key" field in the mutation.
+func (m *LoginAttemptMutation) SourceKey() (r []byte, exists bool) {
+	v := m.source_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceKey returns the old "source_key" field's value of the LoginAttempt entity.
+// If the LoginAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LoginAttemptMutation) OldSourceKey(ctx context.Context) (v []byte, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceKey: %w", err)
+	}
+	return oldValue.SourceKey, nil
+}
+
+// ResetSourceKey resets all changes to the "source_key" field.
+func (m *LoginAttemptMutation) ResetSourceKey() {
+	m.source_key = nil
+}
+
 // SetAttemptedAt sets the "attempted_at" field.
 func (m *LoginAttemptMutation) SetAttemptedAt(t time.Time) {
 	m.attempted_at = &t
@@ -10381,9 +10418,12 @@ func (m *LoginAttemptMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *LoginAttemptMutation) Fields() []string {
-	fields := make([]string, 0, 2)
+	fields := make([]string, 0, 3)
 	if m.account_key != nil {
 		fields = append(fields, loginattempt.FieldAccountKey)
+	}
+	if m.source_key != nil {
+		fields = append(fields, loginattempt.FieldSourceKey)
 	}
 	if m.attempted_at != nil {
 		fields = append(fields, loginattempt.FieldAttemptedAt)
@@ -10398,6 +10438,8 @@ func (m *LoginAttemptMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case loginattempt.FieldAccountKey:
 		return m.AccountKey()
+	case loginattempt.FieldSourceKey:
+		return m.SourceKey()
 	case loginattempt.FieldAttemptedAt:
 		return m.AttemptedAt()
 	}
@@ -10411,6 +10453,8 @@ func (m *LoginAttemptMutation) OldField(ctx context.Context, name string) (ent.V
 	switch name {
 	case loginattempt.FieldAccountKey:
 		return m.OldAccountKey(ctx)
+	case loginattempt.FieldSourceKey:
+		return m.OldSourceKey(ctx)
 	case loginattempt.FieldAttemptedAt:
 		return m.OldAttemptedAt(ctx)
 	}
@@ -10428,6 +10472,13 @@ func (m *LoginAttemptMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAccountKey(v)
+		return nil
+	case loginattempt.FieldSourceKey:
+		v, ok := value.([]byte)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceKey(v)
 		return nil
 	case loginattempt.FieldAttemptedAt:
 		v, ok := value.(time.Time)
@@ -10487,6 +10538,9 @@ func (m *LoginAttemptMutation) ResetField(name string) error {
 	switch name {
 	case loginattempt.FieldAccountKey:
 		m.ResetAccountKey()
+		return nil
+	case loginattempt.FieldSourceKey:
+		m.ResetSourceKey()
 		return nil
 	case loginattempt.FieldAttemptedAt:
 		m.ResetAttemptedAt()

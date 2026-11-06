@@ -15,6 +15,8 @@ const (
 	FieldID = "id"
 	// FieldAccountKey holds the string denoting the account_key field in the database.
 	FieldAccountKey = "account_key"
+	// FieldSourceKey holds the string denoting the source_key field in the database.
+	FieldSourceKey = "source_key"
 	// FieldAttemptedAt holds the string denoting the attempted_at field in the database.
 	FieldAttemptedAt = "attempted_at"
 	// Table holds the table name of the loginattempt in the database.
@@ -25,6 +27,7 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldAccountKey,
+	FieldSourceKey,
 	FieldAttemptedAt,
 }
 

@@ -49,6 +49,17 @@ type Repository interface {
 	RecordRejectedSubmission(context.Context, platform.TransactionContext, uuid.UUID, string, string, time.Time) error
 }
 
+// Authenticate verifies a Gateway bearer without side effects beyond the credential
+// owner's own cutover bookkeeping. Transports call it before reading a request body;
+// Submit and ReportState authenticate again in their own transaction, so this is
+// only an early rejection, never the authority for stored data.
+func (s *Service) Authenticate(ctx context.Context, bearer string) error {
+	return s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
+		_, err := s.authenticator.Authenticate(tx.Context(), tx, bearer)
+		return err
+	})
+}
+
 // ReportState records an authenticated report separately from any Transmission acceptance.
 func (s *Service) ReportState(ctx context.Context, bearer string, report GatewayStateReport) error {
 	if err := report.Validate(); err != nil {

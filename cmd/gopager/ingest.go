@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -13,20 +14,46 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
-type ingestAPI struct {
-	service *ingest.Service
+// gatewayIntake is the intake service surface the HTTP routes need; *ingest.Service
+// implements it. Authenticate is separate so that a request is rejected before its
+// body is read.
+type gatewayIntake interface {
+	Authenticate(ctx context.Context, bearer string) error
+	Submit(ctx context.Context, bearer string, request ingest.Submission, encodedSize int) (ingest.Receipt, error)
+	ReportState(ctx context.Context, bearer string, report ingest.GatewayStateReport) error
 }
 
-func registerIngestRoutes(mux *http.ServeMux, service *ingest.Service) {
+type ingestAPI struct {
+	service gatewayIntake
+}
+
+// registerIngestRoutes adds the Gateway-authenticated intake routes to mux.
+func registerIngestRoutes(mux *http.ServeMux, service gatewayIntake) {
 	api := ingestAPI{service: service}
 	mux.HandleFunc("POST /api/v1/transmissions", api.submitTransmission)
 	mux.HandleFunc("POST /api/v1/gateway/state", api.reportGatewayState)
 }
 
-func (api ingestAPI) submitTransmission(w http.ResponseWriter, r *http.Request) {
+// authenticate extracts and verifies the Gateway bearer before any request body is
+// read, so an unauthenticated client cannot make the server buffer and decode up to
+// the body limit. It writes the error response and returns false on failure. The
+// credential is verified again inside the Submission or state transaction, which
+// remains the authority for what is stored.
+func (api ingestAPI) authenticate(w http.ResponseWriter, r *http.Request) (string, bool) {
 	bearer, err := gatewayBearer(r)
+	if err == nil {
+		err = api.service.Authenticate(r.Context(), bearer)
+	}
 	if err != nil {
 		writeManagementError(w, err)
+		return "", false
+	}
+	return bearer, true
+}
+
+func (api ingestAPI) submitTransmission(w http.ResponseWriter, r *http.Request) {
+	bearer, ok := api.authenticate(w, r)
+	if !ok {
 		return
 	}
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
@@ -66,9 +93,8 @@ func (api ingestAPI) submitTransmission(w http.ResponseWriter, r *http.Request) 
 }
 
 func (api ingestAPI) reportGatewayState(w http.ResponseWriter, r *http.Request) {
-	bearer, err := gatewayBearer(r)
-	if err != nil {
-		writeManagementError(w, err)
+	bearer, ok := api.authenticate(w, r)
+	if !ok {
 		return
 	}
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))

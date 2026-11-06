@@ -44,10 +44,19 @@ func (s SessionCreation) LogValue() slog.Value {
 	return slog.GroupValue(slog.String("id", s.ID.String()), slog.String("accountId", s.AccountID.String()))
 }
 
+// LoginAttemptKeys identify one login attempt in the persistent throttle buckets. Both
+// are hashes, so the throttle table holds neither usernames nor client addresses.
+type LoginAttemptKeys struct {
+	// Account is the hash of the normalized username.
+	Account [32]byte
+	// Source is the hash of the client source (see AuthenticateLocal).
+	Source [32]byte
+}
+
 // LoginRepository owns bounded persistent throttling and Session/audit persistence.
 // TakeLoginAttempt serializes its own accounting and returns a safe retry delay.
 type LoginRepository interface {
-	TakeLoginAttempt(context.Context, platform.TransactionContext, [32]byte, time.Time, LoginRateLimits) (time.Duration, error)
+	TakeLoginAttempt(context.Context, platform.TransactionContext, LoginAttemptKeys, time.Time, LoginRateLimits) (time.Duration, error)
 	LoginAccount(context.Context, platform.TransactionContext, string) (LoginAccount, error)
 	CreateSession(context.Context, platform.TransactionContext, SessionCreation) error
 	RevokeSession(context.Context, platform.TransactionContext, uuid.UUID, uuid.UUID, time.Time) (int64, error)
@@ -86,7 +95,7 @@ func (s SessionResult) LogValue() slog.Value {
 }
 
 // LoginService implements local password login (AuthenticateLocal), Logout and
-// ReadSession with persistent per-account and per-instance throttling. Create
+// ReadSession with persistent per-account, per-source and per-instance throttling. Create
 // it with NewLoginService.
 type LoginService struct {
 	transactions Transactions
@@ -97,22 +106,28 @@ type LoginService struct {
 	limits       LoginRateLimits
 }
 
-// LoginRateLimits are per-minute limits; account identity is the normalized username, never the IP.
+// LoginRateLimits are per-minute limits. The account bucket is the normalized
+// username only, so one shared address cannot lock out other accounts through it;
+// the source bucket caps what one client source can try across all usernames, so
+// that a single anonymous client cannot exhaust the instance bucket (and with it
+// every operator's login) or lock accounts out one by one.
 type LoginRateLimits struct {
 	AccountAttempts  int
+	SourceAttempts   int
 	InstanceAttempts int
 }
 
 // DefaultLoginRateLimits returns the default limits: 10 attempts per minute per
-// account and 300 per minute per instance. Each call returns a fresh value.
+// account, 30 per minute per client source and 300 per minute per instance. Each
+// call returns a fresh value.
 func DefaultLoginRateLimits() LoginRateLimits {
-	return LoginRateLimits{AccountAttempts: 10, InstanceAttempts: 300}
+	return LoginRateLimits{AccountAttempts: 10, SourceAttempts: 30, InstanceAttempts: 300}
 }
 
 // NewLoginService composes ordinary login and prepares one salted dummy password hash.
 func NewLoginService(transactions Transactions, resolver *Resolver, repository LoginRepository, facts events.Appender, limits LoginRateLimits) (*LoginService, error) {
 	if transactions == nil || resolver == nil || repository == nil || facts == nil ||
-		limits.AccountAttempts <= 0 || limits.InstanceAttempts <= 0 {
+		limits.AccountAttempts <= 0 || limits.SourceAttempts <= 0 || limits.InstanceAttempts <= 0 {
 		return nil, ErrInvalidInput
 	}
 	dummy, _, err := NewSecret()
@@ -133,12 +148,21 @@ func NewLoginService(transactions Transactions, resolver *Resolver, repository L
 // holds no lock; the Session is created in a second transaction under the shared access
 // lock after the account state was re-read. Infrastructure failures never become login
 // success.
-func (s *LoginService) AuthenticateLocal(ctx context.Context, username, password string) (SessionResult, error) {
+//
+// source identifies the client for the per-source throttle, normally the host part of
+// the connection's remote address (see NewHTTPHandler). It is hashed before storage
+// and never trusted for anything but throttling; an empty source shares one bucket.
+func (s *LoginService) AuthenticateLocal(ctx context.Context, source, username, password string) (SessionResult, error) {
 	key, err := UsernameKey(username)
 	if err != nil {
 		return SessionResult{}, err
 	}
-	accountKey := sha256.Sum256([]byte(key))
+	keys := LoginAttemptKeys{
+		Account: sha256.Sum256([]byte(key)),
+		// The prefix keeps the two bucket namespaces disjoint even if a username
+		// equals a source string.
+		Source: sha256.Sum256([]byte("login-source:" + source)),
+	}
 	var account LoginAccount
 	var rejection error
 	err = s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
@@ -146,7 +170,7 @@ func (s *LoginService) AuthenticateLocal(ctx context.Context, username, password
 		if err != nil {
 			return err
 		}
-		retry, err := s.repository.TakeLoginAttempt(tx.Context(), tx, accountKey, now, s.limits)
+		retry, err := s.repository.TakeLoginAttempt(tx.Context(), tx, keys, now, s.limits)
 		if err != nil {
 			return err
 		}

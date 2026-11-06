@@ -24,9 +24,11 @@ const loginAccountingLockKey int64 = 0x47504D4947520002
 // TakeLoginAttempt accounts for login attempts across all API processes. It serializes the
 // count-and-insert with a transaction advisory lock so that concurrent attempts cannot slip
 // past the limits; the instance limit bounds persisted rows, including attempts against
-// unknown accounts.
-func (s *Store) TakeLoginAttempt(ctx context.Context, tx platform.TransactionContext, key [32]byte, now time.Time, limits identity.LoginRateLimits) (time.Duration, error) {
-	if limits.AccountAttempts <= 0 || limits.InstanceAttempts <= 0 {
+// unknown accounts. The buckets are checked from the widest (instance) to the narrowest
+// (account), and a rejected attempt is not stored, so a throttled client cannot extend its
+// own wait.
+func (s *Store) TakeLoginAttempt(ctx context.Context, tx platform.TransactionContext, keys identity.LoginAttemptKeys, now time.Time, limits identity.LoginRateLimits) (time.Duration, error) {
+	if limits.AccountAttempts <= 0 || limits.SourceAttempts <= 0 || limits.InstanceAttempts <= 0 {
 		return 0, identity.ErrInvalidInput
 	}
 	executor, err := s.primary.Resolve(tx)
@@ -48,36 +50,42 @@ func (s *Store) TakeLoginAttempt(ctx context.Context, tx platform.TransactionCon
 		return 0, err
 	}
 	query := client.LoginAttempt.Query().Order(ent.Asc(loginattempt.FieldAttemptedAt))
-	total, err := query.Clone().Count(scope)
-	if err != nil {
-		return 0, err
-	}
-	if total >= limits.InstanceAttempts {
-		first, err := query.Clone().First(scope)
-		if err != nil {
-			return 0, err
+	for _, bucket := range []struct {
+		query *ent.LoginAttemptQuery
+		limit int
+	}{
+		{query.Clone(), limits.InstanceAttempts},
+		{query.Clone().Where(loginattempt.SourceKeyEQ(keys.Source[:])), limits.SourceAttempts},
+		{query.Clone().Where(loginattempt.AccountKeyEQ(keys.Account[:])), limits.AccountAttempts},
+	} {
+		retry, err := bucketRetryAfter(scope, bucket.query, bucket.limit, now)
+		if err != nil || retry > 0 {
+			return retry, err
 		}
-		return first.AttemptedAt.Add(time.Minute).Sub(now), nil
-	}
-	accountQuery := query.Clone().Where(loginattempt.AccountKeyEQ(key[:]))
-	accountCount, err := accountQuery.Clone().Count(scope)
-	if err != nil {
-		return 0, err
-	}
-	if accountCount >= limits.AccountAttempts {
-		first, err := accountQuery.First(scope)
-		if err != nil {
-			return 0, err
-		}
-		return first.AttemptedAt.Add(time.Minute).Sub(now), nil
 	}
 	driver, err := borrowed.New(s.primary, tx)
 	if err != nil {
 		return 0, err
 	}
 	scope = guard.Bind(ctx, guard.Access{Current: driver.Current, Create: map[string]bool{"LoginAttempt": true}})
-	err = ent.NewClient(ent.Driver(driver)).LoginAttempt.Create().SetAccountKey(key[:]).SetAttemptedAt(now).Exec(scope)
+	err = ent.NewClient(ent.Driver(driver)).LoginAttempt.Create().
+		SetAccountKey(keys.Account[:]).SetSourceKey(keys.Source[:]).SetAttemptedAt(now).Exec(scope)
 	return 0, err
+}
+
+// bucketRetryAfter returns how long until the oldest attempt in the bucket (ordered by
+// time, already restricted to the last minute) leaves the window, or zero while the
+// bucket is below its limit.
+func bucketRetryAfter(ctx context.Context, bucket *ent.LoginAttemptQuery, limit int, now time.Time) (time.Duration, error) {
+	count, err := bucket.Clone().Count(ctx)
+	if err != nil || count < limit {
+		return 0, err
+	}
+	first, err := bucket.First(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return first.AttemptedAt.Add(time.Minute).Sub(now), nil
 }
 
 // LoginAccount returns only password-verification state for an exact normalized username key.
