@@ -2,6 +2,7 @@ package borrowed_test
 
 import (
 	"errors"
+	"github.com/gopager/gopager/internal/testutil/passwords"
 	"testing"
 
 	"github.com/google/uuid"
@@ -26,23 +27,23 @@ func TestLocalBootstrapIsAtomicAndCreatesOnlyExplicitAuthority(t *testing.T) {
 	permissions := identity.BootstrapPermissions{Actions: []string{"password.local", "session.manage-own"}, Fields: []string{"address"}}
 	failure := errors.New("bootstrap fact failure")
 	id, err := identity.Bootstrap(t.Context(), store, repository, store, failingLoginFacts{failure},
-		"Operator", "initial-password", permissions)
+		"Operator", "initial-password", permissions, passwords.Option())
 	if !errors.Is(err, failure) || id != uuid.Nil {
 		t.Fatalf("bootstrap reported success after failed fact: %v", err)
 	}
-	id, err = identity.Bootstrap(t.Context(), store, repository, store, facts, "Operator", "initial-password", permissions)
+	id, err = identity.Bootstrap(t.Context(), store, repository, store, facts, "Operator", "initial-password", permissions, passwords.Option())
 	if err != nil {
 		t.Fatalf("failed bootstrap did not roll back one-time guard: %v", err)
 	}
 	if _, err := identity.Bootstrap(t.Context(), store, repository, store, facts,
-		"replacement", "another-password", permissions); !errors.Is(err, authz.ErrRevisionConflict) {
+		"replacement", "another-password", permissions, passwords.Option()); !errors.Is(err, authz.ErrRevisionConflict) {
 		t.Fatalf("completed bootstrap was reopened: %v", err)
 	}
 	resolver, err := identity.NewResolver(repository, store, repository)
 	if err != nil {
 		t.Fatal(err)
 	}
-	login, err := identity.NewLoginService(store, resolver, repository, facts, identity.DefaultLoginRateLimits())
+	login, err := identity.NewLoginService(store, resolver, repository, facts, identity.DefaultLoginRateLimits(), passwords.Option())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +105,7 @@ func TestConcurrentLocalBootstrapHasOneWinner(t *testing.T) {
 		go func() {
 			<-start
 			_, err := identity.Bootstrap(t.Context(), store, repository, store, facts,
-				name, "initial-password", identity.BootstrapPermissions{Actions: []string{"password.local"}})
+				name, "initial-password", identity.BootstrapPermissions{Actions: []string{"password.local"}}, passwords.Option())
 			results <- err
 		}()
 	}

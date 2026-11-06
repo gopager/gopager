@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/gopager/gopager/internal/testutil/passwords"
 	"sync"
 	"testing"
 	"time"
@@ -172,7 +173,7 @@ func TestConcurrentLogoutsWaitForReadersWithoutConflict(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	login, err := identity.NewLoginService(store, resolver, identities, facts, identity.DefaultLoginRateLimits())
+	login, err := identity.NewLoginService(store, resolver, identities, facts, identity.DefaultLoginRateLimits(), passwords.Option())
 	if err != nil {
 		t.Fatal(err)
 	}

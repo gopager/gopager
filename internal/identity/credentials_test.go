@@ -62,6 +62,37 @@ var _ = ginkgo.Describe("Local credentials", func() {
 		gomega.Expect(valid).To(gomega.BeFalse())
 	})
 
+	ginkgo.It("encodes the production cost parameters", func() {
+		gomega.Expect(ProductionPasswordParams).To(gomega.Equal(PasswordParams{MemoryKiB: 19 * 1024, Iterations: 2, Parallelism: 1}))
+		encoded, err := HashPassword("correct-password")
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		gomega.Expect(encoded).To(gomega.HavePrefix("$argon2id$v=19$m=19456,t=2,p=1$"))
+		zero, err := PasswordHasher{}.Hash("correct-password")
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		gomega.Expect(zero).To(gomega.HavePrefix("$argon2id$v=19$m=19456,t=2,p=1$"))
+	})
+
+	ginkgo.It("lets a reduced-cost hasher verify its own and production hashes only", func() {
+		cheap, err := NewPasswordHasher(PasswordParams{MemoryKiB: 8, Iterations: 1, Parallelism: 1})
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		own, err := cheap.Hash("correct-password")
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		gomega.Expect(own).To(gomega.HavePrefix("$argon2id$v=19$m=8,t=1,p=1$"))
+		valid, err := cheap.Verify(own, "correct-password")
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		gomega.Expect(valid).To(gomega.BeTrue())
+		production, err := HashPassword("correct-password")
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		valid, err = cheap.Verify(production, "correct-password")
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
+		gomega.Expect(valid).To(gomega.BeTrue())
+		// The production verifier must not accept reduced-cost hashes.
+		_, err = VerifyPassword(own, "correct-password")
+		gomega.Expect(err).To(gomega.HaveOccurred())
+		_, err = NewPasswordHasher(PasswordParams{})
+		gomega.Expect(err).To(gomega.MatchError(ErrInvalidInput))
+	})
+
 	ginkgo.It("rejects corrupt or unbounded hash parameters explicitly", func() {
 		for _, stored := range []string{"", "$argon2id$v=19$m=999999999,t=2,p=1$AA$AA"} {
 			_, err := VerifyPassword(stored, "correct-password")

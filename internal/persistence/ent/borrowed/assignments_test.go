@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/gopager/gopager/internal/testutil/passwords"
 	"math"
 	"reflect"
 	"slices"
@@ -174,11 +175,11 @@ func newMatcherFixture(t *testing.T) matcherFixture {
 		t.Fatal(err)
 	}
 	principal, err := identity.Bootstrap(t.Context(), store, repository, store, facts, "Operator", "initial-password",
-		identity.BootstrapPermissions{Actions: authz.Actions(), Fields: []string{"unit", "address"}})
+		identity.BootstrapPermissions{Actions: authz.Actions(), Fields: []string{"unit", "address"}}, passwords.Option())
 	if err != nil {
 		t.Fatal(err)
 	}
-	login, err := identity.NewLoginService(store, resolver, repository, facts, identity.DefaultLoginRateLimits())
+	login, err := identity.NewLoginService(store, resolver, repository, facts, identity.DefaultLoginRateLimits(), passwords.Option())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1447,7 +1448,7 @@ func TestCurrentMatcherCreationReceiptsAreActorBound(t *testing.T) {
 	other := f
 	other.principal = seedLoginAccount(t, f.store, "Other", true)
 	replaceManagementGrants(t, other, []authz.Grant{{Actions: authz.Actions(), Scope: authz.Scope{Kind: "all"}}})
-	login, err := identity.NewLoginService(f.store, f.resolver, f.owners.identity, f.facts, identity.DefaultLoginRateLimits())
+	login, err := identity.NewLoginService(f.store, f.resolver, f.owners.identity, f.facts, identity.DefaultLoginRateLimits(), passwords.Option())
 	if err != nil {
 		t.Fatal(err)
 	}

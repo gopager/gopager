@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gopager/gopager/internal/testutil/passwords"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -51,7 +52,7 @@ func seedLoginAccount(t *testing.T, store *postgres.Store, username string, allo
 	if err != nil {
 		t.Fatal(err)
 	}
-	hash, err := identity.HashPassword("correct-password")
+	hash, err := passwords.Hasher().Hash("correct-password")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +101,7 @@ func TestOrdinaryLoginCommitsSessionAuditAndFactWithoutCommandIdentity(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	login, err := identity.NewLoginService(store, resolver, repository, facts, identity.DefaultLoginRateLimits())
+	login, err := identity.NewLoginService(store, resolver, repository, facts, identity.DefaultLoginRateLimits(), passwords.Option())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +157,7 @@ func TestOrdinaryLoginCommitsSessionAuditAndFactWithoutCommandIdentity(t *testin
 		t.Fatal(err)
 	}
 	failure := errors.New("fact append unavailable")
-	broken, err := identity.NewLoginService(store, resolver, repository, failingLoginFacts{failure}, identity.DefaultLoginRateLimits())
+	broken, err := identity.NewLoginService(store, resolver, repository, failingLoginFacts{failure}, identity.DefaultLoginRateLimits(), passwords.Option())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +204,7 @@ func TestLoginRejectionAndPersistentAccountThrottle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	login, err := identity.NewLoginService(store, resolver, repository, facts, identity.DefaultLoginRateLimits())
+	login, err := identity.NewLoginService(store, resolver, repository, facts, identity.DefaultLoginRateLimits(), passwords.Option())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +219,7 @@ func TestLoginRejectionAndPersistentAccountThrottle(t *testing.T) {
 		}
 	}
 	// A new service instance must observe the same persisted account bucket.
-	other, err := identity.NewLoginService(store, resolver, repository, facts, identity.DefaultLoginRateLimits())
+	other, err := identity.NewLoginService(store, resolver, repository, facts, identity.DefaultLoginRateLimits(), passwords.Option())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +276,7 @@ func TestLoginLogoutHTTPWithPrimaryAuthorityAndTLSProxy(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			login, err := identity.NewLoginService(store, resolver, repository, facts, identity.DefaultLoginRateLimits())
+			login, err := identity.NewLoginService(store, resolver, repository, facts, identity.DefaultLoginRateLimits(), passwords.Option())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -525,7 +526,7 @@ func TestLoginSourceThrottleSpansUsernames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	login, err := identity.NewLoginService(store, resolver, repository, facts, identity.DefaultLoginRateLimits())
+	login, err := identity.NewLoginService(store, resolver, repository, facts, identity.DefaultLoginRateLimits(), passwords.Option())
 	if err != nil {
 		t.Fatal(err)
 	}
