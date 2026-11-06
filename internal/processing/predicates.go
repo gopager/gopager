@@ -11,7 +11,6 @@ import (
 	"unicode/utf8"
 
 	"cel.dev/cel-go/cel"
-	"cel.dev/cel-go/common/types"
 	"cel.dev/cel-go/interpreter"
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
@@ -61,26 +60,26 @@ func (d Dependency) validate() error {
 	return nil
 }
 
-// FieldState classifies a field value as present, readably absent, or hidden from the
-// current authority. Hidden fields carry no Value and make dependent predicates
-// Indeterminate.
+// FieldState classifies a field value as present or absent. Evaluation is ordinary
+// two-valued logic run as the system: no state depends on a human reader's rights, so there
+// is no hidden or unknown state.
 type FieldState string
 
 const (
 	// FieldPresent marks a field with a Value (possibly an explicit null).
 	FieldPresent FieldState = "present"
-	// FieldAbsent marks a field the reader may see but that has no value; only optional
-	// fields may be absent.
+	// FieldAbsent marks a field that has no value; only optional fields may be absent.
 	FieldAbsent FieldState = "absent"
-	// FieldHidden marks a field whose value the current authority may not read.
-	FieldHidden FieldState = "hidden"
 )
 
-// FieldValue distinguishes readable absence from hidden data and retains dependencies.
+// FieldValue is one field's state and value. Dependencies carries the owner's field-group
+// classification of a captured source field and is empty on every derived value: a
+// definition's outputs are classified once per definition (see SourceReference), not per
+// value.
 type FieldValue struct {
 	State        FieldState   `json:"state"`
 	Value        *Value       `json:"value,omitempty"`
-	Dependencies []Dependency `json:"dependencies"`
+	Dependencies []Dependency `json:"dependencies,omitempty"`
 }
 
 // Declarations is supplied by source/step owners, not inferred from untrusted JSON.
@@ -100,25 +99,6 @@ type Predicate struct {
 	Value  *Value      `json:"value,omitempty"`
 	Values []Value     `json:"values,omitempty"`
 	Args   []Predicate `json:"args,omitempty"`
-}
-
-// Truth is the three-valued outcome of a predicate.
-type Truth string
-
-// The predicate outcomes.
-const (
-	DefiniteFalse Truth = "false"
-	DefiniteTrue  Truth = "true"
-	// Indeterminate means the result depends on a hidden field. Branch steps fail with an
-	// authority-unavailable failure rather than choosing a side.
-	Indeterminate Truth = "indeterminate"
-)
-
-// PredicateResult is a predicate outcome together with the union of the source
-// dependencies of every field it read.
-type PredicateResult struct {
-	Truth        Truth
-	Dependencies []Dependency
 }
 
 type predicateField struct {
@@ -351,7 +331,7 @@ func CompilePredicate(ctx context.Context, predicate Predicate, declarations Dec
 	if ast.OutputType() != cel.BoolType {
 		return nil, invalid(errors.New("predicate must produce boolean"))
 	}
-	program, err := env.Program(ast, cel.Globals(constants), cel.EvalOptions(cel.OptPartialEval, cel.OptTrackCost),
+	program, err := env.Program(ast, cel.Globals(constants), cel.EvalOptions(cel.OptTrackCost),
 		cel.CostLimit(MaxPredicateCELCost), cel.MemoryLimit(2<<20), cel.InterruptCheckFrequency(1))
 	if err != nil {
 		return nil, invalid(err)
@@ -360,84 +340,58 @@ func CompilePredicate(ctx context.Context, predicate Predicate, declarations Dec
 		fields: fields, byteComparisons: byteComparisons}, nil
 }
 
-// Evaluate resolves every declared operand before CEL evaluation, retaining all dependencies.
-// Hidden operands remain unknown even when boolean short-circuiting decides the result.
-func (p *PredicateProgram) Evaluate(ctx context.Context, reader FieldReader) (PredicateResult, error) {
+// Evaluate resolves every declared operand and evaluates the predicate with ordinary
+// two-valued logic: AND, OR and NOT are boolean, and an absent operand makes every
+// comparison on it false (NOT of such a comparison is therefore true). It never inspects a
+// reader's rights.
+func (p *PredicateProgram) Evaluate(ctx context.Context, reader FieldReader) (bool, error) {
 	if p == nil || p.program == nil || reader == nil || ctx == nil {
-		return PredicateResult{}, invalid(errors.New("missing predicate program/reader/context"))
+		return false, invalid(errors.New("missing predicate program/reader/context"))
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	input := make(map[string]any, len(p.fields)*2)
-	var unknowns []*cel.AttributePatternType
-	var dependencies []Dependency
-	var targetContext *dependencyKey
 	encodedSize := 0
 	decodedBytes := 0
 	fieldValues := make([]FieldValue, len(p.fields))
 	for fieldIndex, field := range p.fields {
 		if err := ctx.Err(); err != nil {
-			return PredicateResult{}, err
+			return false, err
 		}
 		value, err := reader.LookupField(ctx, field.reference)
 		if err != nil {
-			return PredicateResult{}, platform.NewFailure(platform.FailureCode(err), err)
+			return false, platform.NewFailure(platform.FailureCode(err), err)
 		}
 		fieldValues[fieldIndex] = value
-		if !slices.Contains([]FieldState{FieldPresent, FieldAbsent, FieldHidden}, value.State) ||
+		if !slices.Contains([]FieldState{FieldPresent, FieldAbsent}, value.State) ||
 			(value.State == FieldPresent && value.Value == nil) || (value.State != FieldPresent && value.Value != nil) ||
-			(value.State == FieldAbsent && !field.schema.Optional) ||
-			(field.reference.Namespace != "step" && len(value.Dependencies) == 0) {
-			return PredicateResult{}, invalid(errors.New("invalid classified field state"))
+			(value.State == FieldAbsent && !field.schema.Optional) {
+			return false, invalid(errors.New("invalid field state"))
 		}
 		encoded, err := json.Marshal(value)
 		if err != nil {
-			return PredicateResult{}, invalid(err)
+			return false, invalid(err)
 		}
 		encodedSize += len(encoded)
 		if encodedSize > MaxInputBytes {
-			return PredicateResult{}, resource(errors.New("predicate input/dependency boundary"))
+			return false, resource(errors.New("predicate input boundary"))
 		}
 		fieldBytes, err := decodedBytesInJSON(encoded)
 		if err != nil {
-			return PredicateResult{}, err
+			return false, err
 		}
 		decodedBytes += fieldBytes
 		if decodedBytes > MaxInputBytes {
-			return PredicateResult{}, resource(errors.New("predicate decoded bytes boundary"))
-		}
-		for _, dependency := range value.Dependencies {
-			if err := dependency.validate(); err != nil {
-				return PredicateResult{}, err
-			}
-			if field.reference.Namespace == "target" && dependency.TargetPosition != nil {
-				key := dependency.key()
-				if targetContext != nil && *targetContext != key {
-					return PredicateResult{}, invalid(errors.New("predicate mixes target contexts"))
-				}
-				targetContext = &key
-			}
-			dependency.Groups = slices.Clone(dependency.Groups)
-			if dependency.TargetPosition != nil {
-				position := *dependency.TargetPosition
-				dependency.TargetPosition = &position
-			}
-			dependencies = append(dependencies, dependency)
+			return false, resource(errors.New("predicate decoded bytes boundary"))
 		}
 		input["p"+field.name] = value.State == FieldPresent
-		if value.State == FieldHidden {
-			unknowns = append(unknowns, cel.AttributePattern(field.name), cel.AttributePattern("p"+field.name))
-		} else if value.State == FieldPresent {
+		if value.State == FieldPresent {
 			native, err := value.Value.Native(field.schema)
 			if err != nil {
-				return PredicateResult{}, err
+				return false, err
 			}
 			input[field.name] = native
 		}
-	}
-	activation, err := cel.PartialVars(input, unknowns...)
-	if err != nil {
-		return PredicateResult{}, invalid(err)
 	}
 	byteCost := uint64(0)
 	for _, comparison := range p.byteComparisons {
@@ -449,56 +403,46 @@ func (p *PredicateProgram) Evaluate(ctx context.Context, reader FieldReader) (Pr
 		for _, candidate := range comparison.candidates {
 			byteCost += byteComparisonCost(observed, candidate)
 			if byteCost >= MaxPredicateCELCost {
-				return PredicateResult{}, resource(errors.New("CEL byte comparison cost boundary"))
+				return false, resource(errors.New("CEL byte comparison cost boundary"))
 			}
 		}
 	}
 	program := p.program
 	if byteCost != 0 {
+		var err error
 		program, err = p.env.Program(p.ast, cel.Globals(p.constants),
-			cel.EvalOptions(cel.OptPartialEval, cel.OptTrackCost),
+			cel.EvalOptions(cel.OptTrackCost),
 			cel.CostLimit(MaxPredicateCELCost-byteCost), cel.MemoryLimit(2<<20),
 			cel.InterruptCheckFrequency(1))
 		if err != nil {
-			return PredicateResult{}, invalid(err)
+			return false, invalid(err)
 		}
 	}
-	result, details, err := program.ContextEval(ctx, activation)
+	result, details, err := program.ContextEval(ctx, input)
 	if err != nil {
 		if ctx.Err() != nil {
-			return PredicateResult{}, ctx.Err()
+			return false, ctx.Err()
 		}
 		var cancellation interpreter.EvalCancelledError
 		if errors.As(err, &cancellation) &&
 			(cancellation.Cause == interpreter.CostLimitExceeded || cancellation.Cause == interpreter.MemoryLimitExceeded) {
-			return PredicateResult{}, resource(err)
+			return false, resource(err)
 		}
-		return PredicateResult{}, invalid(err)
+		return false, invalid(err)
 	}
 	if details != nil {
 		if actual := details.ActualCost(); actual != nil && *actual+byteCost > MaxPredicateCELCost {
-			return PredicateResult{}, resource(errors.New("CEL combined comparison cost boundary"))
+			return false, resource(errors.New("CEL combined comparison cost boundary"))
 		}
 	}
 	if err := ctx.Err(); err != nil {
-		return PredicateResult{}, err
+		return false, err
 	}
-	truth := Indeterminate
-	if !types.IsUnknown(result) {
-		boolean, ok := result.Value().(bool)
-		if !ok {
-			return PredicateResult{}, invalid(errors.New("invalid predicate runtime result"))
-		}
-		truth = DefiniteFalse
-		if boolean {
-			truth = DefiniteTrue
-		}
+	truth, ok := result.Value().(bool)
+	if !ok {
+		return false, invalid(errors.New("invalid predicate runtime result"))
 	}
-	dependencies, err = UnionDependencies(dependencies)
-	if err != nil {
-		return PredicateResult{}, err
-	}
-	return PredicateResult{Truth: truth, Dependencies: dependencies}, nil
+	return truth, nil
 }
 
 // byteComparisonCost charges maximum operand lengths at each corresponding bytes leaf.

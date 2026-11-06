@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
@@ -420,21 +421,29 @@ func (s *Service) DeleteWorkflow(ctx context.Context, proof identity.Proof, id u
 }
 
 // prepare compiles a detached definition and rejects substitution by a trusted preparation adapter.
-func (s *Service) prepare(ctx context.Context, definition processing.Definition) (result processing.Definition, err error) {
+func (s *Service) prepare(ctx context.Context, definition processing.Definition) (processing.Definition, error) {
+	checked, _, err := s.prepareReferenced(ctx, definition)
+	return checked, err
+}
+
+// prepareReferenced is prepare that also returns the source fields the definition reads, for
+// save-time field validation.
+func (s *Service) prepareReferenced(ctx context.Context, definition processing.Definition) (result processing.Definition,
+	references []processing.SourceReference, err error) {
 	encoded, err := json.Marshal(definition)
 	if err != nil {
-		return processing.Definition{}, err
+		return processing.Definition{}, nil, err
 	}
 	var detached processing.Definition
 	if err := processing.Decode(encoded, &detached); err != nil {
-		return processing.Definition{}, err
+		return processing.Definition{}, nil, err
 	}
 	program, err := s.preparer.PrepareWorkflow(ctx, detached)
 	if err != nil {
-		return processing.Definition{}, err
+		return processing.Definition{}, nil, err
 	}
 	if program == nil {
-		return processing.Definition{}, platform.NewFailure(platform.CodeAuthorityUnavailable,
+		return processing.Definition{}, nil, platform.NewFailure(platform.CodeAuthorityUnavailable,
 			errors.New("Workflow preparation owner returned no program"))
 	}
 	if closer, ok := s.preparer.(interface {
@@ -446,17 +455,17 @@ func (s *Service) prepare(ctx context.Context, definition processing.Definition)
 	}
 	checked, err := program.CheckedDefinition()
 	if err != nil {
-		return processing.Definition{}, err
+		return processing.Definition{}, nil, err
 	}
 	actual, err := json.Marshal(checked)
 	if err != nil {
-		return processing.Definition{}, err
+		return processing.Definition{}, nil, err
 	}
 	if !bytes.Equal(encoded, actual) {
-		return processing.Definition{}, platform.NewFailure(platform.CodeAuthorityUnavailable,
+		return processing.Definition{}, nil, platform.NewFailure(platform.CodeAuthorityUnavailable,
 			errors.New("Workflow preparation substituted the definition"))
 	}
-	return checked, ctx.Err()
+	return checked, program.SourceReferences(), ctx.Err()
 }
 
 // SaveVersion preauthorizes, compiles without a transaction, then reauthorizes/CAS-writes all participants.
@@ -515,7 +524,7 @@ func (s *Service) SaveVersion(ctx context.Context, proof identity.Proof, command
 	if replay {
 		return result, nil
 	}
-	detached, err = s.prepare(ctx, detached)
+	detached, references, err := s.prepareReferenced(ctx, detached)
 	if err != nil {
 		return commands.Result{}, err
 	}
@@ -541,6 +550,9 @@ func (s *Service) SaveVersion(ctx context.Context, proof identity.Proof, command
 		}
 		if authority.Revision != preparationRevision {
 			return authz.ErrRevisionConflict
+		}
+		if err := authorizeReferences(authority, references); err != nil {
+			return err
 		}
 		current.Revision, err = commands.NextRevision(current.Revision, expected)
 		if err != nil {
@@ -616,4 +628,33 @@ func (s *Service) ActivateVersion(ctx context.Context, proof identity.Proof, par
 		return commands.Result{}, err
 	}
 	return result, nil
+}
+
+// authorizeReferences rejects a definition that reads a source or target field whose field
+// group the author may not read. Evaluation runs as the system and never consults a human
+// reader's rights, so this save-time check is what keeps an author from deriving and then
+// viewing data of groups they cannot read. A reference whose owner declared no group cannot
+// be proven readable and is rejected as well.
+//
+// authority is the author's current authority; references come from
+// processing.WorkflowProgram.SourceReferences. The error is INVALID_INPUT and names the
+// offending reference.
+func authorizeReferences(authority authz.Authority, references []processing.SourceReference) error {
+	for _, reference := range references {
+		if len(reference.Groups) == 0 {
+			return platform.NewFailure(platform.CodeInvalidInput,
+				fmt.Errorf("field reference %s declares no field group", reference.Field))
+		}
+		for _, group := range reference.Groups {
+			err := authz.AuthorizeFields(authority, []string{group})
+			if errors.Is(err, authz.ErrForbidden) {
+				return platform.NewFailure(platform.CodeInvalidInput,
+					fmt.Errorf("field reference %s requires field group %q, which the author may not read", reference.Field, group))
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

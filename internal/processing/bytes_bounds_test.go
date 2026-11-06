@@ -107,7 +107,7 @@ func TestBytesComparisonCostUsesMaximumLengthsAndSumsCompositeLeaves(t *testing.
 		t.Fatal(err)
 	}
 	result, err := program.Evaluate(context.Background(), fixture)
-	if err != nil || result.Truth != DefiniteTrue {
+	if err != nil || !result {
 		t.Fatalf("nullable bytes membership failed: %+v, %v", result, err)
 	}
 }

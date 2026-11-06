@@ -49,7 +49,14 @@ func (o *installedOwnerFixture) AuthorizeInstalled(ctx context.Context, id uuid.
 		return InvocationEnvelope{}, nil, true, capabilityUnavailable(errors.New("fixture source context unavailable"))
 	}
 	o.contexts = append(o.contexts, call)
-	encoded, err := json.Marshal(input)
+	// Only the mapped values are compared across contexts: the definition-level classification
+	// stamped on each input legitimately differs by original target position.
+	mapped := make(map[string]FieldValue, len(input))
+	for name, field := range input {
+		field.Dependencies = nil
+		mapped[name] = field
+	}
+	encoded, err := json.Marshal(mapped)
 	if err != nil {
 		return InvocationEnvelope{}, nil, true, err
 	}
@@ -257,8 +264,9 @@ func TestInstalledWorkflowActuallyWaitsBeyondBuiltinBudgetWithoutDetachingCaller
 		string(result.Fields["text"].Value.Value) != `"LEVEL=7"` {
 		t.Fatalf("host mapping after installed call or prior deadline failed: %+v, %v", result, err)
 	}
-	if len(result.Fields["text"].Dependencies) != 1 || result.Fields["text"].Dependencies[0].Groups[0] != "payload" {
-		t.Fatalf("installed output lost input/selector classification: %+v", result)
+	dependencies, err := result.Dependencies()
+	if err != nil || len(result.Fields["text"].Dependencies) != 0 || len(dependencies) != 1 || dependencies[0].Groups[0] != "payload" {
+		t.Fatalf("installed output is not classified once per definition: %+v, %v", result, err)
 	}
 }
 

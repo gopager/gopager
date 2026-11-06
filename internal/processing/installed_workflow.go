@@ -111,6 +111,12 @@ func executeInstalled(ctx context.Context, step compiledStep, frame *executionFr
 	if err != nil {
 		return nil, err
 	}
+	// The plugin is authorized for the whole definition's classification, not per input value:
+	// derived values carry no classification of their own.
+	for name, field := range input {
+		field.Dependencies = frame.dependencies
+		input[name] = field
+	}
 	if err := frame.budget.consume(input); err != nil {
 		return nil, err
 	}
@@ -172,7 +178,7 @@ func executeInstalled(ctx context.Context, step compiledStep, frame *executionFr
 	}
 	fields := make(map[string]FieldValue, len(manifest.ResultSchema))
 	for _, name := range sortedNames(manifest.ResultSchema) {
-		field := FieldValue{State: FieldAbsent, Dependencies: dependencies}
+		field := FieldValue{State: FieldAbsent}
 		if value, present := output[name]; present {
 			field.State, field.Value = FieldPresent, &value
 		}

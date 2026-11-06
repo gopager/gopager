@@ -196,15 +196,15 @@ func TestSyntheticOwnerUsesMatcherAndWorkflowUnitScope(t *testing.T) {
 	}
 }
 
-func TestSyntheticOwnerMasksMissingFieldRightsAndFailsClosedWithoutNetwork(t *testing.T) {
+func TestSyntheticOwnerCapturesEveryFieldRegardlessOfEditorRightsAndFailsClosedWithoutNetwork(t *testing.T) {
 	owner, network, tx := testOwner(protocols.POCSAG, nil)
 	authority := testAuthority("payload")
 	raw := replaceNetworkID(`{"schemaVersion":1,"protocol":"pocsag","form":"text","networkId":"NETWORK","payload":{"value":"x"},"targets":[]}`, network.ID)
 	projection, _ := capture(t, owner, network, tx, authority, testWorkflow(authz.Scope{Kind: "all"}), raw)
 	name, ok := findField(projection.Fields, "network", "name")
 	text, textOK := findField(projection.Fields, "payload", "text", "value")
-	if !ok || name.Field.State != processing.FieldHidden || !textOK || text.Field.State != processing.FieldPresent {
-		t.Fatalf("field rights were not applied independently: %+v %+v", name, text)
+	if !ok || name.Field.State != processing.FieldPresent || !textOK || text.Field.State != processing.FieldPresent {
+		t.Fatalf("capture depended on the editor's field rights: %+v %+v", name, text)
 	}
 	missing, err := NewOwner(testMatcher{}, nil, testClock{now: time.Now()}, nil)
 	if err != nil {

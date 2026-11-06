@@ -29,6 +29,12 @@ func (processingDeclarationsFixture) FieldSchema(ref processing.FieldRef) (proce
 	return processing.FieldSchema{Kind: processing.BooleanValue}, nil
 }
 
+// FieldGroups declares the fixture field in a group the bootstrap author may read, so save-time
+// field validation can classify the definition.
+func (processingDeclarationsFixture) FieldGroups(processing.FieldRef) ([]string, error) {
+	return []string{"unit"}, nil
+}
+
 func preparedProcessingDefinition(t *testing.T) processing.Definition {
 	t.Helper()
 	flag := processing.FieldRef{Namespace: "source", Path: []string{"flag"}}

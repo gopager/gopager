@@ -77,7 +77,7 @@ func TestProcessingCompletionRejectsPartialHiddenUncorrelatedAndUnpublishedResul
 		"empty missing field": func(f *ProcessingCompletionFact) { f.Result.Fields = map[string]processing.FieldValue{} },
 		"hidden": func(f *ProcessingCompletionFact) {
 			field := f.Result.Fields["level"]
-			field.State, field.Value = processing.FieldHidden, nil
+			field.State, field.Value = processing.FieldState("hidden"), nil
 			f.Result.Fields["level"] = field
 		},
 		"wrong type": func(f *ProcessingCompletionFact) {

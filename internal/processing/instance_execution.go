@@ -320,8 +320,8 @@ func (r *InstanceExecution) AuthorizeInstalled(ctx context.Context, id uuid.UUID
 	var dependencies []Dependency
 	for name, field := range detached {
 		schema, declared := manifest.InputSchema[name]
-		if !declared || field.State == FieldHidden {
-			return InvocationEnvelope{}, nil, preview, invalid(errors.New("undeclared or hidden installed input"))
+		if !declared {
+			return InvocationEnvelope{}, nil, preview, invalid(errors.New("undeclared installed input"))
 		}
 		if err := validateFieldValue(schema, field, false); err != nil {
 			return InvocationEnvelope{}, nil, preview, err

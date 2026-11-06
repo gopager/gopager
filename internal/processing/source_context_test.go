@@ -50,10 +50,11 @@ func TestSourceContextClassificationSurvivesWorkflowDerivation(t *testing.T) {
 				t.Fatalf("missing context value: %+v", field)
 			}
 			value, err := field.Value.Native(definition.OutputSchema["context"])
-			if err != nil || value != test.value || len(field.Dependencies) != 1 {
-				t.Fatalf("context projection: %+v err=%v", field, err)
+			dependencies, dependencyErr := evaluation.Dependencies()
+			if err != nil || dependencyErr != nil || value != test.value || len(field.Dependencies) != 0 || len(dependencies) != 1 {
+				t.Fatalf("context projection: %+v err=%v, %v", field, err, dependencyErr)
 			}
-			dependency := field.Dependencies[0]
+			dependency := dependencies[0]
 			groups := map[string]bool{}
 			for _, group := range dependency.Groups {
 				groups[group] = true
@@ -69,7 +70,7 @@ func TestSourceContextClassificationSurvivesWorkflowDerivation(t *testing.T) {
 	}
 }
 
-func TestSourceContextAbsenceHiddenAndInvalidOwnerInput(t *testing.T) {
+func TestSourceContextAbsenceAndInvalidOwnerInput(t *testing.T) {
 	projection, _ := sourceFixture(t)
 	contextual, err := projection.WithContextFields("Dispatch")
 	if err != nil {
@@ -79,23 +80,6 @@ func TestSourceContextAbsenceHiddenAndInvalidOwnerInput(t *testing.T) {
 	if subtype.Field.State != FieldAbsent || subtype.Field.Value != nil || !subtype.Schema.Optional ||
 		subtype.Field.Dependencies[0].Groups[0] != "payload" {
 		t.Fatalf("absent subtype lost classification: %+v", subtype)
-	}
-	// A trusted owner applies global visibility after constructing classified context.
-	contextual.Fields[6].Field.State, contextual.Fields[6].Field.Value = FieldHidden, nil
-	source, err := CaptureSource(t.Context(), contextual)
-	if err != nil {
-		t.Fatal(err)
-	}
-	reference := FieldRef{Namespace: "source", Path: []string{"network", "name"}}
-	definition := selectedDefinition()
-	definition.OutputSchema["network"] = FieldSchema{Kind: StringValue}
-	definition.Outputs["network"] = Assignment{Field: &reference}
-	program, err := CompileWorkflow(t.Context(), definition, source, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := program.EvaluateScoped(t.Context(), source, EvaluationScope{SourceEligible: true}, nil); err == nil {
-		t.Fatal("hidden Network supplied a derived value")
 	}
 	if _, err := contextual.WithContextFields("other"); platform.FailureCode(err) != platform.CodeInvalidInput {
 		t.Fatalf("duplicate context overwritten: %v", err)
