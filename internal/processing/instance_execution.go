@@ -38,7 +38,7 @@ type ExecutionBinding struct {
 }
 
 // InvocationSourceOwner checks current source/configuration and scoped data authority under primary locks.
-// editor=true additionally requires rule.preview and all stored sample reads for the current editor.
+// editor=true additionally requires workflow.preview and all stored sample reads for the current editor.
 // Synthetic preview must be explicitly identified by this owner, not inferred from arbitrary source IDs.
 type InvocationSourceOwner interface {
 	CheckInstalledSource(context.Context, platform.TransactionContext, ExecutionBinding,

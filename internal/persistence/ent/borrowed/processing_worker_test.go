@@ -91,14 +91,14 @@ func TestProcessingWorkerPrivateEvaluationAndCurrentSourceRecheck(t *testing.T) 
 			return err
 		}
 		configuration.CreatedAt, configuration.UpdatedAt, version.CreatedAt = now, now, now
-		if err := repository.SaveWorkflow(tx.Context(), tx, authority, "rule.create", configuration, 0, now); err != nil {
+		if err := repository.SaveWorkflow(tx.Context(), tx, authority, "workflow.create", configuration, 0, now); err != nil {
 			return err
 		}
 		if err := repository.SaveVersion(tx.Context(), tx, version); err != nil {
 			return err
 		}
 		configuration.Revision, configuration.ActiveVersionID = 2, &version.ID
-		return repository.SaveWorkflow(tx.Context(), tx, authority, "rule.activate", configuration, 1, now)
+		return repository.SaveWorkflow(tx.Context(), tx, authority, "workflow.activate", configuration, 1, now)
 	}); err != nil {
 		t.Fatal(err)
 	}

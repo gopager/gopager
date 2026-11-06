@@ -116,7 +116,7 @@ func TestProcessingManagementVersionsActivationOnlyAndRetainedHistory(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	replaceManagementGrants(t, f, []authz.Grant{{Scope: authz.Scope{Kind: "all"}, Actions: []string{"rule.activate"}}})
+	replaceManagementGrants(t, f, []authz.Grant{{Scope: authz.Scope{Kind: "all"}, Actions: []string{"workflow.activate"}}})
 	if _, err := service.ReadVersion(t.Context(), f.proof, created.ID, first.ID); !errors.Is(err, authz.ErrForbidden) {
 		t.Fatalf("activate authority became public definition read: %v", err)
 	}
@@ -275,7 +275,7 @@ func TestProcessingManagementUnitScopeFollowsTheUnitAgencyAndExplicitInput(t *te
 			t.Fatal(err)
 		}
 	}
-	replaceManagementGrants(t, f, []authz.Grant{{Actions: []string{"rule.create"},
+	replaceManagementGrants(t, f, []authz.Grant{{Actions: []string{"workflow.create"},
 		Scope: authz.Scope{Kind: "agency", References: []string{f.agencies[0].String()}}}})
 	input := processingMetadataFixture("shared unit workflow", authz.Scope{Kind: "unit", References: []string{unit.ID.String()}})
 	if _, err := service.CreateWorkflow(t.Context(), f.proof, uuid.New(), input, checkedMutation); !errors.Is(err, authz.ErrForbidden) {

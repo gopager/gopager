@@ -81,9 +81,17 @@ type AuthorityRepository interface {
 	TouchCredential(context.Context, platform.TransactionContext, uuid.UUID, time.Time) error
 }
 
+// touchInterval is the minimum age of a credential's stored last-use time before Resolve
+// writes it again. It spares a write per authenticated request while keeping the session
+// inactivity rule honest to within this interval.
+const touchInterval = 5 * time.Minute
+
 // ScopeReferences checks current existence through the owning domain, not a cached ID list.
+// ScopesExist answers for all scopes at once so the cost of a resolution does not grow with
+// the number of grants: the result is aligned with the input (true means every reference of
+// that scope exists). Implementations batch their lookups per scope kind.
 type ScopeReferences interface {
-	ScopeExists(context.Context, platform.TransactionContext, authz.Scope) (bool, error)
+	ScopesExist(context.Context, platform.TransactionContext, []authz.Scope) ([]bool, error)
 }
 
 // Resolver derives a caller's current authority from proof or from a trusted
@@ -129,7 +137,9 @@ func NewResolver(repository AuthorityRepository, clock platform.Clock, reference
 // expired credential (sessions also expire 30 days after creation or 7 days
 // after last use), an inactive account, or an access key restricted to a
 // scope that no longer exists. Grants on scopes that no longer exist are
-// dropped. On success it updates the credential's last-used time.
+// dropped. On success it updates the credential's last-used time, but only when the stored
+// value is at least touchInterval (5 minutes) old; the 7-day session inactivity rule can
+// therefore be off by up to that interval.
 func (r *Resolver) Resolve(ctx context.Context, tx platform.TransactionContext, proof Proof) (Authentication, error) {
 	if proof.Kind != AnonymousProof && proof.Kind != SessionProof && proof.Kind != AccessKeyProof ||
 		(proof.Kind == AnonymousProof && proof.Secret != "") {
@@ -182,17 +192,17 @@ func (r *Resolver) Resolve(ctx context.Context, tx platform.TransactionContext, 
 		if err := authz.ValidateRestrictions(credential.Restrictions); err != nil {
 			return Authentication{}, platform.NewFailure(platform.CodeAuthorityUnavailable, err)
 		}
-		for _, scope := range credential.Restrictions.Scopes {
-			exists, err := r.references.ScopeExists(ctx, tx, scope)
-			if err != nil {
-				return Authentication{}, err
-			}
+		existing, err := r.scopesExist(ctx, tx, credential.Restrictions.Scopes)
+		if err != nil {
+			return Authentication{}, err
+		}
+		for _, exists := range existing {
 			if !exists {
 				return Authentication{}, ErrLoginRequired
 			}
 		}
 	}
-	if proof.Kind != AnonymousProof {
+	if proof.Kind != AnonymousProof && now.Sub(credential.LastUsedAt) >= touchInterval {
 		if err := r.repository.TouchCredential(ctx, tx, credential.ID, now); err != nil {
 			return Authentication{}, err
 		}
@@ -232,16 +242,20 @@ func (r *Resolver) accountAuthority(ctx context.Context, tx platform.Transaction
 	if err != nil {
 		return authz.Authority{}, err
 	}
-	active := make([]authz.Grant, 0, len(grants))
-	for _, grant := range grants {
+	scopes := make([]authz.Scope, len(grants))
+	for i, grant := range grants {
 		if err := authz.ValidateGrant(grant); err != nil {
 			return authz.Authority{}, platform.NewFailure(platform.CodeAuthorityUnavailable, err)
 		}
-		exists, err := r.references.ScopeExists(ctx, tx, grant.Scope)
-		if err != nil {
-			return authz.Authority{}, err
-		}
-		if exists {
+		scopes[i] = grant.Scope
+	}
+	existing, err := r.scopesExist(ctx, tx, scopes)
+	if err != nil {
+		return authz.Authority{}, err
+	}
+	active := make([]authz.Grant, 0, len(grants))
+	for i, grant := range grants {
+		if existing[i] {
 			active = append(active, grant)
 		}
 	}
@@ -255,4 +269,20 @@ func (r *Resolver) accountAuthority(ctx context.Context, tx platform.Transaction
 		return authz.Authority{}, platform.NewFailure(platform.CodeAuthorityUnavailable, err)
 	}
 	return authority, nil
+}
+
+// scopesExist resolves all scopes with one batched owner call and rejects an owner that
+// answers for a different number of scopes, which would silently misalign grants.
+func (r *Resolver) scopesExist(ctx context.Context, tx platform.TransactionContext, scopes []authz.Scope) ([]bool, error) {
+	if len(scopes) == 0 {
+		return nil, nil
+	}
+	existing, err := r.references.ScopesExist(ctx, tx, scopes)
+	if err != nil {
+		return nil, err
+	}
+	if len(existing) != len(scopes) {
+		return nil, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("scope owner answered a different number of scopes"))
+	}
+	return existing, nil
 }

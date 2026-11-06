@@ -1985,7 +1985,7 @@ paths:
       tags:
       - Workflows
       summary: List Workflows
-      description: Requires `rule.read`. Offset paging; any other query parameter is 400.
+      description: Requires `workflow.read`. Offset paging; any other query parameter is 400.
       security:
       - sessionCookie: []
       - accessKey: []
@@ -2015,7 +2015,7 @@ paths:
       tags:
       - Workflows
       summary: Create a Workflow
-      description: 'Requires `rule.create` within the requested scope. Idempotent per (caller, `commandId`): an
+      description: 'Requires `workflow.create` within the requested scope. Idempotent per (caller, `commandId`): an
         identical replay returns the original result; reusing the `commandId` with different input is 409 `IDEMPOTENCY_CONFLICT`.
         The body is limited to 1 MiB and is decoded strictly: unknown fields, duplicate object keys and trailing
         data are 400.'
@@ -2061,7 +2061,7 @@ paths:
       tags:
       - Workflows
       summary: Read a Workflow
-      description: Requires `rule.read`. Absent, deleted and invisible items are all 404.
+      description: Requires `workflow.read`. Absent, deleted and invisible items are all 404.
       security:
       - sessionCookie: []
       - accessKey: []
@@ -2090,7 +2090,7 @@ paths:
       tags:
       - Workflows
       summary: Update Workflow metadata
-      description: 'Requires `rule.update` within both the current and the requested scope. Never changes the active
+      description: 'Requires `workflow.update` within both the current and the requested scope. Never changes the active
         version. Optimistic concurrency via `expectedRevision`; a stale value is 409 `REVISION_CONFLICT`. The body
         is limited to 1 MiB and is decoded strictly: unknown fields, duplicate object keys and trailing data are
         400.'
@@ -2133,7 +2133,7 @@ paths:
       tags:
       - Workflows
       summary: Delete a Workflow
-      description: 'Requires `rule.delete`. Disables the Workflow and clears its active version; saved versions
+      description: 'Requires `workflow.delete`. Disables the Workflow and clears its active version; saved versions
         are retained. Optimistic concurrency via `expectedRevision`; a stale value is 409 `REVISION_CONFLICT`. The
         body is limited to 1 MiB and is decoded strictly: unknown fields, duplicate object keys and trailing data
         are 400.'
@@ -2179,7 +2179,7 @@ paths:
       tags:
       - Workflows
       summary: List saved definitions
-      description: Requires `rule.read` on the Workflow.
+      description: Requires `workflow.read` on the Workflow.
       security:
       - sessionCookie: []
       - accessKey: []
@@ -2211,7 +2211,7 @@ paths:
       tags:
       - Workflows
       summary: Save an immutable definition
-      description: 'Requires `rule.update`. Compiles the definition (including installed plugin steps) and stores
+      description: 'Requires `workflow.update`. Compiles the definition (including installed plugin steps) and stores
         it; does not activate it. Advances the Workflow revision. The result `id` is the new version ID and `revision`
         is the new Workflow revision. A manifest with an unsupported schema or SDK is 409 `INCOMPATIBLE_VERSION`.
         Idempotent per (caller, `commandId`): an identical replay returns the original result; reusing the `commandId`
@@ -2260,7 +2260,7 @@ paths:
       tags:
       - Workflows
       summary: Read a saved definition
-      description: Requires `rule.read`. Absent, deleted and invisible items are all 404.
+      description: Requires `workflow.read`. Absent, deleted and invisible items are all 404.
       security:
       - sessionCookie: []
       - accessKey: []
@@ -2293,7 +2293,7 @@ paths:
       tags:
       - Workflows
       summary: Activate a saved definition
-      description: 'Requires `rule.activate`. Recompiles the version before activating it. `expectedRevision` is
+      description: 'Requires `workflow.activate`. Recompiles the version before activating it. `expectedRevision` is
         the Workflow revision. Optimistic concurrency via `expectedRevision`; a stale value is 409 `REVISION_CONFLICT`.
         The body is limited to 1 MiB and is decoded strictly: unknown fields, duplicate object keys and trailing
         data are 400.'
@@ -2340,7 +2340,7 @@ paths:
       - Workflows
       summary: Evaluate a definition without publishing
       description: |
-        Requires `rule.preview`. Exactly one of `versionId` / `definition` and exactly one of
+        Requires `workflow.preview`. Exactly one of `versionId` / `definition` and exactly one of
         `syntheticJson` / `storedTransmissionId`. Nothing is persisted. The result contains only
         fields the caller may read. If the Workflow changes during evaluation the request fails with
         409 `REVISION_CONFLICT`. A `syntheticJson` input is evaluated against the current Network named
@@ -2392,7 +2392,7 @@ paths:
       tags:
       - Workflows
       summary: List Processing candidate states
-      description: Requires `rule.read` on the Workflow.
+      description: Requires `workflow.read` on the Workflow.
       security:
       - sessionCookie: []
       - accessKey: []
@@ -2428,7 +2428,7 @@ paths:
       tags:
       - Workflows
       summary: Read one candidate state
-      description: Requires `rule.read`. Absent, deleted and invisible items are all 404.
+      description: Requires `workflow.read`. Absent, deleted and invisible items are all 404.
       security:
       - sessionCookie: []
       - accessKey: []
@@ -2461,7 +2461,7 @@ paths:
       tags:
       - Workflows
       summary: Read result metadata of a candidate
-      description: Requires `rule.read`. Absent, deleted and invisible items are all 404. Returns identifiers and
+      description: Requires `workflow.read`. Absent, deleted and invisible items are all 404. Returns identifiers and
         timing only, never evaluated fields.
       security:
       - sessionCookie: []
@@ -2496,7 +2496,7 @@ paths:
       - Workflows
       summary: Retry a failed candidate
       description: |
-        Requires `rule.reprocess`. Only a `failed` candidate of an unpublished Transmission can be
+        Requires `workflow.reprocess`. Only a `failed` candidate of an unpublished Transmission can be
         retried; it becomes `pending` and due immediately. `expectedRevision` is the candidate
         revision; a mismatch is 409 `REVISION_CONFLICT`. The candidate must also still be current: the
         Transmission's targets, source and context revisions, the Workflow's active version and

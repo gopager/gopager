@@ -42,17 +42,17 @@ func TestProcessingCandidateNativeReselectionRetainsResultsAndAttempts(t *testin
 			return err
 		}
 		configuration.CreatedAt, configuration.UpdatedAt, version.CreatedAt = now, now, now
-		if err := store.SaveWorkflow(tx.Context(), tx, authority, "rule.create", configuration, 0, now); err != nil {
+		if err := store.SaveWorkflow(tx.Context(), tx, authority, "workflow.create", configuration, 0, now); err != nil {
 			return err
 		}
 		if err := store.SaveVersion(tx.Context(), tx, version); err != nil {
 			return err
 		}
 		configuration.Revision, configuration.ActiveVersionID = 2, &version.ID
-		if err := store.SaveWorkflow(tx.Context(), tx, authority, "rule.activate", configuration, 1, now); err != nil {
+		if err := store.SaveWorkflow(tx.Context(), tx, authority, "workflow.activate", configuration, 1, now); err != nil {
 			return err
 		}
-		if err := store.RecordChange(tx.Context(), tx, actor, configuration.ID, "rule.activate", now); err != nil {
+		if err := store.RecordChange(tx.Context(), tx, actor, configuration.ID, "workflow.activate", now); err != nil {
 			return err
 		}
 		binding.ConfigurationRevision, err = store.LockRevision(tx.Context(), tx)
@@ -112,10 +112,10 @@ func TestProcessingCandidateNativeReselectionRetainsResultsAndAttempts(t *testin
 			expected := configuration.Revision
 			configuration.Revision++
 			configuration.Enabled, configuration.UpdatedAt = enabled, now
-			if err := store.SaveWorkflow(tx.Context(), tx, authority, "rule.update", configuration, expected, now); err != nil {
+			if err := store.SaveWorkflow(tx.Context(), tx, authority, "workflow.update", configuration, expected, now); err != nil {
 				return err
 			}
-			if err := store.RecordChange(tx.Context(), tx, actor, configuration.ID, "rule.update", now); err != nil {
+			if err := store.RecordChange(tx.Context(), tx, actor, configuration.ID, "workflow.update", now); err != nil {
 				return err
 			}
 			binding.WorkflowRevision = configuration.Revision
@@ -281,7 +281,7 @@ func TestProcessingCandidateNativeReselectionRetainsResultsAndAttempts(t *testin
 			t.Fatalf("CRUD/read rights implicitly permitted retry: %v", err)
 		}
 		allowed := processingAuthorityFixture(actor, authz.Scope{Kind: "all"})
-		allowed.Grants[0].Actions = []string{"rule.reprocess"}
+		allowed.Grants[0].Actions = []string{"workflow.reprocess"}
 		if result, err := retry(allowed, retryExpected, true); !errors.Is(err, abortRetry) ||
 			result.State != "pending" || !result.ManualRetryPending {
 			t.Fatalf("retry/audit participants were not reached before rollback: %+v err=%v", result, err)
@@ -302,7 +302,7 @@ func TestProcessingCandidateNativeReselectionRetainsResultsAndAttempts(t *testin
 			client := ent.NewClient(ent.Driver(driver))
 			scope := guard.Bind(tx.Context(), guard.Access{Current: driver.Current,
 				Predicates: map[string]entql.P{"AuditRecord": entql.And(
-					entql.FieldEQ("target_id", due.ID), entql.FieldEQ("action", "rule.reprocess"))}})
+					entql.FieldEQ("target_id", due.ID), entql.FieldEQ("action", "workflow.reprocess"))}})
 			count, err := client.AuditRecord.Query().Count(scope)
 			if err != nil {
 				return err
@@ -494,7 +494,7 @@ func TestProcessingCandidateNativeReselectionRetainsResultsAndAttempts(t *testin
 			t.Fatalf("exhausted reselection entered automatic dispatch: %+v", work)
 		}
 		allowed := processingAuthorityFixture(actor, authz.Scope{Kind: "all"})
-		allowed.Grants[0].Actions = []string{"rule.reprocess"}
+		allowed.Grants[0].Actions = []string{"workflow.reprocess"}
 		retried, err := store.RetryCandidate(tx.Context(), tx, allowed, binding.WorkflowID, initial.ID, 2)
 		if err != nil {
 			return err

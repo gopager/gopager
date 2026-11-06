@@ -374,15 +374,15 @@ Management operations (see [HTTP API](http-api.md) for the routes and envelopes)
 
 | Operation | Permission | Effect | Event `changeKind` |
 | --- | --- | --- | --- |
-| List / read workflow, list / read versions | `rule.read` | Results are filtered by scope. | — |
-| Create workflow | `rule.create` | New workflow with `revision` 1 and no active version. `commandId` makes the request idempotent. | `created` |
-| Update workflow | `rule.update` | Changes `name`, `scope` and `enabled`. The active version is unchanged. | `updated` |
-| Save version | `rule.update` | Compiles the definition, stores an immutable version, and increments the workflow revision. Idempotent by `commandId`. | `version-saved` |
-| Activate version | `rule.activate` | Recompiles the version and sets `activeVersionId`. Any retained version can be activated, including an earlier one. | `activated` |
-| Delete workflow | `rule.delete` | Sets `enabled=false` and clears the active version. Versions are retained. | `deleted` |
-| Preview | `rule.preview` | See [Preview](#preview). | — |
-| List / read candidate status, read result metadata | `rule.read` | See [Status reads](#status-reads). | — |
-| Retry failed candidate | `rule.reprocess` | See [Retries](#retries). | — |
+| List / read workflow, list / read versions | `workflow.read` | Results are filtered by scope. | — |
+| Create workflow | `workflow.create` | New workflow with `revision` 1 and no active version. `commandId` makes the request idempotent. | `created` |
+| Update workflow | `workflow.update` | Changes `name`, `scope` and `enabled`. The active version is unchanged. | `updated` |
+| Save version | `workflow.update` | Compiles the definition, stores an immutable version, and increments the workflow revision. Idempotent by `commandId`. | `version-saved` |
+| Activate version | `workflow.activate` | Recompiles the version and sets `activeVersionId`. Any retained version can be activated, including an earlier one. | `activated` |
+| Delete workflow | `workflow.delete` | Sets `enabled=false` and clears the active version. Versions are retained. | `deleted` |
+| Preview | `workflow.preview` | See [Preview](#preview). | — |
+| List / read candidate status, read result metadata | `workflow.read` | See [Status reads](#status-reads). | — |
+| Retry failed candidate | `workflow.reprocess` | See [Retries](#retries). | — |
 
 Common rules:
 
@@ -539,7 +539,7 @@ Each delay has uniform ±20 % jitter. After the fifth automatic attempt the cand
 
 **Manual retry** of a `failed`, unpublished candidate:
 
-- Requires `rule.reprocess` and the candidate's `expectedRevision`.
+- Requires `workflow.reprocess` and the candidate's `expectedRevision`.
 - Checks, in the same transaction, that the candidate is still current: its transmission is unpublished with unchanged targets, source and assignment context revisions; its workflow is still selected at the same active version and workflow revision; the processing configuration revision is unchanged; and every processing instance the definition uses is still valid. Anything stale fails with `409 REVISION_CONFLICT` and leaves the candidate `failed`.
 - On success, queues one attempt immediately: the candidate becomes `pending`, due now.
 - The manual attempt does not count against or reset the automatic budget.
@@ -607,7 +607,7 @@ All processing events use schema version 1 and producer version `processing-kern
 
 ### Status reads
 
-Candidate status reads require `rule.read` on the workflow and are permission-filtered. Their response contains only:
+Candidate status reads require `workflow.read` on the workflow and are permission-filtered. Their response contains only:
 
 ```json
 {"id": "…", "revision": "4", "state": "failed", "selected": true, "failureCode": "RESOURCE_LIMIT", "updatedAt": "…"}

@@ -103,7 +103,7 @@ func buildActionScopes() map[string][]string {
 		"key.create-own key.manage-own key.manage-technical subscription.manage-own subscription.manage-global",
 		"all", "account")
 	add("delivery.read delivery.retry delivery.redeliver", "all", "agency", "unit", "unitCollection", "account")
-	add("rule.read rule.create rule.update rule.delete rule.preview rule.activate rule.reprocess presentation.manage",
+	add("workflow.read workflow.create workflow.update workflow.delete workflow.preview workflow.activate workflow.reprocess presentation.manage",
 		"all", "agency", "unit")
 	add("notice.manage plugin.configure operations.manage", "all")
 	add("audit.read", "all", "agency", "account")

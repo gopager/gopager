@@ -63,13 +63,23 @@ func (o matcherOwners) ReadUnitContext(ctx context.Context, tx platform.Transact
 	return o.units.ReadUnitContext(ctx, tx, id)
 }
 
-func (o matcherOwners) ScopeExists(ctx context.Context, tx platform.TransactionContext, scope authz.Scope) (bool, error) {
-	switch scope.Kind {
-	case "unit", "unitCollection", "agency":
-		return o.units.ScopeExists(ctx, tx, scope)
-	default:
-		return o.identity.ScopeExists(ctx, tx, scope)
+func (o matcherOwners) ScopesExist(ctx context.Context, tx platform.TransactionContext, scopes []authz.Scope) ([]bool, error) {
+	result := make([]bool, len(scopes))
+	for i, scope := range scopes {
+		var existing []bool
+		var err error
+		switch scope.Kind {
+		case "unit", "unitCollection", "agency":
+			existing, err = o.units.ScopesExist(ctx, tx, []authz.Scope{scope})
+		default:
+			existing, err = o.identity.ScopesExist(ctx, tx, []authz.Scope{scope})
+		}
+		if err != nil {
+			return nil, err
+		}
+		result[i] = existing[0]
 	}
+	return result, nil
 }
 
 type matcherFixture struct {
@@ -321,11 +331,11 @@ func TestCurrentMatcherSelectionCandidatesAndDeletionInvalidation(t *testing.T) 
 		t.Fatalf("Unit deletion did not retain pending correction: %v", err)
 	}
 	err = f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		exists, err := f.unitStore.ScopeExists(tx.Context(), tx, authz.Scope{Kind: "unit", References: []string{unit.ID.String()}})
+		existing, err := f.unitStore.ScopesExist(tx.Context(), tx, []authz.Scope{{Kind: "unit", References: []string{unit.ID.String()}}})
 		if err != nil {
 			return err
 		}
-		if exists {
+		if existing[0] {
 			t.Fatal("deleted Unit still authorizes a restricting scope")
 		}
 		result, err := f.rules.MatchTargets(tx.Context(), tx, f.networks[0], protocols.POCSAG, observed, targets)

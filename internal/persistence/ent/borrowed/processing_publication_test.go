@@ -139,14 +139,14 @@ func TestProcessingPublicationAtomicEvidenceAndFences(t *testing.T) {
 				CreatedAt: now, UpdatedAt: now}
 			version := processing.Version{ID: uuid.New(), WorkflowID: configuration.ID,
 				CreatedAt: now, CreatedBy: actor, Definition: preparedProcessingDefinition(t)}
-			if err := repository.SaveWorkflow(tx.Context(), tx, authority, "rule.create", configuration, 0, now); err != nil {
+			if err := repository.SaveWorkflow(tx.Context(), tx, authority, "workflow.create", configuration, 0, now); err != nil {
 				return err
 			}
 			if err := repository.SaveVersion(tx.Context(), tx, version); err != nil {
 				return err
 			}
 			configuration.Revision, configuration.ActiveVersionID = 2, &version.ID
-			if err := repository.SaveWorkflow(tx.Context(), tx, authority, "rule.activate", configuration, 1, now); err != nil {
+			if err := repository.SaveWorkflow(tx.Context(), tx, authority, "workflow.activate", configuration, 1, now); err != nil {
 				return err
 			}
 			bindings = append(bindings, processing.CandidateBinding{WorkflowID: configuration.ID,

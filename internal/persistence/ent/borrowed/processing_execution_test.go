@@ -56,7 +56,7 @@ func (s *installedSourceFixture) CheckInstalledSource(ctx context.Context, tx pl
 		return err
 	}
 	if editor {
-		return authz.Authorize(authority, "rule.preview", nil, target, now)
+		return authz.Authorize(authority, "workflow.preview", nil, target, now)
 	}
 	return nil
 }
@@ -357,7 +357,7 @@ func TestProcessingExecutionCurrentAuthorityAndArtifactLifetime(t *testing.T) {
 			case "editor-revoked":
 				actions := authz.Actions()
 				for i, action := range actions {
-					if action == "rule.preview" {
+					if action == "workflow.preview" {
 						actions = append(actions[:i], actions[i+1:]...)
 						break
 					}

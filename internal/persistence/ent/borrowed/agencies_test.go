@@ -2,6 +2,7 @@ package borrowed_test
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/google/uuid"
@@ -63,21 +64,17 @@ func TestAgencyLifecycleAndScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		for _, c := range []struct {
-			scope authz.Scope
-			want  bool
-		}{
-			{authz.Scope{Kind: "agency", References: []string{north.ID.String()}}, true},
-			{authz.Scope{Kind: "agency", References: []string{south.ID.String()}}, false},
-			{authz.Scope{Kind: "agency", References: []string{north.ID.String(), uuid.NewString()}}, false},
-		} {
-			exists, err := f.unitStore.ScopeExists(tx.Context(), tx, c.scope)
-			if err != nil {
-				return err
-			}
-			if exists != c.want {
-				t.Fatalf("ScopeExists(%v)=%t want %t", c.scope, exists, c.want)
-			}
+		scopes := []authz.Scope{
+			{Kind: "agency", References: []string{north.ID.String()}},
+			{Kind: "agency", References: []string{south.ID.String()}},
+			{Kind: "agency", References: []string{north.ID.String(), uuid.NewString()}},
+		}
+		existing, err := f.unitStore.ScopesExist(tx.Context(), tx, scopes)
+		if err != nil {
+			return err
+		}
+		if want := []bool{true, false, false}; !slices.Equal(existing, want) {
+			t.Fatalf("ScopesExist(%v)=%v want %v", scopes, existing, want)
 		}
 		return nil
 	}); err != nil {

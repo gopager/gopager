@@ -864,47 +864,4 @@ func (s *Store) RecordChange(ctx context.Context, tx platform.TransactionContext
 	return owner.RecordConfigurationChange(ctx, tx, actor, target, action, now)
 }
 
-// ScopeExists checks every restricting reference against its current owning entity: Agencies,
-// non-deleted Units or Unit collections.
-func (s *Store) ScopeExists(ctx context.Context, tx platform.TransactionContext, target authz.Scope) (bool, error) {
-	if !authz.ValidScope(target) || (target.Kind != "unit" && target.Kind != "unitCollection" && target.Kind != "agency") {
-		return false, authz.ErrInvalidInput
-	}
-	values := make([]any, 0, len(target.References))
-	seen := make(map[uuid.UUID]bool, len(target.References))
-	for _, reference := range target.References {
-		id, err := uuid.Parse(reference)
-		if err != nil {
-			return false, authz.ErrInvalidInput
-		}
-		if !seen[id] {
-			seen[id] = true
-			values = append(values, id)
-		}
-	}
-	predicate := entql.FieldIn("id", values...)
-	entity := "UnitCollection"
-	switch target.Kind {
-	case "unit":
-		entity = "Unit"
-		predicate = entql.And(predicate, entql.FieldEQ("deleted", false))
-	case "agency":
-		entity = "Agency"
-	}
-	client, scope, err := s.client(ctx, tx, map[string]entql.P{entity: predicate}, nil)
-	if err != nil {
-		return false, err
-	}
-	var count int
-	switch entity {
-	case "Unit":
-		count, err = client.Unit.Query().Count(scope)
-	case "Agency":
-		count, err = client.Agency.Query().Count(scope)
-	default:
-		count, err = client.UnitCollection.Query().Count(scope)
-	}
-	return count == len(values), err
-}
-
 var _ units.Repository = (*Store)(nil)

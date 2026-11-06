@@ -21,7 +21,7 @@ func TestAgencyScopeReplacesNetwork(t *testing.T) {
 	}
 	for action, want := range map[string]bool{
 		"message.read": true, "without-unit.read": true, "unit.create": true, "gateway.update": true,
-		"network.update": true, "address-rule.update": true, "rule.read": true, "audit.read": true,
+		"network.update": true, "address-rule.update": true, "workflow.read": true, "audit.read": true,
 		"agency.read": true, "agency.update": true, "agency.create": false, "agency.delete": false,
 		"unit-template.read": false,
 	} {

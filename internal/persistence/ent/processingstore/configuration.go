@@ -187,7 +187,7 @@ func (s *Store) ListWorkflows(ctx context.Context, tx platform.TransactionContex
 	if err != nil {
 		return processing.Page[processing.WorkflowConfiguration]{}, err
 	}
-	client, scope, err := s.readClient(ctx, tx, authority, "rule.read", now)
+	client, scope, err := s.readClient(ctx, tx, authority, "workflow.read", now)
 	if err != nil {
 		return processing.Page[processing.WorkflowConfiguration]{}, err
 	}
@@ -218,12 +218,12 @@ func version(row *ent.WorkflowVersion) processing.Version {
 
 // ReadVersion keeps immutable definitions inside their currently readable owning Workflow.
 func (s *Store) ReadVersion(ctx context.Context, tx platform.TransactionContext, authority authz.Authority, parent, id uuid.UUID, now time.Time) (processing.Version, error) {
-	return s.ReadVersionForAction(ctx, tx, authority, "rule.read", parent, id, now)
+	return s.ReadVersionForAction(ctx, tx, authority, "workflow.read", parent, id, now)
 }
 
 // ReadVersionForAction loads an owning definition for a trusted command, without adding a public read grant.
 func (s *Store) ReadVersionForAction(ctx context.Context, tx platform.TransactionContext, authority authz.Authority, action string, parent, id uuid.UUID, now time.Time) (processing.Version, error) {
-	if !slices.Contains([]string{"rule.read", "rule.update", "rule.activate", "rule.preview"}, action) {
+	if !slices.Contains([]string{"workflow.read", "workflow.update", "workflow.activate", "workflow.preview"}, action) {
 		return processing.Version{}, authz.ErrInvalidInput
 	}
 	client, scope, err := s.readClient(ctx, tx, authority, action, now)
@@ -246,10 +246,10 @@ func (s *Store) ListVersions(ctx context.Context, tx platform.TransactionContext
 	if err != nil {
 		return processing.Page[processing.Version]{}, err
 	}
-	if _, err := s.ReadWorkflow(ctx, tx, authority, "rule.read", parent, now); err != nil {
+	if _, err := s.ReadWorkflow(ctx, tx, authority, "workflow.read", parent, now); err != nil {
 		return processing.Page[processing.Version]{}, err
 	}
-	client, scope, err := s.readClient(ctx, tx, authority, "rule.read", now)
+	client, scope, err := s.readClient(ctx, tx, authority, "workflow.read", now)
 	if err != nil {
 		return processing.Page[processing.Version]{}, err
 	}
@@ -271,7 +271,7 @@ func (s *Store) ListVersions(ctx context.Context, tx platform.TransactionContext
 
 // SaveWorkflow persists a service-authorized complete metadata change with expected-revision CAS.
 func (s *Store) SaveWorkflow(ctx context.Context, tx platform.TransactionContext, authority authz.Authority, action string, value processing.WorkflowConfiguration, expected int64, now time.Time) error {
-	if !slices.Contains([]string{"rule.create", "rule.update", "rule.activate", "rule.delete"}, action) ||
+	if !slices.Contains([]string{"workflow.create", "workflow.update", "workflow.activate", "workflow.delete"}, action) ||
 		expected < 0 || now.IsZero() {
 		return authz.ErrInvalidInput
 	}
