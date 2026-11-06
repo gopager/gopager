@@ -157,7 +157,7 @@ func (s *PreviewService) Preview(ctx context.Context, proof identity.Proof, inpu
 			versionID = uuid.New()
 		}
 		if s.sourceOwner == nil {
-			return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Processing preview source owner unavailable"))
+			return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("processing preview source owner unavailable"))
 		}
 		switch mode {
 		case previewSynthetic:

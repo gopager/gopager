@@ -121,7 +121,7 @@ type dispatchOutcome struct {
 // cancellation and returns any other selection failure.
 func (d *Dispatcher) Run(ctx context.Context) error {
 	if !d.running.CompareAndSwap(false, true) {
-		return platform.NewFailure(platform.CodeRevisionConflict, errors.New("Processing dispatcher already running"))
+		return platform.NewFailure(platform.CodeRevisionConflict, errors.New("processing dispatcher already running"))
 	}
 	defer d.running.Store(false)
 	work, cancel := context.WithCancel(ctx)

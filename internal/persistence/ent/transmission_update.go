@@ -4,7 +4,7 @@ package ent
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"time"
@@ -109,13 +109,13 @@ func (_u *TransmissionUpdate) SetNillableProtocol(v *transmission.Protocol) *Tra
 }
 
 // SetPayload sets the "payload" field.
-func (_u *TransmissionUpdate) SetPayload(v json.RawMessage) *TransmissionUpdate {
+func (_u *TransmissionUpdate) SetPayload(v jsontext.Value) *TransmissionUpdate {
 	_u.mutation.SetPayload(v)
 	return _u
 }
 
 // AppendPayload appends value to the "payload" field.
-func (_u *TransmissionUpdate) AppendPayload(v json.RawMessage) *TransmissionUpdate {
+func (_u *TransmissionUpdate) AppendPayload(v jsontext.Value) *TransmissionUpdate {
 	_u.mutation.AppendPayload(v)
 	return _u
 }
@@ -205,13 +205,13 @@ func (_u *TransmissionUpdate) SetNillableIncomplete(v *bool) *TransmissionUpdate
 }
 
 // SetQualityMetrics sets the "quality_metrics" field.
-func (_u *TransmissionUpdate) SetQualityMetrics(v json.RawMessage) *TransmissionUpdate {
+func (_u *TransmissionUpdate) SetQualityMetrics(v jsontext.Value) *TransmissionUpdate {
 	_u.mutation.SetQualityMetrics(v)
 	return _u
 }
 
 // AppendQualityMetrics appends value to the "quality_metrics" field.
-func (_u *TransmissionUpdate) AppendQualityMetrics(v json.RawMessage) *TransmissionUpdate {
+func (_u *TransmissionUpdate) AppendQualityMetrics(v jsontext.Value) *TransmissionUpdate {
 	_u.mutation.AppendQualityMetrics(v)
 	return _u
 }
@@ -493,13 +493,13 @@ func (_u *TransmissionUpdateOne) SetNillableProtocol(v *transmission.Protocol) *
 }
 
 // SetPayload sets the "payload" field.
-func (_u *TransmissionUpdateOne) SetPayload(v json.RawMessage) *TransmissionUpdateOne {
+func (_u *TransmissionUpdateOne) SetPayload(v jsontext.Value) *TransmissionUpdateOne {
 	_u.mutation.SetPayload(v)
 	return _u
 }
 
 // AppendPayload appends value to the "payload" field.
-func (_u *TransmissionUpdateOne) AppendPayload(v json.RawMessage) *TransmissionUpdateOne {
+func (_u *TransmissionUpdateOne) AppendPayload(v jsontext.Value) *TransmissionUpdateOne {
 	_u.mutation.AppendPayload(v)
 	return _u
 }
@@ -589,13 +589,13 @@ func (_u *TransmissionUpdateOne) SetNillableIncomplete(v *bool) *TransmissionUpd
 }
 
 // SetQualityMetrics sets the "quality_metrics" field.
-func (_u *TransmissionUpdateOne) SetQualityMetrics(v json.RawMessage) *TransmissionUpdateOne {
+func (_u *TransmissionUpdateOne) SetQualityMetrics(v jsontext.Value) *TransmissionUpdateOne {
 	_u.mutation.SetQualityMetrics(v)
 	return _u
 }
 
 // AppendQualityMetrics appends value to the "quality_metrics" field.
-func (_u *TransmissionUpdateOne) AppendQualityMetrics(v json.RawMessage) *TransmissionUpdateOne {
+func (_u *TransmissionUpdateOne) AppendQualityMetrics(v jsontext.Value) *TransmissionUpdateOne {
 	_u.mutation.AppendQualityMetrics(v)
 	return _u
 }

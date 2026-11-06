@@ -4,6 +4,7 @@ package ent
 
 import (
 	"encoding/json"
+	"encoding/json/jsontext"
 	"fmt"
 	"strings"
 	"time"
@@ -22,7 +23,7 @@ type DomainEvent struct {
 	// Seq holds the value of the "seq" field.
 	Seq int64 `json:"seq,omitempty"`
 	// Envelope holds the value of the "envelope" field.
-	Envelope json.RawMessage `json:"envelope,omitempty"`
+	Envelope jsontext.Value `json:"envelope,omitempty"`
 	// Type holds the value of the "type" field.
 	Type string `json:"type,omitempty"`
 	// OccurredAt holds the value of the "occurred_at" field.

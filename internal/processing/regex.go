@@ -103,7 +103,7 @@ func (CoreRegex) Regex(ctx context.Context, pattern string, text *string) (Regex
 func admitRegex(pattern string) (*regexp.Regexp, error) {
 	parsed, err := syntax.Parse(pattern, syntax.Perl)
 	if err != nil {
-		return nil, invalid(errors.New("Core regex rejected its pattern"))
+		return nil, invalid(errors.New("core regex rejected its pattern"))
 	}
 	slots := int64(2 * (parsed.MaxCap() + 1))
 	if !regexWithinBounds(estimateRegexInsts(parsed), slots) {
@@ -111,14 +111,14 @@ func admitRegex(pattern string) (*regexp.Regexp, error) {
 	}
 	program, err := syntax.Compile(parsed.Simplify())
 	if err != nil {
-		return nil, invalid(errors.New("Core regex rejected its pattern"))
+		return nil, invalid(errors.New("core regex rejected its pattern"))
 	}
 	if !regexWithinBounds(int64(len(program.Inst)), slots) {
 		return nil, resource(errors.New("regex program boundary"))
 	}
 	compiled, err := regexp.Compile(pattern)
 	if err != nil {
-		return nil, invalid(errors.New("Core regex rejected its pattern"))
+		return nil, invalid(errors.New("core regex rejected its pattern"))
 	}
 	return compiled, nil
 }

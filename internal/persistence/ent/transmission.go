@@ -4,6 +4,7 @@ package ent
 
 import (
 	"encoding/json"
+	"encoding/json/jsontext"
 	"fmt"
 	"strings"
 	"time"
@@ -32,7 +33,7 @@ type Transmission struct {
 	// Protocol holds the value of the "protocol" field.
 	Protocol transmission.Protocol `json:"protocol,omitempty"`
 	// Payload holds the value of the "payload" field.
-	Payload json.RawMessage `json:"-"`
+	Payload jsontext.Value `json:"-"`
 	// ObservedAt holds the value of the "observed_at" field.
 	ObservedAt time.Time `json:"observed_at,omitempty"`
 	// ObservationOffsetSeconds holds the value of the "observation_offset_seconds" field.
@@ -44,7 +45,7 @@ type Transmission struct {
 	// Incomplete holds the value of the "incomplete" field.
 	Incomplete bool `json:"incomplete,omitempty"`
 	// QualityMetrics holds the value of the "quality_metrics" field.
-	QualityMetrics json.RawMessage `json:"-"`
+	QualityMetrics jsontext.Value `json:"-"`
 	// MessageID holds the value of the "message_id" field.
 	MessageID uuid.UUID `json:"message_id,omitempty"`
 	// ProcessingStatus holds the value of the "processing_status" field.

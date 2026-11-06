@@ -1,11 +1,11 @@
 .DEFAULT_GOAL := lint
 
 # Tool versions are pinned here and run through "go run", so no global install is
-# needed and local runs match CI. Bump deliberately; v1.64.8 is the last release of
-# the golangci-lint v1 line, whose .golangci.yml format the repository uses.
-GOLANGCI_LINT_VERSION := v1.64.8
-GOVULNCHECK_VERSION := v1.1.4
-GOLANGCI_LINT := go run github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+# needed and local runs match CI. Bump deliberately; golangci-lint v2 is required
+# for Go 1.27 (v1 cannot read its export data).
+GOLANGCI_LINT_VERSION := v2.15.0
+GOVULNCHECK_VERSION := v1.9.0
+GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 GOVULNCHECK := go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
 
 # Pathspec of the files "go generate" rewrites: the Ent output, not its hand-written

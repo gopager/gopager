@@ -39,7 +39,7 @@ type syntheticAssignmentNetworkOwner struct {
 func (owner syntheticAssignmentNetworkOwner) ReadNetwork(ctx context.Context,
 	tx platform.TransactionContext, id uuid.UUID) (protocols.Protocol, uuid.UUID, error) {
 	if owner.owner == nil {
-		return "", uuid.Nil, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Network owner is not wired"))
+		return "", uuid.Nil, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("network owner is not wired"))
 	}
 	network, err := owner.owner.ReadSyntheticNetwork(ctx, tx, id)
 	if err != nil {

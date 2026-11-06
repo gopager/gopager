@@ -29,7 +29,7 @@ type processingDefinitionArtifacts struct {
 func (p *processingDefinitionArtifacts) PrepareInstalled(ctx context.Context, id uuid.UUID,
 	revision int64) (*processing.InstalledArtifact, error) {
 	if p.root == nil {
-		return nil, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Processing artifact root unavailable"))
+		return nil, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("processing artifact root unavailable"))
 	}
 	var configuration processing.InstanceConfiguration
 	err := p.store.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
@@ -39,7 +39,7 @@ func (p *processingDefinitionArtifacts) PrepareInstalled(ctx context.Context, id
 			return err
 		}
 		if !configuration.Enabled {
-			return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Processing instance disabled"))
+			return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("processing instance disabled"))
 		}
 		_, err = p.resolver.ResolvePrincipalAuthority(tx.Context(), tx, configuration.ExecutionPrincipalID)
 		return err
@@ -55,7 +55,7 @@ func (p *processingDefinitionArtifacts) PrepareInstalled(ctx context.Context, id
 func (p *processingDefinitionArtifacts) LoadInstalled(ctx context.Context,
 	configuration processing.InstanceConfiguration) (*processing.InstalledArtifact, error) {
 	if p.root == nil {
-		return nil, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Processing artifact root unavailable"))
+		return nil, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("processing artifact root unavailable"))
 	}
 	inspector, err := processing.NewLocalInstanceInspector(p.host, p.root)
 	if err != nil {

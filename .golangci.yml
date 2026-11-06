@@ -1,33 +1,49 @@
-# golangci-lint v1 configuration (version pinned in the Makefile).
-# A conservative set: correctness findings only, no style linters.
-run:
-  timeout: 10m
-
+# golangci-lint v2 configuration (version pinned in the Makefile).
+# A conservative set: correctness findings only, no style linters. Migrated from the
+# v1 config with `golangci-lint migrate`; the exclusion presets reproduce the v1
+# default exclusions. The path rules below cover pre-existing findings in processing
+# code: remove an entry when its finding is fixed.
+version: "2"
 linters:
-  disable-all: true
+  default: none
   enable:
-    - govet
-    - staticcheck
     - errcheck
+    - govet
     - ineffassign
-    - unused
     - misspell
-
-issues:
-  # Pre-existing findings in processing code, which this change must not touch. Remove
-  # an entry when its finding is fixed; new findings in these files of any other
-  # linter still fail.
-  exclude-rules:
-    - path: cmd/gopager/processing_worker\.go
-      linters: [ineffassign, staticcheck]
-      text: ineffectual assignment to ctx|SA4006
-    - path: internal/processing/workflow_test\.go
-      linters: [ineffassign, staticcheck]
-      text: ineffectual assignment to source|SA4006
-    - path: internal/processing/workflow\.go
-      linters: [staticcheck]
-      text: SA4009
-  # Generated Ent code is excluded by its "Code generated" header; the paths below
-  # are an extra guard.
-  exclude-dirs:
-    - internal/persistence/ent/enttest
+    - staticcheck
+    - unused
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - ineffassign
+          - staticcheck
+        path: cmd/gopager/processing_worker\.go
+        text: ineffectual assignment to ctx|SA4006
+      - linters:
+          - ineffassign
+          - staticcheck
+        path: internal/processing/workflow_test\.go
+        text: ineffectual assignment to source|SA4006
+      - linters:
+          - staticcheck
+        path: internal/processing/workflow\.go
+        text: SA4009
+    paths:
+      - internal/persistence/ent/enttest
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

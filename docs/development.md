@@ -6,12 +6,12 @@ Contribution and documentation rules: [CONTRIBUTING.md](../CONTRIBUTING.md). Run
 
 | Tool | Needed for |
 | --- | --- |
-| Go, version from [go.mod](../go.mod) (`go 1.26.10`) | everything |
+| Go, version from [go.mod](../go.mod) (`go 1.27.3`) | everything |
 | Make | all `make` targets below |
 | Network access | `make lint` and `make vuln` fetch their pinned tools through `go run` the first time |
 | Docker (running daemon, pull access to `postgres:18.0-alpine`) | integration tests, unless an external test database is supplied |
 
-All other tools are pinned and run through `go tool` / `go run`; nothing needs a global install: the Ent code generator and Ginkgo CLI via `go.mod`, golangci-lint (`v1.64.8`) and govulncheck (`v1.1.4`) via the version variables at the top of the [Makefile](../Makefile). Change a pin there only.
+All other tools are pinned and run through `go tool` / `go run`; nothing needs a global install: the Ent code generator and Ginkgo CLI via `go.mod`, golangci-lint (`v2.15.0`) and govulncheck (`v1.9.0`) via the version variables at the top of the [Makefile](../Makefile). Change a pin there only.
 
 ## Repository Layout
 
@@ -80,11 +80,11 @@ make vuln               # govulncheck ./... (pinned version, needs network)
 
 `gofmt` covers `cmd/` and `internal/` (including generated Ent code and tests). Only `test-integration` needs Docker.
 
-[.golangci.yml](../.golangci.yml) enables a conservative set: `govet`, `staticcheck`, `errcheck`, `ineffassign`, `unused`, `misspell`. Generated code is skipped by golangci-lint's generated-file detection. Three known findings in processing code are excluded by path and text (two ineffectual assignments in `cmd/gopager/processing_worker.go` and `internal/processing/workflow_test.go`, and an overwritten argument in `internal/processing/workflow.go`); delete the matching `exclude-rules` entry when you fix one. Do not add new exclusions to hide findings in code you change.
+[.golangci.yml](../.golangci.yml) enables a conservative set: `govet`, `staticcheck`, `errcheck`, `ineffassign`, `unused`, `misspell`. Generated code is skipped by golangci-lint's generated-file detection. The config uses the golangci-lint v2 format (migrated with `golangci-lint migrate`; the `std-error-handling`, `comments`, `common-false-positives` and `legacy` exclusion presets keep the v1 default exclusions). In v2, `staticcheck` also covers the former `gosimple` and `stylecheck` checks (for example ST1005 lower-case error strings). Three known findings in processing code are excluded by path and text (two ineffectual assignments in `cmd/gopager/processing_worker.go` and `internal/processing/workflow_test.go`, and an overwritten argument in `internal/processing/workflow.go`); delete the matching `linters.exclusions.rules` entry when you fix one. Do not add new exclusions to hide findings in code you change.
 
 `make generate-check` compares only the Ent output (`internal/persistence/ent`, not its hand-written `schema/`) with git, so commit or stage regenerated files before expecting it to pass locally; it also fails on generated files that git does not track.
 
-`make vuln` reports no vulnerability reachable from the code (Go 1.26.10, `klauspost/compress` v1.20.2, `moby/go-archive` v0.3.0) and is a required CI check. Moving to Go 1.27 first needs golangci-lint v2: v1.64.8 cannot read Go 1.27 export data.
+`make vuln` reports no vulnerability reachable from the code (Go 1.27.3, `klauspost/compress` v1.20.2, `moby/go-archive` v0.3.0) and is a required CI check. golangci-lint v1 cannot read Go 1.27 export data, which is why the pin is v2.
 
 ### Continuous integration
 
