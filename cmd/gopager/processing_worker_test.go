@@ -39,7 +39,7 @@ func TestInstalledWorkflowRunsOnProductionWiring(t *testing.T) {
 			return err
 		}
 		_, err = executor.ExecContext(tx.Context(), `INSERT INTO gateway_networks
-			(id,gateway_id,gateway_network_identifier,network_id,is_default) VALUES($1,$2,'installed',$3,true)`,
+			(id,gateway_id,gateway_network_identifier,network_id,priority) VALUES($1,$2,'installed',$3,0)`,
 			uuid.New(), gateway, network)
 		return err
 	}); err != nil {

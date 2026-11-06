@@ -271,7 +271,7 @@ var (
 		{Name: "gateway_id", Type: field.TypeUUID},
 		{Name: "gateway_network_identifier", Type: field.TypeString, Size: 128},
 		{Name: "network_id", Type: field.TypeUUID},
-		{Name: "default", Type: field.TypeBool},
+		{Name: "priority", Type: field.TypeInt},
 	}
 	// GatewayNetworksTable holds the schema information for the "gateway_networks" table.
 	GatewayNetworksTable = &schema.Table{
@@ -288,6 +288,11 @@ var (
 				Name:    "gatewaynetwork_gateway_id_network_id",
 				Unique:  true,
 				Columns: []*schema.Column{GatewayNetworksColumns[1], GatewayNetworksColumns[3]},
+			},
+			{
+				Name:    "gatewaynetwork_gateway_id_priority",
+				Unique:  true,
+				Columns: []*schema.Column{GatewayNetworksColumns[1], GatewayNetworksColumns[4]},
 			},
 		},
 	}

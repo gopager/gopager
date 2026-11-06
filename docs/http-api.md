@@ -472,13 +472,18 @@ Field rules:
   depending on the protocol.
 - The optional fields `gatewayNetworkIdentifier`, `qualityMetrics` and `incomplete` must
   be omitted rather than set to `null`.
-- Network resolution uses only the Networks assigned to the Gateway, in this order:
-  1. the declared `gatewayNetworkIdentifier`
+- Network resolution uses only the Networks assigned to the Gateway that serve the
+  submission's protocol, in this order:
+  1. the declared `gatewayNetworkIdentifier` (an unknown identifier is `400 INVALID_INPUT`)
   2. the only Network for this protocol
-  3. the only Network with a matching address rule
-  4. the protocol's default Network
-  
-  If none applies, the result is `400 INVALID_INPUT`.
+  3. the only Network with an address rule matching the targets at the observation time
+  4. the highest-priority Network among several that match; the intake fact
+     `operation.network-ambiguous` is appended
+  5. when none matches, including a submission without targets, the highest-priority Network
+     for this protocol
+
+  A Gateway without a Network for the protocol gets `400 INVALID_INPUT`. The stored resolution is
+  `declared`, `inferred-single`, `inferred-address`, `address-priority` or `priority`.
 - Idempotency is keyed on (Gateway, `submissionId`). An identical re-submission returns
   the stored receipt. Different content under the same ID returns
   `409 IDEMPOTENCY_CONFLICT`. Rejected submissions (`400`, `409`, `413`) create no
@@ -507,11 +512,15 @@ Network replacement body:
 
 ```json
 {"schemaVersion":1,"expectedRevision":"4","networks":[
-  {"gatewayNetworkIdentifier":"north","networkId":"…","default":true}]}
+  {"gatewayNetworkIdentifier":"north","networkId":"…","priority":0}]}
 ```
 
 - 1–1024 entries. Identifiers and Network IDs must be unique.
-- Each protocol in the set needs exactly one `default`.
+- Every entry has an explicit `priority`. Across the set the priorities must be exactly
+  `0..n-1`: unique, contiguous, in any request order. `0` is the highest priority. A duplicate,
+  a gap or a negative value is `400 INVALID_INPUT`. Priority decides between Networks of one
+  protocol at intake (see the submission resolution order above); two districts that share
+  one alarm channel are two Networks of the Gateway, one per Agency.
 - The responses are `{"schemaVersion":1,"revision":"N"}` and, for issuing a credential,
   `{"schemaVersion":1,"credentialId","secret","status","revision"}`.
 

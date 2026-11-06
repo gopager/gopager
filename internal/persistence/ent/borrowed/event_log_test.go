@@ -28,25 +28,14 @@ import (
 // Compile-time proof that the event store satisfies the log reader port.
 var _ events.Log = (*eventstore.Store)(nil)
 
-// observerDatabase opens an independent observer pool in the fixture schema, so assertions
+// observerDatabase opens an independent observer pool on the fixture database, so assertions
 // see only committed data.
 func observerDatabase(t *testing.T, store *postgres.Store) *sql.DB {
 	t.Helper()
-	var schema string
-	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		executor, err := store.Resolve(tx)
-		if err != nil {
-			return err
-		}
-		return executor.QueryRowContext(tx.Context(), "SELECT current_schema()").Scan(&schema)
-	}); err != nil {
-		t.Fatal(err)
-	}
-	config, err := pgx.ParseConfig(os.Getenv("GOPAGER_TEST_DATABASE_URL"))
+	config, err := pgx.ParseConfig(storeDSN(t, store))
 	if err != nil {
 		t.Fatal(err)
 	}
-	config.RuntimeParams["search_path"] = schema
 	db := stdlib.OpenDB(*config)
 	db.SetMaxOpenConns(4)
 	t.Cleanup(func() {

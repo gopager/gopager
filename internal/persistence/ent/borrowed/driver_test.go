@@ -4,17 +4,14 @@ import (
 	"context"
 	"errors"
 	"io/fs"
-	"net/url"
 	"os"
 	"slices"
-	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"entgo.io/ent/entql"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/events"
@@ -43,65 +40,56 @@ func newStore(t *testing.T) *postgres.Store {
 	return newStoreWithMigrations(t, migrations.Files)
 }
 
-// newStoreWithMigrations applies a chosen release collection in an isolated test schema.
+// migratedTemplate is the database with the release migrations applied, built once per process.
+var migratedTemplate = testpostgres.NewTemplate("migrated", func(ctx context.Context, dsn string) error {
+	store, _, err := postgres.NewStore(dsn, true)
+	if err != nil {
+		return err
+	}
+	migrateErr := store.Migrate(ctx, migrations.Files, platform.MigrationApply)
+	if err := store.Close(); err != nil && migrateErr == nil {
+		return err
+	}
+	return migrateErr
+})
+
+// storeDSNs maps each fixture store to the DSN of its private database.
+var storeDSNs sync.Map
+
+// storeDSN returns the DSN of the database behind a fixture store, for independent observers.
+func storeDSN(t testing.TB, store *postgres.Store) string {
+	t.Helper()
+	dsn, ok := storeDSNs.Load(store)
+	if !ok {
+		t.Fatal("store was not created by newStoreWithMigrations")
+	}
+	return dsn.(string)
+}
+
+// newStoreWithMigrations opens a store on an isolated database with a chosen release collection
+// applied. The release migrations are cloned from a pre-migrated template.
 func newStoreWithMigrations(t *testing.T, files fs.FS) *postgres.Store {
 	t.Helper()
-	dsn := os.Getenv("GOPAGER_TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("PostgreSQL integration disabled; run with GOPAGER_INTEGRATION=1")
+	migrated := files == migrations.Files
+	var dsn string
+	if migrated {
+		dsn = migratedTemplate.Database(t)
+	} else {
+		dsn = testpostgres.EmptyDatabase(t)
 	}
-	config, err := pgx.ParseConfig(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	admin := stdlib.OpenDB(*config)
-	name := "test_" + strings.ReplaceAll(uuid.NewString(), "-", "")
-	if _, err := admin.ExecContext(t.Context(), `CREATE SCHEMA "`+name+`"`); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if _, err := admin.ExecContext(context.Background(), `DROP SCHEMA "`+name+`" CASCADE`); err != nil {
-			t.Error(err)
-		}
-		if err := admin.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	scopedDSN := dsn + " search_path=" + name
-	if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
-		address, err := url.Parse(dsn)
-		if err != nil {
-			t.Fatal(err)
-		}
-		query := address.Query()
-		query.Set("search_path", name)
-		address.RawQuery = query.Encode()
-		scopedDSN = address.String()
-	}
-	store, _, err := postgres.NewStore(scopedDSN, true)
+	store, _, err := postgres.NewStore(dsn, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
+		storeDSNs.Delete(store)
 		if err := store.Close(); err != nil {
 			t.Error(err)
 		}
 	})
-	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		executor, err := store.Resolve(tx)
-		if err != nil {
-			return err
-		}
-		var actual string
-		if err := executor.QueryRowContext(tx.Context(), "SELECT current_schema()").Scan(&actual); err != nil {
-			return err
-		}
-		if actual != name {
-			t.Fatalf("fixture isolation failed: schema=%q, want %q", actual, name)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
+	storeDSNs.Store(store, dsn)
+	if migrated {
+		return store
 	}
 	if err := store.Migrate(t.Context(), files, platform.MigrationApply); err != nil {
 		t.Fatal(err)

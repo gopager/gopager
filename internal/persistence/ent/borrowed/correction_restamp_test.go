@@ -70,8 +70,8 @@ func newRestampFixture(t *testing.T) *restampFixture {
 	}
 	f.network = f.networks[0]
 	f.exec(t, `INSERT INTO gateways(id,state) VALUES($1,'active')`, f.gateway)
-	f.exec(t, `INSERT INTO gateway_networks(id,gateway_id,gateway_network_identifier,network_id,is_default)
-		VALUES($1,$2,'default',$3,true)`, uuid.New(), f.gateway, f.network)
+	f.exec(t, `INSERT INTO gateway_networks(id,gateway_id,gateway_network_identifier,network_id,priority)
+		VALUES($1,$2,'default',$3,0)`, uuid.New(), f.gateway, f.network)
 	created, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
 		units.UnitInput{AgencyID: f.agency, Name: "Restamp", CollectionIDs: []uuid.UUID{}}, checkedMutation)
 	if err != nil {

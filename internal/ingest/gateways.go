@@ -18,11 +18,12 @@ import (
 
 // GatewayNetworkInput is one requested Gateway-to-Network assignment: the
 // Gateway's local Identifier (1..128 bytes of non-blank UTF-8) for the Network,
-// and whether it is the default Network for that Network's protocol.
+// and its Priority among all of the Gateway's Networks (0 is the highest). The
+// priorities of one request form exactly the set 0..n-1.
 type GatewayNetworkInput struct {
 	Identifier string    `json:"gatewayNetworkIdentifier"`
 	NetworkID  uuid.UUID `json:"networkId"`
-	Default    bool      `json:"default"`
+	Priority   int       `json:"priority"`
 }
 
 // GatewayCredentialView is the non-secret status of one Gateway credential.
@@ -95,20 +96,20 @@ func NewGatewayAdministration(transactions identity.Transactions, resolver *iden
 
 // ConfigureNetworks atomically replaces the Gateway's Network assignments,
 // guarded by the expected revision, and returns the new revision. Input must
-// hold 1..1024 entries with unique identifiers and Network IDs, and every
-// protocol present must have exactly one default; a referenced Network that
+// hold 1..1024 entries with unique identifiers and Network IDs and with
+// priorities that are exactly 0..n-1 (see validPriorities); a referenced Network that
 // does not exist is reported as authz.ErrInvalidInput. check is called with
 // the resolved authentication before any change (e.g. to require a fresh
 // session); its error aborts the call. The caller needs "gateway.update" on
 // every currently and newly assigned Network.
 func (s *GatewayAdministration) ConfigureNetworks(ctx context.Context, proof identity.Proof, gateway uuid.UUID,
 	expected int64, input []GatewayNetworkInput, check func(identity.Authentication) error) (int64, error) {
-	if gateway == uuid.Nil || expected <= 0 || len(input) == 0 || len(input) > 1024 || check == nil {
+	if gateway == uuid.Nil || expected <= 0 || len(input) == 0 || len(input) > 1024 || check == nil ||
+		!validPriorities(input) {
 		return 0, authz.ErrInvalidInput
 	}
 	seenIdentifiers, seenNetworks := make(map[string]bool), make(map[uuid.UUID]bool)
 	assignments := make([]GatewayNetwork, 0, len(input))
-	defaults := make(map[protocols.Protocol]int)
 	for _, item := range input {
 		if item.Identifier == "" || !utf8.ValidString(item.Identifier) || len([]byte(item.Identifier)) > 128 ||
 			strings.TrimSpace(item.Identifier) == "" || item.NetworkID == uuid.Nil ||
@@ -116,7 +117,8 @@ func (s *GatewayAdministration) ConfigureNetworks(ctx context.Context, proof ide
 			return 0, authz.ErrInvalidInput
 		}
 		seenIdentifiers[item.Identifier], seenNetworks[item.NetworkID] = true, true
-		assignments = append(assignments, GatewayNetwork{Identifier: item.Identifier, NetworkID: item.NetworkID, Default: item.Default})
+		assignments = append(assignments, GatewayNetwork{Identifier: item.Identifier, NetworkID: item.NetworkID,
+			Priority: item.Priority})
 	}
 	var revision int64
 	err := s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
@@ -152,18 +154,6 @@ func (s *GatewayAdministration) ConfigureNetworks(ctx context.Context, proof ide
 			}
 			assignments[index].Protocol = protocol
 			scope[agency] = true
-			if assignments[index].Default {
-				defaults[protocol]++
-			}
-		}
-		protocolsInSet := make(map[protocols.Protocol]bool)
-		for _, assignment := range assignments {
-			protocolsInSet[assignment.Protocol] = true
-		}
-		for protocol := range protocolsInSet {
-			if defaults[protocol] != 1 {
-				return authz.ErrInvalidInput
-			}
 		}
 		if err := authorizeGatewayNetworks(authentication.Authority, "gateway.update", scope, now); err != nil {
 			return err

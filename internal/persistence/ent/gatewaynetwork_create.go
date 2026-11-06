@@ -38,9 +38,9 @@ func (_c *GatewayNetworkCreate) SetNetworkID(v uuid.UUID) *GatewayNetworkCreate 
 	return _c
 }
 
-// SetDefault sets the "default" field.
-func (_c *GatewayNetworkCreate) SetDefault(v bool) *GatewayNetworkCreate {
-	_c.mutation.SetDefault(v)
+// SetPriority sets the "priority" field.
+func (_c *GatewayNetworkCreate) SetPriority(v int) *GatewayNetworkCreate {
+	_c.mutation.SetPriority(v)
 	return _c
 }
 
@@ -121,8 +121,13 @@ func (_c *GatewayNetworkCreate) check() error {
 	if _, ok := _c.mutation.NetworkID(); !ok {
 		return &ValidationError{Name: "network_id", err: errors.New(`ent: missing required field "GatewayNetwork.network_id"`)}
 	}
-	if _, ok := _c.mutation.Default(); !ok {
-		return &ValidationError{Name: "default", err: errors.New(`ent: missing required field "GatewayNetwork.default"`)}
+	if _, ok := _c.mutation.Priority(); !ok {
+		return &ValidationError{Name: "priority", err: errors.New(`ent: missing required field "GatewayNetwork.priority"`)}
+	}
+	if v, ok := _c.mutation.Priority(); ok {
+		if err := gatewaynetwork.PriorityValidator(v); err != nil {
+			return &ValidationError{Name: "priority", err: fmt.Errorf(`ent: validator failed for field "GatewayNetwork.priority": %w`, err)}
+		}
 	}
 	return nil
 }
@@ -171,9 +176,9 @@ func (_c *GatewayNetworkCreate) createSpec() (*GatewayNetwork, *sqlgraph.CreateS
 		_spec.SetField(gatewaynetwork.FieldNetworkID, field.TypeUUID, value)
 		_node.NetworkID = value
 	}
-	if value, ok := _c.mutation.Default(); ok {
-		_spec.SetField(gatewaynetwork.FieldDefault, field.TypeBool, value)
-		_node.Default = value
+	if value, ok := _c.mutation.Priority(); ok {
+		_spec.SetField(gatewaynetwork.FieldPriority, field.TypeInt, value)
+		_node.Priority = value
 	}
 	return _node, _spec
 }

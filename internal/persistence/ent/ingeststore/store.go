@@ -124,10 +124,10 @@ func (s *Store) GatewayNetworks(ctx context.Context, tx platform.TransactionCont
 		return nil, err
 	}
 	rows, err := executor.QueryContext(ctx, `SELECT gn.gateway_network_identifier, gn.network_id,
-		n.protocol, gn.is_default
+		n.protocol, gn.priority
 		FROM gateway_networks gn JOIN networks n ON n.id=gn.network_id
 		WHERE gn.gateway_id=$1 AND n.deleted=false
-		ORDER BY gn.gateway_network_identifier`, gateway)
+		ORDER BY gn.priority`, gateway)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +136,7 @@ func (s *Store) GatewayNetworks(ctx context.Context, tx platform.TransactionCont
 	for rows.Next() {
 		var network ingest.GatewayNetwork
 		var protocol string
-		if err := rows.Scan(&network.Identifier, &network.NetworkID, &protocol, &network.Default); err != nil {
+		if err := rows.Scan(&network.Identifier, &network.NetworkID, &protocol, &network.Priority); err != nil {
 			return nil, err
 		}
 		network.Protocol = protocols.Protocol(protocol)
@@ -319,6 +319,15 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 		submission.Resolution, string(submission.Protocol), string(payload),
 		submission.ObservedAt, observationOffset, accepted, incomplete, quality, messageID); err != nil {
 		return ingest.Receipt{}, err
+	}
+	if submission.Resolution == "address-priority" {
+		slog.Warn("Gateway Network inference was ambiguous; highest-priority matching Network applied",
+			"transmissionId", transmissionID)
+		if err := s.appendFact(ctx, tx, events.IntakeFact{ID: uuid.New(), Type: events.NetworkAmbiguous,
+			GatewayID: gateway, TransmissionID: transmissionID, NetworkID: submission.ResolvedNetwork,
+			Resolution: submission.Resolution, Revision: 1, OccurredAt: accepted}); err != nil {
+			return ingest.Receipt{}, err
+		}
 	}
 	if submission.ObservedAt.After(accepted.Add(15 * time.Minute)) {
 		slog.Warn("Gateway Observation time exceeds the configured clock-skew tolerance",

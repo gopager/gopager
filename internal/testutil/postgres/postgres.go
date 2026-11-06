@@ -18,6 +18,9 @@ import (
 
 const image = "postgres:18.0-alpine@sha256:48c8ad3a7284b82be4482a52076d47d879fd6fb084a1cbfccbd551f9331b0e40"
 
+// ownedContainer is set while Run owns the PostgreSQL container.
+var ownedContainer bool
+
 // Run executes a package's tests, starting an owned fixture only when requested.
 // An explicit disposable DSN overrides container creation; setup/cleanup errors fail the run.
 func Run(m *testing.M) (code int) {
@@ -38,13 +41,23 @@ func Run(m *testing.M) (code int) {
 			tcpostgres.WithUsername("gopager_test"),
 			tcpostgres.WithPassword("disposable-test-only"),
 			tcpostgres.WithSQLDriver("pgx"),
-			// The module defaults to fsync=off; keep normal database durability settings.
-			testcontainers.WithCmd("postgres", "-c", "fsync=on"),
+			// Disposable, non-durable server: speed over crash safety. max_connections leaves room
+			// for many parallel test databases, each with its own pools.
+			testcontainers.WithCmd("postgres", "-c", "fsync=off", "-c", "synchronous_commit=off",
+				"-c", "full_page_writes=off", "-c", "max_connections=500"),
+			// The 18+ image keeps PGDATA at /var/lib/postgresql/18/docker, so mounting the parent
+			// puts the whole data directory in memory.
+			testcontainers.CustomizeRequest(testcontainers.GenericContainerRequest{
+				ContainerRequest: testcontainers.ContainerRequest{
+					Tmpfs: map[string]string{"/var/lib/postgresql": "rw"},
+				},
+			}),
 			testcontainers.WithWaitStrategy(
 				wait.ForLog("database system is ready to accept connections").WithOccurrence(2),
 				wait.ForListeningPort("5432/tcp"),
 			),
 		)
+		ownedContainer = err == nil
 		if container != nil {
 			defer func() {
 				cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -91,5 +104,17 @@ func Run(m *testing.M) (code int) {
 		return 1
 	}
 	fmt.Fprintln(os.Stderr, "test PostgreSQL: fixture ready")
+	defer func() {
+		if err := dropTemplates(dsn); err != nil {
+			fmt.Fprintln(os.Stderr, "test PostgreSQL: template cleanup failed:", err)
+			code = 1
+		}
+	}()
 	return m.Run()
+}
+
+// OwnsContainer reports whether the fixture is a container started by Run, whose server
+// settings the test utilities control, as opposed to an externally supplied DSN.
+func OwnsContainer() bool {
+	return ownedContainer
 }

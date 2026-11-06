@@ -55,7 +55,7 @@ func TestTransactionDetectsForeignMigrationWithoutLock(t *testing.T) {
 	if err := store.Migrate(ctx, first, platform.MigrationApply); err != nil {
 		t.Fatalf("apply v1: %v", err)
 	}
-	newer := newStoreInSchema(t, testDatabaseURL(t), storeTestSchema(t, store))
+	newer := newStoreAt(t, storeTestDSN(store))
 	both := migrationFiles("CREATE TABLE synthetic_state (id int PRIMARY KEY)", "CREATE TABLE synthetic_outbox (id int PRIMARY KEY)")
 	if err := newer.Migrate(ctx, both, platform.MigrationApply); err != nil {
 		t.Fatalf("apply v2 from another process: %v", err)

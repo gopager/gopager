@@ -89,8 +89,8 @@ func TestCorrectionReadmitsProcessingForChangedTargets(t *testing.T) {
 		}
 	}
 	exec(`INSERT INTO gateways(id,state) VALUES($1,'active')`, gatewayID)
-	exec(`INSERT INTO gateway_networks(id,gateway_id,gateway_network_identifier,network_id,is_default)
-		VALUES($1,$2,'default',$3,true)`, uuid.New(), gatewayID, networkID)
+	exec(`INSERT INTO gateway_networks(id,gateway_id,gateway_network_identifier,network_id,priority)
+		VALUES($1,$2,'default',$3,0)`, uuid.New(), gatewayID, networkID)
 	unitA, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
 		units.UnitInput{AgencyID: f.agency, Name: "Readmission A", CollectionIDs: []uuid.UUID{}}, checkedMutation)
 	if err != nil {

@@ -113,8 +113,8 @@ func TestProcessingSourceOwnerMapsMissingMessageToNotFound(t *testing.T) {
 		}{
 			{`WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id) INSERT INTO networks(id,name,protocol,agency_id) SELECT $1,'owner network','pocsag',a.id FROM a`, []any{network}},
 			{`INSERT INTO gateways(id,state) VALUES($1,'active')`, []any{gateway}},
-			{`INSERT INTO gateway_networks(id,gateway_id,gateway_network_identifier,network_id,is_default)
-				VALUES($1,$2,'default',$3,true)`, []any{uuid.New(), gateway, network}},
+			{`INSERT INTO gateway_networks(id,gateway_id,gateway_network_identifier,network_id,priority)
+				VALUES($1,$2,'default',$3,0)`, []any{uuid.New(), gateway, network}},
 			{`INSERT INTO processing_workflows(id,name,scope_kind,enabled,created_at,updated_at)
 				VALUES($1,'owner workflow','all',true,$2,$2)`, []any{workflow, now}},
 			{`INSERT INTO processing_workflow_versions(id,workflow_id,definition,created_at,created_by)

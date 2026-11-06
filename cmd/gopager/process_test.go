@@ -2,12 +2,9 @@ package main
 
 import (
 	"bytes"
-	"crypto/rand"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
-	neturl "net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -16,8 +13,7 @@ import (
 	"time"
 
 	"github.com/gopager/gopager/internal/platform"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/stdlib"
+	testpostgres "github.com/gopager/gopager/internal/testutil/postgres"
 )
 
 // TestRunProcessHelper invokes the actual command entry in an isolated test process.
@@ -42,32 +38,7 @@ func TestFullCommandProcessStartupAndSignalShutdown(t *testing.T) {
 	}
 	for _, roles := range []string{"api,worker", "worker"} {
 		t.Run(roles, func(t *testing.T) {
-			cfg, err := pgx.ParseConfig(url)
-			if err != nil {
-				t.Fatal(err)
-			}
-			db := stdlib.OpenDB(*cfg)
-			defer db.Close()
-			var random [6]byte
-			if _, err := rand.Read(random[:]); err != nil {
-				t.Fatal(err)
-			}
-			schema := fmt.Sprintf("test_cli_%x", random[:])
-			if _, err := db.Exec(`CREATE SCHEMA "` + schema + `"`); err != nil {
-				t.Fatal(err)
-			}
-			defer func() {
-				if _, err := db.Exec(`DROP SCHEMA "` + schema + `" CASCADE`); err != nil {
-					t.Error(err)
-				}
-			}()
-			connectionURL, err := neturl.Parse(url)
-			if err != nil {
-				t.Fatal(err)
-			}
-			query := connectionURL.Query()
-			query.Set("search_path", schema)
-			connectionURL.RawQuery = query.Encode()
+			connectionURL := testpostgres.EmptyDatabase(t)
 			address := ""
 			if roles == "api,worker" {
 				listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -81,7 +52,7 @@ func TestFullCommandProcessStartupAndSignalShutdown(t *testing.T) {
 			}
 			command := exec.Command(os.Args[0], "-test.run=^TestRunProcessHelper$")
 			command.Env = append(os.Environ(), "GOPAGER_TEST_PROCESS_HELPER="+roles,
-				"GOPAGER_DATABASE_URL="+connectionURL.String(), "GOPAGER_TEST_LISTEN="+address)
+				"GOPAGER_DATABASE_URL="+connectionURL, "GOPAGER_TEST_LISTEN="+address)
 			output := startupOutput{ready: make(chan struct{})}
 			command.Stdout, command.Stderr = &output, &output
 			if err := command.Start(); err != nil {

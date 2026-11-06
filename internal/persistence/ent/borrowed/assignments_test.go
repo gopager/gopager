@@ -796,8 +796,8 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateway_networks
-			(id,gateway_id,gateway_network_identifier,network_id,is_default)
-			VALUES($1,$2,'default',$3,true)`, uuid.New(), gatewayID, networkID); err != nil {
+			(id,gateway_id,gateway_network_identifier,network_id,priority)
+			VALUES($1,$2,'default',$3,0)`, uuid.New(), gatewayID, networkID); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO messages

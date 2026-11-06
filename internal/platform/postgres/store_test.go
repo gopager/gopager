@@ -106,7 +106,7 @@ func TestMigrationsAgainstPostgreSQL(t *testing.T) {
 
 func TestConcurrentMigrationApplicationsSerialize(t *testing.T) {
 	store := newTestStore(t)
-	second := newStoreInSchema(t, testDatabaseURL(t), storeTestSchema(t, store))
+	second := newStoreAt(t, storeTestDSN(store))
 	migrations := migrationFiles("CREATE TABLE synthetic_once (id BIGINT PRIMARY KEY)")
 
 	start := make(chan struct{})
@@ -183,7 +183,7 @@ func TestMigrationFailureRollsBackDDLAndLedgerRow(t *testing.T) {
 
 func TestMigrationLockWaitHonorsCancellation(t *testing.T) {
 	store := newTestStore(t)
-	waitingStore := newStoreInSchema(t, testDatabaseURL(t), storeTestSchema(t, store))
+	waitingStore := newStoreAt(t, storeTestDSN(store))
 	conn, err := store.db.Conn(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -341,7 +341,7 @@ func TestFullStartupExposesSafeHealthAndShutdown(t *testing.T) {
 		Profile:       "full",
 		Roles:         []platform.Role{platform.RoleAPI, platform.RoleWorker},
 		MigrationMode: platform.MigrationApply,
-		DatabaseURL:   testDatabaseURL(t),
+		DatabaseURL:   storeTestDSN(store),
 		ListenAddress: address,
 	}
 	handle, err := platform.Start(context.Background(), config, nil, store, nil)

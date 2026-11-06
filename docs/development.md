@@ -98,18 +98,18 @@ make vuln               # govulncheck ./... (pinned version, needs network)
 | --- | --- | --- |
 | Quick | `make test` (`go test ./...`) | Go only. Database tests are skipped with `PostgreSQL integration disabled; run with GOPAGER_INTEGRATION=1`. |
 | Full, owned containers | `make test-integration` (`GOPAGER_INTEGRATION=1 go test -race -count=1 -timeout=20m ./...`) | Docker |
-| Full, external database | `GOPAGER_TEST_DATABASE_URL='postgres://…' go test -race -count=1 ./...` | A disposable PostgreSQL database with `CREATE SCHEMA` privilege |
+| Full, external database | `GOPAGER_TEST_DATABASE_URL='postgres://…' go test -race -count=1 ./...` | A disposable PostgreSQL server with a role that has `CREATEDB` |
 
 Environment variables:
 
 | Variable | Values | Effect |
 | --- | --- | --- |
 | `GOPAGER_INTEGRATION` | unset or `1`; anything else fails the run | `1` starts one PostgreSQL container per participating test package |
-| `GOPAGER_TEST_DATABASE_URL` | DSN | Use this database instead of a container; setting it alone also enables database tests. Never point it at a production database. |
+| `GOPAGER_TEST_DATABASE_URL` | DSN | Use this server instead of a container; setting it alone also enables database tests. Tests create and drop databases next to the one named in the DSN, so use a disposable server, never a production one. |
 
 Use `-count=1` for integration runs so Go's test cache does not report stale results. In a requested integration run, a missing Docker daemon or unreachable database fails the run; it is not skipped.
 
-Packages with database tests (their `TestMain` calls `testpostgres.Run`): `cmd/gopager`, `internal/platform/postgres`, `internal/persistence/ent/borrowed`. Each test creates its own schema (random name) and drops it on cleanup, so tests do not interfere when sharing one database. The container keeps `fsync=on`.
+Packages with database tests (their `TestMain` calls `testpostgres.Run`): `cmd/gopager`, `internal/platform/postgres`, `internal/persistence/ent/borrowed`. Each test gets its own database (random name), dropped with `WITH (FORCE)` on cleanup, so tests share nothing: schemas, `LISTEN/NOTIFY` channels and advisory locks are all database-scoped. `internal/testutil/postgres` provides `EmptyDatabase(t)` (cloned from `template0`) and `NewTemplate(name, build).Database(t)`, which builds a template database once per process (for example with all migrations applied), marks it `IS_TEMPLATE` with connections disallowed, and clones it with `CREATE DATABASE … TEMPLATE`. Clones of one template are serialized because PostgreSQL refuses to copy a template that other sessions are using. `Run` drops the process's templates after the tests. The owned container is deliberately non-durable (`fsync=off`, `synchronous_commit=off`, `full_page_writes=off`, data directory on tmpfs, `max_connections=500`); it is a throwaway fixture and says nothing about crash safety. An external server may have any durability settings.
 
 Run a subset:
 

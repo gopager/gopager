@@ -22,8 +22,13 @@ type Clock interface {
 }
 
 // TargetMatcher resolves Transmission targets against the configured address
-// rules at the observation time on the already resolved Network.
+// rules at the observation time. NetworksWithMatches reports which of the
+// candidate Networks have any matching rule (used to disambiguate a Gateway
+// with several Networks for one protocol); MatchTargets produces the final
+// per-target resolutions for the chosen Network.
 type TargetMatcher interface {
+	NetworksWithMatches(context.Context, platform.TransactionContext, []uuid.UUID,
+		protocols.Protocol, time.Time, []protocols.Target) (assignments.NetworkCandidates, error)
 	MatchTargets(context.Context, platform.TransactionContext, uuid.UUID, protocols.Protocol,
 		time.Time, []protocols.Target) (assignments.MatchResult, error)
 }
@@ -135,7 +140,11 @@ func (s *Service) Submit(ctx context.Context, bearer string, request Submission,
 		if err != nil {
 			return err
 		}
-		networkID, resolution, err := ResolveNetwork(submission, assigned)
+		addressMatches, err := s.addressMatches(tx, submission, assigned)
+		if err != nil {
+			return err
+		}
+		networkID, resolution, err := ResolveNetwork(submission, assigned, addressMatches)
 		if err != nil {
 			return platform.NewFailure(platform.CodeInvalidInput, err)
 		}

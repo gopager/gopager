@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"net/http/httputil"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 
@@ -22,8 +21,7 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
 	"github.com/gopager/gopager/internal/protocols"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/stdlib"
+	testpostgres "github.com/gopager/gopager/internal/testutil/postgres"
 )
 
 type managementNetworkFixture struct{ id, agency uuid.UUID }
@@ -53,6 +51,19 @@ func seedAgency(t *testing.T, store *postgres.Store) uuid.UUID {
 	return id
 }
 
+// migratedTemplate is the database with the release migrations applied, built once per process.
+var migratedTemplate = testpostgres.NewTemplate("migrated", func(ctx context.Context, dsn string) error {
+	store, _, err := postgres.NewStore(dsn, true)
+	if err != nil {
+		return err
+	}
+	migrateErr := store.Migrate(ctx, migrations.Files, platform.MigrationApply)
+	if err := store.Close(); err != nil && migrateErr == nil {
+		return err
+	}
+	return migrateErr
+})
+
 // newManagementStore isolates actual PostgreSQL HTTP tests even with an externally supplied database.
 func newManagementStore(t *testing.T) *postgres.Store {
 	return newManagementStoreWithFields(t, []string{"unit", "address"})
@@ -60,38 +71,7 @@ func newManagementStore(t *testing.T) *postgres.Store {
 
 func newManagementStoreWithFields(t *testing.T, fields []string) *postgres.Store {
 	t.Helper()
-	dsn := os.Getenv("GOPAGER_TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("PostgreSQL integration disabled; run with GOPAGER_INTEGRATION=1")
-	}
-	config, err := pgx.ParseConfig(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	admin := stdlib.OpenDB(*config)
-	name := "test_http_" + strings.ReplaceAll(uuid.NewString(), "-", "")
-	if _, err := admin.ExecContext(t.Context(), `CREATE SCHEMA "`+name+`"`); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if _, err := admin.ExecContext(context.Background(), `DROP SCHEMA "`+name+`" CASCADE`); err != nil {
-			t.Error(err)
-		}
-		if err := admin.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	scopedDSN := dsn + " search_path=" + name
-	if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
-		address, err := url.Parse(dsn)
-		if err != nil {
-			t.Fatal(err)
-		}
-		query := address.Query()
-		query.Set("search_path", name)
-		address.RawQuery = query.Encode()
-		scopedDSN = address.String()
-	}
+	scopedDSN := migratedTemplate.Database(t)
 	store, _, err := postgres.NewStore(scopedDSN, true)
 	if err != nil {
 		t.Fatal(err)
@@ -101,9 +81,6 @@ func newManagementStoreWithFields(t *testing.T, fields []string) *postgres.Store
 			t.Error(err)
 		}
 	})
-	if err := store.Migrate(t.Context(), migrations.Files, platform.MigrationApply); err != nil {
-		t.Fatal(err)
-	}
 	repository, err := identitystore.New(store)
 	if err != nil {
 		t.Fatal(err)

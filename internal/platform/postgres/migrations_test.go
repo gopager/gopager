@@ -14,10 +14,8 @@ import (
 
 func TestMigrationCheckWithReadOnlyConnection(t *testing.T) {
 	store := newTestStore(t)
-	schema := storeTestSchema(t, store)
-	readOnlyURL := testDatabaseURL(t)
 	// This setting applies to every physical test connection, not just one pooled session.
-	readOnly := newStoreInSchemaWithParams(t, readOnlyURL, schema, map[string]string{"default_transaction_read_only": "on"})
+	readOnly := newStoreAtWithParams(t, storeTestDSN(store), map[string]string{"default_transaction_read_only": "on"})
 	if err := readOnly.Migrate(context.Background(), nil, platform.MigrationCheck); platform.FailureCode(err) != platform.CodeIncompatibleVersion {
 		t.Fatalf("read-only missing ledger: %v", err)
 	}
