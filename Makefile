@@ -97,7 +97,6 @@ generate-check:
 vuln:
 	$(GOVULNCHECK) ./...
 
-# docs-check verifies Markdown links, heading fragments and D-/REQ-/AP-/C- IDs.
-# It is not part of the default target or CI until the documents are fixed.
+# docs-check verifies Markdown links, heading fragments and the ID registers declared in .doccheck.json files.
 docs-check:
 	go run ./tools/doccheck

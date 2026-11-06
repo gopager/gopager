@@ -13,7 +13,7 @@ func TestSlugify(t *testing.T) {
 		{"link text", "See [the plan](plan.md#x) now", "see-the-plan-now"},
 		{"emphasis", "**Bold** and *italic*", "bold-and-italic"},
 		{"underscore emphasis", "Some _emphasised_ word", "some-emphasised-word"},
-		{"html anchor stripped", `<a id="d-01"></a>D-01 Title`, "d-01-title"},
+		{"html anchor stripped", `<a id="x-01"></a>X-01 Title`, "x-01-title"},
 		{"double space not collapsed", "A  B", "a--b"},
 		{"slash", "Lite/Full profile", "litefull-profile"},
 		{"unicode letters", "Übersicht Größe", "übersicht-größe"},

@@ -1,0 +1,76 @@
+{
+  "kinds": [
+    {
+      "name": "decision",
+      "reference": "D-(?P<num>\\d+)(?:\\.\\.(?:D-)?(?P<end>\\d+))?",
+      "missing": "not in the decision register",
+      "rows": {"file": "decisions/README.md", "pattern": "^\\| (?P<id>D-(?P<num>\\d+)) \\|"}
+    },
+    {
+      "name": "requirement",
+      "reference": "REQ-(?P<num>\\d+)(?:\\.\\.(?:REQ-)?(?P<end>\\d+))?",
+      "missing": "not in the requirements catalog",
+      "rows": {"file": "requirements-catalog.md", "pattern": "^\\| (?P<id>REQ-(?P<num>\\d+)) \\|"}
+    },
+    {
+      "name": "work-package",
+      "reference": "AP-(?P<num>\\d+)(?:\\.\\.(?:AP-)?(?P<end>\\d+))?",
+      "missing": "no file in development/work-packages/",
+      "files": "^work-packages/ap-(?P<num>\\d+)-[^/]+\\.md$"
+    },
+    {
+      "name": "contract",
+      "reference": "C-(?P<num>\\d+)(?:\\.\\.(?:C-)?(?P<end>\\d+))?",
+      "missing": "no file in development/contracts/",
+      "files": "^contracts/c-(?P<num>\\d+)-[^/]+\\.md$"
+    }
+  ],
+  "headingKinds": [
+    {
+      "name": "evidence",
+      "reference": "(?:(?P<variant>source) )?AP-(?P<doc>\\d+) E-(?P<num>\\d+)(?:\\.\\.(?:E-)?(?P<end>\\d+))?",
+      "sources": [
+        {
+          "variant": "",
+          "files": "^execution/ap-(?P<doc>\\d+)\\.md$",
+          "heading": "^E-(?P<num>\\d+)\\b",
+          "missingDocument": "no development/execution/ap-nn.md for this work package",
+          "missingHeading": "no such E-nn heading in its development/execution/ap-nn.md"
+        },
+        {
+          "variant": "source",
+          "files": "^execution/source-ap-(?P<doc>\\d+)\\.md$",
+          "heading": "^E-(?P<num>\\d+)\\b",
+          "missingDocument": "no development/execution/source-ap-nn.md for this work package",
+          "missingHeading": "no such E-nn heading in its development/execution/source-ap-nn.md"
+        }
+      ]
+    }
+  ],
+  "ignore": [
+    {
+      "path": "development/execution/source-ap-06.md",
+      "kind": "unknown-work-package",
+      "prefix": "AP-18",
+      "reason": "The archived source records use the first work-package sequence (AP-17..AP-27, renumbered to AP-06..AP-16 under D-96/D-97); history keeps its original wording."
+    },
+    {
+      "path": "development/execution/source-ap-07.md",
+      "kind": "unknown-work-package",
+      "prefix": "AP-24",
+      "reason": "Old sequence, see decisions D-97."
+    },
+    {
+      "path": "development/execution/source-ap-08.md",
+      "kind": "unknown-work-package",
+      "prefix": "AP-19",
+      "reason": "Old sequence, see decisions D-97."
+    },
+    {
+      "path": "development/execution/source-ap-12.md",
+      "kind": "unknown-work-package",
+      "prefix": "AP-23",
+      "reason": "Old sequence, see decisions D-97."
+    }
+  ]
+}

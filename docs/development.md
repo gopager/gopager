@@ -71,7 +71,7 @@ make fmt                # gofmt -w cmd internal
 make fmt-check          # fail and list files that need gofmt
 make vet                # go vet ./...
 make golangci           # golangci-lint run ./... (pinned version)
-make docs-check         # Markdown links, heading anchors and D-/REQ-/AP-/E-/C- IDs (tools/doccheck)
+make docs-check         # Markdown links, heading anchors and configured ID references (tools/doccheck)
 make lint               # fmt-check, vet, golangci, docs-check
 make test               # quick tier: go test ./...
 make test-integration   # all tests incl. PostgreSQL, shuffled, with JUnit and JSON reports (gotestsum, pinned)
@@ -84,7 +84,7 @@ make vuln               # govulncheck ./... (pinned version, needs network)
 
 `gofmt` covers `cmd/` and `internal/` (including generated Ent code and tests). Only the `test-integration`, `test-race` and `test-stress` targets need Docker.
 
-`make docs-check` runs `go run ./tools/doccheck`. It checks every Markdown file for relative links, heading anchors and references to decisions (`development/decisions/README.md`), requirements, work packages, execution evidence (`AP-nn E-m`, or `source AP-nn E-m` for the archived source records) and contracts. Findings that history must keep, such as old work-package numbers in archived records, are listed with a reason in `tools/doccheck/ignore.txt`; an entry that no longer matches is reported, so the list cannot hide new problems.
+`make docs-check` runs `go run ./tools/doccheck`. It checks every Markdown file for relative links and heading anchors. Further rules come from `.doccheck.json` files, which the tool discovers anywhere in the scanned tree; each declares, relative to its own directory, families of numbered references with the register, file names or headings that define the valid numbers, and a list of accepted findings with a reason. The schema is documented on the `config` type in `tools/doccheck/config.go`; a configuration error exits with status 2. Without a configuration file only links and anchors are checked. The rules for the development documents live in `development/.doccheck.json` and disappear with that directory. An ignore entry that no longer matches is reported as `stale-ignore`, so the list cannot hide new problems.
 
 [.golangci.yml](../.golangci.yml) enables a conservative set: `govet`, `staticcheck`, `errcheck`, `ineffassign`, `unused`, `misspell`. Generated code is skipped by golangci-lint's generated-file detection. The config uses the golangci-lint v2 format (migrated with `golangci-lint migrate`; the `std-error-handling`, `comments`, `common-false-positives` and `legacy` exclusion presets keep the v1 default exclusions). In v2, `staticcheck` also covers the former `gosimple` and `stylecheck` checks (for example ST1005 lower-case error strings). Three known findings in processing code are excluded by path and text (two ineffectual assignments in `cmd/gopager/processing_worker.go` and `internal/processing/workflow_test.go`, and an overwritten argument in `internal/processing/workflow.go`); delete the matching `linters.exclusions.rules` entry when you fix one. Do not add new exclusions to hide findings in code you change.
 

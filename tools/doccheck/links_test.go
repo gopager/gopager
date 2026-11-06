@@ -45,8 +45,8 @@ func TestIsLocal(t *testing.T) {
 func TestResolve(t *testing.T) {
 	t.Parallel()
 	tests := []struct{ src, link, want string }{
-		{"development/a.md", "b.md", "development/b.md"},
-		{"development/x/a.md", "../b.md", "development/b.md"},
+		{"notes/a.md", "b.md", "notes/b.md"},
+		{"notes/x/a.md", "../b.md", "notes/b.md"},
 		{"README.md", "docs/a.md", "docs/a.md"},
 		{"docs/a.md", "/api/v1.yaml", "api/v1.yaml"},
 		{"README.md", "../outside.md", ""},
@@ -84,14 +84,7 @@ func TestCheckLinksEndToEnd(t *testing.T) {
 		"b.md":      "# B\n\n## Section\n",
 		"sub/c.txt": "x",
 	})
-	docs, err := loadDocuments(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var got []string
-	for _, f := range checkAll(root, docs) {
-		got = append(got, f.String())
-	}
+	got := findingStrings(t, root)
 	want := []string{
 		"a.md:3: broken-link: nope.md",
 		"a.md:3: broken-anchor: b.md#nothing",
