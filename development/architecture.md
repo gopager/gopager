@@ -359,6 +359,8 @@ No end-to-end grouping, multiworker fencing, process-kill durability, performanc
 
 ### AP-12 Durable Worker and Job Queue Assessment
 
+**Historical:** superseded by [D-135](decisions/10-foundation-redesign.md#d-135) item 9 as amended by [D-137](decisions/10-foundation-redesign.md#d-137) (due `processing_candidates` claimed with `SKIP LOCKED` and woken by `NOTIFY`; see [docs/architecture.md](../docs/architecture.md)). Kept as provenance; do not use as a current specification.
+
 **Current scope navigation:** This is the assessed Processing prerequisite for AP-06, not whole-AP-12 execution. River remains unselected. The evaluation-stage Watermill candidate wording below is qualified by [D-94's later publication selection](#proposed-postgresql-integration-slice); no Processing worker replacement follows.
 
 **Status:** River `v0.51.0` is an evaluation candidate only under [D-87](authoritative-plan.md#ap-12-river-queue-evaluation). [D-75](authoritative-plan.md#processing-durable-selection-placement) and the active AP-12 implementation binding remain unchanged.
@@ -386,6 +388,8 @@ The prototype demonstrates real compatibility with GoPager's selected `database/
 Do not adopt either library or change D-75 on this comparison alone. A follow-up architecture proposal may reconsider the lifecycle from first principles, as pre-release restructuring is allowed, but must show one authoritative durable work lifecycle and map C-08 identity/revision, source authorization, leases/fencing, retry exhaustion, terminal outcomes and recovery. It should also decide whether Watermill is only an event transport or the durable selector, rather than silently maintaining both as sources of pending work. No benchmark, resource-cost or resolved dependency-footprint comparison, hard-process-kill test, full C-08 mapping, full Lite/Full integration or production-readiness validation was performed. No AP baseline, D-75, contract, product manifest or product source was changed. Exact versions, commands and observed results are in [source AP-12 execution evidence](execution/source-ap-12.md#e-40-isolated-watermill-sqlite-comparison). Sources: [Watermill SQLite documentation](https://watermill.io/pubsubs/sqlite/), [Watermill SQLite adapter v0.1.2 API and connection notes](https://pkg.go.dev/github.com/ThreeDotsLabs/watermill-sqlite/wmsqlitemodernc@v0.1.2), [River SQLite support](https://riverqueue.com/docs/sqlite), [River Pro distribution and pricing model](https://riverqueue.com/docs/pro).
 
 ### Core-Domain Event-Driven Architecture Reassessment
+
+**Historical:** superseded by [D-135](decisions/10-foundation-redesign.md#d-135) item 10 (one sequenced `domain_events` log with gap-safe consumers and `NOTIFY`; no Watermill). Kept as provenance; do not use as a current specification.
 
 The reassessment was authorized under [D-89](authoritative-plan.md#core-domain-event-driven-architecture-reassessment). Its hybrid target direction and an isolated Watermill prototype were approved under [D-90](authoritative-plan.md#core-domain-event-driven-architecture-direction-and-watermill-prototype). D-90 retains [D-43](authoritative-plan.md#ap-06-transmissionmessage-architecture-decision), [D-75](authoritative-plan.md#processing-durable-selection-placement), and the current C-08/C-11 bindings; it does not select a production transport dependency.
 
@@ -547,6 +551,8 @@ The upstream module manifest adds expression/ANTLR/Protobuf dependencies; it als
 
 ### Native Plugin Alternative Review
 
+**Historical:** the D-65 review is superseded by [D-131](decisions/04-processing-and-plugins.md#d-131) (managed plugin processes). Kept as provenance; do not use as a current specification.
+
 Date: 2026-11-01; explicitly requested documentary comparison under [D-65](authoritative-plan.md#native-plugin-alternative-review). This is a review, not adoption, a new executable experiment or implementation of the full AP-11 host. [Source notes](requirements-evidence.md#native-plugin-sources) own local/upstream provenance and observed package metadata.
 
 | Option | Fit / constraints under the corrected single-start boundary |
@@ -647,7 +653,7 @@ This table owns placement rules. The implemented directory contents are describe
 | [internal/persistence/ent/](../internal/persistence/ent/) | Hand-written Ent schema in `schema/`; generated client code at the top level and per-entity subpackages is never edited by hand. Infrastructure support: `guard/` (deny-by-default privacy policy), `permissions/` (authorization decisions as Ent predicates), `borrowed/` (Ent driver inside an existing platform transaction; hosts most store integration tests). |
 | Store adapters: [identitystore/](../internal/persistence/ent/identitystore/), [unitstore/](../internal/persistence/ent/unitstore/), [assignmentstore/](../internal/persistence/ent/assignmentstore/), [ingeststore/](../internal/persistence/ent/ingeststore/), [processingstore/](../internal/persistence/ent/processingstore/), [eventstore/](../internal/persistence/ent/eventstore/), [commandstore/](../internal/persistence/ent/commandstore/) under `internal/persistence/ent/` | Implement the domain repository interfaces inside the platform transaction. Ent access goes through the guard policy. Placement under `ent/` does not imply Ent use: `ingeststore` uses only parameterized SQL through the platform executor (including Message Grouping), and `assignmentstore`/`eventstore` combine Ent with SQL; `eventstore` also owns the Watermill fact transport. |
 | [pluginsdk/](../pluginsdk/) | Public Go SDK for plugin executables (handshake, `Serve`, gRPC client/server); the only importable package outside `internal/`. |
-| [api/openapi/v1.yaml](../api/openapi/v1.yaml), [api/plugin/v2/plugin.proto](../api/plugin/v2/plugin.proto) | Published HTTP and plugin wire schemas. They are permanent documentation and authoritative for implemented schemas ([change rule 9](README.md#change-rules)). |
+| [api/openapi/v1.yaml](../api/openapi/v1.yaml), [api/plugin/v2/plugin.proto](../api/plugin/v2/plugin.proto) | Published HTTP and plugin wire schemas. They are permanent documentation and authoritative for implemented schemas ([change rule 5](README.md#change-rules)). |
 | [internal/testutil/postgres/](../internal/testutil/postgres/), [internal/testutil/pluginfixture/](../internal/testutil/pluginfixture/) | Shared disposable database lifecycle used by the test entry points, and plugin fixture builds from `internal/processing/testdata/`. Test imports only; production code must not depend on them. Only genuinely reused setup belongs here, not private adapter internals. |
 | Test fixtures | Put actual static inputs/expected outputs in the owning package's `testdata/`. Keep generated test data local (plugin fixtures are built from source, never committed); do not create empty fixture directories or move unit tests into a global `tests/` tree. |
 | [docs/](../docs/README.md) | Permanent product and code documentation; rules in [Permanent Documentation](README.md#permanent-documentation). |

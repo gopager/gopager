@@ -16,14 +16,14 @@ One fact has one maintained definition. Other documents link to it; they do not 
 | Concrete input/expected-output examples (F-IDs) | [Core cases](contracts/reference-cases.md), [boundary cases](contracts/ap-02-boundary-cases.md) | Case's contract owner |
 | Domain term meanings, prohibited terms and rename history | [Glossary](glossary.md) | Integration |
 | Stable task definition, REQ/C context, role, prerequisites, supporting write scope, acceptance and non-goals | Respective [AP file](work-packages.md#revised-execution-path) | Planning / integration |
-| Authorized assignment revision | Respective AP file; authority in the plan | Planning / integration |
+| Authorized assignment revision | Respective AP file; authority in its ADR | Planning / integration |
 | Named assignee, actual execution state, approved write-scope binding, commands/results, blockers and artifact handovers | Respective [execution record](execution/README.md) | Executing owner / integration |
-| Shared session and immutable-AP workflow | [Execution rules](work-packages/shared-rules.md) | Integration |
+| Execution procedure, roles, scope changes and the AP template | [Execution rules](work-packages/shared-rules.md), [AP template](work-packages/ap-template.md) | Integration |
 | REQ-to-package coverage and planned evidence categories | [Requirement mapping](work-packages/requirement-mapping.md) | Integration |
 | External source provenance, reuse assessment and documentation-review evidence | [Source/evidence notes](requirements-evidence.md) | Documentation / assessing owner |
 | Implemented behavior for operators, API clients, plugin authors and contributors: architecture and data flow, operations/configuration, HTTP usage, Workflows, plugins, build/test/lint commands, repository layout and code conventions | [docs/](../docs/README.md) | Implementing owner, in the same change as the code |
-| Implemented HTTP routes and request/response schemas | [api/openapi/v1.yaml](../api/openapi/v1.yaml) | Implementing owner; the owning C-ID file records it as authoritative ([change rule 9](#change-rules)) |
-| Implemented plugin wire protocol and Go plugin SDK | [api/plugin/v2/plugin.proto](../api/plugin/v2/plugin.proto), [pluginsdk/](../pluginsdk/) | Implementing owner; [C-10](contracts/c-10-plugin-host.md) records them as authoritative (change rule 9) |
+| Implemented HTTP routes and request/response schemas | [api/openapi/v1.yaml](../api/openapi/v1.yaml) | Implementing owner; the owning C-ID file records it as authoritative ([change rule 5](#change-rules)) |
+| Implemented plugin wire protocol and Go plugin SDK | [api/plugin/v2/plugin.proto](../api/plugin/v2/plugin.proto), [pluginsdk/](../pluginsdk/) | Implementing owner; [C-10](contracts/c-10-plugin-host.md) records them as authoritative (change rule 5) |
 | Identifier-level behavior of Go code | Go doc comments (`go doc`) | Implementing owner |
 | Project description and getting started; contribution and documentation rules | Root [README](../README.md); [CONTRIBUTING.md](../CONTRIBUTING.md) | Integration / documentation |
 | Agent entry route for code work | [AGENTS.md](../AGENTS.md), imported by [CLAUDE.md](../CLAUDE.md) | Integration; links into `docs/` only, no duplicate rules |
@@ -32,9 +32,9 @@ One fact has one maintained definition. Other documents link to it; they do not 
 | Process navigation | [Package directory](work-packages.md), [contract directory](domain-contracts.md) | Documentation |
 | Repository-wide library reuse policy | [Library reuse](#library-reuse) | Architecture / integration |
 
-Permanent documentation and generated/published artifacts describe implemented behavior and are authoritative for implemented schemas once recorded under change rule 9. Contracts in this tree remain planning contracts: they own planned behavior, gates and boundaries, link to those artifacts instead of repeating their fields, and a disagreement between code and a contract is reported here, not resolved by editing permanent documentation to match the contract.
+Permanent documentation and generated/published artifacts describe implemented behavior and are authoritative for implemented schemas once recorded under change rule 5. Contracts in this tree remain planning contracts: they own planned behavior, gates and boundaries, link to those artifacts instead of repeating their fields, and a disagreement between code and a contract is reported here, not resolved by editing permanent documentation to match the contract.
 
-Roles are not named assignees. An assignee or a completed task does not grant scope/execution approval. There is one approval gate: the user approves a work package before it starts ([approval rule](authoritative-plan.md#workflow-and-approval-gates)); no intermediate approval gates exist inside a package, and completion evidence stays mandatory.
+Roles, the approval rule and the execution procedure are defined in the [execution rules](work-packages/shared-rules.md); the approval rule itself in the [plan](authoritative-plan.md#workflow-and-approval-gates).
 
 ## Project Language
 
@@ -86,29 +86,22 @@ Current project setup:
 
 ## Status Terms
 
-- **Confirmed:** explicitly decided; drafts may not reopen it.
-- **Selected, validation pending:** technical planning baseline, not successful validation.
-- **Draft:** proposed contract representation, not frozen.
-- **Open/blocker:** missing decision/input/evidence assigned to an owner.
-- **Approved:** recorded authority with exact scope/version/evidence.
-- **Documented:** recorded specification, not implemented behavior.
+- **Accepted** (decision): recorded in an ADR; changing it needs a new ADR.
+- **Draft** (contract): planned behavior an AP still defines.
+- **Implemented** (contract): behavior delivered by a completed AP; its schema is linked from the C-ID file ([change rule 5](#change-rules)).
+- **Open:** a missing decision, input or evidence with a named responsible AP.
 
-Contract state is in its C-ID file, execution state in its execution record and decisions in the ADRs; the approval rule is in the plan. Assignment checkmarks are not evidence.
+Contract state is in its C-ID file, execution state in its execution record and decisions in the ADRs. Assignment checkmarks are not evidence.
 
 ## Change Rules
 
 1. Locate the owner in the matrix before editing. Do not add a summary of the same rule to another document, even if that document is a convenient entry point.
-2. A product decision gets a stable D-ID, an entry in the ADR file of its topic (status, date, supersession, the decision in one to five sentences, consequences) and a row in the [ADR index](decisions/README.md); the chosen behavior is specified only in the linked owner. A superseded decision keeps its record and names its successor. A technology selection/rationale is recorded under its TECH-ID in the architecture. Implementation-local choices are recorded beside the owning contract/interface or code, with rationale when non-obvious, not in a parallel decision diary.
-3. Preserve stable REQ/D/P/C/AP/T/F/TECH IDs. Reserve removed IDs. Delivery phase and approval are never inferred from requirements, files or checkmarks.
-4. Contract updates identify owner, version/status, changed surface, producers/consumers and affected packages. Keep data/error/time/revision/idempotency/transaction rules at that boundary; shared authorization or commit semantics require integration agreement. Necessary planning and contract decisions belong to the AP that consumes them, based on approved prior-AP outputs or user clarification; do not add a separate AP or owner sign-off gate unless the approved scope/change rules require it. Freeze the exact required slice before implementation. Changes to frozen prior-AP results still require the explicit earlier-result gate and renewed approval of affected scope.
-5. Executing agents cannot enlarge their assignment. Authorized planners amend AP documentation directly, with scope/authority recorded in the plan; do not create sidecars. Execution information stays in execution records.
-6. Every executing agent follows [mandatory documentation maintenance](work-packages/shared-rules.md#mandatory-documentation-maintenance). Conflicting owners block dependent work; do not silently pick a weaker rule or unapproved default.
-7. Evidence must distinguish planned cases from executed commands and results. No inferred product completion, SLA, capacity, RPO/RTO or hardware certification.
-8. Names and propagation follow the [glossary maintenance rules](glossary.md#maintenance-rules). External code adoption follows the [reuse assessment](requirements-evidence.md#evidence-assessment-for-deliberate-reuse).
-9. Once generated API/schema/SDK artifacts become authoritative, record their exact path/version in the owning C-ID file and replace corresponding hand-maintained detail with links. Never keep two independently editable definitions of the same schema.
+2. A product decision gets a stable D-ID, an entry in the ADR file of its topic (status, date, supersession, the decision in one to five sentences, consequences) and a row in the [ADR index](decisions/README.md); the chosen behavior is specified only in the linked owner. A superseded decision keeps its record and names its successor. A technology selection is recorded under its TECH-ID in the architecture. Implementation-local choices stay beside the code.
+3. Preserve stable REQ/D/P/C/AP/T/F/TECH IDs. Reserve removed IDs.
+4. Changes during an AP follow the [execution rules](work-packages/shared-rules.md): [documentation maintenance](work-packages/shared-rules.md#mandatory-documentation-maintenance) and the [scope-change procedure](work-packages/shared-rules.md#scope-change). New and amended APs follow the [AP template](work-packages/ap-template.md).
+5. Once a generated API/schema/SDK artifact is authoritative, record its path in the owning C-ID file and replace hand-maintained detail with links. Never keep two independently editable definitions of the same schema.
+6. Names follow the [glossary maintenance rules](glossary.md#maintenance-rules). External code adoption follows the [reuse assessment](requirements-evidence.md#evidence-assessment-for-deliberate-reuse).
 
 ## Reading Order
 
-For assigned work, start from the AP's **Session Context** and the [shared procedure](work-packages/shared-rules.md#session-start). Read only linked sections needed by its tasks and the specific producer handovers. Do not preload decision history, source assignments, whole contracts or prior chat.
-
-For a lookup, choose the owner above. D/P/TECH IDs route decisions and gates; C-ID files expose interface details; F-IDs locate examples. History is provenance, never an alternative specification.
+For assigned work, start at [session start](work-packages/shared-rules.md#session-start). For a lookup, choose the owner in the matrix above; D/P/TECH IDs route decisions and gates, C-ID files expose interface details, F-IDs locate examples. History is provenance, never an alternative specification.

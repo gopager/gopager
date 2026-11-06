@@ -149,6 +149,8 @@ Every decision keeps its stable D-ID. The [ADR index](decisions/README.md) lists
 | D-133 | <a id="d-133"></a>[Command-ID reuse conflict code](decisions/08-operations-and-http.md#d-133) |
 | D-134 | <a id="d-134"></a>[Review-finding AP planning revision](decisions/09-process-and-documentation.md#d-134) |
 | D-135 | <a id="d-135"></a>[Foundation redesign after the 2026-11-06 re-evaluation](decisions/10-foundation-redesign.md#d-135) |
+| D-136 | <a id="d-136"></a>[Agent execution rules and boundary crossings](decisions/09-process-and-documentation.md#d-136) |
+| D-137 | <a id="d-137"></a>[Processing work record as implemented](decisions/10-foundation-redesign.md#d-137) |
 
 ## Operating Assumptions
 
@@ -184,7 +186,7 @@ This is the only delivery-phase classification. It does not repeat REQ acceptanc
 | REQ-125 | Later |
 | REQ-126 | Removed under D-31; ID reserved |
 | REQ-127 | Phase-1 proposal |
-| REQ-128 | Later |
+| REQ-128 | Phase 1 (Unit import/export), promoted into AP-15/AP-16 by [D-135](decisions/10-foundation-redesign.md#d-135) item 15 |
 | REQ-129..130 | Phase-1 proposal |
 | REQ-131 | Later |
 | REQ-132 | Phase-1 proposal |
@@ -212,8 +214,8 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 | P-09 | Logical-model question resolved by D-29/D-30; physical design at owner gates, not a diagram freeze | [D-29](#d-29), [C-05](contracts/c-05-matching-correction.md) | AP-03 / AP-04 / affected implementation owner |
 | P-10 | Query/live projection/revocation enforcement remains current consumer work | [C-06](contracts/c-06-identity-authorization.md), [C-07](contracts/c-07-query-live.md) | AP-10 |
 | P-11 | Claims/materialization/attempts and real host/provider evidence remain | [C-08](contracts/c-08-events-jobs.md), [C-09](contracts/c-09-delivery.md), [C-10](contracts/c-10-plugin-host.md) | AP-11 / AP-12 |
-| P-12 | Historical correction planning and PostgreSQL concurrency/publication evidence recorded in [AP-08](execution/ap-08.md); owner acceptance pending | [C-05](contracts/c-05-matching-correction.md) | AP-08 |
-| P-13 | Master-data/default/template planning and implementation recorded in [AP-08](execution/ap-08.md); owner acceptance pending; template actions consumed by AP-14 | [C-04](contracts/c-04-master-data.md) | AP-08 |
+| P-12 | Historical correction planning and PostgreSQL concurrency/publication evidence recorded in [AP-08](execution/ap-08.md#handover) | [C-05](contracts/c-05-matching-correction.md) | AP-08 |
+| P-13 | Master-data/default/template planning and implementation recorded in [AP-08](execution/ap-08.md#handover); template actions consumed by AP-14 | [C-04](contracts/c-04-master-data.md) | AP-08 |
 | P-14 | Full account cleanup planning/participants and lifecycle evidence remain | [C-13](contracts/c-13-account-lifecycle.md) | AP-14 |
 | P-15 | Query Unicode/index evidence remains; deferred backend runtime parity is not required now | [C-07](contracts/c-07-query-live.md) | AP-10 |
 | P-16 | Shared renderer selection belongs to Delivery; GUI/historical work to presentation; frontend editor to browser AP | [C-11](contracts/c-11-processing-presentation.md) | AP-11 / AP-13 / AP-15 |
@@ -230,7 +232,7 @@ There is one approval gate: **the user approves a work package before it starts.
 | --- | --- |
 | Starting a work package | User approval of that package (its assignment, approved delivery scope and fixed required inputs) before it starts. This is the only gate. |
 | Planning and contract details inside the package | Included in the approved package; no further owner sign-off, freeze permission or intermediate approval |
-| Fixed behavior or outside-scope change | A new or amended decision (ADR) before the affected implementation; the user approves it |
+| Fixed behavior or outside-scope change | User approval of the change, recorded as an ADR with a D-ID before the affected implementation; procedure in the [scope-change rules](work-packages/shared-rules.md#scope-change) |
 | External effects, experiments, parallel work | Explicit approved environment or slice, or disjoint scope; the package's own acceptance tests remain assigned work |
 | Documentary maintenance | User-authorized direct maintenance; no product execution |
 

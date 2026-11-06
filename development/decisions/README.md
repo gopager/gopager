@@ -16,8 +16,8 @@ Add a decision to the ADR file of its topic with status, date, supersession, the
 | [06-identity-and-authorization.md](06-identity-and-authorization.md) | Identity and authorization | 15 (D-07..D-71) |
 | [07-query-and-live.md](07-query-and-live.md) | Query and live | 3 (D-16..D-28) |
 | [08-operations-and-http.md](08-operations-and-http.md) | Operations and HTTP | 3 (D-52..D-133) |
-| [09-process-and-documentation.md](09-process-and-documentation.md) | Process and documentation | 11 (D-19..D-134) |
-| [10-foundation-redesign.md](10-foundation-redesign.md) | Foundation redesign | 1 (D-135..D-135) |
+| [09-process-and-documentation.md](09-process-and-documentation.md) | Process and documentation | 12 (D-19..D-136) |
+| [10-foundation-redesign.md](10-foundation-redesign.md) | Foundation redesign | 2 (D-135..D-137) |
 
 ## Index
 
@@ -157,4 +157,6 @@ Add a decision to the ADR file of its topic with status, date, supersession, the
 | D-132 | Documentation and naming separation | accepted | 2026-11-05 | [09-process-and-documentation](09-process-and-documentation.md#d-132) |
 | D-133 | Command-ID reuse conflict code | accepted | 2026-11-06 | [08-operations-and-http](08-operations-and-http.md#d-133) |
 | D-134 | Review-finding AP planning revision | accepted | 2026-11-06 | [09-process-and-documentation](09-process-and-documentation.md#d-134) |
-| D-135 | Foundation redesign after the 2026-11-06 re-evaluation | accepted | 2026-11-06 | [10-foundation-redesign](10-foundation-redesign.md#d-135) |
+| D-135 | Foundation redesign after the 2026-11-06 re-evaluation | accepted (item 9 amended by D-137) | 2026-11-06 | [10-foundation-redesign](10-foundation-redesign.md#d-135) |
+| D-136 | Agent execution rules and boundary crossings | accepted | 2026-11-06 | [09-process-and-documentation](09-process-and-documentation.md#d-136) |
+| D-137 | Processing work record as implemented | accepted | 2026-11-07 | [10-foundation-redesign](10-foundation-redesign.md#d-137) |
