@@ -53,7 +53,7 @@ func (f runnerFunc) Run(ctx context.Context) error { return f(ctx) }
 func TestReadinessRequiresEveryAuthorityCheck(t *testing.T) {
 	store := &probeStore{}
 	h, err := Start(context.Background(), Config{
-		Profile: "full", Roles: []Role{RoleWorker}, DatabaseURL: "synthetic",
+		Roles: []Role{RoleWorker}, DatabaseURL: "synthetic",
 	}, nil, store, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -103,7 +103,7 @@ func TestReadinessRequiresEveryAuthorityCheck(t *testing.T) {
 func TestShutdownCancelsActiveOperationsAndRejectsNewOnes(t *testing.T) {
 	store := &cancellingStore{started: make(chan struct{})}
 	h, err := Start(context.Background(), Config{
-		Profile: "full", Roles: []Role{RoleWorker}, DatabaseURL: "synthetic",
+		Roles: []Role{RoleWorker}, DatabaseURL: "synthetic",
 	}, nil, store, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -140,7 +140,7 @@ func TestShutdownDeadlineAndRunnerFailureAreVisible(t *testing.T) {
 		release := make(chan struct{})
 		exited := make(chan struct{})
 		h, err := Start(context.Background(), Config{
-			Profile: "full", Roles: []Role{RoleWorker}, DatabaseURL: "synthetic",
+			Roles: []Role{RoleWorker}, DatabaseURL: "synthetic",
 		}, nil, &fakeStore{}, []Runner{runnerFunc(func(context.Context) error {
 			defer close(exited)
 			<-release
@@ -166,7 +166,7 @@ func TestShutdownDeadlineAndRunnerFailureAreVisible(t *testing.T) {
 	})
 	t.Run("runner failure on cancellation", func(t *testing.T) {
 		h, err := Start(context.Background(), Config{
-			Profile: "full", Roles: []Role{RoleWorker}, DatabaseURL: "synthetic",
+			Roles: []Role{RoleWorker}, DatabaseURL: "synthetic",
 		}, nil, &fakeStore{}, []Runner{runnerFunc(func(ctx context.Context) error {
 			<-ctx.Done()
 			return NewFailure(CodeStorageUnavailable, errors.New("synthetic-private-marker"))

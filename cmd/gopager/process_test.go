@@ -22,7 +22,7 @@ func TestRunProcessHelper(t *testing.T) {
 	if roles == "" {
 		return
 	}
-	os.Args = []string{"gopager", "--profile=full", "--roles=" + roles,
+	os.Args = []string{"gopager", "--roles=" + roles,
 		"--migration-mode=apply", "--listen-address=" + os.Getenv("GOPAGER_TEST_LISTEN")}
 	if strings.Contains(roles, "api") {
 		os.Args = append(os.Args, "--public-origin=http://"+os.Getenv("GOPAGER_TEST_LISTEN"))

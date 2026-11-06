@@ -1,0 +1,53 @@
+# GoPager Lite profile: one host, one gopager process (api and worker roles),
+# PostgreSQL as a sidecar. See docs/operations.md#topology.
+name: gopager
+
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gopager
+      POSTGRES_DB: gopager
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      # PostgreSQL 18 images keep the data directory below /var/lib/postgresql.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gopager -d gopager"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  gopager:
+    build:
+      context: ../..
+      dockerfile: deploy/compose/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # The database host is not loopback, so GoPager demands verified TLS unless
+      # --allow-insecure-db is set; the private compose network is the trust
+      # boundary here.
+      GOPAGER_DATABASE_URL: postgres://gopager:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/gopager?sslmode=disable
+    command:
+      - --roles=api,worker
+      - --migration-mode=apply
+      - --listen-address=0.0.0.0:8080
+      - --public-origin=${GOPAGER_PUBLIC_ORIGIN:-http://localhost:8080}
+      - --allow-insecure-db
+    ports:
+      - "${GOPAGER_PORT:-8080}:8080"
+    # GoPager allows 30 s for graceful shutdown.
+    stop_grace_period: 35s
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
+
+volumes:
+  pgdata:
