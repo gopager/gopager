@@ -2,11 +2,13 @@
 
 ## Handover
 
+Current as of the D-135 follow-up (AP-08 E-18..E-25); earlier states are in the evidence entries.
+
 Verified D-60 prerequisite: Unit/collection/current-context operations and standalone temporal-rule/current matching only. Exact implemented artifacts are linked from [E-02](#e-02-implemented-approved-prerequisite-slice); actual PostgreSQL/race/HTTP cases are in [E-03](#e-03-postgresql-race-http-and-proxy-validation).
 
 Consumers retain current scope/revision/lock participation and server-derived candidate contexts. Original verification used explicit Network fixtures; current production intake/Network composition is evidenced separately in [AP-07](ap-07.md#handover).
 
-Remaining templates/Organizations/defaults/bulk, suppression and historical support/correction belong to [AP-08](../work-packages/ap-08-master-data-correction-after-intake.md#planning-before-coding). This record verifies neither those operations nor whole original tasks. Historical blockers below are dated observations, not unowned inputs.
+Templates, Organizations, defaults, bulk operations, Suppressions and historical correction were delivered under [AP-08](ap-08.md#handover), which also records the D-135 changes to this slice (Units belong to an Agency, selector-scoped correction, the `message_units` cache instead of supports, Network resolution with address inference and priority); this record verifies neither those operations nor whole original tasks. Historical blockers below are dated observations, not unowned inputs.
 
 ## Baseline
 

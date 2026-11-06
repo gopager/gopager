@@ -6,7 +6,7 @@ Verified prerequisite: bootstrap, login/logout/self-Session, current-authority r
 
 AP-06/AP-07 and each later protected domain compose server-derived scope-existence/filter/projection adapters in the live primary transaction; point authorization never permits raw entity output. No Guest/admin/worker fallback for missing authority.
 
-This does not verify general management, Recovery/rescue, key issuance/rotation or participant cleanup; [AP-14](../work-packages/ap-14-identity-lifecycle.md#exact-participant-api-and-verification-binding) owns them. Historical AP/task numbers and blockers below describe their observation dates, not current prerequisites.
+This does not verify general management, Recovery/rescue, key issuance/rotation or participant cleanup; [AP-14](../work-packages/ap-14-identity-lifecycle.md#planning-before-coding) owns them. Historical AP/task numbers and blockers below describe their observation dates, not current prerequisites.
 
 ## Baseline
 

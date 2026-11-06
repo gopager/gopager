@@ -5,7 +5,7 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 <a id="d-135"></a>
 ## D-135 Foundation redesign after the 2026-11-06 re-evaluation
 
-- **Status:** accepted
+- **Status:** accepted; item 9 amended by [D-137](#d-137), item 15 (REQ-128) by [D-138](09-process-and-documentation.md#d-138)
 - **Date:** 2026-11-06
 - **Supersedes:** [D-25](04-processing-and-plugins.md#d-25) (barrier semantics), [D-77](04-processing-and-plugins.md#d-77), [D-79](04-processing-and-plugins.md#d-79), [D-82](04-processing-and-plugins.md#d-82), [D-92](05-events-and-delivery.md#d-92), [D-93](05-events-and-delivery.md#d-93), [D-94](05-events-and-delivery.md#d-94), [D-123](05-events-and-delivery.md#d-123), [D-124](05-events-and-delivery.md#d-124); in part [D-03](01-platform-and-storage.md#d-03), [D-14](01-platform-and-storage.md#d-14), [D-22](07-query-and-live.md#d-22), [D-24](04-processing-and-plugins.md#d-24), [D-28](07-query-and-live.md#d-28), [D-31](01-platform-and-storage.md#d-31), [D-32](01-platform-and-storage.md#d-32), [D-76](04-processing-and-plugins.md#d-76), [D-88](05-events-and-delivery.md#d-88), [D-90](05-events-and-delivery.md#d-90), TECH-05 (SQLite half) and TECH-07.
 - **Decision:** A user-ordered first-principles re-evaluation of every planning document and the implemented code, including a cost/use review of all user stories, replaced the following foundations. The items are numbered as in the original record.
@@ -26,3 +26,14 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
   15. **Story simplifications.** REQ-062 cleanup is one transaction plus `principal.deleted`; REQ-072/076 recovery requests and automatic dispatch are dropped; REQ-090 webhooks start with POST JSON, Bearer and HMAC-SHA256; REQ-094 stays a requirement with one declarative layout definition rendered by the frontend and the Core; REQ-096 becomes a static banner; REQ-129 uses per-integration Unit parameters; REQ-005 keeps live updates for loaded Messages through a range-filtered stream; REQ-077/078 keep action and scope restrictions only; the D-51 Grouping window gains a one-day product cap; REQ-128 import/export is promoted into AP-15/AP-16; REQ-121 EAS stays until the user confirms that no deployment needs it.
 - **Consequences:** C-04, C-05, C-06, C-07, C-08, C-11 and C-12 and the glossary are amended at their owners; migrations are edited in place under [D-128](01-platform-and-storage.md#d-128). Code changes are recorded as "Follow-up (D-135)" entries with E-IDs in the execution records of AP-05 to AP-08; `docs/`, OpenAPI and Go doc comments change with the code. Open AP-09..AP-16 texts are corrected inline. Process slimming (this ADR set and one approval gate per package) is part of the same decision.
 - **Owner detail:** [Architecture](../architecture.md), [glossary](../glossary.md), [execution records](../execution/README.md), [docs/architecture.md](../../docs/architecture.md).
+
+<a id="d-137"></a>
+## D-137 Processing work record as implemented
+
+- **Status:** accepted
+- **Date:** 2026-11-07
+- **Amends:** [D-135](#d-135) item 9
+- **Decision:** The Processing work record stays `processing_candidates`; the table replacement by `processing_runs` named in D-135 item 9 is dropped. The implemented parts of item 9 stand: due candidates are claimed with `FOR UPDATE SKIP LOCKED`, intake wakes the worker through `NOTIFY`, and concurrency and poll interval are Operator-configurable ([AP-06 E-19](../execution/ap-06.md#e-19-dispatcher-skip-locked-selection-notify-wake-up-renewal-tolerance-flags)). Plugin pooling with `SecureConfig` and the invocation `mode` are unaffected. The rename would cost a migration and a broad refactor without a behavior change.
+- **Consequences:** Candidate supersession on a changed Workflow, version, source or assignment context remains as implemented and documented in [docs/architecture.md](../../docs/architecture.md); D-77, D-79 and D-82 stay superseded as specifications. Removing candidate supersession would need its own decision and work package. The AP-06 handover and AP-13 inputs name `processing_candidates`.
+- **Owner detail:** [AP-06 handover](../execution/ap-06.md#handover), [docs/architecture.md](../../docs/architecture.md)
+

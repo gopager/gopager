@@ -149,6 +149,9 @@ Every decision keeps its stable D-ID. The [ADR index](decisions/README.md) lists
 | D-133 | <a id="d-133"></a>[Command-ID reuse conflict code](decisions/08-operations-and-http.md#d-133) |
 | D-134 | <a id="d-134"></a>[Review-finding AP planning revision](decisions/09-process-and-documentation.md#d-134) |
 | D-135 | <a id="d-135"></a>[Foundation redesign after the 2026-11-06 re-evaluation](decisions/10-foundation-redesign.md#d-135) |
+| D-136 | <a id="d-136"></a>[Agent execution rules and boundary crossings](decisions/09-process-and-documentation.md#d-136) |
+| D-137 | <a id="d-137"></a>[Processing work record as implemented](decisions/10-foundation-redesign.md#d-137) |
+| D-138 | <a id="d-138"></a>[Open-AP boundary repair and server exchange of Units](decisions/09-process-and-documentation.md#d-138) |
 
 ## Operating Assumptions
 
@@ -166,7 +169,11 @@ This is the only delivery-phase classification. It does not repeat REQ acceptanc
 | REQ-053 | Later |
 | REQ-054..064 | Phase-1 proposal |
 | REQ-065..068 | Later; prepare only the contracted identity boundary initially |
-| REQ-069..079 | Phase-1 proposal |
+| REQ-069..071 | Phase-1 proposal |
+| REQ-072 | Dropped by [D-135](decisions/10-foundation-redesign.md#d-135) item 15; ID reserved |
+| REQ-073..075 | Phase-1 proposal |
+| REQ-076 | Dropped by [D-135](decisions/10-foundation-redesign.md#d-135) item 15; ID reserved |
+| REQ-077..079 | Phase-1 proposal |
 | REQ-080 | Later |
 | REQ-081..082 | Phase-1 proposal |
 | REQ-083 | Later |
@@ -184,13 +191,14 @@ This is the only delivery-phase classification. It does not repeat REQ acceptanc
 | REQ-125 | Later |
 | REQ-126 | Removed under D-31; ID reserved |
 | REQ-127 | Phase-1 proposal |
-| REQ-128 | Later |
+| REQ-128 | Phase 1 approved (server-to-server exchange, revised by [D-138](decisions/09-process-and-documentation.md#d-138)); AP-15 |
 | REQ-129..130 | Phase-1 proposal |
 | REQ-131 | Later |
 | REQ-132 | Phase-1 proposal |
 | REQ-133..134/138 | Delivery classification unresolved; owner planning is assigned under D-126, but these additions are not silently approved or deferred |
 | REQ-135..137 | Acceptance refinements of already approved field/query goals; verify within AP-10 without broadening frozen authorization |
 | REQ-139 | Later; the event, Subscription and plugin model keeps reaction compatibility ([D-131](#managed-plugin-process-runtime), [D-135](#foundation-redesign-after-the-2026-11-06-re-evaluation)) |
+| REQ-140 | Phase 1 approved ([D-138](decisions/09-process-and-documentation.md#d-138)); AP-15 |
 | [D-30 comparison extension](#d-30) | Later, separately approved slice; not a current contract blocker |
 
 Resolve IDs in the [catalog](requirements-catalog.md), not in a parallel feature summary.
@@ -212,8 +220,8 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 | P-09 | Logical-model question resolved by D-29/D-30; physical design at owner gates, not a diagram freeze | [D-29](#d-29), [C-05](contracts/c-05-matching-correction.md) | AP-03 / AP-04 / affected implementation owner |
 | P-10 | Query/live projection/revocation enforcement remains current consumer work | [C-06](contracts/c-06-identity-authorization.md), [C-07](contracts/c-07-query-live.md) | AP-10 |
 | P-11 | Claims/materialization/attempts and real host/provider evidence remain | [C-08](contracts/c-08-events-jobs.md), [C-09](contracts/c-09-delivery.md), [C-10](contracts/c-10-plugin-host.md) | AP-11 / AP-12 |
-| P-12 | Historical correction planning and PostgreSQL concurrency/publication evidence recorded in [AP-08](execution/ap-08.md); owner acceptance pending | [C-05](contracts/c-05-matching-correction.md) | AP-08 |
-| P-13 | Master-data/default/template planning and implementation recorded in [AP-08](execution/ap-08.md); owner acceptance pending; template actions consumed by AP-14 | [C-04](contracts/c-04-master-data.md) | AP-08 |
+| P-12 | Historical correction planning and PostgreSQL concurrency/publication evidence recorded in [AP-08](execution/ap-08.md#handover) | [C-05](contracts/c-05-matching-correction.md) | AP-08 |
+| P-13 | Master-data/default/template planning and implementation recorded in [AP-08](execution/ap-08.md#handover); template actions consumed by AP-14 | [C-04](contracts/c-04-master-data.md) | AP-08 |
 | P-14 | Full account cleanup planning/participants and lifecycle evidence remain | [C-13](contracts/c-13-account-lifecycle.md) | AP-14 |
 | P-15 | Query Unicode/index evidence remains; deferred backend runtime parity is not required now | [C-07](contracts/c-07-query-live.md) | AP-10 |
 | P-16 | Shared renderer selection belongs to Delivery; GUI/historical work to presentation; frontend editor to browser AP | [C-11](contracts/c-11-processing-presentation.md) | AP-11 / AP-13 / AP-15 |
@@ -230,7 +238,7 @@ There is one approval gate: **the user approves a work package before it starts.
 | --- | --- |
 | Starting a work package | User approval of that package (its assignment, approved delivery scope and fixed required inputs) before it starts. This is the only gate. |
 | Planning and contract details inside the package | Included in the approved package; no further owner sign-off, freeze permission or intermediate approval |
-| Fixed behavior or outside-scope change | A new or amended decision (ADR) before the affected implementation; the user approves it |
+| Fixed behavior or outside-scope change | User approval of the change, recorded as an ADR with a D-ID before the affected implementation; procedure in the [scope-change rules](work-packages/shared-rules.md#scope-change) |
 | External effects, experiments, parallel work | Explicit approved environment or slice, or disjoint scope; the package's own acceptance tests remain assigned work |
 | Documentary maintenance | User-authorized direct maintenance; no product execution |
 
