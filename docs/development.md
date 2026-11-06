@@ -6,7 +6,7 @@ Contribution and documentation rules: [CONTRIBUTING.md](../CONTRIBUTING.md). Run
 
 | Tool | Needed for |
 | --- | --- |
-| Go, version from [go.mod](../go.mod) (`go 1.26.2`) | everything |
+| Go, version from [go.mod](../go.mod) (`go 1.26.10`) | everything |
 | Make | all `make` targets below |
 | Network access | `make lint` and `make vuln` fetch their pinned tools through `go run` the first time |
 | Docker (running daemon, pull access to `postgres:18.0-alpine`) | integration tests, unless an external test database is supplied |
@@ -84,7 +84,7 @@ make vuln               # govulncheck ./... (pinned version, needs network)
 
 `make generate-check` compares only the Ent output (`internal/persistence/ent`, not its hand-written `schema/`) with git, so commit or stage regenerated files before expecting it to pass locally; it also fails on generated files that git does not track.
 
-`make vuln` currently reports standard-library vulnerabilities fixed in later Go 1.26 patch releases than the `go 1.26.2` in `go.mod`, plus findings in two test-only dependencies. It is therefore not a required CI check; raising the Go version is the fix.
+`make vuln` reports no vulnerability reachable from the code (Go 1.26.10, `klauspost/compress` v1.20.2, `moby/go-archive` v0.3.0) and is a required CI check. Moving to Go 1.27 first needs golangci-lint v2: v1.64.8 cannot read Go 1.27 export data.
 
 ### Continuous integration
 

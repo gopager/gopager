@@ -9,7 +9,7 @@ GoPager is a single executable, `gopager`, backed by one PostgreSQL primary. It 
 
 | Component | Requirement |
 | --- | --- |
-| Go | The version in [go.mod](../go.mod) (`go 1.26.2`), only for building |
+| Go | The version in [go.mod](../go.mod) (`go 1.26.10`), only for building |
 | PostgreSQL | A writable primary. The test suite runs against PostgreSQL 18. Read replicas and hot standbys are rejected as not writable. |
 | Database privileges | `apply` mode needs privileges to create tables, indexes and functions in the connection's current schema |
 | Plugins (optional) | A local directory with plugin executables and manifests; see [Plugins](plugins.md) |

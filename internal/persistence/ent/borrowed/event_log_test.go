@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"os"
 	"slices"
 	"strconv"
 	"testing"
@@ -349,7 +348,7 @@ func TestEventLogAppendNotifiesAfterCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	db := observerDatabase(t, store)
-	listener, err := pgx.Connect(t.Context(), os.Getenv("GOPAGER_TEST_DATABASE_URL"))
+	listener, err := pgx.Connect(t.Context(), storeDSN(t, store))
 	if err != nil {
 		t.Fatal(err)
 	}
