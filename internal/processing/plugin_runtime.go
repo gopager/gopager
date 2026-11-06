@@ -2,6 +2,8 @@ package processing
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"os"
@@ -10,6 +12,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
 
@@ -22,6 +25,11 @@ const pluginStartTimeout = 10 * time.Second
 // installedInvocationTimeout bounds one installed invocation, including starting its plugin process.
 // It is a variable only so tests can exercise the bound without waiting for the production value.
 var installedInvocationTimeout = 30 * time.Second
+
+// pluginIdleTimeout is how long a plugin process may stay unused before the host stops it.
+// Five minutes keeps a busy instance warm between workflow runs yet releases the memory of
+// instances nobody triggers. It is a variable only so tests can exercise it without waiting.
+var pluginIdleTimeout = 5 * time.Minute
 
 // errInvocationDeadline is the cancellation cause recorded when an invocation's own deadline
 // expires, which distinguishes it from cancellation of the caller's context.
@@ -41,33 +49,120 @@ func invocationErr(ctx context.Context) error {
 // Core configuration such as GOPAGER_DATABASE_URL is never inherited.
 var pluginEnvironment = []string{"PATH", "HOME", "LANG", "LC_ALL", "TZ", "TMPDIR"}
 
-// PluginHost owns the plugin processes started for loaded artifacts (plugin-runtime 2.0).
-// Each loaded artifact, and therefore each configured instance, gets its own process.
+// processKey identifies one pooled plugin process: a configured instance at an exact
+// configuration revision running one exact artifact. Configuration is passed per invocation, but
+// a new revision may pin another artifact and must never be served by a process of an older one.
+type processKey struct {
+	instance uuid.UUID
+	revision int64
+	digest   string
+}
+
+// PluginHost owns the plugin processes and the verified-artifact cache of plugin-runtime 2.0.
+//
+// A process is started on the first invocation of a configured instance revision, reused by every
+// later run, and stopped after pluginIdleTimeout without use, when the instance changes, or when
+// the host closes. Artifacts loaded without an instance are unpooled: each has a private process
+// that stops with its last handle.
 type PluginHost struct {
 	mu        sync.Mutex
 	closed    bool
-	artifacts map[*InstalledArtifact]struct{}
+	processes map[processKey]*pluginProcess
+	unpooled  map[*pluginProcess]struct{}
+	cache     map[artifactCacheKey]*cachedArtifact
 }
 
 // NewPluginHost creates an empty host; no process starts until an artifact is invoked.
 func NewPluginHost() *PluginHost {
-	return &PluginHost{artifacts: make(map[*InstalledArtifact]struct{})}
+	return &PluginHost{
+		processes: make(map[processKey]*pluginProcess),
+		unpooled:  make(map[*pluginProcess]struct{}),
+		cache:     make(map[artifactCacheKey]*cachedArtifact),
+	}
 }
 
-func (h *PluginHost) register(artifact *InstalledArtifact) error {
+// acquire returns the process for key, creating it on first use, and takes one reference.
+// A nil instance in key requests a private, unpooled process.
+func (h *PluginHost) acquire(key processKey, cached *cachedArtifact) (*pluginProcess, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.closed {
-		return capabilityUnavailable(errors.New("plugin host is closed"))
+		return nil, capabilityUnavailable(errors.New("plugin host is closed"))
 	}
-	h.artifacts[artifact] = struct{}{}
-	return nil
+	pooled := key.instance != uuid.Nil
+	if pooled {
+		if process, exists := h.processes[key]; exists {
+			process.mu.Lock()
+			process.refs++
+			process.mu.Unlock()
+			return process, nil
+		}
+	}
+	checksum, err := hex.DecodeString(key.digest)
+	if err != nil {
+		return nil, invalid(err)
+	}
+	process := &pluginProcess{host: h, key: key, pooled: pooled, cacheKey: cached.key, path: cached.path,
+		dir: cached.dir, checksum: checksum, slot: make(chan struct{}, 1), refs: 1}
+	if pooled {
+		h.processes[key] = process
+	} else {
+		h.unpooled[process] = struct{}{}
+	}
+	return process, nil
 }
 
-func (h *PluginHost) forget(artifact *InstalledArtifact) {
+// drop removes an unreferenced process from the host so abandoned revisions do not accumulate.
+func (h *PluginHost) drop(process *pluginProcess) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	delete(h.artifacts, artifact)
+	process.mu.Lock()
+	defer process.mu.Unlock()
+	if process.refs > 0 && !process.retired {
+		return
+	}
+	if h.processes[process.key] == process {
+		delete(h.processes, process.key)
+	}
+	delete(h.unpooled, process)
+}
+
+// InstanceChanged stops the processes of every revision of the instance older than revision and
+// drops the cached artifacts the instance used. Callers invoke it after a configuration commit;
+// like run cancellation it is a best-effort signal, not execution authority.
+func (h *PluginHost) InstanceChanged(id uuid.UUID, revision int64) {
+	if h == nil {
+		return
+	}
+	var stale []*pluginProcess
+	h.mu.Lock()
+	for key, process := range h.processes {
+		if key.instance == id && key.revision < revision {
+			delete(h.processes, key)
+			stale = append(stale, process)
+		}
+	}
+	for key, entry := range h.cache {
+		if _, uses := entry.instances[id]; uses {
+			delete(h.cache, key)
+		}
+	}
+	h.mu.Unlock()
+	for _, process := range stale {
+		process.retire()
+	}
+}
+
+// invalidate forgets a cached artifact whose bytes no longer match its pinned digest and retires
+// the process that was meant to run it.
+func (h *PluginHost) invalidate(process *pluginProcess) {
+	h.mu.Lock()
+	delete(h.cache, process.cacheKey)
+	if h.processes[process.key] == process {
+		delete(h.processes, process.key)
+	}
+	h.mu.Unlock()
+	process.retire()
 }
 
 // Close stops every remaining plugin process; callers join runs first so this is a safety net.
@@ -77,14 +172,19 @@ func (h *PluginHost) Close(ctx context.Context) error {
 	}
 	h.mu.Lock()
 	h.closed = true
-	remaining := make([]*InstalledArtifact, 0, len(h.artifacts))
-	for artifact := range h.artifacts {
-		remaining = append(remaining, artifact)
+	remaining := make([]*pluginProcess, 0, len(h.processes)+len(h.unpooled))
+	for _, process := range h.processes {
+		remaining = append(remaining, process)
 	}
-	h.artifacts = map[*InstalledArtifact]struct{}{}
+	for process := range h.unpooled {
+		remaining = append(remaining, process)
+	}
+	h.processes = map[processKey]*pluginProcess{}
+	h.unpooled = map[*pluginProcess]struct{}{}
+	h.cache = map[artifactCacheKey]*cachedArtifact{}
 	h.mu.Unlock()
-	for _, artifact := range remaining {
-		artifact.stop()
+	for _, process := range remaining {
+		process.retire()
 	}
 	return nil
 }
@@ -101,21 +201,50 @@ func pluginCommand(path, dir string) *exec.Cmd {
 	return command
 }
 
+// pluginProcess is the long-lived child process of one pool key, shared by every InstalledArtifact
+// handle that was loaded for that key.
+type pluginProcess struct {
+	host     *PluginHost
+	key      processKey
+	pooled   bool
+	cacheKey artifactCacheKey
+	path     string
+	dir      string
+	checksum []byte
+	// slot serializes invocations: the plugin handler contract does not require concurrency
+	// safety (pluginsdk.Serve would run each RPC on its own goroutine), so one process handles
+	// one request at a time, which also bounds a misbehaving plugin to one stuck call.
+	slot chan struct{}
+
+	mu        sync.Mutex
+	refs      int
+	retired   bool
+	client    *plugin.Client
+	stub      *pluginsdk.Client
+	busy      int
+	lastUsed  time.Time
+	idleAfter time.Duration
+	idle      *time.Timer
+}
+
 // connection starts the plugin process on first use and returns its invocation stub.
-func (a *InstalledArtifact) connection() (*pluginsdk.Client, *plugin.Client, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.closed {
-		return nil, nil, capabilityUnavailable(errors.New("installed artifact is closed"))
+// The started binary is verified against the pinned digest by go-plugin itself (SecureConfig), so
+// a binary replaced after the load-time check is refused instead of executed.
+func (p *pluginProcess) connection() (*pluginsdk.Client, *plugin.Client, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.retired {
+		return nil, nil, capabilityUnavailable(errors.New("plugin process was retired"))
 	}
-	if a.client != nil && !a.client.Exited() && a.stub != nil {
-		return a.stub, a.client, nil
+	if p.client != nil && !p.client.Exited() && p.stub != nil {
+		return p.stub, p.client, nil
 	}
-	a.stopLocked()
+	p.stopLocked()
 	client := plugin.NewClient(&plugin.ClientConfig{
 		HandshakeConfig:  pluginsdk.Handshake,
 		Plugins:          plugin.PluginSet{pluginsdk.PluginName: &pluginsdk.GRPCPlugin{}},
-		Cmd:              pluginCommand(a.path, a.dir),
+		Cmd:              pluginCommand(p.path, p.dir),
+		SecureConfig:     &plugin.SecureConfig{Checksum: p.checksum, Hash: sha256.New()},
 		AllowedProtocols: []plugin.Protocol{plugin.ProtocolGRPC},
 		SkipHostEnv:      true,
 		StartTimeout:     pluginStartTimeout,
@@ -126,6 +255,11 @@ func (a *InstalledArtifact) connection() (*pluginsdk.Client, *plugin.Client, err
 	protocol, err := client.Client()
 	if err != nil {
 		client.Kill()
+		if errors.Is(err, plugin.ErrChecksumsDoNotMatch) {
+			// The host lock precedes the process lock, so invalidate runs after this call returns.
+			go p.host.invalidate(p)
+			return nil, nil, capabilityUnavailable(errors.New("plugin executable differs from its pinned digest"))
+		}
 		return nil, nil, capabilityUnavailable(errors.New("plugin process did not complete its handshake"))
 	}
 	raw, err := protocol.Dispense(pluginsdk.PluginName)
@@ -134,42 +268,141 @@ func (a *InstalledArtifact) connection() (*pluginsdk.Client, *plugin.Client, err
 		client.Kill()
 		return nil, nil, capabilityUnavailable(errors.New("plugin process does not offer the invocation service"))
 	}
-	a.client, a.stub = client, stub
+	p.client, p.stub = client, stub
 	return stub, client, nil
 }
 
-func (a *InstalledArtifact) stopLocked() {
-	if a.client != nil {
-		a.client.Kill()
+func (p *pluginProcess) stopLocked() {
+	if p.idle != nil {
+		p.idle.Stop()
+		p.idle = nil
 	}
-	a.client, a.stub = nil, nil
+	if p.client != nil {
+		p.client.Kill()
+	}
+	p.client, p.stub = nil, nil
 }
 
 // stopIf kills used only when it is still the current process, so a concurrent restart survives.
-func (a *InstalledArtifact) stopIf(used *plugin.Client) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.client == used {
-		a.stopLocked()
+func (p *pluginProcess) stopIf(used *plugin.Client) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.client == used {
+		p.stopLocked()
 	}
 }
 
-func (a *InstalledArtifact) stop() {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.stopLocked()
+// retire stops the process for good; later invocations are refused instead of restarting it.
+func (p *pluginProcess) retire() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.retired = true
+	p.stopLocked()
 }
 
-// call performs one bounded invocation. A deadline, cancellation or transport failure kills the
-// process so an uncooperative plugin cannot keep running; the next call starts a new one.
-// Expiry of the invocation's own deadline is RESOURCE_LIMIT; caller cancellation stays a
-// cancellation and any other transport failure is INVALID_INPUT.
+// release drops one handle reference. An unpooled process stops with its last handle; a pooled one
+// stays warm for the next run until it idles out or its instance changes, unless it never started,
+// in which case there is nothing to keep warm and the pool entry is dropped.
+func (p *pluginProcess) release() {
+	p.mu.Lock()
+	p.refs--
+	unreferenced := p.refs <= 0
+	if unreferenced && !p.pooled {
+		p.retired = true
+		p.stopLocked()
+	}
+	removable := unreferenced && (!p.pooled || p.client == nil)
+	p.mu.Unlock()
+	if removable {
+		p.host.drop(p)
+	}
+}
+
+// beginUse marks the process busy so the idle timer cannot stop it under a running call.
+func (p *pluginProcess) beginUse() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.busy++
+	if p.idle != nil {
+		p.idle.Stop()
+		p.idle = nil
+	}
+}
+
+// endUse records the end of a call and arms the idle timer once the process is unused.
+func (p *pluginProcess) endUse() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.busy--
+	p.lastUsed = time.Now()
+	if p.busy > 0 || p.retired || p.client == nil {
+		return
+	}
+	p.idleAfter = pluginIdleTimeout
+	p.idle = time.AfterFunc(p.idleAfter, p.idleExpired)
+}
+
+// idleExpired stops a process that stayed unused for the whole idle period. The lastUsed check
+// discards a timer that fired concurrently with a newer call.
+func (p *pluginProcess) idleExpired() {
+	p.mu.Lock()
+	if p.busy > 0 || p.retired || time.Since(p.lastUsed) < p.idleAfter {
+		p.mu.Unlock()
+		return
+	}
+	p.stopLocked()
+	unreferenced := p.refs <= 0
+	p.mu.Unlock()
+	if unreferenced {
+		p.host.drop(p)
+	}
+}
+
+// running reports whether a plugin child process is currently alive.
+func (p *pluginProcess) running() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.client != nil && !p.client.Exited()
+}
+
+// invoke performs one request on the process, one at a time. A transport failure or an expired
+// deadline kills the process so an uncooperative plugin cannot keep running; the next call starts
+// a new one. Expiry of the invocation's own deadline is RESOURCE_LIMIT; caller cancellation stays
+// a cancellation and any other transport failure is INVALID_INPUT.
+func (p *pluginProcess) invoke(ctx context.Context, input []byte) ([]byte, error) {
+	select {
+	case p.slot <- struct{}{}:
+	case <-ctx.Done():
+		return nil, invocationErr(ctx)
+	}
+	defer func() { <-p.slot }()
+	p.beginUse()
+	defer p.endUse()
+	stub, client, err := p.connection()
+	if err != nil {
+		return nil, err
+	}
+	response, err := stub.Invoke(ctx, input, MaxOutputBytes)
+	if err != nil {
+		p.stopIf(client)
+		if err := invocationErr(ctx); err != nil {
+			return nil, err
+		}
+		return nil, invalid(errors.New("plugin invocation failed"))
+	}
+	return response, nil
+}
+
+// call performs one bounded invocation on the artifact's process.
 func (a *InstalledArtifact) call(ctx context.Context, input []byte, output any, duration time.Duration, budget *executionBudget) error {
 	if a == nil || ctx == nil || output == nil || duration <= 0 {
 		return invalid(errors.New("missing plugin invocation participant"))
 	}
 	if err := invocationErr(ctx); err != nil {
 		return err
+	}
+	if a.isClosed() {
+		return capabilityUnavailable(errors.New("installed artifact is closed"))
 	}
 	if len(input) > MaxInputBytes {
 		return resource(errors.New("plugin encoded input boundary"))
@@ -181,19 +414,9 @@ func (a *InstalledArtifact) call(ctx context.Context, input []byte, output any, 
 	defer cancel()
 	var response []byte
 	invoke := func(context.Context) error {
-		stub, client, err := a.connection()
-		if err != nil {
-			return err
-		}
-		response, err = stub.Invoke(ctx, input, MaxOutputBytes)
-		if err != nil {
-			a.stopIf(client)
-			if err := invocationErr(ctx); err != nil {
-				return err
-			}
-			return invalid(errors.New("plugin invocation failed"))
-		}
-		return nil
+		var err error
+		response, err = a.process.invoke(ctx, input)
+		return err
 	}
 	var err error
 	if budget == nil {

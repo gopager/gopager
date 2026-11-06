@@ -69,14 +69,3 @@ func TestMissingDeclarationOwnerDoesNotMaskCancellation(t *testing.T) {
 		t.Fatalf("cancelled preparation consulted missing owner: %v", err)
 	}
 }
-
-func TestPreparationTrackerPreservesOptionalPreviewCapability(t *testing.T) {
-	var mainOnly InstalledArtifacts = &preparationArtifactTracker{}
-	if _, ok := mainOnly.(InstalledPreviewArtifacts); ok {
-		t.Fatal("main-only tracker advertises an unavailable preview owner")
-	}
-	var preview InstalledArtifacts = preparationPreviewArtifactTracker{&preparationArtifactTracker{}}
-	if _, ok := preview.(InstalledPreviewArtifacts); !ok {
-		t.Fatal("preview tracker lost its dedicated preview capability")
-	}
-}

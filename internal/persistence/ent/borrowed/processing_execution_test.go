@@ -130,12 +130,14 @@ func setExecutionFields(t *testing.T, f matcherFixture, fields []string) {
 	}
 }
 
-// provisionExecutionFixture writes the supplied command/preview plugin executables built for this test process.
-func provisionExecutionFixture(t *testing.T, root *os.Root, preview bool) processing.ProvisionedArtifact {
+// provisionExecutionFixture writes the supplied command plugin executable built for this test process
+// and a manifest that declares, or omits, supportsPreview.
+func provisionExecutionFixture(t *testing.T, root *os.Root, supportsPreview bool) processing.ProvisionedArtifact {
 	t.Helper()
-	name := "command"
-	if preview {
-		name = "preview"
+	const name = "command"
+	manifestPath := "no-preview.json"
+	if supportsPreview {
+		manifestPath = "supports-preview.json"
 	}
 	data := pluginfixture.Binary(t, name)
 	if err := root.WriteFile(name, data, 0o755); err != nil {
@@ -144,7 +146,7 @@ func provisionExecutionFixture(t *testing.T, root *os.Root, preview bool) proces
 	digest := sha256.Sum256(data)
 	noSecret := false
 	manifest := processing.InstalledManifest{SchemaVersion: 2, SDKMajor: 2, PluginID: "test-command",
-		Version: "1", CapabilityID: "test", Pure: true, PurePreview: true,
+		Version: "1", CapabilityID: "test", Pure: true, SupportsPreview: supportsPreview,
 		Artifact: processing.ArtifactReference{Path: name, Digest: hex.EncodeToString(digest[:])},
 		InputSchema: map[string]processing.FieldSchema{"mode": {Kind: processing.StringValue},
 			"text": {Kind: processing.StringValue, Optional: true}},
@@ -155,10 +157,10 @@ func provisionExecutionFixture(t *testing.T, root *os.Root, preview bool) proces
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := root.WriteFile(name+".json", encoded, 0600); err != nil {
+	if err := root.WriteFile(manifestPath, encoded, 0600); err != nil {
 		t.Fatal(err)
 	}
-	return processing.ProvisionedArtifact{ManifestPath: name + ".json", Pin: processing.ArtifactPin{
+	return processing.ProvisionedArtifact{ManifestPath: manifestPath, Pin: processing.ArtifactPin{
 		PluginID: manifest.PluginID, Version: manifest.Version, CapabilityID: manifest.CapabilityID, Digest: manifest.Artifact.Digest}}
 }
 
@@ -174,7 +176,7 @@ func TestProcessingExecutionCurrentAuthorityAndArtifactLifetime(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	for _, name := range []string{"main", "preview", "missing-preview", "invalid-preview", "source-denied",
+	for _, name := range []string{"main", "preview", "preview-unsupported", "invalid-artifact", "source-denied",
 		"global-hidden", "changed-revision", "principal-revoked", "editor-revoked", "stop"} {
 		t.Run(name, func(t *testing.T) {
 			root, err := os.OpenRoot(t.TempDir())
@@ -186,8 +188,7 @@ func TestProcessingExecutionCurrentAuthorityAndArtifactLifetime(t *testing.T) {
 					t.Error(err)
 				}
 			})
-			main := provisionExecutionFixture(t, root, false)
-			preview := provisionExecutionFixture(t, root, true)
+			main := provisionExecutionFixture(t, root, name != "preview-unsupported")
 			manager, err := processing.NewInstanceExecutions(host, root, f.store, repository, f.resolver)
 			if err != nil {
 				t.Fatal(err)
@@ -198,13 +199,10 @@ func TestProcessingExecutionCurrentAuthorityAndArtifactLifetime(t *testing.T) {
 				t.Fatal(err)
 			}
 			instance := processing.InstanceConfiguration{ID: uuid.New(), Revision: 1, Enabled: true,
-				ExecutionPrincipalID: f.principal, CreatedBy: f.principal, Main: main, Preview: &preview,
+				ExecutionPrincipalID: f.principal, CreatedBy: f.principal, Main: main,
 				Configuration: configuration}
 			if name == "preview" {
 				instance.ExecutionPrincipalID = seedExecutionPrincipal(t, f)
-			}
-			if name == "missing-preview" {
-				instance.Preview = nil
 			}
 			save := func(expected int64) {
 				t.Helper()
@@ -229,7 +227,7 @@ func TestProcessingExecutionCurrentAuthorityAndArtifactLifetime(t *testing.T) {
 				principal: instance.ExecutionPrincipalID}
 			binding := processing.ExecutionBinding{WorkflowID: uuid.New(), DefinitionVersionID: uuid.New(),
 				RunID: uuid.New(), Source: sourceIdentity}
-			if name == "preview" || name == "missing-preview" || name == "editor-revoked" {
+			if name == "preview" || name == "preview-unsupported" || name == "editor-revoked" {
 				binding.PreviewEditor, err = execution.NewPreviewAuthority(f.resolver, f.proof)
 				if err != nil {
 					t.Fatal(err)
@@ -244,13 +242,13 @@ func TestProcessingExecutionCurrentAuthorityAndArtifactLifetime(t *testing.T) {
 					t.Error(err)
 				}
 			})
-			if name == "invalid-preview" {
-				if err := root.WriteFile("preview.json", []byte(`{}`), 0600); err != nil {
+			if name == "invalid-artifact" {
+				if err := root.WriteFile(main.ManifestPath, []byte(`{}`), 0600); err != nil {
 					t.Fatal(err)
 				}
 				for range 2 {
 					if _, err := run.PrepareInstalled(run.Context(), instance.ID, 1); err == nil {
-						t.Fatal("invalid configured preview or cached failed preparation accepted")
+						t.Fatal("invalid configured artifact or cached failed preparation accepted")
 					}
 				}
 				return
@@ -300,9 +298,9 @@ func TestProcessingExecutionCurrentAuthorityAndArtifactLifetime(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if name == "source-denied" || name == "global-hidden" || name == "missing-preview" {
+			if name == "source-denied" || name == "global-hidden" || name == "preview-unsupported" {
 				if result, err := program.EvaluateInstalled(run.Context(), source, run); err == nil || result.Selected {
-					t.Fatalf("unavailable authority/preview returned result: %+v err=%v", result, err)
+					t.Fatalf("unavailable authority or unsupported preview returned result: %+v err=%v", result, err)
 				}
 				return
 			}

@@ -10,7 +10,7 @@
     "digest": "4f69af662a1c0009e8220304c26f548058f0b60815835a95ca0e3c6872361b12"
   },
   "pure": true,
-  "purePreview": true,
+  "supportsPreview": true,
   "inputSchema": {
     "text": {
       "kind": "string"

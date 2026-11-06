@@ -23,7 +23,7 @@ func artifactFixture(t *testing.T, data []byte) (string, *os.Root, InstalledMani
 	digest := sha256.Sum256(data)
 	noSecret := false
 	manifest := InstalledManifest{SchemaVersion: 2, SDKMajor: 2, SDKMinor: 0,
-		PluginID: "test-command", Version: "1", CapabilityID: "test", Pure: true, PurePreview: true,
+		PluginID: "test-command", Version: "1", CapabilityID: "test", Pure: true, SupportsPreview: true,
 		Artifact:    ArtifactReference{Path: "plugin", Digest: hex.EncodeToString(digest[:])},
 		InputSchema: map[string]FieldSchema{"text": {Kind: StringValue}}, ResultSchema: map[string]FieldSchema{},
 		ConfigurationSchema: FieldSchema{Kind: ObjectValue, Properties: map[string]FieldSchema{}},

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"strconv"
 
 	"github.com/gopager/gopager/pluginsdk"
 )
@@ -21,7 +22,7 @@ type response struct {
 	Failure       string           `json:"failure,omitempty"`
 }
 
-func text(value string) field {
+func textField(value string) field {
 	encoded, _ := json.Marshal(value)
 	return field{Kind: "string", Value: encoded}
 }
@@ -29,10 +30,22 @@ func text(value string) field {
 func handle(ctx context.Context, data []byte) ([]byte, error) {
 	var request struct {
 		InstanceID string           `json:"instanceId"`
+		Mode       string           `json:"mode"`
 		Input      map[string]field `json:"input"`
 	}
 	if err := json.Unmarshal(data, &request); err != nil {
 		return nil, err
+	}
+	if request.Mode == "preview" {
+		// Preview never runs the live behaviours below (including their failures and effects).
+		if value, present := request.Input["text"]; present {
+			var text string
+			if err := json.Unmarshal(value.Value, &text); err != nil {
+				return nil, err
+			}
+			request.Input["text"] = textField("PREVIEW:" + text)
+		}
+		return json.Marshal(response{SchemaVersion: 2, Fields: request.Input})
 	}
 	mode := ""
 	if value, ok := request.Input["mode"]; ok {
@@ -54,9 +67,11 @@ func handle(ctx context.Context, data []byte) ([]byte, error) {
 		for {
 		}
 	case "env":
-		request.Input["text"] = text(os.Getenv("GOPAGER_TEST_CORE_SECRET"))
+		request.Input["text"] = textField(os.Getenv("GOPAGER_TEST_CORE_SECRET"))
+	case "pid":
+		request.Input["text"] = textField(strconv.Itoa(os.Getpid()))
 	case "instance":
-		request.Input["text"] = text(request.InstanceID)
+		request.Input["text"] = textField(request.InstanceID)
 	}
 	if ctx.Err() != nil {
 		return nil, errors.New("cancelled")

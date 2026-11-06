@@ -18,7 +18,7 @@ Related: [HTTP API](http-api.md) (routes, authentication, errors) · [Plugins](p
 | --- | --- |
 | **Workflow** | Revisioned metadata: `name`, `scope`, `enabled`, `activeVersionId`. Every change increments `revision`. Deleting a workflow is logical: it sets `enabled=false` and clears the active version. |
 | **Workflow version** | An immutable saved **definition** (selector, steps, output schema). Saving a version does not activate it. Any retained version can be activated. |
-| **Processing instance** | An administratively configured, revisioned binding of one plugin capability: the `main` plugin artifact, an optional `preview` artifact, an execution principal and a configuration value. Each save creates a new immutable revision. Installed steps pin an instance ID and revision. |
+| **Processing instance** | An administratively configured, revisioned binding of one plugin capability: the `main` plugin artifact, an execution principal and a configuration value. Each save creates a new immutable revision. Installed steps pin an instance ID and revision. |
 | **Candidate** | Durable work item for one (transmission, workflow, definition version, source revision, context revision). It is admitted when a transmission is accepted and an enabled workflow's scope covers it. Admission does not mean the selector matched. |
 | **Result** | Private evaluation evidence stored when a candidate completes with `selected=true`. Not-selected completions store no result. |
 | **Publication** | Step that attaches a completed candidate's result to the transmission's message, appends its `processing.completed` event and refreshes the transmission's processing status. It runs in the same transaction as the completion; it never hides evidence. |
@@ -285,7 +285,8 @@ Patterns are checked when the definition is compiled, so an inadmissible pattern
   - Any other reason, or a malformed response → `INVALID_INPUT`
   - A plugin error, crash or broken connection during the call → `INVALID_INPUT`
   - A plugin process that cannot be started or does not complete its handshake → `AUTHORITY_UNAVAILABLE`
-- During preview only the instance's `preview` artifact runs. If no preview artifact is configured, the step fails with `AUTHORITY_UNAVAILABLE`.
+- During preview the instance's plugin is called with `mode: "preview"` and must answer without effects outside its process. If its manifest does not declare `supportsPreview`, the plugin is not called and the step fails with `AUTHORITY_UNAVAILABLE`.
+- The plugin process of an instance revision is long-lived and shared by all runs and previews that use it, one call at a time; see [Plugins](plugins.md#1-runtime-model).
 - Plugins whose configuration policy declares a secret, or user-scoped configuration, cannot be used: `AUTHORITY_UNAVAILABLE`.
 
 The manifest, artifact pinning and gRPC invocation are described in [Plugins](plugins.md).
@@ -359,7 +360,7 @@ All failures use the platform error codes. Messages are internal and never part 
 | --- | --- |
 | `INVALID_INPUT` | `schemaVersion` ≠ 1; unknown or duplicate JSON properties; unknown step `kind` or mismatched step configuration; duplicate or empty step `id`; invalid output name; unknown field reference or field outside lexical scope; malformed predicate operands (for example `not` with ≠ 1 arg, `in` without `values`, `contains` on a non-string, ordered comparison on a non-numeric field); literal not matching the schema; incompatible assignment or undeclared conversion; required output unmapped; mapping to an undeclared output; extraction input not a string; capture group missing or ambiguous; invalid capture conversion; unparseable regex; installed step without `instanceId` or with revision ≤ 0; installed `outputSchema` differing from the manifest's `resultSchema`; runtime: required value absent, conversion failure, plugin failure. |
 | `RESOURCE_LIMIT` | More than 128 steps; branch depth > 32; JSON/schema/value/predicate nesting > 32; collection > 1000; predicate args/values > 1024; encoded input > 1 MiB; regex bounds; CEL cost or memory; aggregate run input/intermediate > 1 MiB; result > 256 KiB; accumulated built-in compute > 1 s; installed call > 30 s; plugin reports `resource-limit`. |
-| `AUTHORITY_UNAVAILABLE` | Hidden selector, branch or extraction input; instance disabled, missing artifact root, or preview artifact unavailable; plugin uses secret or user-scoped configuration; plugin reports `capability-unavailable`; execution principal no longer resolvable or authorized. |
+| `AUTHORITY_UNAVAILABLE` | Hidden selector, branch or extraction input; instance disabled, missing artifact root, or preview requested for a plugin that does not support preview; plugin uses secret or user-scoped configuration; plugin reports `capability-unavailable`; execution principal no longer resolvable or authorized. |
 | `INCOMPATIBLE_VERSION` | Plugin manifest schema or SDK version not supported (see [Plugins](plugins.md)). |
 | `REVISION_CONFLICT` | `expectedRevision` does not match; pinned instance revision is no longer current; authority or workflow changed between preparation and commit. |
 
@@ -420,7 +421,6 @@ Input fields:
 | `enabled` | Required. |
 | `executionPrincipalId` | Required. The principal must currently resolve. |
 | `main` | `{"manifestPath", "pin": {"pluginId", "version", "capabilityId", "digest"}}`. `digest` is lowercase SHA-256 hex. |
-| `preview` | Optional, same structure. Must declare `pure` and `purePreview`, and match `main` in plugin, version, capability, input/result/configuration schemas and configuration policy. |
 | `configuration` | A typed value valid against the manifest's `configurationSchema`. |
 
 Before the instance is stored:
@@ -467,7 +467,7 @@ Rules:
 - Targets are matched against current assignments.
 - The workflow scope is applied for the given network or unit.
 - Fields the editor may not read are **hidden**, so a definition that depends on them fails with `AUTHORITY_UNAVAILABLE`.
-- Installed steps run only the instance's preview artifact. Each call checks both the execution principal and the editor.
+- Installed steps call the instance's plugin in preview mode, and only if its manifest declares `supportsPreview`. Each call checks both the execution principal and the editor.
 - After evaluation, the workflow revision and source authority are checked again. If the workflow changed, the request fails with `REVISION_CONFLICT`.
 - The response is the [result shape](#result-shape).
 

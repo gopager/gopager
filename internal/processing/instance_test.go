@@ -43,18 +43,14 @@ func TestInstanceInspectionPinsConfigurationAndDedicatedPreviewWithoutExecution(
 	if err := inspector.InspectInstance(t.Context(), instance); err != nil {
 		t.Fatalf("inspection ran trapping initialization or rejected valid main: %v", err)
 	}
-	instance.Preview = &ProvisionedArtifact{ManifestPath: "preview.json", Pin: pin}
-	if err := inspector.InspectInstance(t.Context(), instance); err != nil {
-		t.Fatalf("independently loaded bit-identical preview rejected: %v", err)
-	}
 	if _, err := os.Stat(filepath.Join(directory, "started.marker")); !os.IsNotExist(err) {
 		t.Fatalf("instance inspection started the plugin: %v", err)
 	}
-	instance.Preview.Pin.Digest = strings.Repeat("a", 64)
-	if err := inspector.InspectInstance(t.Context(), instance); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
-		t.Fatalf("configured invalid preview silently omitted: %v", err)
+	wrongDigest := instance
+	wrongDigest.Main.Pin.Digest = strings.Repeat("a", 64)
+	if err := inspector.InspectInstance(t.Context(), wrongDigest); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
+		t.Fatalf("mismatching artifact digest accepted: %v", err)
 	}
-	instance.Preview = nil
 	secret := true
 	manifest.ConfigurationPolicy.Secret = &secret
 	writeManifest(t, root, manifest)

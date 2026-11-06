@@ -229,7 +229,7 @@ Log lines in use: `platform started`, `platform readiness check failed`, `platfo
 
 ## Plugin Directory
 
-`--processing-artifact-root` (or `GOPAGER_PROCESSING_ARTIFACT_ROOT`) names a local directory of plugin manifests and executables. All file access is confined to this directory. Executables must be regular files with an executable bit, at most 256 MiB, and match the SHA-256 digest in their manifest. Plugin processes are started on demand and receive only `PATH`, `HOME`, `LANG`, `LC_ALL`, `TZ` and `TMPDIR` from GoPager's environment — never `GOPAGER_DATABASE_URL`.
+`--processing-artifact-root` (or `GOPAGER_PROCESSING_ARTIFACT_ROOT`) names a local directory of plugin manifests and executables. All file access is confined to this directory. Executables must be regular files with an executable bit, at most 256 MiB, and match the SHA-256 digest in their manifest. Plugin processes are started on demand (verified against the pinned digest at every start), reused by later runs of the same instance revision, stopped after 5 minutes without calls, and receive only `PATH`, `HOME`, `LANG`, `LC_ALL`, `TZ` and `TMPDIR` from GoPager's environment — never `GOPAGER_DATABASE_URL`.
 
 Without a plugin directory GoPager runs normally; creating, inspecting or executing plugin instances fails with `AUTHORITY_UNAVAILABLE`. Configure the same directory contents on every `api` and `worker` process. Manifest format and installation: [Plugins](plugins.md); configuring instances: [Workflows](workflows.md).
 

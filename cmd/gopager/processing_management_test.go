@@ -115,7 +115,7 @@ func pluginFixtureRoot(t *testing.T) string {
 	if err := os.WriteFile(filepath.Join(directory, "plugin"), pluginfixture.Binary(t, "command"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"instance-manifest.json", "instance-redaction-manifest.json", "instance-preview-manifest.json"} {
+	for _, path := range []string{"instance-manifest.json", "instance-redaction-manifest.json"} {
 		raw, err := os.ReadFile("../../internal/processing/testdata/" + path)
 		if err != nil {
 			t.Fatal(err)
@@ -153,7 +153,7 @@ func TestProcessingInstanceArtifactFixturesLoadFromConfiguredRoot(t *testing.T) 
 		}
 	}()
 	pin := processing.ArtifactPin{PluginID: "test-command", Version: "1", CapabilityID: "test", Digest: fixtureDigest(t)}
-	for _, path := range []string{"instance-manifest.json", "instance-redaction-manifest.json", "instance-preview-manifest.json"} {
+	for _, path := range []string{"instance-manifest.json", "instance-redaction-manifest.json"} {
 		artifact, err := host.LoadInstalled(t.Context(), root, path, pin)
 		if err != nil {
 			t.Fatalf("load fixture %q: %v", path, err)
@@ -690,7 +690,9 @@ func TestProcessingSyntheticPreviewUsesProductionNetworkOwner(t *testing.T) {
 	}
 }
 
-func TestProcessingSyntheticPreviewUsesOnlyDedicatedInstalledPreview(t *testing.T) {
+// TestProcessingSyntheticPreviewUsesOnlyPreviewSupportingInstalledPlugins checks that an editor preview
+// reaches an installed plugin in preview mode only when its manifest declares supportsPreview.
+func TestProcessingSyntheticPreviewUsesOnlyPreviewSupportingInstalledPlugins(t *testing.T) {
 	store := newManagementStoreWithFields(t,
 		[]string{"unit", "address", "payload", "gateway", "derived"})
 	identityRepository, err := identitystore.New(store)
@@ -709,7 +711,7 @@ func TestProcessingSyntheticPreviewUsesOnlyDedicatedInstalledPreview(t *testing.
 		identity: identityRepository,
 		units:    unitRepository,
 	}
-	artifactRoot, mainArtifact, dedicatedPreview := installedPreviewArtifacts(t)
+	artifactRoot, supportingArtifact, unsupportingArtifact := installedPreviewArtifacts(t)
 	runtime, err := composeProcessingAPIRuntime(t.Context(), store, networks, artifactRoot, networks)
 	if err != nil {
 		t.Fatal(err)
@@ -753,16 +755,16 @@ func TestProcessingSyntheticPreviewUsesOnlyDedicatedInstalledPreview(t *testing.
 	}
 	if err := inspector.InspectInstance(t.Context(), processing.InstanceConfiguration{
 		ID: uuid.New(), Revision: 1, Enabled: true, ExecutionPrincipalID: operatorID,
-		Main: mainArtifact, Preview: &dedicatedPreview, Configuration: configuration,
+		Main: supportingArtifact, Configuration: configuration,
 		CreatedAt: time.Now().UTC().Truncate(time.Microsecond), CreatedBy: operatorID,
 	}); err != nil {
-		t.Fatalf("dedicated preview fixture inspection failed: %v", err)
+		t.Fatalf("preview fixture inspection failed: %v", err)
 	}
-	createInstance := func(preview *processing.ProvisionedArtifact) uuid.UUID {
+	createInstance := func(artifact processing.ProvisionedArtifact) uuid.UUID {
 		t.Helper()
 		body, err := json.Marshal(instanceMutation{SchemaVersion: 1, CommandID: uuid.New(),
 			InstanceInput: processingmanagement.InstanceInput{Enabled: &enabled,
-				ExecutionPrincipalID: operatorID, Main: mainArtifact, Preview: preview,
+				ExecutionPrincipalID: operatorID, Main: artifact,
 				Configuration: configuration}})
 		if err != nil {
 			t.Fatal(err)
@@ -775,8 +777,8 @@ func TestProcessingSyntheticPreviewUsesOnlyDedicatedInstalledPreview(t *testing.
 		}
 		return id
 	}
-	instanceID := createInstance(&dedicatedPreview)
-	withoutPreviewID := createInstance(nil)
+	instanceID := createInstance(supportingArtifact)
+	withoutPreviewID := createInstance(unsupportingArtifact)
 	workflowResponse := managementRequest(t, client, origin, http.MethodPost, "/api/v1/workflows",
 		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Installed Preview",`+
 			`"scope":{"kind":"all"},"enabled":true}`,
@@ -849,24 +851,25 @@ func TestProcessingSyntheticPreviewUsesOnlyDedicatedInstalledPreview(t *testing.
 		login.CSRFToken, "", http.StatusOK)
 	var evaluation processing.Evaluation
 	if err := json.Unmarshal(response.Data, &evaluation); err != nil || !evaluation.Selected {
-		t.Fatalf("dedicated installed preview failed: %+v, %s, error=%v", evaluation, response.Data, err)
+		t.Fatalf("installed preview failed: %+v, %s, error=%v", evaluation, response.Data, err)
 	}
 	if evaluation.Fields["text"].Value == nil ||
 		string(evaluation.Fields["text"].Value.Value) != `"PREVIEW:installed preview"` {
-		t.Fatalf("dedicated preview did not use the separate guest: %s", response.Data)
+		t.Fatalf("preview mode did not reach the plugin: %s", response.Data)
 	}
 	missing := managementRequest(t, client, origin, http.MethodPost,
 		"/api/v1/workflows/"+workflowID.String()+"/preview", bodyFor(withoutPreviewID),
 		login.CSRFToken, "", http.StatusServiceUnavailable)
 	if missing.Code != string(platform.CodeAuthorityUnavailable) {
-		t.Fatalf("missing dedicated preview returned %q, want authority unavailable", missing.Code)
+		t.Fatalf("plugin without preview support returned %q, want authority unavailable", missing.Code)
 	}
 	if after := processingPreviewSideEffects(t, store); before != after {
 		t.Fatalf("installed previews wrote durable results/candidates/events: before=%v after=%v", before, after)
 	}
 }
 
-// installedPreviewArtifacts supplies distinct main/preview plugins with matching echo schemas.
+// installedPreviewArtifacts provisions the command plugin twice: once whose manifest declares
+// supportsPreview and once whose manifest does not.
 func installedPreviewArtifacts(t *testing.T) (string, processing.ProvisionedArtifact, processing.ProvisionedArtifact) {
 	t.Helper()
 	root := t.TempDir()
@@ -879,22 +882,27 @@ func installedPreviewArtifacts(t *testing.T) (string, processing.ProvisionedArti
 		t.Fatal(err)
 	}
 	manifest.ResultSchema = map[string]processing.FieldSchema{"text": {Kind: processing.StringValue}}
+	binary := pluginfixture.Binary(t, "command")
+	digest := sha256.Sum256(binary)
+	if err := os.WriteFile(filepath.Join(root, "plugin"), binary, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	artifacts := make([]processing.ProvisionedArtifact, 2)
-	for index, name := range []string{"command", "preview"} {
-		binary := pluginfixture.Binary(t, name)
-		digest := sha256.Sum256(binary)
-		manifest.Artifact = processing.ArtifactReference{Path: name, Digest: hex.EncodeToString(digest[:])}
+	for index, supports := range []bool{true, false} {
+		manifest.Artifact = processing.ArtifactReference{Path: "plugin", Digest: hex.EncodeToString(digest[:])}
+		manifest.SupportsPreview = supports
 		encoded, err := json.Marshal(manifest)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(root, name), binary, 0o755); err != nil {
+		name := "supports-preview.json"
+		if !supports {
+			name = "no-preview.json"
+		}
+		if err := os.WriteFile(filepath.Join(root, name), encoded, 0600); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(root, name+".json"), encoded, 0600); err != nil {
-			t.Fatal(err)
-		}
-		artifacts[index] = processing.ProvisionedArtifact{ManifestPath: name + ".json",
+		artifacts[index] = processing.ProvisionedArtifact{ManifestPath: name,
 			Pin: processing.ArtifactPin{PluginID: manifest.PluginID, Version: manifest.Version,
 				CapabilityID: manifest.CapabilityID, Digest: manifest.Artifact.Digest}}
 	}
