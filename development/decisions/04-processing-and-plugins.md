@@ -202,7 +202,7 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 
 - **Status:** accepted (amended by D-135: Operator configuration)
 - **Date:** 2026-11-02
-- **Decision:** Scheduling values prepared as injectable configuration; Operator exposure added under D-135. Prepare validated injected scheduling configuration, retaining D-83/D-84's selected initial defaults. Do not scatter fixed scheduling literals through runner mechanics. Operator flags/environment/UI and a final centrally fixed policy remain later choices, not implied by this instruction. [C-08](../contracts/c-08-events-jobs.md#processing-dispatcher-bounds) owns this scheduling boundary; executable configuration lives in [the dispatcher](../../internal/processing/worker/dispatcher.go).
+- **Decision:** Scheduling values prepared as injectable configuration; Operator exposure added under D-135. Prepare validated injected scheduling configuration, retaining D-83/D-84's selected initial defaults. Do not scatter fixed scheduling literals through runner mechanics. Operator flags/environment/UI and a final centrally fixed policy remain later choices, not implied by this instruction. [C-08](../../docs/workflows.md#worker-dispatch) owns this scheduling boundary; executable configuration lives in [the dispatcher](../../internal/processing/worker/dispatcher.go).
 - **Consequences:** Additive to the approved in-progress dispatcher/root/test scope. No AP baseline, earlier platform API, lease/renewal/retry or external Delivery policy change. This does not automatically reopen existing fixed contractual resource/security limits.
 - **Owner detail:** This record is the only current definition
 

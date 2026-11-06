@@ -50,7 +50,7 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Status:** accepted
 - **Date:** 2026-11-04
 - **Decision:** Approved standalone Unit-template ownership direction; C-06 actions and implementation remain unbound. The user responded `standalone`. A Unit template is therefore an independent master-data resource, not an Organization-owned resource. This permits a template to carry an optional Organization reference without making that Organization the template's owner. The Organization-scoped and read-only alternatives were not selected.
-- **Consequences:** [C-04](../contracts/c-04-master-data.md#ap-08-unit-template-direction) owns the snapshot behavior. [AP-08 T060](../work-packages/ap-08-master-data-correction-after-intake.md) owns exact C-06 template actions and implementation; [AP-15](../work-packages/ap-15-frontend.md) consumes the completed API.
+- **Consequences:** [C-04](../../docs/http-api.md#master-data-semantics) owns the snapshot behavior. [AP-08 T060](../work-packages/ap-08-master-data-correction-after-intake.md) owns exact C-06 template actions and implementation; [AP-15](../work-packages/ap-15-frontend.md) consumes the completed API.
 - **Owner detail:** This record is the only current definition
 
 <a id="d-127"></a>
@@ -59,5 +59,5 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Status:** accepted
 - **Date:** 2026-11-04
 - **Decision:** Selected AP-08 explicit target-specific suppression; no broad selector rules. AP-08 persists one Suppression per immutable `(transmissionId, targetPosition)`. This makes each exclusion, authorization context, audit record, and lift apply only to the manager-selected original target. Broad selectors that silently suppress future or multiple targets are not part of this slice.
-- **Consequences:** [C-05 historical-correction 1.0](../contracts/c-05-matching-correction.md#ap-08-historical-correction-and-suppression) owns the exact data and revision contract; [C-06](../contracts/c-06-identity-authorization.md#ap-08-master-data-authorization) owns authorization. D-10's confirmed no-deletion/no-implicit-Payload-masking boundary, C-05 initial target admission, original evidence, Message membership, and Delivery non-trigger behavior remain unchanged.
+- **Consequences:** [C-05 historical-correction 1.0](../../docs/architecture.md#historical-correction-worker-role) owns the exact data and revision contract; [C-06](../../docs/http-api.md#authorization) owns authorization. D-10's confirmed no-deletion/no-implicit-Payload-masking boundary, C-05 initial target admission, original evidence, Message membership, and Delivery non-trigger behavior remain unchanged.
 - **Owner detail:** This record is the only current definition

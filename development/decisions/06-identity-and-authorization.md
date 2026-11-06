@@ -50,7 +50,7 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Status:** accepted
 - **Date:** 2026-10-26
 - **Decision:** Approved NFC/Unicode-casefold equality for local usernames, preserving display spelling. Preserve the submitted display spelling and use one NFC/full-default-Unicode-casefold/NFC comparison key for account uniqueness, login, Recovery and account-keyed throttling. Accents remain significant; canonically equivalent and casefold-equivalent usernames identify the same account. Passwords retain their existing no-normalization rule.
-- **Owner detail:** [C-06](../contracts/c-06-identity-authorization.md#local-identity-and-authorization-handover-candidate)
+- **Owner detail:** [C-06](../../docs/http-api.md#authorization)
 
 <a id="d-55"></a>
 ## D-55 Detail Field Authorization Decision
@@ -58,15 +58,15 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Status:** accepted
 - **Date:** 2026-10-26
 - **Decision:** Approved read-field rights plus a separate detail-action gate. The user selected field authorization through `message.read`, with a separate `message.detail` action gate on the same concrete data context. The alternative required duplicate field declarations on both actions. The selected option separates data visibility from entry into the additional view without widening existing readable scope.
-- **Owner detail:** [C-06](../contracts/c-06-identity-authorization.md#detail-field-authorization-addendum)
+- **Owner detail:** [C-06](../../docs/http-api.md#authorization)
 
 <a id="d-56"></a>
 ## D-56 Identity Fact Append Decision
 
 - **Status:** accepted
 - **Date:** 2026-10-26
-- **Decision:** Approved minimal identity-fact freeze and append integration. Freeze the proposed [C-08 identity-facts 1.0 subset](../contracts/c-08-events-jobs.md#ap-07-identity-fact-append-candidate) and implement its minimal append integration now. The alternative was to hold this integration, which prevents the required identity-core handover. Only the existing three identity/configuration fact types and nonsecret context are included.
-- **Owner detail:** [C-08](../contracts/c-08-events-jobs.md#ap-07-identity-fact-append-candidate)
+- **Decision:** Approved minimal identity-fact freeze and append integration. Freeze the proposed [C-08 identity-facts 1.0 subset](../../docs/architecture.md#domain-events-and-outbox) and implement its minimal append integration now. The alternative was to hold this integration, which prevents the required identity-core handover. Only the existing three identity/configuration fact types and nonsecret context are included.
+- **Owner detail:** [C-08](../../docs/architecture.md#domain-events-and-outbox)
 
 <a id="d-57"></a>
 ## D-57 HTTP Credential Selection Decision
@@ -74,7 +74,7 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Status:** accepted
 - **Date:** 2026-10-26
 - **Decision:** Approved explicit Authorization bearer precedence without Session/Guest fallback. Use the explicitly supplied Authorization credential without fallback to Session or Guest if that credential is invalid. The alternative rejected every mixed request. The chosen rule supports deliberate API-key calls from an already signed-in browser without silently escalating a failed key request to Session authority.
-- **Owner detail:** [C-06](../contracts/c-06-identity-authorization.md#http-credential-selection-addendum)
+- **Owner detail:** [C-06](../../docs/http-api.md#authentication)
 
 <a id="d-58"></a>
 ## D-58 Ordinary Login Decision
@@ -82,7 +82,7 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Status:** accepted
 - **Date:** 2026-10-27
 - **Decision:** Approved ordinary login without Command IDs or login receipts. Implement ordinary login without a Command ID or login receipts. Each successful login may create a new Session. The alternative was to add a client Command ID and safe retry-status lookup, which the user rejected as unnecessary complexity. Keep the existing password, Session, throttle, Origin/CSRF and application-wide HTTP rules.
-- **Owner detail:** [C-06](../contracts/c-06-identity-authorization.md#ordinary-login-addendum)
+- **Owner detail:** [C-06](../../docs/http-api.md#sessions-browser-login)
 
 <a id="d-59"></a>
 ## D-59 Identity Prerequisite Scope Decision
@@ -106,7 +106,7 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 
 - **Status:** accepted
 - **Date:** 2026-11-01
-- **Decision:** Field visibility is unscoped (global per Principal/group), separate from scoped data eligibility. Separate scope-based data eligibility from unscoped effective field-group visibility. The normative product clarification is owned by [C-06](../contracts/c-06-identity-authorization.md#unscoped-field-visibility-product-clarification). Retaining conditional per-Unit field visibility is rejected. D-68 fixed product-defined groups remain applicable; no administrator-defined arbitrary groups are introduced.
+- **Decision:** Field visibility is unscoped (global per Principal/group), separate from scoped data eligibility. Separate scope-based data eligibility from unscoped effective field-group visibility. The normative product clarification is owned by [C-06](../../docs/http-api.md#authorization). Retaining conditional per-Unit field visibility is rejected. D-68 fixed product-defined groups remain applicable; no administrator-defined arbitrary groups are introduced.
 - **Owner detail:** This record is the only current definition
 
 <a id="d-70"></a>

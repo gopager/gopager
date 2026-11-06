@@ -49,7 +49,7 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 
 - **Status:** accepted
 - **Date:** 2026-10-25
-- **Decision:** Approved AP-04 FLEX type/address clarification of D-18; preserves D-29's logical Message model. The user selected `short_numeric=numeric` rather than deferral; `source_code_identity=distinct_signal` rather than tone-only coalescing or deferral; and explicitly approved decimal-address CAPCODE clarification. These decisions preserve distinguishable signal information and avoid treating routing notation as an integer address. Behavior and exact mappings belong solely to [C-02](../contracts/c-02-protocol-payload.md#ap-04-flex-clarification), terminology to the [glossary](../glossary.md), and examples to [F-42..F-44](../contracts/reference-cases.md#ap-04-protocol-cases).
+- **Decision:** Approved AP-04 FLEX type/address clarification of D-18; preserves D-29's logical Message model. The user selected `short_numeric=numeric` rather than deferral; `source_code_identity=distinct_signal` rather than tone-only coalescing or deferral; and explicitly approved decimal-address CAPCODE clarification. These decisions preserve distinguishable signal information and avoid treating routing notation as an integer address. Behavior and exact mappings belong solely to [C-02](../../docs/http-api.md#protocols-targets-and-payload-identity), terminology to the [glossary](../glossary.md), and examples to [F-42..F-44](../contracts/reference-cases.md#ap-04-protocol-cases).
 - **Owner detail:** [C-02](../contracts/c-02-protocol-payload.md)
 
 <a id="d-40"></a>
@@ -138,7 +138,7 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Date:** 2026-10-26
 - **Decision:** Approved Transmission ID plus immutable zero-based target position instead of a separate target UUID. The user selected the Transmission reference plus immutable zero-based target position. This distinguishes even identical Address/Function entries without introducing a separate entity. C-05 owns the concrete reference and targetless-support semantics; shared conventions route to that definition.
 - **Consequences:** AP-06 T023/T024 and AP-08 T029 use this reference; C-08 facts and C-11 target context consume it. Planned F-52 covers duplicates, bounds, cross-Transmission ownership and targetless support.
-- **Owner detail:** [C-05](../contracts/c-05-matching-correction.md#original-target-reference)
+- **Owner detail:** [C-05](../../docs/architecture.md#address-rule-semantics)
 
 <a id="d-104"></a>
 ## D-104 AP-07 Gateway HTTP Submission boundary decision

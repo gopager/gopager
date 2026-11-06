@@ -63,7 +63,7 @@ Persona definitions are in the [glossary](glossary.md#personas-and-roles). Their
 
 | ID | User goal / story | Observable acceptance outcome | Provenance |
 | --- | --- | --- | --- |
-| REQ-031 | As an operator, I obtain traceably correct Unit matches for Transmission Addresses. | Original reports remain traceable, matches use the appropriate original time, and repeated reports do not create duplicate Unit appearances. Storage/derivation is defined by [C-05](contracts/c-05-matching-correction.md#target-resolution-message-contributions-and-ingest-storage). | U/B; AP-02 D-29 |
+| REQ-031 | As an operator, I obtain traceably correct Unit matches for Transmission Addresses. | Original reports remain traceable, matches use the appropriate original time, and repeated reports do not create duplicate Unit appearances. Storage/derivation is defined by [C-05](../docs/architecture.md#address-rule-semantics). | U/B; AP-02 D-29 |
 | REQ-032 | As a manager, I combine broad and specific assignment rules. | The most specific unambiguous match wins; equally specific or partially overlapping simultaneously valid rules are rejected with a conflict explanation. | U |
 | REQ-033 | As a manager, I limit technical Address-to-Unit assignments in time. | The same technical Address may belong to different Units sequentially; boundary times are unambiguous. Temporal validity concerns this assignment, not historical versions of colors, icons, or general master data. | U, narrowed |
 | REQ-034 | As an operator, historical assignments remain correct. | Changes to temporal rules correct the affected history without changing received originals or Message membership. [C-05](contracts/c-05-matching-correction.md) owns the rematching/storage algorithm. | U; AP-02 D-29 |

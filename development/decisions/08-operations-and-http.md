@@ -8,7 +8,7 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Status:** accepted
 - **Date:** 2026-10-26
 - **Decision:** Approved HTTP support for the entire application, including human authentication and sessions; extends D-45. Every GoPager application function, including browser/API routes, protected administrative routes, Gateway routes, human login, Recovery and Session use, must function over HTTP. GoPager does not require TLS termination, add an HTTP opt-in, or redirect HTTP to HTTPS. An Operator may terminate TLS at a reverse proxy; HTTP remains supported between that proxy and GoPager. Direct HTTP is also supported and carries no GoPager transport-security guarantee.
-- **Owner detail:** [C-12](../contracts/c-12-persistence-operations.md#application-http-transport), [C-06](../contracts/c-06-identity-authorization.md#http-transport-and-human-authentication)
+- **Owner detail:** [C-12](../../docs/http-api.md#basics), [C-06](../../docs/http-api.md#authentication)
 
 <a id="d-101"></a>
 ## D-101 Processing Artifact-root Configuration
