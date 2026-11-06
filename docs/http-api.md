@@ -58,13 +58,17 @@ selected from the request as follows:
    anonymous.
 3. **Neither** → anonymous. The request runs as the installation's guest account, which
    has no rights unless an administrator granted it some. If no guest account exists,
-   the result is `401 LOGIN_REQUIRED`.
+   the result is `401 LOGIN_REQUIRED`. Guests are read-only: they may view and filter, and
+   an anonymous request with any method except `GET`, `HEAD` and `OPTIONS` is
+   `401 LOGIN_REQUIRED` before the body is read, so a guest can never create or change
+   anything, whatever grants the guest account holds.
 
 On every authenticated route (master data, assignments, corrections, Gateway administration,
 Processing) a session or bearer credential is checked before the request body is read: an
 unknown, revoked, expired or inactive-account credential is `401 LOGIN_REQUIRED` without the
-body being consumed. Anonymous requests have no credential to check and proceed to the
-operation. This early check is advisory; the credential, the account state and the caller's
+body being consumed. Anonymous `GET`, `HEAD` and `OPTIONS` requests have no credential to check and proceed to the
+operation. Expiry is uniform: every service, login-adjacent path and the early check reject a
+session or key whose expiry has passed with `401 LOGIN_REQUIRED`. This early check is advisory; the credential, the account state and the caller's
 grants are re-read from the primary database in the same transaction as the operation.
 Revocations take effect on the next request.
 

@@ -209,7 +209,7 @@ Runtime check/apply semantics: [Operations](operations.md#database-migrations).
 - Persistence adapters in `internal/persistence/ent/*store` implement those interfaces. All Ent queries go through the guard privacy policy; adapters bind an access decision with `guard.Bind`. Privacy overrides (`privacy.DecisionContext`) are rejected by the borrowed driver.
 - `cmd/gopager` composes stores and services once (`composeCore`) and registers the routes of `internal/httpapi`; it contains no domain rules and no HTTP handlers.
 - `internal/httpapi` holds all HTTP adapters for `/api/v1` application routes (the auth handler stays in `internal/identity`). It imports domain packages only, never a store.
-- Services that run work under a caller's authority share `identity.WithAuthority`; a service that needs a different step order passes `identity.LockMutations` or `identity.RejectExpiredAuthentication` instead of copying the transaction wrapper.
+- Services that run work under a caller's authority share `identity.WithAuthority`; a service that serializes its writes passes `identity.LockMutations` instead of copying the transaction wrapper.
 - Configuration is parsed only in `cmd/gopager`; library packages never read flags or environment variables.
 - `internal/testutil/...` is imported only from tests.
 - Test-only inputs live in the owning package's `testdata/`; there is no global test tree.
