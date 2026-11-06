@@ -166,11 +166,7 @@ func (r *Resolver) Resolve(ctx context.Context, tx platform.TransactionContext, 
 		if err != nil {
 			return Authentication{}, err
 		}
-		if credential.Kind != proof.Kind || credential.RevokedAt != nil || credential.ConsumedAt != nil ||
-			(credential.ExpiresAt != nil && !now.Before(*credential.ExpiresAt)) ||
-			(proof.Kind == SessionProof && (credential.ExpiresAt == nil ||
-				!now.Before(credential.CreatedAt.Add(30*24*time.Hour)) ||
-				!now.Before(credential.LastUsedAt.Add(7*24*time.Hour)))) {
+		if !credentialUsable(proof.Kind, credential, now) {
 			return Authentication{}, ErrLoginRequired
 		}
 		account, err = r.repository.Account(ctx, tx, credential.AccountID)
@@ -178,10 +174,7 @@ func (r *Resolver) Resolve(ctx context.Context, tx platform.TransactionContext, 
 	if err != nil {
 		return Authentication{}, err
 	}
-	if account.State != "active" || account.ID == uuid.Nil ||
-		(proof.Kind == SessionProof && account.Kind != "human") ||
-		(proof.Kind != AnonymousProof && account.Kind == "guest") ||
-		(proof.Kind == AnonymousProof && account.Kind != "guest") {
+	if !accountUsable(proof.Kind, account) {
 		return Authentication{}, ErrLoginRequired
 	}
 	authority, err := r.accountAuthority(ctx, tx, account.ID, revision)
@@ -213,6 +206,64 @@ func (r *Resolver) Resolve(ctx context.Context, tx platform.TransactionContext, 
 		CredentialID: credential.ID, Kind: proof.Kind, CSRFToken: credential.CSRFToken,
 		ExpiresAt: credential.ExpiresAt,
 	}, nil
+}
+
+// credentialUsable reports whether a stored credential may authenticate a proof of the given kind at
+// now: matching kind, not revoked, consumed or expired, and, for sessions, within the absolute and
+// inactivity limits. Resolve and Authenticate share it so the early and the transactional check
+// cannot drift apart.
+func credentialUsable(kind ProofKind, credential CredentialRecord, now time.Time) bool {
+	if credential.Kind != kind || credential.RevokedAt != nil || credential.ConsumedAt != nil ||
+		(credential.ExpiresAt != nil && !now.Before(*credential.ExpiresAt)) {
+		return false
+	}
+	return kind != SessionProof || (credential.ExpiresAt != nil &&
+		now.Before(credential.CreatedAt.Add(30*24*time.Hour)) &&
+		now.Before(credential.LastUsedAt.Add(7*24*time.Hour)))
+}
+
+// accountUsable reports whether the account is active and of a kind the proof kind may act as.
+func accountUsable(kind ProofKind, account AccountRecord) bool {
+	return account.State == "active" && account.ID != uuid.Nil &&
+		(kind != SessionProof || account.Kind == "human") &&
+		(kind == AnonymousProof) == (account.Kind == "guest")
+}
+
+// Authenticate is the cheap early check that a session or access-key proof names an existing,
+// usable credential of an active account: a hash lookup of the credential and its account only.
+// It takes no access lock, resolves no grants and does not write the credential's last-used time.
+// The result is advisory: it lets the HTTP layer refuse an unauthenticated request before reading
+// its body, while the authoritative decision (current grants, restrictions, CSRF) is still taken
+// by Resolve inside the operation's own transaction, where it stays consistent with the data the
+// operation changes. An anonymous proof has no credential to check and yields ErrLoginRequired;
+// callers skip those (see Preauthenticator).
+func (r *Resolver) Authenticate(ctx context.Context, tx platform.TransactionContext, proof Proof) error {
+	if proof.Kind != SessionProof && proof.Kind != AccessKeyProof {
+		return ErrLoginRequired
+	}
+	hash, err := SecretHash(proof.Secret)
+	if err != nil {
+		return err
+	}
+	now, err := r.clock.Now(ctx, tx)
+	if err != nil {
+		return err
+	}
+	credential, err := r.repository.Credential(ctx, tx, hash)
+	if err != nil {
+		return err
+	}
+	if !credentialUsable(proof.Kind, credential, now) {
+		return ErrLoginRequired
+	}
+	account, err := r.repository.Account(ctx, tx, credential.AccountID)
+	if err != nil {
+		return err
+	}
+	if !accountUsable(proof.Kind, account) {
+		return ErrLoginRequired
+	}
+	return nil
 }
 
 // ResolvePrincipalAuthority returns current owner authority for a trusted internal

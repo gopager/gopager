@@ -25,7 +25,7 @@ type ProcessingRoutes struct {
 }
 
 type processingWorkflowAPI struct {
-	transport *identity.HTTPTransport
+	routeGuard
 	service   *processingmanagement.Service
 	reads     *processingmanagement.ProcessingReads
 	retries   *processingmanagement.RetryService
@@ -52,8 +52,8 @@ func decodeProcessingJSON(r *http.Request, input any) error {
 
 // RegisterProcessingRoutes adds the Workflow, Instance, candidate read, retry and preview routes
 // for every service present in routes.
-func RegisterProcessingRoutes(mux *http.ServeMux, transport *identity.HTTPTransport, routes ProcessingRoutes) {
-	api := processingWorkflowAPI{transport: transport, service: routes.Workflows,
+func RegisterProcessingRoutes(mux *http.ServeMux, transport *identity.HTTPTransport, authenticator Authenticator, routes ProcessingRoutes) {
+	api := processingWorkflowAPI{routeGuard: routeGuard{transport: transport, authenticator: authenticator}, service: routes.Workflows,
 		reads: routes.Reads, retries: routes.Retries, preview: routes.Preview, instances: routes.Instances}
 	if api.service != nil {
 		api.registerWorkflows(mux)
@@ -71,9 +71,4 @@ func RegisterProcessingRoutes(mux *http.ServeMux, transport *identity.HTTPTransp
 	if api.instances != nil {
 		api.registerInstances(mux)
 	}
-}
-
-// route shares the management proof selection and error mapping with the Processing routes.
-func (api processingWorkflowAPI) route(operation managementOperation, status int) http.HandlerFunc {
-	return (managementAPI{transport: api.transport}).route(operation, status)
 }

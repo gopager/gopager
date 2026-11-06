@@ -21,7 +21,10 @@ type authorityFixture struct {
 	exists       bool
 	touched      bool
 	scopeCalls   int
-	failure      error
+	grantCalls   int
+
+	credentialErr error
+	failure       error
 }
 
 func (f *authorityFixture) Now(context.Context, platform.TransactionContext) (time.Time, error) {
@@ -45,10 +48,11 @@ func (f *authorityFixture) Guest(context.Context, platform.TransactionContext) (
 }
 
 func (f *authorityFixture) Credential(context.Context, platform.TransactionContext, [32]byte) (CredentialRecord, error) {
-	return f.credential, nil
+	return f.credential, f.credentialErr
 }
 
 func (f *authorityFixture) Grants(context.Context, platform.TransactionContext, uuid.UUID) ([]authz.Grant, error) {
+	f.grantCalls++
 	return f.grants, nil
 }
 
