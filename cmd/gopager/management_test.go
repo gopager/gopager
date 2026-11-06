@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
-	"net/http/httputil"
-	"net/url"
 	"strings"
 	"testing"
 
@@ -174,250 +172,229 @@ func managementResultID(t *testing.T, result managementResponse) (uuid.UUID, str
 	return value.ID, value.Revision
 }
 
-func TestManagementHTTPAndTLSReverseProxyWithHTTPUpstream(t *testing.T) {
+// TestManagementHTTPAPI walks the management routes over plain HTTP. The TLS reverse proxy path
+// has one dedicated test, TestTLSReverseProxyServesLoginAndLogoutOverProductionWiring.
+func TestManagementHTTPAPI(t *testing.T) {
 	t.Parallel()
-	for _, secure := range []bool{false, true} {
-		name := "plain-http"
-		if secure {
-			name = "https-proxy-http-upstream"
+	store := newManagementStore(t)
+	agency := `"agencyId":"` + seedAgency(t, store).String() + `",`
+	backend := httptest.NewUnstartedServer(nil)
+	t.Cleanup(backend.Close)
+	origin := "http://" + backend.Listener.Addr().String()
+	network := managementNetworkFixture{id: uuid.New(), agency: uuid.New()}
+	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), mustComposeCore(t, store), network)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend.Config.Handler = handler
+	backend.Start()
+	client := backend.Client()
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.Jar = jar
+	login := managementRequest(t, client, origin, "POST", "/api/v1/auth/login",
+		`{"schemaVersion":1,"username":"operator","password":"initial-password"}`, "", "", http.StatusOK)
+	if login.CSRFToken == "" {
+		t.Fatal("login did not provide Session-bound CSRF")
+	}
+	managementRequest(t, client, origin, "POST", "/api/v1/unit-collections",
+		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Denied"}`, "", "", http.StatusForbidden)
+	collection := managementRequest(t, client, origin, "POST", "/api/v1/unit-collections",
+		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Stations"}`, login.CSRFToken, "", http.StatusCreated)
+	collectionID, _ := managementResultID(t, collection)
+	unitInput := `{"schemaVersion":1,"commandId":"` + uuid.NewString() + `",` + agency + `"name":"Station","collectionIds":["` + collectionID.String() + `"],"organizationId":null,"settings":{}}`
+	created := managementRequest(t, client, origin, "POST", "/api/v1/units", unitInput, login.CSRFToken, "", http.StatusCreated)
+	unitID, _ := managementResultID(t, created)
+	retry := managementRequest(t, client, origin, "POST", "/api/v1/units", unitInput, login.CSRFToken, "", http.StatusCreated)
+	if retryID, _ := managementResultID(t, retry); retryID != unitID {
+		t.Fatal("HTTP creation retry created a second Unit")
+	}
+	for _, membership := range []string{"", `,"collectionIds":null`} {
+		managementRequest(t, client, origin, "PUT", "/api/v1/units/"+unitID.String(),
+			`{"schemaVersion":1,"expectedRevision":"1",`+agency+`"name":"Silent clear","organizationId":null,"settings":{}`+membership+`}`, login.CSRFToken, "", http.StatusBadRequest)
+	}
+	managementRequest(t, client, origin, "PUT", "/api/v1/units/"+unitID.String(),
+		`{"schemaVersion":1,"expectedRevision":"1",`+agency+`"name":"Station renamed","collectionIds":["`+collectionID.String()+`"],"organizationId":null,"settings":{}}`, login.CSRFToken, "", http.StatusOK)
+	defaults := `{"color":{"mode":"value","value":"#AABBCC"},"icon":{"mode":"unset"},"functionMeanings":{"mode":"unset"}}`
+	organization := managementRequest(t, client, origin, "POST", "/api/v1/organizations",
+		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Radio Operations","defaults":`+defaults+`}`,
+		login.CSRFToken, "", http.StatusCreated)
+	organizationID, _ := managementResultID(t, organization)
+	templateSettings := `{"color":{"mode":"inherit"},"icon":{"mode":"inherit"},"functionMeanings":{"mode":"inherit"}}`
+	template := managementRequest(t, client, origin, "POST", "/api/v1/unit-templates",
+		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Radio","organizationId":"`+
+			organizationID.String()+`","settings":`+templateSettings+`}`, login.CSRFToken, "", http.StatusCreated)
+	templateID, _ := managementResultID(t, template)
+	copied := managementRequest(t, client, origin, "POST", "/api/v1/units/from-template",
+		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`",`+agency+`"templateId":"`+templateID.String()+
+			`","name":"Copied Radio","collectionIds":[]}`, login.CSRFToken, "", http.StatusCreated)
+	copiedID, _ := managementResultID(t, copied)
+	bulkSettings := `{"color":{"mode":"value","value":"#123456"},"icon":{"mode":"unset"},"functionMeanings":{"mode":"unset"}}`
+	bulkItems := `"operation":"update","items":[{"id":"` + copiedID.String() +
+		`","expectedRevision":"1","settings":` + bulkSettings + `}]}`
+	bulk := `{"schemaVersion":1,"commandId":"` + uuid.NewString() + `",` + bulkItems
+	bulkPreview := `{"schemaVersion":1,` + bulkItems
+	managementRequest(t, client, origin, "POST", "/api/v1/units/bulk/preview",
+		bulkPreview, "", "", http.StatusForbidden)
+	managementRequestWithoutOrigin(t, client, origin, "/api/v1/units/bulk/preview",
+		bulkPreview, login.CSRFToken, http.StatusForbidden)
+	preview := managementRequest(t, client, origin, "POST", "/api/v1/units/bulk/preview",
+		bulkPreview, login.CSRFToken, "", http.StatusOK)
+	var previewData struct {
+		Valid bool `json:"valid"`
+	}
+	if err := json.Unmarshal(preview.Data, &previewData); err != nil || !previewData.Valid {
+		t.Fatalf("bulk preview was invalid: %v", err)
+	}
+	managementRequest(t, client, origin, "POST", "/api/v1/units/bulk",
+		bulk, login.CSRFToken, "", http.StatusOK)
+	managementRequest(t, client, origin, "DELETE", "/api/v1/organizations/"+organizationID.String(),
+		`{"schemaVersion":1,"expectedRevision":"1"}`, login.CSRFToken, "", http.StatusOK)
+	managementRequest(t, client, origin, "GET", "/api/v1/unit-templates/"+templateID.String(),
+		"", "", "", http.StatusOK)
+	// Suppression/correction routes return only the safe version-1 error shape.
+	managementRequest(t, client, origin, "GET", "/api/v1/suppressions", "", "", "", http.StatusOK)
+	unknownTransmission := uuid.NewString()
+	missingTarget := managementRequest(t, client, origin, "POST", "/api/v1/suppressions",
+		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","transmissionId":"`+unknownTransmission+
+			`","targetPosition":0}`, login.CSRFToken, "", http.StatusNotFound)
+	if missingTarget.Code != "NOT_FOUND" || strings.Contains(string(missingTarget.Data), unknownTransmission) {
+		t.Fatalf("unknown suppression target was not a safe NOT_FOUND: %+v", missingTarget)
+	}
+	unknownField := managementRequest(t, client, origin, "POST", "/api/v1/suppressions",
+		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","transmissionId":"`+unknownTransmission+
+			`","targetPosition":0,"selector":"*"}`,
+		login.CSRFToken, "", http.StatusBadRequest)
+	if unknownField.Code != "INVALID_INPUT" {
+		t.Fatalf("broad suppression selector was not rejected: %+v", unknownField)
+	}
+	unknownCorrection := uuid.NewString()
+	for _, request := range []struct{ method, path, body, csrf string }{
+		{"GET", "/api/v1/assignment-corrections/" + unknownCorrection, "", ""},
+		{"POST", "/api/v1/assignment-corrections/" + unknownCorrection + "/retry",
+			`{"schemaVersion":1,"commandId":"` + uuid.NewString() + `"}`, login.CSRFToken},
+	} {
+		missing := managementRequest(t, client, origin, request.method, request.path, request.body,
+			request.csrf, "", http.StatusNotFound)
+		if missing.Code != "NOT_FOUND" || strings.Contains(string(missing.Data), unknownCorrection) {
+			t.Fatalf("%s %s was not a safe NOT_FOUND: %+v", request.method, request.path, missing)
 		}
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			store := newManagementStore(t)
-			agency := `"agencyId":"` + seedAgency(t, store).String() + `",`
-			backend := httptest.NewUnstartedServer(nil)
-			t.Cleanup(backend.Close)
-			origin := "http://" + backend.Listener.Addr().String()
-			var proxy *httptest.Server
-			if secure {
-				target, err := url.Parse(origin)
-				if err != nil {
-					t.Fatal(err)
-				}
-				proxy = httptest.NewUnstartedServer(httputil.NewSingleHostReverseProxy(target))
-				t.Cleanup(proxy.Close)
-				origin = "https://" + proxy.Listener.Addr().String()
-			}
-			network := managementNetworkFixture{id: uuid.New(), agency: uuid.New()}
-			handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), mustComposeCore(t, store), network)
-			if err != nil {
-				t.Fatal(err)
-			}
-			backend.Config.Handler = handler
-			backend.Start()
-			client := backend.Client()
-			if secure {
-				proxy.StartTLS()
-				client = proxy.Client()
-			}
-			jar, err := cookiejar.New(nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			client.Jar = jar
-			login := managementRequest(t, client, origin, "POST", "/api/v1/auth/login",
-				`{"schemaVersion":1,"username":"operator","password":"initial-password"}`, "", "", http.StatusOK)
-			if login.CSRFToken == "" {
-				t.Fatal("login did not provide Session-bound CSRF")
-			}
-			managementRequest(t, client, origin, "POST", "/api/v1/unit-collections",
-				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Denied"}`, "", "", http.StatusForbidden)
-			collection := managementRequest(t, client, origin, "POST", "/api/v1/unit-collections",
-				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Stations"}`, login.CSRFToken, "", http.StatusCreated)
-			collectionID, _ := managementResultID(t, collection)
-			unitInput := `{"schemaVersion":1,"commandId":"` + uuid.NewString() + `",` + agency + `"name":"Station","collectionIds":["` + collectionID.String() + `"],"organizationId":null,"settings":{}}`
-			created := managementRequest(t, client, origin, "POST", "/api/v1/units", unitInput, login.CSRFToken, "", http.StatusCreated)
-			unitID, _ := managementResultID(t, created)
-			retry := managementRequest(t, client, origin, "POST", "/api/v1/units", unitInput, login.CSRFToken, "", http.StatusCreated)
-			if retryID, _ := managementResultID(t, retry); retryID != unitID {
-				t.Fatal("HTTP creation retry created a second Unit")
-			}
-			for _, membership := range []string{"", `,"collectionIds":null`} {
-				managementRequest(t, client, origin, "PUT", "/api/v1/units/"+unitID.String(),
-					`{"schemaVersion":1,"expectedRevision":"1",`+agency+`"name":"Silent clear","organizationId":null,"settings":{}`+membership+`}`, login.CSRFToken, "", http.StatusBadRequest)
-			}
-			managementRequest(t, client, origin, "PUT", "/api/v1/units/"+unitID.String(),
-				`{"schemaVersion":1,"expectedRevision":"1",`+agency+`"name":"Station renamed","collectionIds":["`+collectionID.String()+`"],"organizationId":null,"settings":{}}`, login.CSRFToken, "", http.StatusOK)
-			defaults := `{"color":{"mode":"value","value":"#AABBCC"},"icon":{"mode":"unset"},"functionMeanings":{"mode":"unset"}}`
-			organization := managementRequest(t, client, origin, "POST", "/api/v1/organizations",
-				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Radio Operations","defaults":`+defaults+`}`,
-				login.CSRFToken, "", http.StatusCreated)
-			organizationID, _ := managementResultID(t, organization)
-			templateSettings := `{"color":{"mode":"inherit"},"icon":{"mode":"inherit"},"functionMeanings":{"mode":"inherit"}}`
-			template := managementRequest(t, client, origin, "POST", "/api/v1/unit-templates",
-				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Radio","organizationId":"`+
-					organizationID.String()+`","settings":`+templateSettings+`}`, login.CSRFToken, "", http.StatusCreated)
-			templateID, _ := managementResultID(t, template)
-			copied := managementRequest(t, client, origin, "POST", "/api/v1/units/from-template",
-				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`",`+agency+`"templateId":"`+templateID.String()+
-					`","name":"Copied Radio","collectionIds":[]}`, login.CSRFToken, "", http.StatusCreated)
-			copiedID, _ := managementResultID(t, copied)
-			bulkSettings := `{"color":{"mode":"value","value":"#123456"},"icon":{"mode":"unset"},"functionMeanings":{"mode":"unset"}}`
-			bulkItems := `"operation":"update","items":[{"id":"` + copiedID.String() +
-				`","expectedRevision":"1","settings":` + bulkSettings + `}]}`
-			bulk := `{"schemaVersion":1,"commandId":"` + uuid.NewString() + `",` + bulkItems
-			bulkPreview := `{"schemaVersion":1,` + bulkItems
-			managementRequest(t, client, origin, "POST", "/api/v1/units/bulk/preview",
-				bulkPreview, "", "", http.StatusForbidden)
-			managementRequestWithoutOrigin(t, client, origin, "/api/v1/units/bulk/preview",
-				bulkPreview, login.CSRFToken, http.StatusForbidden)
-			preview := managementRequest(t, client, origin, "POST", "/api/v1/units/bulk/preview",
-				bulkPreview, login.CSRFToken, "", http.StatusOK)
-			var previewData struct {
-				Valid bool `json:"valid"`
-			}
-			if err := json.Unmarshal(preview.Data, &previewData); err != nil || !previewData.Valid {
-				t.Fatalf("bulk preview was invalid: %v", err)
-			}
-			managementRequest(t, client, origin, "POST", "/api/v1/units/bulk",
-				bulk, login.CSRFToken, "", http.StatusOK)
-			managementRequest(t, client, origin, "DELETE", "/api/v1/organizations/"+organizationID.String(),
-				`{"schemaVersion":1,"expectedRevision":"1"}`, login.CSRFToken, "", http.StatusOK)
-			managementRequest(t, client, origin, "GET", "/api/v1/unit-templates/"+templateID.String(),
-				"", "", "", http.StatusOK)
-			// Suppression/correction routes return only the safe version-1 error shape.
-			managementRequest(t, client, origin, "GET", "/api/v1/suppressions", "", "", "", http.StatusOK)
-			unknownTransmission := uuid.NewString()
-			missingTarget := managementRequest(t, client, origin, "POST", "/api/v1/suppressions",
-				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","transmissionId":"`+unknownTransmission+
-					`","targetPosition":0}`, login.CSRFToken, "", http.StatusNotFound)
-			if missingTarget.Code != "NOT_FOUND" || strings.Contains(string(missingTarget.Data), unknownTransmission) {
-				t.Fatalf("unknown suppression target was not a safe NOT_FOUND: %+v", missingTarget)
-			}
-			unknownField := managementRequest(t, client, origin, "POST", "/api/v1/suppressions",
-				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","transmissionId":"`+unknownTransmission+
-					`","targetPosition":0,"selector":"*"}`,
-				login.CSRFToken, "", http.StatusBadRequest)
-			if unknownField.Code != "INVALID_INPUT" {
-				t.Fatalf("broad suppression selector was not rejected: %+v", unknownField)
-			}
-			unknownCorrection := uuid.NewString()
-			for _, request := range []struct{ method, path, body, csrf string }{
-				{"GET", "/api/v1/assignment-corrections/" + unknownCorrection, "", ""},
-				{"POST", "/api/v1/assignment-corrections/" + unknownCorrection + "/retry",
-					`{"schemaVersion":1,"commandId":"` + uuid.NewString() + `"}`, login.CSRFToken},
-			} {
-				missing := managementRequest(t, client, origin, request.method, request.path, request.body,
-					request.csrf, "", http.StatusNotFound)
-				if missing.Code != "NOT_FOUND" || strings.Contains(string(missing.Data), unknownCorrection) {
-					t.Fatalf("%s %s was not a safe NOT_FOUND: %+v", request.method, request.path, missing)
-				}
-			}
-			managementRequest(t, client, origin, "GET", "/api/v1/units/"+copiedID.String(),
-				"", "", "", http.StatusOK)
-			managementRequest(t, client, origin, "GET", "/api/v1/units?offset=0&limit=1", "", "", "", http.StatusOK)
-			managementRequest(t, client, origin, "GET", "/api/v1/units?networkId=ignored", "", "", "", http.StatusBadRequest)
-			managementRequest(t, client, origin, "GET", "/api/v1/units", "", "", "Bearer malformed", http.StatusUnauthorized)
-			ruleValues := `"networkId":"` + network.id.String() + `","unitId":"` + unitID.String() +
-				`","protocol":"pocsag","selector":{"from":10,"to":20,"mode":"function-bit","functions":[1,3]},"enabled":true`
-			managementRequest(t, client, origin, "POST", "/api/v1/address-rules/preview", `{"schemaVersion":1,`+ruleValues+`}`, "", "", http.StatusForbidden)
-			managementRequestWithoutOrigin(t, client, origin, "/api/v1/address-rules/preview",
-				`{"schemaVersion":1,`+ruleValues+`}`, login.CSRFToken, http.StatusForbidden)
-			managementRequest(t, client, origin, "POST", "/api/v1/address-rules/preview", `{"schemaVersion":1,`+ruleValues+`}`, login.CSRFToken, "", http.StatusOK)
-			rule := managementRequest(t, client, origin, "POST", "/api/v1/address-rules",
-				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`",`+ruleValues+`}`, login.CSRFToken, "", http.StatusCreated)
-			ruleID, _ := managementResultID(t, rule)
-			managementRequest(t, client, origin, "GET", "/api/v1/address-rules/"+ruleID.String(), "", "", "", http.StatusOK)
-			managementRequest(t, client, origin, "GET", "/api/v1/address-rules?limit=1", "", "", "", http.StatusOK)
-			managementRequest(t, client, origin, "PUT", "/api/v1/address-rules/"+ruleID.String(),
-				`{"schemaVersion":1,"expectedRevision":"1",`+ruleValues+`}`, login.CSRFToken, "", http.StatusOK)
-			managementRequest(t, client, origin, "DELETE", "/api/v1/address-rules/"+ruleID.String(),
-				`{"schemaVersion":1,"expectedRevision":"1"}`, login.CSRFToken, "", http.StatusConflict)
-			deleted := managementRequest(t, client, origin, "DELETE", "/api/v1/address-rules/"+ruleID.String(),
-				`{"schemaVersion":1,"expectedRevision":"2"}`, login.CSRFToken, "", http.StatusAccepted)
-			if !strings.Contains(string(deleted.Data), `"status":"pending"`) {
-				t.Fatal("rule deletion falsely claimed historical completion")
-			}
-			managementRequest(t, client, origin, "PUT", "/api/v1/unit-collections/"+collectionID.String(),
-				`{"schemaVersion":1,"expectedRevision":"1","name":"Stations renamed"}`, login.CSRFToken, "", http.StatusOK)
-			managementRequest(t, client, origin, "GET", "/api/v1/unit-collections/"+collectionID.String(), "", "", "", http.StatusOK)
-			managementRequest(t, client, origin, "GET", "/api/v1/unit-collections", "", "", "", http.StatusOK)
-			managementRequest(t, client, origin, "DELETE", "/api/v1/unit-collections/"+collectionID.String(),
-				`{"schemaVersion":1,"expectedRevision":"2"}`, login.CSRFToken, "", http.StatusOK)
-			managementRequest(t, client, origin, "DELETE", "/api/v1/units/"+unitID.String(),
-				`{"schemaVersion":1,"expectedRevision":"3"}`, login.CSRFToken, "", http.StatusAccepted)
-			if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-				executor, err := store.Resolve(tx)
-				if err != nil {
-					return err
-				}
-				if _, err := executor.ExecContext(tx.Context(), `UPDATE identity_grants
-					SET actions=actions-'unit-template.read'-'organization.create'
-					WHERE subject_kind='principal'`); err != nil {
-					return err
-				}
-				_, err = executor.ExecContext(tx.Context(), `UPDATE identity_control
-					SET access_revision=access_revision+1 WHERE id=1`)
-				return err
-			}); err != nil {
-				t.Fatal(err)
-			}
-			var unitsBefore int
-			if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-				executor, err := store.Resolve(tx)
-				if err != nil {
-					return err
-				}
-				return executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM units`).Scan(&unitsBefore)
-			}); err != nil {
-				t.Fatal(err)
-			}
-			deniedTemplateCopy := managementRequest(t, client, origin, "POST", "/api/v1/units/from-template",
-				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`",`+agency+`"templateId":"`+templateID.String()+
-					`","name":"Denied Copy","collectionIds":[]}`, login.CSRFToken, "", http.StatusForbidden)
-			if deniedTemplateCopy.Code != "FORBIDDEN" || strings.Contains(string(deniedTemplateCopy.Data), templateID.String()) ||
-				strings.Contains(string(deniedTemplateCopy.Data), organizationID.String()) {
-				t.Fatalf("template denial exposed cross-scope data: %+v", deniedTemplateCopy)
-			}
-			var unitsAfter int
-			if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-				executor, err := store.Resolve(tx)
-				if err != nil {
-					return err
-				}
-				return executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM units`).Scan(&unitsAfter)
-			}); err != nil {
-				t.Fatal(err)
-			}
-			if unitsAfter != unitsBefore {
-				t.Fatalf("denied template copy created a Unit: before=%d after=%d", unitsBefore, unitsAfter)
-			}
-			var organizationsBefore int
-			if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-				executor, err := store.Resolve(tx)
-				if err != nil {
-					return err
-				}
-				return executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM organizations`).
-					Scan(&organizationsBefore)
-			}); err != nil {
-				t.Fatal(err)
-			}
-			inlineOrganization := `{"name":"Denied Inline","defaults":{"color":{"mode":"unset"},` +
-				`"icon":{"mode":"unset"},"functionMeanings":{"mode":"unset"}}}`
-			deniedInline := managementRequest(t, client, origin, "POST", "/api/v1/units",
-				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`",`+agency+`"name":"Denied Inline Unit",`+
-					`"collectionIds":[],"settings":{},"newOrganization":`+inlineOrganization+`}`,
-				login.CSRFToken, "", http.StatusForbidden)
-			if deniedInline.Code != "FORBIDDEN" {
-				t.Fatalf("inline Organization denial had unsafe HTTP code: %+v", deniedInline)
-			}
-			var organizationsAfter int
-			if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-				executor, err := store.Resolve(tx)
-				if err != nil {
-					return err
-				}
-				return executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM organizations`).
-					Scan(&organizationsAfter)
-			}); err != nil {
-				t.Fatal(err)
-			}
-			if organizationsAfter != organizationsBefore {
-				t.Fatalf("denied inline creation persisted an Organization: before=%d after=%d",
-					organizationsBefore, organizationsAfter)
-			}
-		})
+	}
+	managementRequest(t, client, origin, "GET", "/api/v1/units/"+copiedID.String(),
+		"", "", "", http.StatusOK)
+	managementRequest(t, client, origin, "GET", "/api/v1/units?offset=0&limit=1", "", "", "", http.StatusOK)
+	managementRequest(t, client, origin, "GET", "/api/v1/units?networkId=ignored", "", "", "", http.StatusBadRequest)
+	managementRequest(t, client, origin, "GET", "/api/v1/units", "", "", "Bearer malformed", http.StatusUnauthorized)
+	ruleValues := `"networkId":"` + network.id.String() + `","unitId":"` + unitID.String() +
+		`","protocol":"pocsag","selector":{"from":10,"to":20,"mode":"function-bit","functions":[1,3]},"enabled":true`
+	managementRequest(t, client, origin, "POST", "/api/v1/address-rules/preview", `{"schemaVersion":1,`+ruleValues+`}`, "", "", http.StatusForbidden)
+	managementRequestWithoutOrigin(t, client, origin, "/api/v1/address-rules/preview",
+		`{"schemaVersion":1,`+ruleValues+`}`, login.CSRFToken, http.StatusForbidden)
+	managementRequest(t, client, origin, "POST", "/api/v1/address-rules/preview", `{"schemaVersion":1,`+ruleValues+`}`, login.CSRFToken, "", http.StatusOK)
+	rule := managementRequest(t, client, origin, "POST", "/api/v1/address-rules",
+		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`",`+ruleValues+`}`, login.CSRFToken, "", http.StatusCreated)
+	ruleID, _ := managementResultID(t, rule)
+	managementRequest(t, client, origin, "GET", "/api/v1/address-rules/"+ruleID.String(), "", "", "", http.StatusOK)
+	managementRequest(t, client, origin, "GET", "/api/v1/address-rules?limit=1", "", "", "", http.StatusOK)
+	managementRequest(t, client, origin, "PUT", "/api/v1/address-rules/"+ruleID.String(),
+		`{"schemaVersion":1,"expectedRevision":"1",`+ruleValues+`}`, login.CSRFToken, "", http.StatusOK)
+	managementRequest(t, client, origin, "DELETE", "/api/v1/address-rules/"+ruleID.String(),
+		`{"schemaVersion":1,"expectedRevision":"1"}`, login.CSRFToken, "", http.StatusConflict)
+	deleted := managementRequest(t, client, origin, "DELETE", "/api/v1/address-rules/"+ruleID.String(),
+		`{"schemaVersion":1,"expectedRevision":"2"}`, login.CSRFToken, "", http.StatusAccepted)
+	if !strings.Contains(string(deleted.Data), `"status":"pending"`) {
+		t.Fatal("rule deletion falsely claimed historical completion")
+	}
+	managementRequest(t, client, origin, "PUT", "/api/v1/unit-collections/"+collectionID.String(),
+		`{"schemaVersion":1,"expectedRevision":"1","name":"Stations renamed"}`, login.CSRFToken, "", http.StatusOK)
+	managementRequest(t, client, origin, "GET", "/api/v1/unit-collections/"+collectionID.String(), "", "", "", http.StatusOK)
+	managementRequest(t, client, origin, "GET", "/api/v1/unit-collections", "", "", "", http.StatusOK)
+	managementRequest(t, client, origin, "DELETE", "/api/v1/unit-collections/"+collectionID.String(),
+		`{"schemaVersion":1,"expectedRevision":"2"}`, login.CSRFToken, "", http.StatusOK)
+	managementRequest(t, client, origin, "DELETE", "/api/v1/units/"+unitID.String(),
+		`{"schemaVersion":1,"expectedRevision":"3"}`, login.CSRFToken, "", http.StatusAccepted)
+	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(tx.Context(), `UPDATE identity_grants
+			SET actions=actions-'unit-template.read'-'organization.create'
+			WHERE subject_kind='principal'`); err != nil {
+			return err
+		}
+		_, err = executor.ExecContext(tx.Context(), `UPDATE identity_control
+			SET access_revision=access_revision+1 WHERE id=1`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var unitsBefore int
+	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		return executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM units`).Scan(&unitsBefore)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	deniedTemplateCopy := managementRequest(t, client, origin, "POST", "/api/v1/units/from-template",
+		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`",`+agency+`"templateId":"`+templateID.String()+
+			`","name":"Denied Copy","collectionIds":[]}`, login.CSRFToken, "", http.StatusForbidden)
+	if deniedTemplateCopy.Code != "FORBIDDEN" || strings.Contains(string(deniedTemplateCopy.Data), templateID.String()) ||
+		strings.Contains(string(deniedTemplateCopy.Data), organizationID.String()) {
+		t.Fatalf("template denial exposed cross-scope data: %+v", deniedTemplateCopy)
+	}
+	var unitsAfter int
+	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		return executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM units`).Scan(&unitsAfter)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if unitsAfter != unitsBefore {
+		t.Fatalf("denied template copy created a Unit: before=%d after=%d", unitsBefore, unitsAfter)
+	}
+	var organizationsBefore int
+	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		return executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM organizations`).
+			Scan(&organizationsBefore)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	inlineOrganization := `{"name":"Denied Inline","defaults":{"color":{"mode":"unset"},` +
+		`"icon":{"mode":"unset"},"functionMeanings":{"mode":"unset"}}}`
+	deniedInline := managementRequest(t, client, origin, "POST", "/api/v1/units",
+		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`",`+agency+`"name":"Denied Inline Unit",`+
+			`"collectionIds":[],"settings":{},"newOrganization":`+inlineOrganization+`}`,
+		login.CSRFToken, "", http.StatusForbidden)
+	if deniedInline.Code != "FORBIDDEN" {
+		t.Fatalf("inline Organization denial had unsafe HTTP code: %+v", deniedInline)
+	}
+	var organizationsAfter int
+	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		return executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM organizations`).
+			Scan(&organizationsAfter)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if organizationsAfter != organizationsBefore {
+		t.Fatalf("denied inline creation persisted an Organization: before=%d after=%d",
+			organizationsBefore, organizationsAfter)
 	}
 }
 

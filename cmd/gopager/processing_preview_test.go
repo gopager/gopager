@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
-	"net/http/httputil"
-	"net/url"
 	"strings"
 	"testing"
 
@@ -21,177 +19,154 @@ import (
 
 func TestProcessingSyntheticPreviewHTTPUsesCurrentFixtureNetworks(t *testing.T) {
 	t.Parallel()
-	for _, secureProxy := range []bool{false, true} {
-		name := "direct-http"
-		if secureProxy {
-			name = "https-reverse-proxy"
+	store := newManagementStoreWithFields(t,
+		[]string{"unit", "address", "payload", "gateway", "derived"})
+	identityRepository, err := identitystore.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unitRepository, err := unitstore.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	networks := previewFixtureNetworks{
+		values: make(map[uuid.UUID]synthetic.Network), identity: identityRepository, units: unitRepository,
+	}
+	for _, protocol := range []protocols.Protocol{
+		protocols.POCSAG, protocols.FLEX, protocols.ZVEI, protocols.EAS,
+	} {
+		id := uuid.New()
+		networks.values[id] = synthetic.Network{ID: id, Name: "Standalone " + string(protocol), Protocol: protocol}
+	}
+	shared := mustComposeCore(t, store)
+	runtime, err := composeProcessingAPIRuntime(t.Context(), shared, "", networks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := runtime.Close(t.Context()); err != nil {
+			t.Error(err)
 		}
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			store := newManagementStoreWithFields(t,
-				[]string{"unit", "address", "payload", "gateway", "derived"})
-			identityRepository, err := identitystore.New(store)
-			if err != nil {
-				t.Fatal(err)
-			}
-			unitRepository, err := unitstore.New(store)
-			if err != nil {
-				t.Fatal(err)
-			}
-			networks := previewFixtureNetworks{
-				values: make(map[uuid.UUID]synthetic.Network), identity: identityRepository, units: unitRepository,
-			}
-			for _, protocol := range []protocols.Protocol{
-				protocols.POCSAG, protocols.FLEX, protocols.ZVEI, protocols.EAS,
-			} {
-				id := uuid.New()
-				networks.values[id] = synthetic.Network{ID: id, Name: "Standalone " + string(protocol), Protocol: protocol}
-			}
-			shared := mustComposeCore(t, store)
-			runtime, err := composeProcessingAPIRuntime(t.Context(), shared, "", networks)
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() {
-				if err := runtime.Close(t.Context()); err != nil {
-					t.Error(err)
-				}
-			})
+	})
 
-			backend := httptest.NewUnstartedServer(nil)
-			t.Cleanup(backend.Close)
-			origin := "http://" + backend.Listener.Addr().String()
-			var proxy *httptest.Server
-			if secureProxy {
-				target, err := url.Parse(origin)
-				if err != nil {
-					t.Fatal(err)
-				}
-				proxy = httptest.NewUnstartedServer(httputil.NewSingleHostReverseProxy(target))
-				t.Cleanup(proxy.Close)
-				origin = "https://" + proxy.Listener.Addr().String()
-			}
-			handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), shared,
-				networks, runtime.routes)
-			if err != nil {
-				t.Fatal(err)
-			}
-			backend.Config.Handler = handler
-			backend.Start()
-			client := backend.Client()
-			if secureProxy {
-				proxy.StartTLS()
-				client = proxy.Client()
-			}
-			jar, err := cookiejar.New(nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			client.Jar = jar
-			login := managementRequest(t, client, origin, http.MethodPost, "/api/v1/auth/login",
-				`{"schemaVersion":1,"username":"operator","password":"initial-password"}`, "", "", http.StatusOK)
-			workflow := managementRequest(t, client, origin, http.MethodPost, "/api/v1/workflows",
-				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Synthetic Preview","scope":{"kind":"all"},"enabled":true}`,
-				login.CSRFToken, "", http.StatusCreated)
-			workflowID, _ := managementResultID(t, workflow)
-			definition := sourceProtocolPreviewDefinition(t)
-			versionInput, err := json.Marshal(workflowVersionMutation{SchemaVersion: 1,
-				CommandID: uuid.New(), ExpectedRevision: 1, Definition: definition})
-			if err != nil {
-				t.Fatal(err)
-			}
-			saved := managementRequest(t, client, origin, http.MethodPost,
-				"/api/v1/workflows/"+workflowID.String()+"/versions", string(versionInput),
-				login.CSRFToken, "", http.StatusCreated)
-			versionID, revision := managementResultID(t, saved)
-			if revision != "2" {
-				t.Fatalf("version save revision = %s, want 2", revision)
-			}
-			managementRequest(t, client, origin, http.MethodPost,
-				"/api/v1/workflows/"+workflowID.String()+"/versions/"+versionID.String()+"/activate",
-				`{"schemaVersion":1,"expectedRevision":"2"}`, login.CSRFToken, "", http.StatusOK)
+	backend := httptest.NewUnstartedServer(nil)
+	t.Cleanup(backend.Close)
+	origin := "http://" + backend.Listener.Addr().String()
+	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), shared,
+		networks, runtime.routes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend.Config.Handler = handler
+	backend.Start()
+	client := backend.Client()
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.Jar = jar
+	login := managementRequest(t, client, origin, http.MethodPost, "/api/v1/auth/login",
+		`{"schemaVersion":1,"username":"operator","password":"initial-password"}`, "", "", http.StatusOK)
+	workflow := managementRequest(t, client, origin, http.MethodPost, "/api/v1/workflows",
+		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Synthetic Preview","scope":{"kind":"all"},"enabled":true}`,
+		login.CSRFToken, "", http.StatusCreated)
+	workflowID, _ := managementResultID(t, workflow)
+	definition := sourceProtocolPreviewDefinition(t)
+	versionInput, err := json.Marshal(workflowVersionMutation{SchemaVersion: 1,
+		CommandID: uuid.New(), ExpectedRevision: 1, Definition: definition})
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved := managementRequest(t, client, origin, http.MethodPost,
+		"/api/v1/workflows/"+workflowID.String()+"/versions", string(versionInput),
+		login.CSRFToken, "", http.StatusCreated)
+	versionID, revision := managementResultID(t, saved)
+	if revision != "2" {
+		t.Fatalf("version save revision = %s, want 2", revision)
+	}
+	managementRequest(t, client, origin, http.MethodPost,
+		"/api/v1/workflows/"+workflowID.String()+"/versions/"+versionID.String()+"/activate",
+		`{"schemaVersion":1,"expectedRevision":"2"}`, login.CSRFToken, "", http.StatusOK)
 
-			before := processingPreviewSideEffects(t, store)
-			inputs := syntheticPreviewInputs(networks.values)
-			observedAt := "2026-11-03T14:00:00Z"
-			for i := range inputs {
-				inputs[i].ObservedAt = &observedAt
-			}
-			transportInput, err := json.Marshal(inputs[0])
-			if err != nil {
-				t.Fatal(err)
-			}
-			transportBody := `{"schemaVersion":1,"versionId":"` + versionID.String() +
-				`","syntheticJson":` + string(transportInput) + `}`
-			previewPath := "/api/v1/workflows/" + workflowID.String() + "/preview"
-			managementRequest(t, client, origin, http.MethodPost, previewPath, transportBody,
-				"", "", http.StatusForbidden)
-			managementRequest(t, client, origin, http.MethodPost, previewPath, transportBody,
-				login.CSRFToken, "invalid", http.StatusUnauthorized)
-			wrongOrigin, err := http.NewRequest(http.MethodPost, origin+previewPath, strings.NewReader(transportBody))
-			if err != nil {
-				t.Fatal(err)
-			}
-			wrongOrigin.Header.Set("Content-Type", "application/json")
-			wrongOrigin.Header.Set("Origin", "https://other.invalid")
-			wrongOrigin.Header.Set(identity.CSRFHeaderName, login.CSRFToken)
-			originResponse, err := client.Do(wrongOrigin)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := originResponse.Body.Close(); err != nil {
-				t.Fatal(err)
-			}
-			if originResponse.StatusCode != http.StatusForbidden {
-				t.Fatalf("cross-origin preview returned %d", originResponse.StatusCode)
-			}
-			for _, input := range inputs {
-				encoded, err := json.Marshal(input)
-				if err != nil {
-					t.Fatal(err)
-				}
-				response := managementRequest(t, client, origin, http.MethodPost,
-					"/api/v1/workflows/"+workflowID.String()+"/preview",
-					`{"schemaVersion":1,"versionId":"`+versionID.String()+`","syntheticJson":`+
-						string(encoded)+`}`, login.CSRFToken, "", http.StatusOK)
-				var evaluation processing.Evaluation
-				if err := json.Unmarshal(response.Data, &evaluation); err != nil || !evaluation.Selected {
-					t.Fatalf("%s/%s synthetic preview result = %+v, decode error = %v",
-						input.Protocol, input.Form, evaluation, err)
-				}
-			}
-			binaryInput := inputs[6]
-			binaryInputJSON, err := json.Marshal(binaryInput)
-			if err != nil {
-				t.Fatal(err)
-			}
-			binaryDefinition := binarySourcePreviewDefinition(t)
-			binaryDefinitionJSON, err := json.Marshal(binaryDefinition)
-			if err != nil {
-				t.Fatal(err)
-			}
-			draft := managementRequest(t, client, origin, http.MethodPost,
-				"/api/v1/workflows/"+workflowID.String()+"/preview",
-				`{"schemaVersion":1,"definition":`+string(binaryDefinitionJSON)+`,"syntheticJson":`+
-					string(binaryInputJSON)+`}`, login.CSRFToken, "", http.StatusOK)
-			var binaryEvaluation processing.Evaluation
-			if err := json.Unmarshal(draft.Data, &binaryEvaluation); err != nil || !binaryEvaluation.Selected {
-				t.Fatalf("typed bytes draft preview = %+v, decode error = %v", binaryEvaluation, err)
-			}
-			revokeManagementAction(t, store, managementOperatorID(t, store), "workflow.preview")
-			revokedInput, err := json.Marshal(inputs[0])
-			if err != nil {
-				t.Fatal(err)
-			}
-			managementRequest(t, client, origin, http.MethodPost,
-				"/api/v1/workflows/"+workflowID.String()+"/preview",
-				`{"schemaVersion":1,"versionId":"`+versionID.String()+`","syntheticJson":`+
-					string(revokedInput)+`}`, login.CSRFToken, "", http.StatusForbidden)
-			after := processingPreviewSideEffects(t, store)
-			if before != after {
-				t.Fatalf("synthetic previews wrote durable results/candidates/events: before=%v after=%v", before, after)
-			}
-		})
+	before := processingPreviewSideEffects(t, store)
+	inputs := syntheticPreviewInputs(networks.values)
+	observedAt := "2026-11-03T14:00:00Z"
+	for i := range inputs {
+		inputs[i].ObservedAt = &observedAt
+	}
+	transportInput, err := json.Marshal(inputs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	transportBody := `{"schemaVersion":1,"versionId":"` + versionID.String() +
+		`","syntheticJson":` + string(transportInput) + `}`
+	previewPath := "/api/v1/workflows/" + workflowID.String() + "/preview"
+	managementRequest(t, client, origin, http.MethodPost, previewPath, transportBody,
+		"", "", http.StatusForbidden)
+	managementRequest(t, client, origin, http.MethodPost, previewPath, transportBody,
+		login.CSRFToken, "invalid", http.StatusUnauthorized)
+	wrongOrigin, err := http.NewRequest(http.MethodPost, origin+previewPath, strings.NewReader(transportBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrongOrigin.Header.Set("Content-Type", "application/json")
+	wrongOrigin.Header.Set("Origin", "https://other.invalid")
+	wrongOrigin.Header.Set(identity.CSRFHeaderName, login.CSRFToken)
+	originResponse, err := client.Do(wrongOrigin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := originResponse.Body.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if originResponse.StatusCode != http.StatusForbidden {
+		t.Fatalf("cross-origin preview returned %d", originResponse.StatusCode)
+	}
+	for _, input := range inputs {
+		encoded, err := json.Marshal(input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response := managementRequest(t, client, origin, http.MethodPost,
+			"/api/v1/workflows/"+workflowID.String()+"/preview",
+			`{"schemaVersion":1,"versionId":"`+versionID.String()+`","syntheticJson":`+
+				string(encoded)+`}`, login.CSRFToken, "", http.StatusOK)
+		var evaluation processing.Evaluation
+		if err := json.Unmarshal(response.Data, &evaluation); err != nil || !evaluation.Selected {
+			t.Fatalf("%s/%s synthetic preview result = %+v, decode error = %v",
+				input.Protocol, input.Form, evaluation, err)
+		}
+	}
+	binaryInput := inputs[6]
+	binaryInputJSON, err := json.Marshal(binaryInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	binaryDefinition := binarySourcePreviewDefinition(t)
+	binaryDefinitionJSON, err := json.Marshal(binaryDefinition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft := managementRequest(t, client, origin, http.MethodPost,
+		"/api/v1/workflows/"+workflowID.String()+"/preview",
+		`{"schemaVersion":1,"definition":`+string(binaryDefinitionJSON)+`,"syntheticJson":`+
+			string(binaryInputJSON)+`}`, login.CSRFToken, "", http.StatusOK)
+	var binaryEvaluation processing.Evaluation
+	if err := json.Unmarshal(draft.Data, &binaryEvaluation); err != nil || !binaryEvaluation.Selected {
+		t.Fatalf("typed bytes draft preview = %+v, decode error = %v", binaryEvaluation, err)
+	}
+	revokeManagementAction(t, store, managementOperatorID(t, store), "workflow.preview")
+	revokedInput, err := json.Marshal(inputs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	managementRequest(t, client, origin, http.MethodPost,
+		"/api/v1/workflows/"+workflowID.String()+"/preview",
+		`{"schemaVersion":1,"versionId":"`+versionID.String()+`","syntheticJson":`+
+			string(revokedInput)+`}`, login.CSRFToken, "", http.StatusForbidden)
+	after := processingPreviewSideEffects(t, store)
+	if before != after {
+		t.Fatalf("synthetic previews wrote durable results/candidates/events: before=%v after=%v", before, after)
 	}
 }
 

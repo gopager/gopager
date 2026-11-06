@@ -2,17 +2,9 @@ package borrowed_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/gopager/gopager/internal/testutil/passwords"
-	"io"
-	"net/http"
-	"net/http/cookiejar"
-	"net/http/httptest"
-	"net/http/httputil"
-	"net/url"
-	"strings"
 	"testing"
 	"time"
 
@@ -257,175 +249,52 @@ func TestLoginRejectionAndPersistentAccountThrottle(t *testing.T) {
 	}
 }
 
-func TestLoginLogoutHTTPWithPrimaryAuthorityAndTLSProxy(t *testing.T) {
+// TestLogoutRevokesStoredSession expects Logout to revoke the stored Session, so its secret no
+// longer resolves, and to leave the account able to sign in again. The HTTP and TLS proxy
+// behaviour of login and logout is tested in cmd/gopager.TestTLSReverseProxyServesLoginAndLogoutOverProductionWiring.
+func TestLogoutRevokesStoredSession(t *testing.T) {
 	t.Parallel()
-	for _, proxyTLS := range []bool{false, true} {
-		t.Run(map[bool]string{false: "HTTP", true: "HTTPS proxy HTTP upstream"}[proxyTLS], func(t *testing.T) {
-			t.Parallel()
-			store := newStore(t)
-			seedLoginAccount(t, store, "http-user", true)
-			repository, err := identitystore.New(store)
-			if err != nil {
-				t.Fatal(err)
-			}
-			resolver, err := identity.NewResolver(repository, store, repository)
-			if err != nil {
-				t.Fatal(err)
-			}
-			facts, err := eventstore.New(store)
-			if err != nil {
-				t.Fatal(err)
-			}
-			login, err := identity.NewLoginService(store, resolver, repository, facts, identity.DefaultLoginRateLimits(), passwords.Option())
-			if err != nil {
-				t.Fatal(err)
-			}
-			var handler http.Handler
-			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.TLS != nil {
-					t.Error("application was not reached over HTTP")
-				}
-				handler.ServeHTTP(w, r)
-			}))
-			defer backend.Close()
-			edge := backend
-			if proxyTLS {
-				upstream, err := url.Parse(backend.URL)
-				if err != nil {
-					t.Fatal(err)
-				}
-				edge = httptest.NewTLSServer(httputil.NewSingleHostReverseProxy(upstream))
-				defer edge.Close()
-			}
-			transport, err := identity.NewHTTPTransport(edge.URL)
-			if err != nil {
-				t.Fatal(err)
-			}
-			handler, err = identity.NewHTTPHandler(transport, login)
-			if err != nil {
-				t.Fatal(err)
-			}
-			client := edge.Client()
-			client.Jar, err = cookiejar.New(nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			body := `{"schemaVersion":1,"username":"http-user","password":"correct-password"}`
-			send := func(path, body, origin, csrf string, status int) ([]byte, []*http.Cookie) {
-				t.Helper()
-				request, err := http.NewRequest(http.MethodPost, edge.URL+path, strings.NewReader(body))
-				if err != nil {
-					t.Fatal(err)
-				}
-				request.Header.Set("Content-Type", "application/json")
-				request.Header.Set("Origin", origin)
-				request.Header.Set(identity.CSRFHeaderName, csrf)
-				request.Header.Set("X-Forwarded-Proto", "http")
-				request.Header.Set("X-Forwarded-Host", "foreign.example")
-				response, err := client.Do(request)
-				if err != nil {
-					t.Fatal(err)
-				}
-				content, readErr := io.ReadAll(response.Body)
-				closeErr := response.Body.Close()
-				if err := errors.Join(readErr, closeErr); err != nil {
-					t.Fatal(err)
-				}
-				if response.StatusCode != status {
-					t.Fatalf("%s returned %d, want %d: %s", path, response.StatusCode, status, content)
-				}
-				if response.Header.Get("Cache-Control") != "no-store" {
-					t.Fatal("authentication response is cacheable")
-				}
-				return content, response.Cookies()
-			}
-			send("/api/v1/auth/login", body, "https://foreign.example", "", http.StatusForbidden)
-			prefix, suffix := `{"schemaVersion":1,"username":"http-user","password":"`, `"}`
-			oversized := prefix + strings.Repeat("x", 16*1024+1-len(prefix)-len(suffix)) + suffix
-			if len(oversized) != 16*1024+1 {
-				t.Fatal("oversized login body has the wrong length")
-			}
-			limited, _ := send("/api/v1/auth/login", oversized, edge.URL, "", http.StatusRequestEntityTooLarge)
-			var limitError struct {
-				Code      string `json:"code"`
-				Retryable bool   `json:"retryable"`
-			}
-			if err := json.Unmarshal(limited, &limitError); err != nil || limitError.Code != "RESOURCE_LIMIT" || limitError.Retryable {
-				t.Fatalf("oversized login body was not RESOURCE_LIMIT: %s", limited)
-			}
-			content, cookies := send("/api/v1/auth/login", body, edge.URL, "", http.StatusOK)
-			var result struct {
-				SchemaVersion int    `json:"schemaVersion"`
-				SessionID     string `json:"sessionId"`
-				CSRFToken     string `json:"csrfToken"`
-			}
-			if err := json.Unmarshal(content, &result); err != nil {
-				t.Fatal(err)
-			}
-			if result.SchemaVersion != 1 || result.CSRFToken == "" || len(cookies) != 1 || cookies[0].Secure != proxyTLS {
-				t.Fatal("ordinary login did not issue correct browser Session")
-			}
-			if strings.Contains(string(content), cookies[0].Value) || strings.Contains(string(content), "correct-password") {
-				t.Fatal("login JSON leaks password or cookie secret")
-			}
-			secret := cookies[0].Value
-			response, err := client.Get(edge.URL + "/api/v1/auth/session")
-			if err != nil {
-				t.Fatal(err)
-			}
-			var current struct {
-				SessionID string `json:"sessionId"`
-				CSRFToken string `json:"csrfToken"`
-			}
-			decodeErr := json.NewDecoder(response.Body).Decode(&current)
-			closeErr := response.Body.Close()
-			if err := errors.Join(decodeErr, closeErr); err != nil {
-				t.Fatal(err)
-			}
-			if response.StatusCode != http.StatusOK || current.SessionID != result.SessionID || current.CSRFToken != result.CSRFToken {
-				t.Fatal("browser reload cannot recover its own current Session/CSRF state")
-			}
-			bearerRequest, err := http.NewRequest(http.MethodGet, edge.URL+"/api/v1/auth/session", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			bearerRequest.Header.Set("Authorization", "Bearer invalid")
-			response, err = client.Do(bearerRequest)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := response.Body.Close(); err != nil {
-				t.Fatal(err)
-			}
-			if response.StatusCode != http.StatusUnauthorized {
-				t.Fatal("current Session endpoint fell back from explicit bearer to Cookie")
-			}
-			send("/api/v1/auth/logout", "", edge.URL, "", http.StatusForbidden)
-			send("/api/v1/auth/logout", "", "https://foreign.example", result.CSRFToken, http.StatusForbidden)
-			send("/api/v1/auth/logout", "", edge.URL, result.CSRFToken, http.StatusNoContent)
-			response, err = client.Get(edge.URL + "/api/v1/auth/session")
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := response.Body.Close(); err != nil {
-				t.Fatal(err)
-			}
-			if response.StatusCode != http.StatusUnauthorized {
-				t.Fatal("logged-out browser retained current Session access")
-			}
-			send("/api/v1/auth/logout", "", edge.URL, result.CSRFToken, http.StatusUnauthorized)
-			err = store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-				_, err := resolver.Resolve(tx.Context(), tx, identity.Proof{Kind: identity.SessionProof, Secret: secret})
-				return err
-			})
-			if !errors.Is(err, identity.ErrLoginRequired) {
-				t.Fatalf("logout did not revoke stored Session: %v", err)
-			}
-			// A browser can sign in again normally, without a receipt or command token.
-			send("/api/v1/auth/login", body, edge.URL, "", http.StatusOK)
-		})
+	store := newStore(t)
+	seedLoginAccount(t, store, "http-user", true)
+	repository, err := identitystore.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver, err := identity.NewResolver(repository, store, repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts, err := eventstore.New(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	login, err := identity.NewLoginService(store, resolver, repository, facts, identity.DefaultLoginRateLimits(), passwords.Option())
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := login.AuthenticateLocal(t.Context(), "test-source", "http-user", "correct-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	proof := identity.Proof{Kind: identity.SessionProof, Secret: session.Secret}
+	if err := login.Logout(t.Context(), proof, func(identity.Authentication) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	err = store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		_, err := resolver.Resolve(tx.Context(), tx, proof)
+		return err
+	})
+	if !errors.Is(err, identity.ErrLoginRequired) {
+		t.Fatalf("logout did not revoke stored Session: %v", err)
+	}
+	if err := login.Logout(t.Context(), proof, func(identity.Authentication) error { return nil }); !errors.Is(err, identity.ErrLoginRequired) {
+		t.Fatalf("second logout of a revoked Session = %v, want the login-required rejection", err)
+	}
+	if _, err := login.AuthenticateLocal(t.Context(), "test-source", "http-user", "correct-password"); err != nil {
+		t.Fatalf("sign-in after logout: %v", err)
 	}
 }
+
 func TestLoginInstanceThrottleBoundsUnknownAccountStorage(t *testing.T) {
 	t.Parallel()
 	store := newStore(t)
