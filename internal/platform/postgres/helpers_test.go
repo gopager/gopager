@@ -44,7 +44,7 @@ func newStoreInSchemaWithParams(t testing.TB, databaseURL, schema string, params
 			t.Errorf("close test database: %v", err)
 		}
 	})
-	return &Store{db: db}
+	return &Store{db: db, config: config}
 }
 
 // testDatabaseURL skips database-dependent cases only in the optional quick run.

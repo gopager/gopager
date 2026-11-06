@@ -38,6 +38,8 @@ Flags use Go `flag` syntax (`--name=value` or `-name value`). Positional argumen
 | `--listen-address` | — | with `api` | HTTP listen address `host:port`. Host must be non-empty (use `0.0.0.0` or `[::]` to listen on all interfaces); port 1–65535. |
 | `--public-origin` | — | with `api` | Public origin browsers use to reach GoPager, `http://` or `https://` scheme, host, optional port, no path other than `/`, no query/fragment/userinfo. Validated whenever set, even for `worker`. See [Security](#security). |
 | `--migration-mode` | `check` | — | `check`: start only if the schema is exactly current. `apply`: run pending migrations first. See [Database Migrations](#database-migrations). |
+| `--processing-concurrency` | `2` | — | Processing candidates evaluated in parallel per worker process. Must be > 0. |
+| `--processing-poll-interval` | `5s` | — | Fallback interval at which a worker looks for due work, as a Go duration (`500ms`, `5s`, `1m`). Must be > 0. New work normally starts immediately through a PostgreSQL notification (channel `gopager_processing_due`, sent by intake); the poll covers lost notifications and work that becomes due by time. |
 | `--processing-artifact-root` | — | — | Plugin directory. Must exist and be openable; leading/trailing whitespace and an explicitly empty value are rejected. |
 | `GOPAGER_PROCESSING_ARTIFACT_ROOT` (env) | — | — | Plugin directory, used only when `--processing-artifact-root` is not given. Same validation. |
 | `--login-attempts-per-account` | `10` | — | Login attempts per minute per normalized username. Must be > 0. |
@@ -48,8 +50,6 @@ Fixed values (not configurable):
 
 | Setting | Value |
 | --- | --- |
-| Worker dispatch concurrency | 2 processing items in flight per worker process |
-| Worker poll interval | 5 s (in addition to immediate in-process wake-ups) |
 | Database pool | 10 open, 5 idle connections, 30 min connection lifetime |
 | Per-call / per-transaction timeout | 30 s |
 | Readiness re-check interval | 5 s |
@@ -81,7 +81,7 @@ Both roles load the plugin directory, if configured, because workflow management
 Topologies:
 
 - **Combined**: one process with `--roles=api,worker`.
-- **Split**: any number of `--roles=api` and `--roles=worker` processes against the same database. Workers coordinate through the database; additional workers pick up work on their 5 s poll.
+- **Split**: any number of `--roles=api` and `--roles=worker` processes against the same database. Workers coordinate through the database (selected rows are locked with `SKIP LOCKED`, claims are revision-checked); additional workers wake through the same notifications and otherwise pick up work on their poll (`--processing-poll-interval`, default 5 s). Each worker process holds one extra dedicated database connection for the notification listener, outside the pool.
 
 All processes of one deployment must run the same release (see [Upgrade](#upgrade)).
 

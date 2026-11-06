@@ -18,6 +18,8 @@
 // default, refuses to start unless the schema is exactly current; apply runs
 // pending migrations first), -public-origin (the HTTP(S) origin used for
 // cookie and Origin checks; required with the api role),
+// -processing-concurrency (default 2) and -processing-poll-interval (default 5s)
+// bound parallel Processing evaluation and the fallback poll for due work;
 // -processing-artifact-root (directory of operator-provisioned plugin
 // executables; falls back to $GOPAGER_PROCESSING_ARTIFACT_ROOT),
 // -login-attempts-per-account and -login-attempts-per-instance (per-minute
@@ -202,6 +204,8 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 	defaultLimits := identity.DefaultLoginRateLimits()
 	loginAccount := flags.Int("login-attempts-per-account", defaultLimits.AccountAttempts, "Per-minute login attempt limit per normalized username")
 	loginInstance := flags.Int("login-attempts-per-instance", defaultLimits.InstanceAttempts, "Per-minute instance login attempt limit")
+	processingConcurrency := flags.Int("processing-concurrency", worker.DefaultDispatchConcurrency, "Maximum Processing candidates evaluated in parallel")
+	processingPoll := flags.Duration("processing-poll-interval", worker.DefaultDispatchPollInterval, "Fallback interval for discovering due Processing work (wake-ups arrive through notifications)")
 	allowInsecure := flags.Bool("allow-insecure-db", false, "Operator approval for unverified remote database TLS")
 	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
 		return startupConfig{}, platform.NewFailure(platform.CodeInvalidInput, err)
@@ -251,10 +255,15 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 			return startupConfig{}, platform.NewFailure(platform.CodeInvalidInput, errors.New("invalid Processing artifact root"))
 		}
 	}
+	// Not WithDefaults: an explicit zero must be rejected, not silently replaced.
+	dispatch := worker.DispatchConfig{Concurrency: *processingConcurrency, PollInterval: *processingPoll}
+	if err := dispatch.Validate(); err != nil {
+		return startupConfig{}, err
+	}
 	return startupConfig{Config: config, PublicOrigin: *publicOrigin,
 		ProcessingArtifactRoot: *processingArtifactRoot,
 		LoginLimits:            identity.LoginRateLimits{AccountAttempts: *loginAccount, InstanceAttempts: *loginInstance},
-		ProcessingDispatch:     (worker.DispatchConfig{}).WithDefaults()}, nil
+		ProcessingDispatch:     dispatch}, nil
 }
 
 // composeApplicationAPI binds domain services to the existing primary store and HTTP listener.

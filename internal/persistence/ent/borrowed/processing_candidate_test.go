@@ -486,11 +486,11 @@ func TestProcessingCandidateNativeReselectionRetainsResultsAndAttempts(t *testin
 		t.Fatal(err)
 	}
 	if err := primary.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		work, err := store.ListCandidateWork(tx.Context(), tx, processing.PageInput{Limit: 1})
+		work, err := store.SelectDueWork(tx.Context(), tx, 1)
 		if err != nil {
 			return err
 		}
-		if work.Total != 0 {
+		if len(work) != 0 {
 			t.Fatalf("exhausted reselection entered automatic dispatch: %+v", work)
 		}
 		allowed := processingAuthorityFixture(actor, authz.Scope{Kind: "all"})

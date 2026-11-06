@@ -1100,6 +1100,17 @@ func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
 		t.Fatal(err)
 	}
 	validated.ResolvedNetwork, validated.Resolution = network, "declared"
+	listenContext, stopListening := context.WithCancel(t.Context())
+	defer stopListening()
+	dueSignals, err := store.Listen(listenContext, "gopager_processing_due")
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-dueSignals: // initial signal after the listener connected
+	case <-time.After(10 * time.Second):
+		t.Fatal("listener did not connect")
+	}
 	var receipt ingest.Receipt
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		var err error
@@ -1109,16 +1120,21 @@ func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	select {
+	case <-dueSignals:
+	case <-time.After(5 * time.Second):
+		t.Fatal("admission did not notify dispatchers about new due work")
+	}
 	var selected []processing.Candidate
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		page, err := processingRepository.ListCandidateWork(tx.Context(), tx, processing.PageInput{Limit: 10})
+		page, err := processingRepository.SelectDueWork(tx.Context(), tx, 10)
 		if err != nil {
 			return err
 		}
-		if page.Total != 2 || len(page.Items) != 2 {
-			t.Fatalf("selected candidate page=%+v", page)
+		if len(page) != 2 {
+			t.Fatalf("selected candidates=%+v", page)
 		}
-		selected = page.Items
+		selected = page
 		return nil
 	}); err != nil {
 		t.Fatal(err)
@@ -1202,11 +1218,11 @@ func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
 			SET due_at=clock_timestamp() WHERE id=$1`, firstCandidate.ID); err != nil {
 			return err
 		}
-		page, err := processingRepository.ListCandidateWork(tx.Context(), tx, processing.PageInput{Limit: 10})
+		page, err := processingRepository.SelectDueWork(tx.Context(), tx, 10)
 		if err != nil {
 			return err
 		}
-		for _, candidate := range page.Items {
+		for _, candidate := range page {
 			if candidate.ID == firstCandidate.ID {
 				recovered = candidate
 				return nil
@@ -1295,11 +1311,11 @@ func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
 	}
 	var invalidCandidate processing.Candidate
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		page, err := processingRepository.ListCandidateWork(tx.Context(), tx, processing.PageInput{Limit: 10})
+		page, err := processingRepository.SelectDueWork(tx.Context(), tx, 10)
 		if err != nil {
 			return err
 		}
-		for _, candidate := range page.Items {
+		for _, candidate := range page {
 			if candidate.TransmissionID == failedReceipt.TransmissionID && candidate.WorkflowID == failedWorkflow {
 				invalidCandidate = candidate
 				return nil

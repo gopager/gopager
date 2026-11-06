@@ -336,10 +336,19 @@ type CandidateRecoveryRepository interface {
 	RecoverCandidate(context.Context, platform.TransactionContext, CandidateLease) (Candidate, error)
 }
 
+// DueNotificationChannel is the PostgreSQL notification channel on which intake announces newly
+// admitted candidates, so idle dispatchers wake without waiting for their poll interval.
+const DueNotificationChannel = "gopager_processing_due"
+
 // CandidateWorkRepository exposes bounded private dispatch metadata and owner-decided supersession.
 // Neither operation grants source access or permission to publish.
 type CandidateWorkRepository interface {
-	ListCandidateWork(context.Context, platform.TransactionContext, PageInput) (Page[Candidate], error)
+	// SelectDueWork returns up to limit candidates that are pending and due or running with an
+	// expired lease, oldest due time first, on the primary clock. It takes no control-row lock and
+	// skips rows another open selection transaction holds, so concurrent dispatchers receive
+	// disjoint rows while their transactions are open. Selection is not a claim: the executor
+	// reconciles and claims with a revision check.
+	SelectDueWork(ctx context.Context, tx platform.TransactionContext, limit int) ([]Candidate, error)
 	SupersedeCandidate(context.Context, platform.TransactionContext, uuid.UUID, int64) (Candidate, error)
 }
 

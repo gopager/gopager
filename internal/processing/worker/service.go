@@ -182,6 +182,8 @@ func (s *Service) run(ctx context.Context, pending processing.Candidate, publish
 	}
 	var captured Capture
 	var current processing.Candidate
+	// Taken before the claim so the local lease deadline never exceeds the primary-clock lease.
+	leaseStart := time.Now()
 	err := s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
 		var err error
 		captured, err = s.source.CaptureCandidate(tx.Context(), tx, pending)
@@ -240,26 +242,45 @@ func (s *Service) run(ctx context.Context, pending processing.Candidate, publish
 			<-results
 			return processing.Candidate{}, nil, ctx.Err()
 		case <-ticker.C:
-			lease, err := current.Lease()
+			attemptStart := time.Now()
+			renewed, err := s.renew(ctx, current, captured)
 			if err == nil {
-				err = s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-					if err := s.source.CheckCandidate(tx.Context(), tx, current, captured); err != nil {
-						return err
-					}
-					var err error
-					current, err = s.repository.RenewCandidate(tx.Context(), tx, lease)
-					return err
-				})
+				current, leaseStart = renewed, attemptStart
+				continue
 			}
-			if err != nil {
-				cancel()
-				<-results
-				return processing.Candidate{}, nil, err
+			// A transient failure is retried at the next tick while the lease still outlives it;
+			// anything else, or a lease that would lapse first, ends the claim.
+			if transientFailure(err) && platform.FailureCode(err) != platform.CodeRevisionConflict &&
+				attemptStart.Add(processing.CandidateRenewInterval).Before(leaseStart.Add(processing.CandidateLeaseDuration)) {
+				continue
 			}
+			cancel()
+			<-results
+			return processing.Candidate{}, nil, err
 		case result := <-results:
 			return s.finish(ctx, current, captured, result, publish)
 		}
 	}
+}
+
+// renew rechecks current source authority and extends the lease in one transaction. The renewed
+// candidate is returned only after the transaction committed, so an uncertain commit leaves the
+// previous lease reference in place.
+func (s *Service) renew(ctx context.Context, current processing.Candidate, captured Capture) (processing.Candidate, error) {
+	lease, err := current.Lease()
+	if err != nil {
+		return processing.Candidate{}, err
+	}
+	var renewed processing.Candidate
+	err = s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
+		if err := s.source.CheckCandidate(tx.Context(), tx, current, captured); err != nil {
+			return err
+		}
+		var err error
+		renewed, err = s.repository.RenewCandidate(tx.Context(), tx, lease)
+		return err
+	})
+	return renewed, err
 }
 
 // finish revalidates current source authority before a fenced completion or classified failure;
