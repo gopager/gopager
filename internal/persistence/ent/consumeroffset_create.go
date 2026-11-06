@@ -20,6 +20,12 @@ type ConsumerOffsetCreate struct {
 	hooks    []Hook
 }
 
+// SetLastTxID sets the "last_tx_id" field.
+func (_c *ConsumerOffsetCreate) SetLastTxID(v uint64) *ConsumerOffsetCreate {
+	_c.mutation.SetLastTxID(v)
+	return _c
+}
+
 // SetLastSeq sets the "last_seq" field.
 func (_c *ConsumerOffsetCreate) SetLastSeq(v int64) *ConsumerOffsetCreate {
 	_c.mutation.SetLastSeq(v)
@@ -72,6 +78,9 @@ func (_c *ConsumerOffsetCreate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *ConsumerOffsetCreate) check() error {
+	if _, ok := _c.mutation.LastTxID(); !ok {
+		return &ValidationError{Name: "last_tx_id", err: errors.New(`ent: missing required field "ConsumerOffset.last_tx_id"`)}
+	}
 	if _, ok := _c.mutation.LastSeq(); !ok {
 		return &ValidationError{Name: "last_seq", err: errors.New(`ent: missing required field "ConsumerOffset.last_seq"`)}
 	}
@@ -117,6 +126,10 @@ func (_c *ConsumerOffsetCreate) createSpec() (*ConsumerOffset, *sqlgraph.CreateS
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
+	}
+	if value, ok := _c.mutation.LastTxID(); ok {
+		_spec.SetField(consumeroffset.FieldLastTxID, field.TypeUint64, value)
+		_node.LastTxID = value
 	}
 	if value, ok := _c.mutation.LastSeq(); ok {
 		_spec.SetField(consumeroffset.FieldLastSeq, field.TypeInt64, value)

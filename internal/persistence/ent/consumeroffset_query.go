@@ -266,12 +266,12 @@ func (_q *ConsumerOffsetQuery) Clone() *ConsumerOffsetQuery {
 // Example:
 //
 //	var v []struct {
-//		LastSeq int64 `json:"last_seq,omitempty"`
+//		LastTxID uint64 `json:"last_tx_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.ConsumerOffset.Query().
-//		GroupBy(consumeroffset.FieldLastSeq).
+//		GroupBy(consumeroffset.FieldLastTxID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *ConsumerOffsetQuery) GroupBy(field string, fields ...string) *ConsumerOffsetGroupBy {
@@ -289,11 +289,11 @@ func (_q *ConsumerOffsetQuery) GroupBy(field string, fields ...string) *Consumer
 // Example:
 //
 //	var v []struct {
-//		LastSeq int64 `json:"last_seq,omitempty"`
+//		LastTxID uint64 `json:"last_tx_id,omitempty"`
 //	}
 //
 //	client.ConsumerOffset.Query().
-//		Select(consumeroffset.FieldLastSeq).
+//		Select(consumeroffset.FieldLastTxID).
 //		Scan(ctx, &v)
 func (_q *ConsumerOffsetQuery) Select(fields ...string) *ConsumerOffsetSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

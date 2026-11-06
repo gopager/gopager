@@ -241,7 +241,7 @@ func init() {
 	consumeroffsetFields := schema.ConsumerOffset{}.Fields()
 	_ = consumeroffsetFields
 	// consumeroffsetDescLastSeq is the schema descriptor for last_seq field.
-	consumeroffsetDescLastSeq := consumeroffsetFields[1].Descriptor()
+	consumeroffsetDescLastSeq := consumeroffsetFields[2].Descriptor()
 	// consumeroffset.LastSeqValidator is a validator for the "last_seq" field. It is called by the builders before save.
 	consumeroffset.LastSeqValidator = consumeroffsetDescLastSeq.Validators[0].(func(int64) error)
 	credentialMixin := schema.Credential{}.Mixin()

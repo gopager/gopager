@@ -17,6 +17,8 @@ type ConsumerOffset struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID string `json:"id,omitempty"`
+	// LastTxID holds the value of the "last_tx_id" field.
+	LastTxID uint64 `json:"last_tx_id,omitempty"`
 	// LastSeq holds the value of the "last_seq" field.
 	LastSeq int64 `json:"last_seq,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -29,7 +31,7 @@ func (*ConsumerOffset) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case consumeroffset.FieldLastSeq:
+		case consumeroffset.FieldLastTxID, consumeroffset.FieldLastSeq:
 			values[i] = new(sql.NullInt64)
 		case consumeroffset.FieldID:
 			values[i] = new(sql.NullString)
@@ -55,6 +57,12 @@ func (_m *ConsumerOffset) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
 				_m.ID = value.String
+			}
+		case consumeroffset.FieldLastTxID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field last_tx_id", values[i])
+			} else if value.Valid {
+				_m.LastTxID = uint64(value.Int64)
 			}
 		case consumeroffset.FieldLastSeq:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -104,6 +112,9 @@ func (_m *ConsumerOffset) String() string {
 	var builder strings.Builder
 	builder.WriteString("ConsumerOffset(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	builder.WriteString("last_tx_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.LastTxID))
+	builder.WriteString(", ")
 	builder.WriteString("last_seq=")
 	builder.WriteString(fmt.Sprintf("%v", _m.LastSeq))
 	builder.WriteString(", ")

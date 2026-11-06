@@ -12,6 +12,8 @@ const (
 	Label = "consumer_offset"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "consumer"
+	// FieldLastTxID holds the string denoting the last_tx_id field in the database.
+	FieldLastTxID = "last_tx_id"
 	// FieldLastSeq holds the string denoting the last_seq field in the database.
 	FieldLastSeq = "last_seq"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -23,6 +25,7 @@ const (
 // Columns holds all SQL columns for consumeroffset fields.
 var Columns = []string{
 	FieldID,
+	FieldLastTxID,
 	FieldLastSeq,
 	FieldUpdatedAt,
 }
@@ -55,6 +58,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByLastTxID orders the results by the last_tx_id field.
+func ByLastTxID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLastTxID, opts...).ToFunc()
 }
 
 // ByLastSeq orders the results by the last_seq field.

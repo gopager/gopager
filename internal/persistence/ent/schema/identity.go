@@ -3,6 +3,7 @@ package schema
 import (
 	"encoding/json"
 	"entgo.io/ent"
+	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/field"
@@ -272,8 +273,8 @@ func (DomainEvent) Fields() []ent.Field {
 	}
 }
 
-// ConsumerOffset defines the consumer_offsets table: the last domain_events seq a named
-// consumer has durably processed.
+// ConsumerOffset defines the consumer_offsets table: the last domain_events (tx_id, seq)
+// position a named consumer has durably processed.
 type ConsumerOffset struct{ ent.Schema }
 
 // Policy returns the privacy policy that guards queries and mutations of the ConsumerOffset schema.
@@ -288,6 +289,7 @@ func (ConsumerOffset) Annotations() []schema.Annotation {
 func (ConsumerOffset) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").StorageKey("consumer").Immutable(),
+		field.Uint64("last_tx_id").SchemaType(map[string]string{dialect.Postgres: "xid8"}),
 		field.Int64("last_seq").NonNegative(),
 		field.Time("updated_at"),
 	}

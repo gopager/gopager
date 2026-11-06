@@ -139,6 +139,7 @@ var (
 	// ConsumerOffsetsColumns holds the columns for the "consumer_offsets" table.
 	ConsumerOffsetsColumns = []*schema.Column{
 		{Name: "consumer", Type: field.TypeString},
+		{Name: "last_tx_id", Type: field.TypeUint64, SchemaType: map[string]string{"postgres": "xid8"}},
 		{Name: "last_seq", Type: field.TypeInt64},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
