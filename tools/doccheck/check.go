@@ -17,66 +17,65 @@ func (f finding) String() string {
 	return fmt.Sprintf("%s:%d: %s: %s", f.Path, f.Line, f.Kind, f.Detail)
 }
 
-// checkAll runs every rule over the documents and returns the sorted,
-// de-duplicated findings. root is the directory holding the repository.
-func checkAll(root string, docs []*document) []finding {
-	reg, out := buildRegistry(docs)
+// checkAll runs every rule over the documents and returns the sorted, de-duplicated findings.
+// root is the directory holding the repository; rules are the loaded configurations, if any.
+func checkAll(root string, docs []*document, rules []*ruleSet) []finding {
+	var out []finding
+	for _, rs := range rules {
+		out = append(out, rs.build(docs)...)
+	}
 	anchorSets := map[string]map[string]bool{}
 	for _, d := range docs {
 		anchorSets[d.path] = d.anchors()
 	}
 	out = append(out, checkLinks(root, docs, anchorSets)...)
 	for _, d := range docs {
-		out = append(out, checkIDs(d, reg)...)
+		for _, rs := range rules {
+			out = append(out, rs.check(d)...)
+		}
 	}
 	return sortUnique(out)
 }
 
-// checkIDs verifies every identifier referenced outside fenced code in d. Inline
-// code is included on purpose: IDs are routinely written in backticks.
-func checkIDs(d *document, reg *registry) []finding {
+// check verifies every reference of rs outside fenced code in d. Inline code is included on
+// purpose: identifiers are routinely written in backticks.
+func (rs *ruleSet) check(d *document) []finding {
 	var out []finding
-	families := []struct {
-		kind idKind
-		set  map[int]bool
-		what string
-	}{
-		{decisionIDs, reg.decisions, "not in the decision register"},
-		{requirementIDs, reg.requirements, "not in the requirements catalog"},
-		{workPackageIDs, reg.workPackages, "no file in development/work-packages/"},
-		{contractIDs, reg.contracts, "no file in development/contracts/"},
-	}
 	for i, line := range d.prose {
-		for _, f := range families {
-			for _, ref := range f.kind.references(line) {
-				if !f.set[ref.n] {
-					out = append(out, finding{d.path, i + 1, f.kind.finding, ref.label + " " + f.what})
+		for _, k := range rs.kinds {
+			for _, ref := range k.ref.references(line) {
+				if !k.known[ref.n] {
+					out = append(out, finding{d.path, i + 1, "unknown-" + k.cfg.Name, ref.label + " " + k.cfg.Missing})
 				}
 			}
 		}
-		for _, ref := range evidenceReferences(line) {
-			if msg := missingEvidence(reg, ref); msg != "" {
-				out = append(out, finding{d.path, i + 1, "unknown-evidence", msg})
+		for _, k := range rs.headingKinds {
+			for _, ref := range k.ref.references(line) {
+				if msg := k.missing(ref); msg != "" {
+					out = append(out, finding{d.path, i + 1, "unknown-" + k.name, msg})
+				}
 			}
 		}
 	}
 	return out
 }
 
-// missingEvidence returns the problem with an "AP-nn E-m" reference, or "".
-func missingEvidence(reg *registry, ref evidenceRef) string {
-	records, file := reg.evidence, "ap"
-	if ref.source {
-		records, file = reg.sourceEvidence, "source-ap"
+// missing returns the problem with a reference, or "".
+func (k *headingKindRule) missing(ref reference) string {
+	for _, s := range k.sources {
+		if s.cfg.Variant != ref.variant {
+			continue
+		}
+		set, ok := s.known[ref.doc]
+		switch {
+		case !ok:
+			return ref.label + ": " + s.cfg.MissingDocument
+		case !set[ref.n]:
+			return ref.label + ": " + s.cfg.MissingHeading
+		}
+		return ""
 	}
-	set, ok := records[ref.ap]
-	if !ok {
-		return fmt.Sprintf("%s: no development/execution/%s-%02d.md", ref.label, file, ref.ap)
-	}
-	if !set[ref.e] {
-		return fmt.Sprintf("%s: no E-%02d heading in development/execution/%s-%02d.md", ref.label, ref.e, file, ref.ap)
-	}
-	return ""
+	return fmt.Sprintf("%s: no source for variant %q", ref.label, ref.variant)
 }
 
 // sortUnique orders findings by path, line, kind, detail and drops exact duplicates.

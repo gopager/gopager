@@ -1,12 +1,14 @@
-// Command doccheck verifies cross-references in the repository's Markdown files:
-// relative links and heading fragments, decision (D-n), requirement (REQ-nnn),
-// work-package (AP-nn), execution-evidence (AP-nn E-m) and contract (C-nn) IDs.
+// Command doccheck verifies cross-references in the repository's Markdown files: relative
+// links and heading fragments always, and numbered identifiers (decisions, work packages,
+// evidence entries and the like) wherever a .doccheck.json file below the root declares them.
+// The schema is documented on the config type.
 //
 // Usage: go run ./tools/doccheck [-root dir] [-json]
 //
 // Findings print as "path:line: kind: detail", sorted. Findings accepted on purpose are listed
-// with a reason in tools/doccheck/ignore.txt; an entry that matches nothing is itself reported. The exit status is 1 when
-// there are findings, 2 on an operational error and 0 otherwise.
+// with a reason in a .doccheck.json file; an entry that matches nothing is itself reported.
+// The exit status is 1 when there are findings, 2 on an operational or configuration error and
+// 0 otherwise.
 package main
 
 import (
@@ -34,17 +36,11 @@ func main() {
 
 // run executes the check and returns the process exit status.
 func run(root string, asJSON bool) int {
-	docs, err := loadDocuments(root)
+	findings, err := analyze(root)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "doccheck:", err)
 		return 2
 	}
-	ignore, err := loadIgnore(root)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "doccheck:", err)
-		return 2
-	}
-	findings := sortUnique(applyIgnore(checkAll(root, docs), ignore))
 	if asJSON {
 		if findings == nil {
 			findings = []finding{}
@@ -63,10 +59,30 @@ func run(root string, asJSON bool) int {
 	return 0
 }
 
-// loadDocuments parses every Markdown file below root, skipping skippedDirs.
-func loadDocuments(root string) ([]*document, error) {
-	var docs []*document
-	err := filepath.WalkDir(root, func(p string, e fs.DirEntry, err error) error {
+// analyze scans the tree below root, loads every configuration and returns the findings that
+// are not ignored. A configuration error is returned as an error.
+func analyze(root string) ([]finding, error) {
+	docs, configs, err := scan(root)
+	if err != nil {
+		return nil, err
+	}
+	var rules []*ruleSet
+	var ignore []ignoreEntry
+	for _, c := range configs {
+		rs, err := loadRules(root, c)
+		if err != nil {
+			return nil, err
+		}
+		rules = append(rules, rs)
+		ignore = append(ignore, rs.ignore...)
+	}
+	return sortUnique(applyIgnore(checkAll(root, docs, rules), ignore)), nil
+}
+
+// scan parses every Markdown file below root, skipping skippedDirs, and returns the
+// repository-relative paths of the configuration files it met.
+func scan(root string) (docs []*document, configs []string, err error) {
+	err = filepath.WalkDir(root, func(p string, e fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -76,6 +92,15 @@ func loadDocuments(root string) ([]*document, error) {
 			}
 			return nil
 		}
+		rel, err := filepath.Rel(root, p)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		if e.Name() == configFileName {
+			configs = append(configs, rel)
+			return nil
+		}
 		if !strings.HasSuffix(e.Name(), ".md") {
 			return nil
 		}
@@ -83,12 +108,8 @@ func loadDocuments(root string) ([]*document, error) {
 		if err != nil {
 			return err
 		}
-		rel, err := filepath.Rel(root, p)
-		if err != nil {
-			return err
-		}
-		docs = append(docs, parseDocument(filepath.ToSlash(rel), string(text)))
+		docs = append(docs, parseDocument(rel, string(text)))
 		return nil
 	})
-	return docs, err
+	return docs, configs, err
 }
