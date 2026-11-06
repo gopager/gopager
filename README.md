@@ -14,7 +14,7 @@ GoPager receives pager transmissions from radio gateways, groups them into messa
 go build ./cmd/gopager
 make                                                  # format check and go vet
 go test ./...                                         # unit tests
-GOPAGER_INTEGRATION=1 go test -race -count=1 ./...    # full suite against PostgreSQL containers
+make test-race                                        # full suite against PostgreSQL containers, as in CI
 ```
 
 To configure and run a deployment, see [docs/operations.md](docs/operations.md).

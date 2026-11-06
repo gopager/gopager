@@ -73,12 +73,15 @@ make vet                # go vet ./...
 make golangci           # golangci-lint run ./... (pinned version)
 make lint               # fmt-check, vet, golangci
 make test               # quick tier: go test ./...
-make test-integration   # GOPAGER_INTEGRATION=1 go test -race -count=1 -timeout=20m ./...
+make test-integration   # all tests incl. PostgreSQL, shuffled, with JUnit and JSON reports (gotestsum, pinned)
+make test-race          # test-integration with the race detector (the CI tier)
+make test-slowest       # tests over 1 s from the last test-integration / test-race run
+make test-stress        # STRESS_COUNT (default 5) shuffled race runs, to hunt flaky tests
 make generate-check     # go generate ./..., then fail if the Ent output differs from git
 make vuln               # govulncheck ./... (pinned version, needs network)
 ```
 
-`gofmt` covers `cmd/` and `internal/` (including generated Ent code and tests). Only `test-integration` needs Docker.
+`gofmt` covers `cmd/` and `internal/` (including generated Ent code and tests). Only the `test-integration`, `test-race` and `test-stress` targets need Docker.
 
 [.golangci.yml](../.golangci.yml) enables a conservative set: `govet`, `staticcheck`, `errcheck`, `ineffassign`, `unused`, `misspell`. Generated code is skipped by golangci-lint's generated-file detection. Three known findings in processing code are excluded by path and text (two ineffectual assignments in `cmd/gopager/processing_worker.go` and `internal/processing/workflow_test.go`, and an overwritten argument in `internal/processing/workflow.go`); delete the matching `exclude-rules` entry when you fix one. Do not add new exclusions to hide findings in code you change.
 
@@ -88,7 +91,7 @@ make vuln               # govulncheck ./... (pinned version, needs network)
 
 ### Continuous integration
 
-[.github/workflows/ci.yml](../.github/workflows/ci.yml) runs on pull requests and pushes to `main`. Job `static`: `make fmt-check`, `make vet`, `make golangci`, `make test`, `make generate-check`. Job `integration` (after `static`): `make test-integration` on the runner's Docker daemon. Job `vulnerabilities` runs `make vuln` as non-blocking information. The Go version comes from `go.mod`.
+[.github/workflows/ci.yml](../.github/workflows/ci.yml) runs on pull requests and pushes to `main`. Job `static`: `make fmt-check`, `make vet`, `make golangci`, `make test`, `make generate-check`. Job `integration` (after `static`, 15 minute limit): `make test-race` on the runner's Docker daemon, then it uploads `build/test-reports` (`junit.xml`, `test.json`) as the `test-reports` artifact and appends `make test-slowest` to the job summary, both even when tests fail. Job `vulnerabilities` runs `make vuln` as non-blocking information. The Go version comes from `go.mod`.
 
 ## Tests
 
@@ -96,9 +99,23 @@ make vuln               # govulncheck ./... (pinned version, needs network)
 
 | Tier | Command | Needs |
 | --- | --- | --- |
-| Quick | `make test` (`go test ./...`) | Go only. Database tests are skipped with `PostgreSQL integration disabled; run with GOPAGER_INTEGRATION=1`. |
-| Full, owned containers | `make test-integration` (`GOPAGER_INTEGRATION=1 go test -race -count=1 -timeout=20m ./...`) | Docker |
-| Full, external database | `GOPAGER_TEST_DATABASE_URL='postgres://…' go test -race -count=1 ./...` | A disposable PostgreSQL server with a role that has `CREATEDB` |
+| Unit | `make test` (`go test ./...`) | Go only. Cacheable. Database tests are skipped with `PostgreSQL integration disabled; run with GOPAGER_INTEGRATION=1`. |
+| Integration | `make test-integration` | Docker. `GOPAGER_INTEGRATION=1`, `-count=1 -shuffle=on`, no race detector; writes `junit.xml` and `test.json` to `build/test-reports` (`TEST_REPORT_DIR`). |
+| Race (CI) | `make test-race` | Docker. Integration plus `-race`; this is what CI runs. |
+| Slowest | `make test-slowest` | The `test.json` of the last integration or race run. Lists tests over `SLOWEST_THRESHOLD` (1 s). |
+| Stress | `make test-stress [STRESS_COUNT=5]` | Docker. `-race -shuffle=on -count=N` for flaky-test hunting. Ginkgo suites reject `-count` above 1, so they are skipped there and repeated with the Ginkgo CLI (`ginkgo --repeat`, the documented way). |
+| External database | `GOPAGER_TEST_DATABASE_URL='postgres://…' make test-race` | A disposable PostgreSQL server with a role that has `CREATEDB` |
+
+Local equals CI: the same make targets, the same pinned PostgreSQL image digest and one container per package, with tool versions pinned in the Makefile. There are no automatic reruns (no `--rerun-fails`): a flaky test is a bug to find with `make test-stress`. The integration targets pass `-shuffle=on`, which disables Go's test cache, so only `make test` is cacheable.
+
+The container is started by `internal/testutil/postgres` per test package, not by make or compose. That needs no setup beyond Docker, isolates concurrent runs and worktrees (no shared fixed port or server), is cleaned up by Testcontainers' Ryuk reaper even after a crash, and runs identical code locally and in CI. `GOPAGER_TEST_DATABASE_URL` stays the escape hatch for a server you provide.
+
+### Where a test belongs
+
+- Domain rules are tested with fakes in the domain package. Same speed as any unit test; no PostgreSQL.
+- Integration tests (mostly `internal/persistence/ent/borrowed`) cover only what PostgreSQL decides: SQL, constraints, locks, isolation, `NOTIFY`, snapshot visibility and migrations. A store test that repeats a domain rule is trimmed to its PostgreSQL-only assertions.
+- E2E tests in `cmd/gopager` cover wiring only, one test per external surface or path. The transport matrix (plain HTTP, TLS reverse proxy, forged forwarding headers, Origin and CSRF) lives at the HTTP unit tier, `internal/identity/http_test.go`; `cmd/gopager/tls_proxy_test.go` is the single E2E test of the TLS proxy path, and feature E2E tests use plain HTTP.
+- Production costs appear only in tests that verify them (Argon2id parameters, real timers). Every other test injects a cheap hasher (`internal/testutil/passwords`) or a short interval (see [Keeping tests off the wall clock](#keeping-tests-off-the-wall-clock)).
 
 Environment variables:
 
@@ -107,7 +124,7 @@ Environment variables:
 | `GOPAGER_INTEGRATION` | unset or `1`; anything else fails the run | `1` starts one PostgreSQL container per participating test package |
 | `GOPAGER_TEST_DATABASE_URL` | DSN | Use this server instead of a container; setting it alone also enables database tests. Tests create and drop databases next to the one named in the DSN, so use a disposable server, never a production one. |
 
-Use `-count=1` for integration runs so Go's test cache does not report stale results. In a requested integration run, a missing Docker daemon or unreachable database fails the run; it is not skipped.
+The integration targets use `-count=1` so Go's test cache does not report stale results. In a requested integration run, a missing Docker daemon or unreachable database fails the run; it is not skipped.
 
 Packages with database tests (their `TestMain` calls `testpostgres.Run`): `cmd/gopager`, `internal/platform/postgres`, `internal/persistence/ent/borrowed`. Each test gets its own database (random name), dropped with `WITH (FORCE)` on cleanup, so tests share nothing: schemas, `LISTEN/NOTIFY` channels and advisory locks are all database-scoped. `internal/testutil/postgres` provides `EmptyDatabase(t)` (cloned from `template0`) and `NewTemplate(name, build).Database(t)`, which builds a template database once per process (for example with all migrations applied), marks it `IS_TEMPLATE` with connections disallowed, and clones it with `CREATE DATABASE … TEMPLATE`. Clones of one template are serialized because PostgreSQL refuses to copy a template that other sessions are using. `Run` drops the process's templates after the tests. The owned container is deliberately non-durable (`fsync=off`, `synchronous_commit=off`, `full_page_writes=off`, data directory on tmpfs, `max_connections=500`); it is a throwaway fixture and says nothing about crash safety. An external server may have any durability settings.
 
@@ -119,11 +136,11 @@ Every test runs in parallel. `paralleltest` and `tparallel` (configured in `.gol
 - A parent with parallel subtests releases its resources with `t.Cleanup`, never `defer`: a deferred call runs when the parent function returns, before the parallel subtests resume.
 - Tests must not touch process-global state: no `t.Setenv`/`os.Setenv` (Go panics on `t.Setenv` in a parallel test), `os.Chdir`, `slog.SetDefault`, swapped package variables, fixed TCP ports (listen on `127.0.0.1:0`) or fixed temp paths. Inject the value instead. A process-wide value that no test changes can be set once in `TestMain`; `internal/processing/main_test.go` does this for `GOPAGER_TEST_CORE_SECRET`.
 - A test that cannot be parallel stays serial and says why: `//nolint:paralleltest // <concrete reason>` on the `func` line (and on the `for`/`t.Run` line that `paralleltest` reports for its subtests; add `tparallel` when a parallel parent has sequential subtests). Go runs serial top-level tests first, one at a time, and only then releases the parallel ones, so a serial test can safely change process-global state. Current exceptions: tests that swap `computeAllowance`, `pluginIdleTimeout` or `installedInvocationTimeout` in `internal/processing`; tests that replace the `slog` default logger or set `LANG`; the re-exec helper `TestRunProcessHelper`; tests that assert against the wall-clock compute allowance or elapsed time (CPU contention would exhaust it); and the event-log tests that read through `Log.ReadAfter`, whose visibility horizon (`pg_snapshot_xmin`) is server-wide, so a transaction open in any parallel test's database hides committed events (with an external server, other packages' transactions hide them as well, so those tests can then need a quiet server).
-- Ginkgo suites (`RunSpecs`) are one parallel test per package; their specs run in order, because a suite shares its `BeforeEach` state and the global Gomega fail handler. Ginkgo rejects `go test -count=N` with N > 1 for them, so repeat runs use `-skip` for the suite or `ginkgo -repeat`.
+- Ginkgo suites (`RunSpecs`) are one parallel test per package; their specs run in order, because a suite shares its `BeforeEach` state and the global Gomega fail handler. Ginkgo rejects `go test -count=N` with N > 1 for them, so `make test-stress` skips them and repeats them with `ginkgo --repeat`.
 
 Isolation model: one PostgreSQL server per test package (separate packages never share a server), one database per test (see above), so schemas, `LISTEN/NOTIFY` channels and advisory locks are per test. Server-wide state is the only shared thing: transaction ids and the snapshot horizon (see the event-log exception) and the connection limit. Each store pool opens at most 10 connections and the owned container allows 500, with up to `GOMAXPROCS` tests running per package. A run with `GOMAXPROCS=32` peaked at about 45 connections; on a much larger machine lower the parallelism with `go test -parallel=N`.
 
-Check for hidden dependencies with `GOPAGER_INTEGRATION=1 go test -race -count=1 -shuffle=on ./...`.
+`make test-integration` and `make test-race` shuffle the test order to expose hidden dependencies; `make test-stress` repeats the run.
 
 Run a subset:
 
