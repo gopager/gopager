@@ -76,7 +76,7 @@ Date: 2026-10-26. The user approved the limited C-04 review scope in [AP-04 E-22
 
 ### E-12 D-48 Gateway Credential Lifecycle
 
-Date: 2026-10-26. Gateway credentials do not expire automatically; the old credential is revoked atomically on the replacement's first successfully authenticated request. See [D-48](../authoritative-plan.md#ap-06-gateway-credential-lifecycle-decision) and [C-06](../contracts/c-06-identity-authorization.md#ap-06-gateway-bearer-credentials). The contract and F-49 remain unfreezed/unexecuted, so T022 stays blocked.
+Date: 2026-10-26. Gateway credentials do not expire automatically; the old credential is revoked atomically on the replacement's first successfully authenticated request. See [D-48](../authoritative-plan.md#ap-06-gateway-credential-lifecycle-decision) and [C-06](../../docs/http-api.md#gateway-authentication). The contract and F-49 remain unfreezed/unexecuted, so T022 stays blocked.
 
 ### E-13 D-49 Grouping Window Precision
 
@@ -92,7 +92,7 @@ Date: 2026-10-26. The user explicitly approved a JSON integer `W` in `0..2^53−
 
 ### E-16 D-52 Application-wide HTTP
 
-Date: 2026-10-26. The user extended HTTP support from Gateway requests to every GoPager application function, including human login, Recovery and Session use. Direct HTTP is supported without a TLS guarantee; Operators may terminate TLS at a reverse proxy and are responsible for protecting exposed transport paths. See [D-52](../authoritative-plan.md#application-wide-http-support-decision), [C-12](../contracts/c-12-persistence-operations.md#application-http-transport) and [C-06](../contracts/c-06-identity-authorization.md#http-transport-and-human-authentication). This is a documentary decision only: no AP baseline or prior evidence changed, owner contracts remain draft, and no AP-06 implementation approval was granted. T022–T024 remain blocked.
+Date: 2026-10-26. The user extended HTTP support from Gateway requests to every GoPager application function, including human login, Recovery and Session use. Direct HTTP is supported without a TLS guarantee; Operators may terminate TLS at a reverse proxy and are responsible for protecting exposed transport paths. See [D-52](../authoritative-plan.md#application-wide-http-support-decision), [C-12](../../docs/http-api.md#basics) and [C-06](../../docs/http-api.md#authentication). This is a documentary decision only: no AP baseline or prior evidence changed, owner contracts remain draft, and no AP-06 implementation approval was granted. T022–T024 remain blocked.
 
 ### E-17 Original Target Reference and Prerequisite Preparation
 
@@ -152,7 +152,7 @@ Date: 2026-11-01. The user selected `field_group_definition=fixed-configurable-g
 
 Date: 2026-11-01. The user explicitly resumed `/execute-work-package AP-06`. Reviewed the unchanged T022/T023/T024 baseline and current prerequisite/gate handover. D-62/D-67 technical selections remain approved; D-66 remains unselected after its chat explanation. Global-view visibility remains explicitly deferred and is not treated as a new AP-06 blocker.
 
-Prepared [C-06 field-group-review 0.1-candidate](../contracts/c-06-identity-authorization.md#fixed-field-group-review-candidate) and C-07's linked query-eligibility note under D-68/documentary authorization. The matrix retains current identifiers, separates readable presentation from rule internals and operation rights, and explicitly marks source/receipt subfield and single-Gateway authorization gaps. No frozen grant model/field semantics, application source, AP-09/AP-10 task or AP baseline changed. This preparation is not a new permission freeze or runtime evidence.
+Prepared [C-06 field-group-review 0.1-candidate](../contracts/c-06-identity-authorization.md#planned-and-not-yet-implemented) and C-07's linked query-eligibility note under D-68/documentary authorization. The matrix retains current identifiers, separates readable presentation from rule internals and operation rights, and explicitly marks source/receipt subfield and single-Gateway authorization gaps. No frozen grant model/field semantics, application source, AP-09/AP-10 task or AP baseline changed. This preparation is not a new permission freeze or runtime evidence.
 
 ### E-29 Approved T043 Start and Verified Partial Kernel Progress
 
@@ -198,7 +198,7 @@ Replacement freeze: [AP-04 E-49](ap-04.md#e-49-unscoped-field-replacement-freeze
 
 Correction handover, 2026-11-01: the separate execution approval was granted and implemented. [AP-07 correction verification](source-ap-07.md#unscoped-field-correction-verification-and-handover) owns the real PostgreSQL/Race/HTTP/Proxy evidence and artifact links. This replaces the earlier scoped-field prerequisite semantics, not the AP-06 baseline. D-66 and the T043 freeze/execution gates still require resolution; AP-06 intake/Grouping/publication remains unimplemented.
 
-Field-visibility correction, 2026-11-01: the user explicitly rejected per-Unit/per-source scopes on field visibility. [D-69](../authoritative-plan.md#unscoped-field-visibility-clarification) records the instructed product direction and [C-06](../contracts/c-06-identity-authorization.md#unscoped-field-visibility-product-clarification) owns its meaning. Previous candidate/frozen scoped-field interpretation is identified as historical rather than silently propagated. Scope-based data access remains separate; current identity implementation/keys/detail composition and existing grants require a concrete replacement freeze/migration binding. No product code or frozen artifact was changed, and D-66 remains undecided.
+Field-visibility correction, 2026-11-01: the user explicitly rejected per-Unit/per-source scopes on field visibility. [D-69](../authoritative-plan.md#unscoped-field-visibility-clarification) records the instructed product direction and [C-06](../../docs/http-api.md#authorization) owns its meaning. Previous candidate/frozen scoped-field interpretation is identified as historical rather than silently propagated. Scope-based data access remains separate; current identity implementation/keys/detail composition and existing grants require a concrete replacement freeze/migration binding. No product code or frozen artifact was changed, and D-66 remains undecided.
 
 User-story follow-up, 2026-11-01: the user explicitly requested five delegated-administration/restricted-view scenarios be added for planning. The canonical [REQ-133..137 addendum](../requirements-catalog.md#n-delegated-administration-and-restricted-views) records goals, positive/negative acceptance and links to existing requirements. The user then explicitly mapped Source to Gateway, Agency to Organization and Unit filters to saved search/view filters, not technical assignment rules. The addendum uses those canonical terms, without a domain rename. Single-Gateway authorization and delegated saved-view/filter management require concrete owner bindings; existing Network-scoped Address-rule management does not satisfy the clarified REQ-133. No new contract freeze, code or AP-baseline change follows.
 

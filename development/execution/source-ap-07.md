@@ -2,7 +2,7 @@
 
 ## Handover
 
-Verified prerequisite: bootstrap, login/logout/self-Session, current-authority resolution, point authorization/native filtering, restricting-key resolution, global fields and immediate invalidation. [E-02..E-13](#e-02-credential-primitives-and-api-registration) and the [field-correction evidence](#unscoped-field-correction-verification-and-handover) retain exact checks; [C-06](../contracts/c-06-identity-authorization.md#local-identity-and-authorization-handover-candidate) owns executable interface/artifact bindings.
+Verified prerequisite: bootstrap, login/logout/self-Session, current-authority resolution, point authorization/native filtering, restricting-key resolution, global fields and immediate invalidation. [E-02..E-13](#e-02-credential-primitives-and-api-registration) and the [field-correction evidence](#unscoped-field-correction-verification-and-handover) retain exact checks; [C-06](../../docs/http-api.md#authorization) owns executable interface/artifact bindings.
 
 AP-06/AP-07 and each later protected domain compose server-derived scope-existence/filter/projection adapters in the live primary transaction; point authorization never permits raw entity output. No Guest/admin/worker fallback for missing authority.
 
@@ -30,7 +30,7 @@ Date: 2026-11-01. The user explicitly approved D-70 identity-fields 1.0 and sepa
 
 ### Unscoped Field Correction Verification and Handover
 
-Date: 2026-11-01. The separately approved `identity-fields1.0` correction is implemented and reverified; earlier scoped-field evidence remains historical. The authoritative record/behavior owner is [C-06](../contracts/c-06-identity-authorization.md#unscoped-field-permission-replacement-candidate).
+Date: 2026-11-01. The separately approved `identity-fields1.0` correction is implemented and reverified; earlier scoped-field evidence remains historical. The authoritative record/behavior owner is [C-06](../../docs/http-api.md#authorization).
 
 Implementation: [global field authority](../../internal/authz/fields.go), [point decisions](../../internal/authz/decision.go), [native query authorization](../../internal/persistence/ent/permissions/filter.go), [current identity resolver](../../internal/identity/authority.go), [Ent authority loader](../../internal/persistence/ent/identitystore/authority.go), [bootstrap](../../internal/persistence/ent/identitystore/bootstrap.go), [generated schema source](../../internal/persistence/ent/schema/identity.go), and [migration 00005](../../internal/persistence/migrations/00005_global_field_permissions.sql). Generation used the existing `go generate ./internal/persistence/ent`; no new dependency or general management endpoint was introduced.
 
@@ -57,7 +57,7 @@ Read the platform transaction/store/composition, test-fixture and migration-test
 
 ### E-02 Credential Primitives and API Registration
 
-Date: 2026-10-26, same Go/macOS environment as E-01. The user separately approved the additive [C-12 application handler registration](../contracts/c-12-persistence-operations.md#application-handler-registration-addendum). [Platform API composition](../../internal/platform/api.go) and `StartWithAPI` preserve the existing no-API `Start` entry point, Health routes and readiness/draining boundary. [Credential tests](../../internal/identity/credentials_test.go) cover D-54 comparison, byte-preserving password handling, salted Argon2id and canonical random-secret hashing.
+Date: 2026-10-26, same Go/macOS environment as E-01. The user separately approved the additive [C-12 application handler registration](../../docs/architecture.md#packages). [Platform API composition](../../internal/platform/api.go) and `StartWithAPI` preserve the existing no-API `Start` entry point, Health routes and readiness/draining boundary. [Credential tests](../../internal/identity/credentials_test.go) cover D-54 comparison, byte-preserving password handling, salted Argon2id and canonical random-secret hashing.
 
 `go test ./internal/platform ./internal/identity` exited 0. E-03 additionally executes these packages under the race detector. The API test uses an actual HTTP test server; this is not evidence of a completed login/Recovery/Session HTTP adapter.
 
@@ -75,11 +75,11 @@ After correction, `GOPAGER_INTEGRATION=1 go test -race -count=1 ./internal/persi
 
 ### E-04 Detail Field Clarification
 
-Date: 2026-10-26. The user selected `read-fields-plus-detail-action`; [D-55](../authoritative-plan.md#detail-field-authorization-decision) records the approval for [C-06 identity-core 1.1](../contracts/c-06-identity-authorization.md#detail-field-authorization-addendum). The active prerequisite binding consumes this narrow addendum; the 1.0 freeze is preserved as history. [Predicate tests](../../internal/persistence/ent/permissions/filter_test.go) verify that a fieldless detail grant permits the additional view only with field-bearing read authority, and that owner/key action omissions fail closed. `go test ./internal/persistence/ent/permissions ./internal/authz` and the two Git diff checks from E-03 exited 0. This is partial F-53 evidence; real Message-context scope/age/projection tests remain necessary at the consumer boundary.
+Date: 2026-10-26. The user selected `read-fields-plus-detail-action`; [D-55](../authoritative-plan.md#detail-field-authorization-decision) records the approval for [C-06 identity-core 1.1](../../docs/http-api.md#authorization). The active prerequisite binding consumes this narrow addendum; the 1.0 freeze is preserved as history. [Predicate tests](../../internal/persistence/ent/permissions/filter_test.go) verify that a fieldless detail grant permits the additional view only with field-bearing read authority, and that owner/key action omissions fail closed. `go test ./internal/persistence/ent/permissions ./internal/authz` and the two Git diff checks from E-03 exited 0. This is partial F-53 evidence; real Message-context scope/age/projection tests remain necessary at the consumer boundary.
 
 ### E-05 Identity Fact Freeze Gap
 
-Date: 2026-10-26. Before implementing state-changing identity services, checked C-06's mandatory same-transaction invalidation facts against the actual C-08 freeze. Transaction-participation 1.0 covers borrowing/atomicity but explicitly leaves the event envelope/schema draft. The [identity-facts candidate](../contracts/c-08-events-jobs.md#ap-07-identity-fact-append-candidate) prepares the minimal AP-07 producer subset and additive integration write scope for explicit approval. No event/job engine or production event table has been implemented.
+Date: 2026-10-26. Before implementing state-changing identity services, checked C-06's mandatory same-transaction invalidation facts against the actual C-08 freeze. Transaction-participation 1.0 covers borrowing/atomicity but explicitly leaves the event envelope/schema draft. The [identity-facts candidate](../../docs/architecture.md#domain-events-and-outbox) prepares the minimal AP-07 producer subset and additive integration write scope for explicit approval. No event/job engine or production event table has been implemented.
 
 ### E-06 Approved Identity Fact Append
 
@@ -97,7 +97,7 @@ The resolver is not a completed login/issuance/delegation/HTTP service. These te
 
 ### E-08 HTTP Credential Selection and Session Transport
 
-Date: 2026-10-26. The user approved [D-57](../authoritative-plan.md#http-credential-selection-decision), and [C-06](../contracts/c-06-identity-authorization.md#http-credential-selection-addendum) now freezes explicit bearer precedence without Session/Guest fallback for invalid explicit credentials.
+Date: 2026-10-26. The user approved [D-57](../authoritative-plan.md#http-credential-selection-decision), and [C-06](../../docs/http-api.md#authentication) now freezes explicit bearer precedence without Session/Guest fallback for invalid explicit credentials.
 
 Implemented [HTTP transport/policy helpers](../../internal/identity/http.go) and [tests](../../internal/identity/http_test.go) covering explicit bearer selection, duplicate/malformed Authorization rejection, no fallback to Session/Guest, duplicate/malformed Session-cookie rejection, strict same-origin checks, and Session-bound CSRF checks. The fixture uses real HTTP requests and a TLS-terminating reverse proxy forwarding to an HTTP upstream, and verifies that untrusted `Forwarded`/`X-Forwarded-*` headers do not influence origin/credential decisions.
 
@@ -125,7 +125,7 @@ Added [actual login/logout HTTP routes](../../internal/identity/handler.go) and 
 
 ### E-12 Local Bootstrap and Product Composition
 
-Date: 2026-10-27. Implemented [local-only bootstrap](../../internal/identity/bootstrap.go), its [Ent adapter](../../internal/persistence/ent/identitystore/bootstrap.go) and [CLI command](../../cmd/gopager/bootstrap.go). Initial actions, fields and delegability are explicit Operator selections; no implicit administrator bypass, default credential or bootstrap HTTP route exists. Password input is bounded stdin pipe/file input, not a command argument or echoed interactive prompt. Startup usage is documented at [C-12](../contracts/c-12-persistence-operations.md#local-identity-initialization-and-startup).
+Date: 2026-10-27. Implemented [local-only bootstrap](../../internal/identity/bootstrap.go), its [Ent adapter](../../internal/persistence/ent/identitystore/bootstrap.go) and [CLI command](../../cmd/gopager/bootstrap.go). Initial actions, fields and delegability are explicit Operator selections; no implicit administrator bypass, default credential or bootstrap HTTP route exists. Password input is bounded stdin pipe/file input, not a command argument or echoed interactive prompt. Startup usage is documented at [C-12](../../docs/operations.md#first-start-and-bootstrap).
 
 [Bootstrap integration tests](../../internal/persistence/ent/borrowed/bootstrap_test.go) prove rollback of the one-time guard on fact failure, successful ordinary login afterward, Guest without grants, no unspecified administrator/delegation rights and exactly one winner for concurrent local initialization. [CLI input tests](../../cmd/gopager/bootstrap_test.go) verify exact password-byte handling. Existing command process tests retain real readiness/signal shutdown and now supply the public origin for API-role startup; earlier evidence is not rewritten.
 

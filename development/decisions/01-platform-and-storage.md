@@ -75,7 +75,7 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Date:** 2026-10-25
 - **Superseded by:** [D-135](10-foundation-redesign.md#d-135)
 - **Decision:** Application Backup/Restore removed; supersedes former application-lifecycle proposals.
-- **Owner detail:** [Reserved REQ-126](../requirements-catalog.md#m-additional-domain-capabilities), [C-12 Operator boundary](../contracts/c-12-persistence-operations.md#operator-backup-boundary-and-profile-transition), [C-13 personal-data boundary](../contracts/c-13-account-lifecycle.md)
+- **Owner detail:** [Reserved REQ-126](../requirements-catalog.md#m-additional-domain-capabilities), [C-12 Operator boundary](../../docs/operations.md#backup-and-restore-responsibility), [C-13 personal-data boundary](../contracts/c-13-account-lifecycle.md)
 
 <a id="d-32"></a>
 ## D-32 AP-04 Scope Decision
@@ -91,7 +91,7 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 
 - **Status:** accepted
 - **Date:** 2026-10-26
-- **Decision:** Approved AP-04 foundation-only freeze and AP-05 binding; execution waits for an explicit AP-05 start, all other technical slices remain gated. Freeze only [C-12 foundation 1.0](../contracts/c-12-persistence-operations.md#ap-05-foundation-boundary), [C-01 intake-commit 1.0](../contracts/c-01-transmission-acceptance.md#ap-05-intake-commit-boundary), [C-08 transaction participation 1.0](../contracts/c-08-events-jobs.md#ap-05-transaction-participation), [C-07 platform-errors 1.0](../contracts/c-07-query-live.md#ap-05-platform-error-binding), and the referenced [shared foundation conventions](../contracts/shared-conventions.md#ap-05-foundation-conventions). Bind [glossary G-1.0](../glossary.md) without changing existing meanings and approve the [TECH foundation tuple](../architecture.md#ap-05-foundation-version-selection). Exact future domain schemas, Gateway HTTP API, search, auth/account implementation, job engine, plugin ABI, Delivery and frontend contracts remain unfrozen. There is no whole-C-ID or whole-product approval.
+- **Decision:** Approved AP-04 foundation-only freeze and AP-05 binding; execution waits for an explicit AP-05 start, all other technical slices remain gated. Freeze only [C-12 foundation 1.0](../../docs/architecture.md#cross-cutting-mechanisms), [C-01 intake-commit 1.0](../../docs/architecture.md#intake-one-transaction), [C-08 transaction participation 1.0](../../docs/architecture.md#transactions-and-the-store-abstraction), [C-07 platform-errors 1.0](../../docs/http-api.md#errors), and the referenced [shared foundation conventions](../../docs/architecture.md#cross-cutting-mechanisms). Bind [glossary G-1.0](../glossary.md) without changing existing meanings and approve the [TECH foundation tuple](../architecture.md#ap-05-foundation-version-selection). Exact future domain schemas, Gateway HTTP API, search, auth/account implementation, job engine, plugin ABI, Delivery and frontend contracts remain unfrozen. There is no whole-C-ID or whole-product approval.
 - **Owner detail:** This record is the only current definition
 
 <a id="d-36"></a>
