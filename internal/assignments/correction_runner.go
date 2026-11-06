@@ -109,8 +109,8 @@ func correctionRetryDelay(failures int) time.Duration {
 
 // RunOnce claims one due correction scope and processes it in batches of up to
 // 100 transmissions, each batch in its own transaction that re-matches the
-// targets, applies changed resolutions, appends an assignment.changed
-// correction fact per changed target and re-admits Processing for every
+// targets, applies changed resolutions, appends one assignment.changed
+// correction fact per changed transmission and re-admits Processing for every
 // changed transmission. A batch or completion failure is recorded on the scope
 // with exponential backoff and is not returned; RunOnce returns an error only
 // when it cannot claim or reschedule. A reschedule failure is joined ahead of
@@ -165,16 +165,8 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 			if err != nil {
 				return err
 			}
-			for _, change := range changes {
-				position := change.TargetPosition
-				if _, err := r.facts.AppendCorrectionFact(tx.Context(), tx, events.CorrectionFact{
-					ID: uuid.New(), Type: "assignment.changed",
-					Aggregate: events.EntityRef{Type: "message", ID: change.MessageID},
-					Revision:  change.MessageRev, OccurredAt: now,
-					TargetPosition: &position, TransmissionID: change.TransmissionID,
-					MessageID: change.MessageID, NetworkID: change.NetworkID,
-					Before: &change.Before, After: &change.After, Reason: "corrected",
-				}); err != nil {
+			for _, fact := range correctionFacts(changes, now) {
+				if _, err := r.facts.AppendCorrectionFact(tx.Context(), tx, fact); err != nil {
 					return err
 				}
 			}

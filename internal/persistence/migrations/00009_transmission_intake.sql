@@ -80,7 +80,7 @@ CREATE TABLE messages (
     first_observed_at timestamptz NOT NULL,
     last_observed_at timestamptz NOT NULL
 );
-CREATE INDEX messages_identity ON messages (identity_form, identity_subtype, identity_value);
+CREATE INDEX messages_identity ON messages (identity_form, identity_subtype, identity_value, last_observed_at);
 -- Published Processing results belong to the Message of their Transmission; a merge moves them.
 ALTER TABLE processing_results ADD CONSTRAINT processing_results_message
     FOREIGN KEY (message_id) REFERENCES messages(id);
@@ -90,7 +90,7 @@ CREATE TABLE transmissions (
     network_id uuid NOT NULL REFERENCES networks(id),
     submission_id varchar(128) NOT NULL CHECK (submission_id <> ''),
     submission_fingerprint bytea NOT NULL CHECK (octet_length(submission_fingerprint) = 32),
-    network_resolution varchar NOT NULL CHECK (network_resolution IN ('declared', 'inferred-single', 'inferred-address', 'default')),
+    network_resolution varchar NOT NULL CHECK (network_resolution IN ('declared', 'inferred-single', 'default')),
     protocol varchar NOT NULL CHECK (protocol IN ('pocsag', 'flex', 'zvei', 'eas')),
     payload json NOT NULL,
     observed_at timestamptz NOT NULL,

@@ -56,10 +56,3 @@ type MatchResult struct {
 	Resolutions []Resolution
 	UnitContext map[uuid.UUID]units.Context
 }
-
-// NetworkCandidates lists, at assignment Revision, the allowed Networks whose
-// current rules assign at least one of the targets, without duplicates.
-type NetworkCandidates struct {
-	Revision int64
-	Networks []uuid.UUID
-}

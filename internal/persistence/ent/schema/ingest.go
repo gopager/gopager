@@ -212,7 +212,7 @@ func (Message) Fields() []ent.Field {
 
 // Indexes returns the indexes and unique constraints of the Message schema.
 func (Message) Indexes() []ent.Index {
-	return []ent.Index{index.Fields("identity_form", "identity_subtype", "identity_value")}
+	return []ent.Index{index.Fields("identity_form", "identity_subtype", "identity_value", "last_observed_at")}
 }
 
 // GroupingControl defines the single-row grouping_control table holding the Message grouping

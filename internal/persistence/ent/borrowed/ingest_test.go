@@ -65,11 +65,6 @@ func (r *intakeFailAfterAccept) AcceptTransmission(ctx context.Context, tx platf
 	return receipt, nil
 }
 
-func (noTargetMatcher) NetworksWithMatches(context.Context, platform.TransactionContext, []uuid.UUID,
-	protocols.Protocol, time.Time, []protocols.Target) (assignments.NetworkCandidates, error) {
-	return assignments.NetworkCandidates{}, nil
-}
-
 func (noTargetMatcher) MatchTargets(context.Context, platform.TransactionContext, uuid.UUID,
 	protocols.Protocol, time.Time, []protocols.Target) (assignments.MatchResult, error) {
 	return assignments.MatchResult{Revision: 1, Resolutions: []assignments.Resolution{}}, nil

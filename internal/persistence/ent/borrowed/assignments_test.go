@@ -314,13 +314,6 @@ func TestCurrentMatcherSelectionCandidatesAndDeletionInvalidation(t *testing.T) 
 			result.Resolutions[2].UnitID != nil || result.UnitContext[unit.ID].ID != unit.ID {
 			t.Fatal("positions, captured revision or explicit unassigned context changed")
 		}
-		candidates, err := f.rules.NetworksWithMatches(tx.Context(), tx, []uuid.UUID{f.networks[0], f.networks[2]}, protocols.POCSAG, observed, targets)
-		if err != nil {
-			return err
-		}
-		if !reflect.DeepEqual(candidates.Networks, []uuid.UUID{f.networks[0]}) || candidates.Revision != result.Revision {
-			t.Fatalf("candidate search widened Gateway Network set: %+v", candidates)
-		}
 		return nil
 	})
 	if err != nil {

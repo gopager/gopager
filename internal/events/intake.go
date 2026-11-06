@@ -21,10 +21,6 @@ const (
 	// ObservationTimeImplausible records that a transmission's reported
 	// observation time was implausible (requires TransmissionID, GatewayID).
 	ObservationTimeImplausible IntakeType = "operation.observation-time-implausible"
-	// NetworkAmbiguous records that a transmission's network could not be
-	// determined unambiguously and how it was resolved (also requires
-	// NetworkID and Resolution).
-	NetworkAmbiguous IntakeType = "operation.network-ambiguous"
 	// GatewayStateChanged records a gateway connectivity state transition
 	// (requires distinct OldState/NewState and ContactTime).
 	GatewayStateChanged IntakeType = "gateway.state-changed"
@@ -37,9 +33,9 @@ const (
 	// MessageMerged records that a message absorbed the messages in Absorbed
 	// (non-empty, distinct, not containing MessageID).
 	MessageMerged IntakeType = "message.merged"
-	// AssignmentChanged records a change of a message target's unit resolution
-	// at admission time (requires TargetPosition, After, and a Reason of
-	// created, corrected, removed or first-time-changed).
+	// AssignmentChanged records the unit resolution of all targets of one
+	// Transmission at admission time (requires Targets in ascending position
+	// order and Reason "created"); targetless Transmissions emit none.
 	AssignmentChanged IntakeType = "assignment.changed"
 )
 
@@ -52,26 +48,29 @@ type IntakeResolution struct {
 	AddressRuleID *uuid.UUID `json:"matchedRuleId,omitempty"`
 }
 
+// IntakeTarget is the resolution of one target position in an assignment.changed
+// fact; the resolution fields are inlined in the JSON form.
+type IntakeTarget struct {
+	Position int `json:"position"`
+	IntakeResolution
+}
+
 // IntakeData is the data payload of an intake envelope; only the fields
 // relevant to the envelope type are set.
 type IntakeData struct {
-	GatewayID      uuid.UUID         `json:"gatewayId,omitempty"`
-	TransmissionID uuid.UUID         `json:"transmissionId,omitempty"`
-	MessageID      uuid.UUID         `json:"messageId,omitempty"`
-	NetworkID      uuid.UUID         `json:"networkId,omitempty"`
-	SubmissionID   string            `json:"submissionId,omitempty"`
-	Resolution     string            `json:"resolution,omitempty"`
-	ContactTime    *time.Time        `json:"contactTime,omitempty"`
-	OldState       string            `json:"oldState,omitempty"`
-	NewState       string            `json:"newState,omitempty"`
-	ReasonCode     string            `json:"reasonCode,omitempty"`
-	Detail         string            `json:"detail,omitempty"`
-	Reason         string            `json:"reason,omitempty"`
-	LateJoin       bool              `json:"lateJoin,omitempty"`
-	Absorbed       []uuid.UUID       `json:"absorbedMessageIds,omitempty"`
-	TargetPosition *int              `json:"targetPosition,omitempty"`
-	Before         *IntakeResolution `json:"before,omitempty"`
-	After          *IntakeResolution `json:"after,omitempty"`
+	GatewayID      uuid.UUID      `json:"gatewayId,omitempty"`
+	TransmissionID uuid.UUID      `json:"transmissionId,omitempty"`
+	MessageID      uuid.UUID      `json:"messageId,omitempty"`
+	SubmissionID   string         `json:"submissionId,omitempty"`
+	ContactTime    *time.Time     `json:"contactTime,omitempty"`
+	OldState       string         `json:"oldState,omitempty"`
+	NewState       string         `json:"newState,omitempty"`
+	ReasonCode     string         `json:"reasonCode,omitempty"`
+	Detail         string         `json:"detail,omitempty"`
+	Reason         string         `json:"reason,omitempty"`
+	LateJoin       bool           `json:"lateJoin,omitempty"`
+	Absorbed       []uuid.UUID    `json:"absorbedMessageIds,omitempty"`
+	Targets        []IntakeTarget `json:"targets,omitempty"`
 }
 
 // IntakeFact is the producer input for an operational fact from transmission
@@ -83,9 +82,7 @@ type IntakeFact struct {
 	GatewayID      uuid.UUID
 	TransmissionID uuid.UUID
 	MessageID      uuid.UUID
-	NetworkID      uuid.UUID
 	SubmissionID   string
-	Resolution     string
 	Revision       int64
 	OccurredAt     time.Time
 	ContactTime    *time.Time
@@ -96,9 +93,7 @@ type IntakeFact struct {
 	Reason         string
 	LateJoin       bool
 	Absorbed       []uuid.UUID
-	TargetPosition *int
-	Before         *IntakeResolution
-	After          *IntakeResolution
+	Targets        []IntakeTarget
 }
 
 // IntakeAppender records intake facts through the caller's active platform
@@ -144,15 +139,13 @@ func (f IntakeFact) Envelope(recorded time.Time) (IntakeEnvelope, error) {
 		envelope.Producer = Producer{Domain: "intake", Version: "transmission-intake1.0"}
 		envelope.AggregateRef = EntityRef{Type: "gateway", ID: f.GatewayID}
 		envelope.Data = IntakeData{GatewayID: f.GatewayID, SubmissionID: f.SubmissionID, ReasonCode: f.ReasonCode}
-	case ObservationTimeImplausible, NetworkAmbiguous:
-		if f.TransmissionID == uuid.Nil || f.GatewayID == uuid.Nil ||
-			f.Type == NetworkAmbiguous && (f.NetworkID == uuid.Nil || f.Resolution == "") {
+	case ObservationTimeImplausible:
+		if f.TransmissionID == uuid.Nil || f.GatewayID == uuid.Nil {
 			return IntakeEnvelope{}, ErrInvalidFact
 		}
 		envelope.Producer = Producer{Domain: "intake", Version: "transmission-intake1.0"}
 		envelope.AggregateRef = EntityRef{Type: "transmission", ID: f.TransmissionID}
-		envelope.Data = IntakeData{GatewayID: f.GatewayID, TransmissionID: f.TransmissionID,
-			NetworkID: f.NetworkID, Resolution: f.Resolution}
+		envelope.Data = IntakeData{GatewayID: f.GatewayID, TransmissionID: f.TransmissionID}
 	case GatewayStateChanged:
 		if f.GatewayID == uuid.Nil || f.OldState == "" || f.NewState == "" ||
 			f.OldState == f.NewState || f.ContactTime == nil || f.ContactTime.IsZero() {
@@ -185,21 +178,34 @@ func (f IntakeFact) Envelope(recorded time.Time) (IntakeEnvelope, error) {
 		envelope.AggregateRef = EntityRef{Type: "message", ID: f.MessageID}
 		envelope.Data = IntakeData{MessageID: f.MessageID, TransmissionID: f.TransmissionID, Absorbed: absorbed}
 	case AssignmentChanged:
-		if f.MessageID == uuid.Nil || f.TransmissionID == uuid.Nil || f.TargetPosition == nil ||
-			*f.TargetPosition < 0 || f.After == nil || !validIntakeResolution(*f.After) ||
-			(f.Before != nil && !validIntakeResolution(*f.Before)) ||
-			!slices.Contains([]string{"created", "corrected", "removed", "first-time-changed"}, f.Reason) {
+		if f.MessageID == uuid.Nil || f.TransmissionID == uuid.Nil || f.Reason != "created" ||
+			!validIntakeTargets(f.Targets) {
 			return IntakeEnvelope{}, ErrInvalidFact
 		}
 		envelope.Producer = Producer{Domain: "assignment", Version: "target-admission1.0"}
 		envelope.AggregateRef = EntityRef{Type: "message", ID: f.MessageID}
 		envelope.Data = IntakeData{MessageID: f.MessageID, TransmissionID: f.TransmissionID,
-			Reason: f.Reason, TargetPosition: f.TargetPosition, Before: f.Before, After: f.After}
+			Reason: f.Reason, Targets: slices.Clone(f.Targets)}
 	default:
 		return IntakeEnvelope{}, errors.Join(ErrInvalidFact, errors.New("unknown intake fact type"))
 	}
 	envelope.AggregateRevision = f.Revision
 	return envelope, nil
+}
+
+// validIntakeTargets reports whether targets is non-empty, strictly ascending from a non-negative
+// position and every resolution is valid.
+func validIntakeTargets(targets []IntakeTarget) bool {
+	if len(targets) == 0 {
+		return false
+	}
+	for i, target := range targets {
+		if target.Position < 0 || i > 0 && target.Position <= targets[i-1].Position ||
+			!validIntakeResolution(target.IntakeResolution) {
+			return false
+		}
+	}
+	return true
 }
 
 func validIntakeResolution(value IntakeResolution) bool {
