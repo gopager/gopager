@@ -4,7 +4,7 @@
 
 ## Session Context
 
-- **Requirements:** [REQ-041..050](../requirements-catalog.md#e-transmission-networks-and-gateways) and [REQ-134](../requirements-catalog.md#n-delegated-administration-and-restricted-views) (single-Gateway delegation; its delivery disposition is decided at the package start approval).
+- **Requirements:** [REQ-041..050](../requirements-catalog.md#e-transmission-networks-and-gateways), server side (screens: AP-15); for REQ-049 this AP produces the Gateway state facts, Delivery triggers on them are AP-11. [REQ-134](../requirements-catalog.md#n-delegated-administration-and-restricted-views) single-Gateway delegation, server side, if the start decision includes it (see Open User Decisions).
 - **Inputs:**
   - [AP-05 handover](../execution/ap-05.md#handover): transaction, primary clock and lifecycle.
   - [Identity/AuthZ handover](../execution/source-ap-07.md#handover): identity and AuthZ results.
@@ -17,20 +17,20 @@
   - `internal/protocols/` — Network validation only.
   - `internal/authz/`, `internal/identity/` — Gateway action/scope/proof adapters.
   - `internal/events/` — Gateway state facts.
-  - owner Ent ingest/event/diagnostic stores, schemas, generated output, next migrations and PostgreSQL tests.
+  - `internal/persistence/ent/schema/`, `internal/persistence/ent/ingeststore/`, `internal/persistence/ent/eventstore/`, generated Ent code and `internal/persistence/migrations/` (per [package layout](shared-rules.md#package-layout)) — Network/Gateway/diagnostic persistence and PostgreSQL tests.
   - `internal/httpapi/` — handlers and the versioned management OpenAPI.
   - `cmd/gopager/` — contact-timeout runner and root registration only (composition, no HTTP adapters).
 - **Compatibility context:** [AP-10 Query](ap-10-query-live.md), [AP-11 Delivery](ap-11-events-delivery.md), [AP-15 Frontend](ap-15-frontend.md), [AP-16 Operations](ap-16-operations.md). Their code is not required.
 
 ## Open User Decisions
 
-- REQ-134 single-Gateway delegation: is it delivered in this AP? Its delivery disposition is decided at the package start approval; the answer is recorded in [Delivery scope](../authoritative-plan.md#delivery-scope) (T086).
+- REQ-134 single-Gateway delegation: is it delivered in this AP? Asked together with the start approval; the answer is recorded in [Delivery scope](../authoritative-plan.md#delivery-scope) (T086).
 
 ## Planning Before Coding
 
 T086 owns exact Network/Gateway create/read/list/update/deactivate/delete and assigned-Network lifecycle rules: manageable scopes, revision/conflict/receipt semantics, protocol/default validation, credential prerequisites, used/deleted reference behavior, audit and safe management HTTP. Network provisioning keeps the C-01 resolution order and the Gateway's Network priority order (`0..n-1`, lower first): declared identifier, the only Network, the one Network whose Address rules match at the Observation time, the highest-priority matching Network (with the `operation.network-ambiguous` fact), and the highest-priority Network when none matches ([D-135](../decisions/10-foundation-redesign.md#d-135) restored address-based inference; there is no default flag). Preserve frozen AP-07 credential proof/rotation/replacement and accepted originals; deletion/deactivation must not manufacture accepted input or silently broaden grants. Destination: C-01/C-06/C-08 and supporting C-12 sections.
 
-T086 owns the single-Gateway detail-versus-credential-rotation action/scope contract for REQ-134 if approved for delivery. Decide and record its delivery disposition during planning under the package start approval; do not defer implementation to AP-14 or infer Network-only authority satisfies it. Implement additive versioned authorization without modifying frozen prior proof semantics. Detail grants do not imply rotation or alarm Payload access. Destination: C-06 and [Delivery scope](../authoritative-plan.md#delivery-scope).
+T086 owns the single-Gateway detail-versus-credential-rotation action/scope contract for REQ-134 if the start decision includes it; do not defer implementation to AP-14 or infer Network-only authority satisfies it. Implement additive versioned authorization without modifying frozen prior proof semantics. Detail grants do not imply rotation or alarm Payload access. Destination: C-06 and [Delivery scope](../authoritative-plan.md#delivery-scope).
 
 T087 owns server-derived diagnostics and state: never-seen versus no retained history, last authenticated contact/heartbeat/reception, degraded/stopped/contact-lost precedence, reason/history projection and allowed fields. Define in C-01/C-08 the runner's inputs and role: the Operator-configured finite contact timeout (validated at startup, never shorter than the Gateway heartbeat interval), the scan interval, the per-Gateway last authenticated contact/heartbeat/reception times and stopped marker, and the database primary clock for every comparison; the runner runs in the `worker` role (one active evaluation per Gateway through the revision check, so several workers are safe) and not in `api`. Also define concurrent report/reception fencing, durable state transition/fact atomicity, retry/restart and runner lifecycle. A stopped Gateway must not silently become contact-lost merely because it stopped intentionally; settle exact precedence from stories/contracts. Use domain-specific store/time checks, not a later generic queue.
 

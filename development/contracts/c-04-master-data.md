@@ -16,6 +16,6 @@ Decisions that remain binding: formation membership alone is not evidence of co-
 
 ## Planned and not yet implemented
 
-- **Extension fields (C-10, REQ-132).** `DeclareExtensionFields` is owned by C-10 and stored by Master data: a definition has plugin namespace and version, type, validation or default, sensitivity and the read and write capability. Unknown or new fields are inaccessible by default; a schema incompatibility blocks activation rather than coercing saved values. Unit updates already carry the complete supported field set so that later extension fields are not erased. REQ-129 prefers per-integration Unit parameters over this mechanism where sufficient.
+- **Extension fields.** Dropped by [D-135](../decisions/10-foundation-redesign.md#d-135): per-Unit integration values use the per-integration parameter table owned by [C-09](c-09-delivery.md) (AP-11, AP-12).
 - **Icon catalog and renderer.** The server stores and copies an icon identifier only. A configured catalog and any renderer belong to the frontend work (AP-15).
-- **Import and export (REQ-128).** Promoted into AP-15/AP-16; not part of this slice.
+- **Exchange and bulk (REQ-128, REQ-140).** Server-to-server exchange of Units with their Address rules, Suppressions and Unit collections, and bulk changes of collections, are planned and implemented by [AP-15 T089](../work-packages/ap-15-frontend.md#planning-before-coding) ([D-138](../decisions/09-process-and-documentation.md#d-138)); the exchange document and bulk rules are defined here and in [C-05](c-05-matching-correction.md) by that task.

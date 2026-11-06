@@ -4,7 +4,15 @@
 
 ## Session Context
 
-- **Requirements:** [REQ-049/081..082/084..087/105..106/108/129..130](../requirements-catalog.md#i-domain-events-extensions-and-deliveries), REQ-091..095 shared Delivery rendering; [REQ-139](../requirements-catalog.md#i-domain-events-extensions-and-deliveries) as compatibility context (not delivered here).
+- **Requirements:** server side of the following (screens: AP-15):
+  - [REQ-081..082/086..087/105..106/130](../requirements-catalog.md#i-domain-events-extensions-and-deliveries) Domain events, Subscriptions and Delivery.
+  - REQ-049: Delivery triggers on AP-09's Gateway state facts.
+  - REQ-084: configuration revision and authority in the Core target descriptor; configuring instances is AP-12.
+  - REQ-085: users pause or remove their Subscriptions; the effect of owner suspension/deletion is AP-14.
+  - REQ-108: sending admission (query: AP-10, login: AP-14, provider limits: AP-12).
+  - REQ-129: the per-Unit parameter table and its use in materialization; managing the values is AP-12.
+  - [REQ-091..095](../requirements-catalog.md#j-processing-presentation-and-usability): Core Delivery rendering of the layout definition; GUI cards and presentation are AP-13.
+  - [REQ-139](../requirements-catalog.md#i-domain-events-extensions-and-deliveries) only as compatibility context (Later).
 - **Inputs:**
   - [AP-05 handover](../execution/ap-05.md#handover): transactions and clock.
   - [AP-06 handover](../execution/ap-06.md#handover): kernel.
@@ -14,13 +22,14 @@
   - [AP-10](ap-10-query-live.md): authorized projection/filter and its event-consumer framework (the sequenced `domain_events` log consumers); verify `development/execution/ap-10.md#handover` exists at start.
   - Verify actual handovers. No generic lease adapter or later host/renderer is assumed.
 - **Owned contract slices:** [C-08](../contracts/c-08-events-jobs.md) and [C-09](../contracts/c-09-delivery.md), plus the required [C-06](../contracts/c-06-identity-authorization.md), [C-07](../contracts/c-07-query-live.md), [C-10](../contracts/c-10-plugin-host.md) input/attempt slices and [C-11 shared rendering](../contracts/c-11-processing-presentation.md#presentation-and-configuration-planned), with canonical cases. The shared Core materialization/rendering code under `internal/processing/` is part of this AP. This AP owns Delivery production claims/leases; AP-05 supplies only fixed transactions/primary clock and synthetic fencing evidence.
-- **Reference (read when needed):** [session procedure](shared-rules.md#session-start), [delivery scope](../authoritative-plan.md#delivery-scope), [approval](../authoritative-plan.md#workflow-and-approval-gates), [D-135](../decisions/10-foundation-redesign.md#d-135) item 10 (one sequenced `domain_events` log) and item 9 (processing runs), [allowed dependencies](../architecture.md#allowed-dependencies), [Domain events and outbox](../../docs/architecture.md#domain-events-and-outbox), [Processing (worker role)](../../docs/architecture.md#processing-worker-role).
+- **Reference (read when needed):** [session procedure](shared-rules.md#session-start), [delivery scope](../authoritative-plan.md#delivery-scope), [approval](../authoritative-plan.md#workflow-and-approval-gates), [D-135](../decisions/10-foundation-redesign.md#d-135) item 10 (one sequenced `domain_events` log) and item 9 as amended by [D-137](../decisions/10-foundation-redesign.md#d-137) (Processing candidates), [allowed dependencies](../architecture.md#allowed-dependencies), [Domain events and outbox](../../docs/architecture.md#domain-events-and-outbox), [Processing (worker role)](../../docs/architecture.md#processing-worker-role).
 - **Write scope:**
   - `internal/events/` — event selection, facts, subscriptions.
-  - `internal/delivery/` — Delivery claims, attempts, management.
+  - `internal/delivery/` (new) — Delivery claims, attempts, management.
   - `internal/processing/` — shared bounded renderer only.
   - `internal/readmodel/`, `internal/units/`, `internal/authz/` — supporting query/default/authority adapters.
-  - owner Ent outbox/subscription/attempt/claim/rendering adapters, schemas, generated output, next migrations and verified necessary library manifests.
+  - `internal/persistence/ent/schema/`, `internal/persistence/ent/eventstore/`, a new Delivery store under `internal/persistence/ent/`, generated Ent code and `internal/persistence/migrations/` (per [package layout](shared-rules.md#package-layout)) — Subscriptions, attempts, claims, per-Unit parameters.
+  - `go.mod`, `go.sum` — only for a library selected under [library reuse](../README.md#library-reuse).
   - `internal/httpapi/` — handlers and OpenAPI.
   - `cmd/gopager/` — runner/root registration only.
 - **Compatibility context:** later-consumer planning (not prerequisites): [AP-12 Host](ap-12-plugin-host.md), [AP-13 Presentation](ap-13-processing-presentation-integration.md), [AP-15 Frontend](ap-15-frontend.md). Shared Core input/attempt contracts and rendering are required by current materialization, not speculative preparation. AP-12 later produces real validated manifest/configuration descriptors and target invocations conforming to this AP's contract.
@@ -37,7 +46,7 @@ T066 defines the completed Core target descriptor (typed inputs, classified depe
 
 AP-12 later produces real validated manifest/configuration descriptors and target invocations conforming to this contract. AP-11 exercises the same complete Core flow with controlled providers supplied by its tests. Production with no configured provider is visibly unavailable; do not claim initial targets or external delivery have been implemented here. Subscription/Delivery HTTP operations are real current Core APIs, not stubs, and may reject unavailable targets explicitly.
 
-T066/T067 define event types/envelopes/order, selection/publication atomicity, canonical lookup/unknown-version/missing-reference handling, domain receipts/work commit before Ack, catch-up/retention/lifecycle, replay/correction suppression and unique fan-out. Per-Unit Delivery overrides (REQ-129) read the per-integration table `integration_unit_parameters(instance_id, unit_id, key, value)` managed with the integration, not plugin Extension fields. Define Delivery claims/token/primary-time expiry, per-attempt state, retry classification/bounds, provider uncertainty and restart behavior. Transport offsets are not domain work leases or idempotency.
+T066/T067 define event types/envelopes/order, selection/publication atomicity, canonical lookup/unknown-version/missing-reference handling, domain receipts/work commit before Ack, catch-up/retention/lifecycle, replay/correction suppression and unique fan-out. Per-Unit Delivery overrides (REQ-129): T066 creates the per-integration table `integration_unit_parameters(instance_id, unit_id, key, value)` (new migration, `instance_id` references the existing plugin instances), defines it in C-09 and applies the values in materialization; plugin Extension fields are dropped. Authoring the values through the integration's configuration API is AP-12. Define Delivery claims/token/primary-time expiry, per-attempt state, retry classification/bounds, provider uncertainty and restart behavior. Transport offsets are not domain work leases or idempotency.
 
 Keep the event model open for [REQ-139](../requirements-catalog.md#i-domain-events-extensions-and-deliveries) plugin reactions under [D-130](../decisions/04-processing-and-plugins.md#d-130):
 - The versioned event-type catalog covers all producing domains, including identity/account lifecycle, master data, Gateways, corrections and operations, not only Messages.

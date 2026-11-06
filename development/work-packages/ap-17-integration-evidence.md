@@ -18,8 +18,8 @@
 - **Owned contract slices:** the evidence mapping and acceptance procedure artifacts only; no contract section is defined here. Domain corrections remain with their owner.
 - **Reference (read when needed):** [execution records](../execution/README.md), [repository layout and testing](../architecture.md#repository-layout-and-testing), [supporting responsibilities](../architecture.md#supporting-responsibilities), [allowed dependencies](../architecture.md#allowed-dependencies), actual approved contract versions and F-cases.
 - **Write scope:**
-  - integration/evidence artifacts — the evidence mapping and acceptance procedure
-  - shared build/CI, API/SDK compatibility checks and asset/package integration in the repository root, `cmd/gopager/`, `sdk/`, `web/` and packaging — only to integrate already completed behavior; domain corrections remain with their owner
+  - `development/execution/ap-17.md` — the evidence mapping and acceptance procedure; [requirement mapping](requirement-mapping.md) status
+  - shared build/CI, API/SDK compatibility checks and asset/package integration in the repository root, `cmd/gopager/`, `pluginsdk/`, `web/` and packaging — only to integrate already completed behavior; domain corrections remain with their owner
 - **Compatibility context:** none; this is the final package.
 
 ## Open User Decisions

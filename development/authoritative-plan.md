@@ -151,6 +151,7 @@ Every decision keeps its stable D-ID. The [ADR index](decisions/README.md) lists
 | D-135 | <a id="d-135"></a>[Foundation redesign after the 2026-11-06 re-evaluation](decisions/10-foundation-redesign.md#d-135) |
 | D-136 | <a id="d-136"></a>[Agent execution rules and boundary crossings](decisions/09-process-and-documentation.md#d-136) |
 | D-137 | <a id="d-137"></a>[Processing work record as implemented](decisions/10-foundation-redesign.md#d-137) |
+| D-138 | <a id="d-138"></a>[Open-AP boundary repair and server exchange of Units](decisions/09-process-and-documentation.md#d-138) |
 
 ## Operating Assumptions
 
@@ -168,7 +169,11 @@ This is the only delivery-phase classification. It does not repeat REQ acceptanc
 | REQ-053 | Later |
 | REQ-054..064 | Phase-1 proposal |
 | REQ-065..068 | Later; prepare only the contracted identity boundary initially |
-| REQ-069..079 | Phase-1 proposal |
+| REQ-069..071 | Phase-1 proposal |
+| REQ-072 | Dropped by [D-135](decisions/10-foundation-redesign.md#d-135) item 15; ID reserved |
+| REQ-073..075 | Phase-1 proposal |
+| REQ-076 | Dropped by [D-135](decisions/10-foundation-redesign.md#d-135) item 15; ID reserved |
+| REQ-077..079 | Phase-1 proposal |
 | REQ-080 | Later |
 | REQ-081..082 | Phase-1 proposal |
 | REQ-083 | Later |
@@ -186,13 +191,14 @@ This is the only delivery-phase classification. It does not repeat REQ acceptanc
 | REQ-125 | Later |
 | REQ-126 | Removed under D-31; ID reserved |
 | REQ-127 | Phase-1 proposal |
-| REQ-128 | Phase 1 (Unit import/export), promoted into AP-15/AP-16 by [D-135](decisions/10-foundation-redesign.md#d-135) item 15 |
+| REQ-128 | Phase 1 approved (server-to-server exchange, revised by [D-138](decisions/09-process-and-documentation.md#d-138)); AP-15 |
 | REQ-129..130 | Phase-1 proposal |
 | REQ-131 | Later |
 | REQ-132 | Phase-1 proposal |
 | REQ-133..134/138 | Delivery classification unresolved; owner planning is assigned under D-126, but these additions are not silently approved or deferred |
 | REQ-135..137 | Acceptance refinements of already approved field/query goals; verify within AP-10 without broadening frozen authorization |
 | REQ-139 | Later; the event, Subscription and plugin model keeps reaction compatibility ([D-131](#managed-plugin-process-runtime), [D-135](#foundation-redesign-after-the-2026-11-06-re-evaluation)) |
+| REQ-140 | Phase 1 approved ([D-138](decisions/09-process-and-documentation.md#d-138)); AP-15 |
 | [D-30 comparison extension](#d-30) | Later, separately approved slice; not a current contract blocker |
 
 Resolve IDs in the [catalog](requirements-catalog.md), not in a parallel feature summary.

@@ -5,7 +5,7 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 <a id="d-135"></a>
 ## D-135 Foundation redesign after the 2026-11-06 re-evaluation
 
-- **Status:** accepted; item 9 amended by [D-137](#d-137)
+- **Status:** accepted; item 9 amended by [D-137](#d-137), item 15 (REQ-128) by [D-138](09-process-and-documentation.md#d-138)
 - **Date:** 2026-11-06
 - **Supersedes:** [D-25](04-processing-and-plugins.md#d-25) (barrier semantics), [D-77](04-processing-and-plugins.md#d-77), [D-79](04-processing-and-plugins.md#d-79), [D-82](04-processing-and-plugins.md#d-82), [D-92](05-events-and-delivery.md#d-92), [D-93](05-events-and-delivery.md#d-93), [D-94](05-events-and-delivery.md#d-94), [D-123](05-events-and-delivery.md#d-123), [D-124](05-events-and-delivery.md#d-124); in part [D-03](01-platform-and-storage.md#d-03), [D-14](01-platform-and-storage.md#d-14), [D-22](07-query-and-live.md#d-22), [D-24](04-processing-and-plugins.md#d-24), [D-28](07-query-and-live.md#d-28), [D-31](01-platform-and-storage.md#d-31), [D-32](01-platform-and-storage.md#d-32), [D-76](04-processing-and-plugins.md#d-76), [D-88](05-events-and-delivery.md#d-88), [D-90](05-events-and-delivery.md#d-90), TECH-05 (SQLite half) and TECH-07.
 - **Decision:** A user-ordered first-principles re-evaluation of every planning document and the implemented code, including a cost/use review of all user stories, replaced the following foundations. The items are numbered as in the original record.

@@ -4,11 +4,16 @@
 
 ## Session Context
 
-- **Requirements:** [REQ-051..052/054..064/069..071/073..079/085/109..110](../requirements-catalog.md#f-access-rights-and-guests). REQ-072/076 (recovery requests and automatic dispatch) are dropped by [D-135](../decisions/10-foundation-redesign.md#d-135).
+- **Requirements:** server side of the following (screens: AP-15):
+  - [REQ-051..052/054..064](../requirements-catalog.md#f-access-rights-and-guests), [REQ-069..071/073..075/077..079](../requirements-catalog.md#g-accounts-and-login) accounts, grants, field groups, guests, sessions, recovery and access keys. For REQ-055..060/070 this AP manages grants and sessions; their enforcement in query and live results is AP-10.
+  - REQ-085: owner suspension or deletion stops Deliveries (pausing a Subscription: AP-11).
+  - REQ-108: login throttling (query: AP-10, sending: AP-11, provider limits: AP-12).
+  - [REQ-109..110](../requirements-catalog.md#k-installed-web-app-and-security-behavior) security audit trail.
+  - REQ-072/076 (recovery requests and automatic dispatch) are dropped by [D-135](../decisions/10-foundation-redesign.md#d-135) item 15.
 - **Inputs:**
   - [identity-core handover](../execution/source-ap-07.md#handover): completed identity-core operations.
-  - [AP-08 handover](../execution/ap-08.md#handover): supporting actions.
-  - [AP-09](ap-09-gateway-network.md): supporting actions. Verify `development/execution/ap-09.md#handover` exists at start.
+  - [AP-08 handover](../execution/ap-08.md#handover): master-data, correction and Agency actions and scopes to offer in grants and keys.
+  - [AP-09](ap-09-gateway-network.md): Gateway management actions and scopes to offer in grants and keys. Verify `development/execution/ap-09.md#handover` exists at start.
   - [AP-10](ap-10-query-live.md): saved views and current fields. Verify `development/execution/ap-10.md#handover` exists at start.
   - [AP-11](ap-11-events-delivery.md): personal Subscription and Delivery. Verify `development/execution/ap-11.md#handover` exists at start.
   - [AP-12](ap-12-plugin-host.md): configuration and Secrets. Verify `development/execution/ap-12.md#handover` exists at start.
@@ -19,7 +24,7 @@
 - **Write scope:**
   - `internal/identity/`, `internal/authz/` — account, recovery, keys, sessions
   - `internal/delivery/`, `internal/pluginhost/` (if extracted), `internal/readmodel/`, `internal/processing/`, `internal/events/` — exact account-owned copies, work and acknowledgements
-  - owner Ent adapters, schemas, generated output and next ordered migrations
+  - `internal/persistence/ent/schema/`, `internal/persistence/ent/identitystore/` and the stores of the account-owned data listed above, generated Ent code and `internal/persistence/migrations/` (per [package layout](shared-rules.md#package-layout))
   - `internal/httpapi/` handlers and versioned management OpenAPI
   - `cmd/gopager/` — local-rescue command and root registration only
   - Preserve independently owned received Payload and shared configurations.

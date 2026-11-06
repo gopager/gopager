@@ -4,7 +4,7 @@
 
 ## Session Context
 
-- **Requirements:** [REQ-091..100](../requirements-catalog.md#j-processing-presentation-and-usability).
+- **Requirements:** [REQ-091..100](../requirements-catalog.md#j-processing-presentation-and-usability), server side (screens and the layout editor: AP-15). For REQ-091..095 this AP owns the GUI card adapters, presentation and layout precedence; Core Delivery rendering of the same layout definition is AP-11.
 - **Inputs:**
   - [AP-06 handover](../execution/ap-06.md#handover): evaluator and the `processing_candidates` work record.
   - [AP-07 handover](../execution/ap-07.md#handover): source capture.
@@ -12,15 +12,15 @@
   - [AP-10](ap-10-query-live.md): authorized projection. Verify `development/execution/ap-10.md#handover` exists at start.
   - [AP-11](ap-11-events-delivery.md): event, Delivery and renderer. Verify `development/execution/ap-11.md#handover` exists at start.
   - [AP-12](ap-12-plugin-host.md): installed host. Verify `development/execution/ap-12.md#handover` exists at start.
-- **Owned contract slices:** [C-11](../contracts/c-11-processing-presentation.md); additive integration slices of C-04/C-06/C-07/C-08/C-09/C-10 without changing frozen evaluator/intake/installed ABI behavior; F-21/F-26 and F-37/F-38 coverage. Presentation/Reprocess integration planning belongs here. Processing is the affected code area.
-- **Reference (read when needed):** [D-135](../decisions/10-foundation-redesign.md#d-135) item 9 (durable worker and queue), [D-134](../decisions/09-process-and-documentation.md#d-134), [domain ownership](../architecture.md#domains-and-data-ownership), [C-06](../contracts/c-06-identity-authorization.md), [C-08](../contracts/c-08-events-jobs.md), [C-09](../contracts/c-09-delivery.md), [C-10](../contracts/c-10-plugin-host.md).
+- **Owned contract slices:** [C-11](../contracts/c-11-processing-presentation.md); additive integration slices without changing frozen evaluator/intake/installed ABI behavior: [C-04](../contracts/c-04-master-data.md) Organization/Unit layout defaults, [C-06](../contracts/c-06-identity-authorization.md) preview and preference actions, [C-07](../contracts/c-07-query-live.md) projection of Processing results, [C-08](../contracts/c-08-events-jobs.md) `replayMode`, [C-09](../contracts/c-09-delivery.md) Subscription layout reference, [C-10](../contracts/c-10-plugin-host.md) installed-step host calls; F-21/F-26 and F-37/F-38 coverage. Presentation/Reprocess integration planning belongs here. Processing is the affected code area.
+- **Reference (read when needed):** [D-135](../decisions/10-foundation-redesign.md#d-135) item 9 as amended by [D-137](../decisions/10-foundation-redesign.md#d-137) (Processing candidates, dispatch), [D-134](../decisions/09-process-and-documentation.md#d-134), [domain ownership](../architecture.md#domains-and-data-ownership), [C-06](../contracts/c-06-identity-authorization.md), [C-08](../contracts/c-08-events-jobs.md), [C-09](../contracts/c-09-delivery.md), [C-10](../contracts/c-10-plugin-host.md).
 - **Write scope:**
   - `internal/processing/` — including historical source/work adapters and the runner
   - `internal/readmodel/` — projection
   - `internal/events/`, `internal/delivery/` — replay/presentation participation
   - `internal/identity/` — account preferences only
   - `internal/units/` — defaults adapters
-  - owner Ent stores, schemas, generated output and next migrations
+  - `internal/persistence/ent/schema/`, `internal/persistence/ent/processingstore/`, `internal/persistence/ent/identitystore/` (preferences), generated Ent code and `internal/persistence/migrations/` (per [package layout](shared-rules.md#package-layout))
   - `internal/httpapi/`, OpenAPI handlers
   - `cmd/gopager/` — runner/root registration only
   - focused integration tests

@@ -5,7 +5,9 @@
 Every work package file `ap-NN-<slug>.md` uses the sections below in this order. The executing agent reads the AP file and the [execution rules](shared-rules.md) and nothing else up front, so the AP must be complete on its own:
 
 - Rely only on completed earlier results, accepted decisions, the AP's own planning and questions to the user. Name each input with its producer and an exact handover or E-ID anchor; never link a whole execution record or a historical assessment.
-- Assign every supporting change the tasks need (contracts, persistence and migrations, HTTP, runners, root wiring) to this AP's write scope and owned slices.
+- Assign every supporting change the tasks need (contracts, persistence and migrations, HTTP, runners, root wiring) to this AP's write scope and owned slices. Each piece of work belongs to exactly one AP; a REQ shared by several APs names each AP's part.
+- Never rely on an undecided question, a definition gap or a later AP unless resolving it is this AP's own planning task. A product question the stories cannot answer goes to **Open user decisions**.
+- Name write-scope paths concretely (see [package layout](shared-rules.md#package-layout)); no "supporting" or "owner" placeholders.
 - Link decisions to their ADR (`../decisions/<topic>.md#d-nnn`), not to the plan's moved-section redirects.
 - Later APs are compatibility context only.
 
@@ -20,7 +22,7 @@ Changes to an AP file after it is approved follow the [scope-change procedure](s
 
 ## Session Context
 
-- **Requirements:** REQ links to the catalog sections, with any qualification.
+- **Requirements:** every REQ ID this AP serves (ranges allowed), linked to its catalog section. For a REQ shared with another AP, state this AP's part and name the AP that owns the rest. The executing agent reads these story rows at start.
 - **Inputs:** one line per producer: `[AP-xx handover](../execution/ap-xx.md#handover)`: what is used.
 - **Owned contract slices:** C-ID file sections, F-case ranges and glossary terms this AP defines or changes.
 - **Reference (read when needed):** fixed contract sections, decisions and architecture sections the tasks rely on.

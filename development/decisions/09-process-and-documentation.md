@@ -101,3 +101,18 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Decision:** The [execution rules](../work-packages/shared-rules.md) are the only definition of how an agent executes an AP; the skill, the development README, the package directory and the execution README link to them. The executing agent also performs approved boundary crossings: it analyzes the impact, asks the user, records each approved crossing as an ADR with a D-ID, adds follow-ups to affected completed records and amends affected open APs inline. The task state `accepted` is retired; `verified` with evidence is final and the user accepts by merging. An execution record's handover always describes the current state. Open APs follow the [AP template](../work-packages/ap-template.md).
 - **Consequences:** AP-09..AP-17 were restructured to the template; the handovers of AP-05..AP-08 were brought up to date with their D-135 follow-ups; earlier `accepted` task states read as `verified`.
 - **Owner detail:** [Execution rules](../work-packages/shared-rules.md), [AP template](../work-packages/ap-template.md), [execution README](../execution/README.md)
+
+<a id="d-138"></a>
+## D-138 Open-AP boundary repair and server exchange of Units
+
+- **Status:** accepted
+- **Date:** 2026-11-07
+- **Amends:** [D-135](10-foundation-redesign.md#d-135) item 15 (REQ-128)
+- **Decision:** User-ordered review of AP-09..AP-17 so that every piece of work belongs to exactly one AP, no AP relies on a later AP or an undecided question outside its own planning, and every AP names its user stories and concrete paths.
+  - REQ-128 is rewritten: exchange of one, several or all Units with their Address rules, Suppressions and Unit collections between servers through one versioned document with import preview; no spreadsheet format. New REQ-140 adds bulk changes of Address rules, Suppressions and Unit collections like REQ-026 for Units. Both, server and screens, belong to AP-15 (new task T089); AP-16 no longer carries REQ-128.
+  - AP-11 creates the per-Unit parameter table of REQ-129 and applies it; AP-12 only manages its values.
+  - AP-10 owns the query-side presentation of assignment state (REQ-035/040/123/124, per-Agency unassigned traffic).
+  - REQ-072/076 are recorded as dropped in the delivery scope; shared REQs name each AP's part; write scopes name persistence paths and follow D-128 for migrations; the Subscription preview is a non-goal of AP-10.
+  - Executing agents read the story rows of their REQ IDs at session start.
+- **Consequences:** Changed: requirements catalog (REQ-128, REQ-140), delivery scope, requirement mapping, package directory, C-04, AP-09..AP-17, execution rules and AP template.
+- **Owner detail:** [Execution rules](../work-packages/shared-rules.md#session-start), [AP-15](../work-packages/ap-15-frontend.md), [requirement mapping](../work-packages/requirement-mapping.md)

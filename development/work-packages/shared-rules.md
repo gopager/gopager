@@ -9,10 +9,11 @@ Roles: the **user** approves packages and boundary crossings and accepts results
 ## Session Start
 
 1. Read the assigned AP file and this file. Do not preload anything else: follow an AP link only when the current task needs it, and read only the linked section.
-2. Ask the user for the package start approval if it is missing. Ask the AP's **Open user decisions** in the same structured question; record the answers at the owner named there (usually [delivery scope](../authoritative-plan.md#delivery-scope) or an ADR) before dependent work.
-3. Inspect the worktree (`git status`, `git log -1`). Preserve changes you did not make.
-4. Verify every **Input** against the linked handover and the actual artifacts (files, routes, migrations, tests). A missing or contradicting input is a [scope change](#scope-change) of class *input gap*, not a reason to backfill it.
-5. Create or continue only this AP's execution record (`development/execution/ap-NN.md`) with the [required structure](../execution/README.md#required-record-structure): baseline revision and uncommitted delta, start approval, assignee, task IDs.
+2. Read the user stories of the AP's REQ IDs: only their rows in the [requirements catalog](../requirements-catalog.md) (story and acceptance), for example `grep -E '^\| REQ-(041|042|134) \|' development/requirements-catalog.md`. They explain what the tasks are for; the AP's tasks and done criteria define what is built. Where the AP names its part of a shared REQ, the rest belongs to the AP named there.
+3. Ask the user for the package start approval if it is missing. Ask the AP's **Open user decisions** in the same structured question; record the answers at the owner named there (usually [delivery scope](../authoritative-plan.md#delivery-scope) or an ADR) before dependent work.
+4. Inspect the worktree (`git status`, `git log -1`). Preserve changes you did not make.
+5. Verify every **Input** against the linked handover and the actual artifacts (files, routes, migrations, tests). A missing or contradicting input is a [scope change](#scope-change) of class *input gap*, not a reason to backfill it.
+6. Create or continue only this AP's execution record (`development/execution/ap-NN.md`) with the [required structure](../execution/README.md#required-record-structure): baseline revision and uncommitted delta, start approval, assignee, task IDs.
 
 ## Scope
 
@@ -28,7 +29,7 @@ Add a library or seam only for a verified current need ([library reuse](../READM
 
 ### Package Layout
 
-Domain code lives in `internal/<domain>/` (for example `internal/units/`, `internal/assignments/`, `internal/ingest/`), HTTP adapters and handlers in `internal/httpapi/`, store implementations under `internal/persistence/`, and `cmd/gopager/` holds composition and process wiring only. The architecture's [allowed dependencies](../architecture.md#allowed-dependencies) govern imports.
+Domain code lives in `internal/<domain>/` (for example `internal/units/`, `internal/assignments/`, `internal/ingest/`), HTTP adapters and handlers in `internal/httpapi/`, and `cmd/gopager/` holds composition and process wiring only. Persistence: Ent schemas in `internal/persistence/ent/schema/`, store implementations in `internal/persistence/ent/<name>store/`, generated Ent code under `internal/persistence/ent/` (regenerate, never edit), SQL migrations in `internal/persistence/migrations/`. Until the first release, a new table gets a new migration file and a change to an existing table edits the migration that creates it ([D-128](../decisions/01-platform-and-storage.md#d-128)). The architecture's [allowed dependencies](../architecture.md#allowed-dependencies) govern imports.
 
 ## Execution and Verification
 
@@ -45,7 +46,7 @@ Update all documentation affected by a change in the same work step, before depe
 
 | Change | Update |
 | --- | --- |
-| Planned interface behavior (fields, states, errors, permissions, limits) | The C-ID file section; concrete cases in [reference cases](../contracts/reference-cases.md) or [boundary cases](../contracts/ap-02-boundary-cases.md) |
+| Planned interface behavior (fields, states, errors, permissions, limits) | The C-ID file section; concrete cases in [reference cases](../contracts/reference-cases.md) or [boundary cases](../contracts/ap-02-boundary-cases.md); a new case takes the next free F-number across `development/contracts/` |
 | Implemented HTTP route or schema | [api/openapi/v1.yaml](../../api/openapi/v1.yaml) and the [docs/http-api.md](../../docs/http-api.md) section; the C-ID file links to it instead of repeating fields |
 | Plugin wire protocol or SDK | [api/plugin/v2/plugin.proto](../../api/plugin/v2/plugin.proto), `pluginsdk/`, [docs/plugins.md](../../docs/plugins.md) |
 | Workflow behavior | [docs/workflows.md](../../docs/workflows.md) |

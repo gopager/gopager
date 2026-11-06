@@ -4,7 +4,7 @@
 
 ## Session Context
 
-- **Requirements:** [REQ-111..112/115..120/127](../requirements-catalog.md#l-operations-data-volume-and-evolution), REQ-128 (Unit import/export, promoted by [D-135](../decisions/10-foundation-redesign.md#d-135)).
+- **Requirements:** [REQ-111..112/115..120/127](../requirements-catalog.md#l-operations-data-volume-and-evolution). REQ-114 for shutdown, readiness and authority honesty (provider outcomes: AP-12; intake: AP-07). For REQ-115/117 the plugin part (shipping first-party plugins, placement on enabled instances) is AP-12.
 - **Inputs:** (those producers own the actual paths/versions and local lifecycle limitations; retention, shutdown and fault participants come from their handovers)
   - [AP-05 handover](../execution/ap-05.md#handover): foundation (store, migrations, runtime).
   - [AP-06 handover](../execution/ap-06.md#handover): kernel.
@@ -14,14 +14,15 @@
 - **Owned contract slices:** [C-12](../contracts/c-12-persistence-operations.md#planned-and-not-yet-implemented-ap-16) planned operations (storage status, `RunRetention`, setup, shutdown, update/migration); supporting slices of [C-01](../contracts/c-01-transmission-acceptance.md), [C-08](../contracts/c-08-events-jobs.md), [C-09](../contracts/c-09-delivery.md) and [C-13](../contracts/c-13-account-lifecycle.md) for retention participants. Do not replace frozen domain semantics. Operational decisions are recorded in these contracts and evidence procedures in the execution record before implementation.
 - **Reference (read when needed):** [technology decisions](../architecture.md#technology-decisions), [operating profiles](../architecture.md#operating-profiles), [supporting responsibilities](../architecture.md#supporting-responsibilities), [D-32](../decisions/01-platform-and-storage.md#d-32), [D-63](../decisions/01-platform-and-storage.md#d-63), [D-134](../decisions/09-process-and-documentation.md#d-134), [D-135](../decisions/10-foundation-redesign.md#d-135), [F-19/F-23/F-25](../contracts/reference-cases.md), [F-39..F-41](../contracts/ap-02-boundary-cases.md), [operations](../../docs/operations.md).
 - **Write scope:**
-  - `internal/operations/` — storage status, retention run, operator commands
+  - `internal/operations/` (new) — storage status, retention run, operator commands
   - `internal/messages/`, `internal/ingest/`, `internal/processing/`, `internal/readmodel/`, `internal/delivery/`, `internal/events/` — retention participants
-  - owner Ent adapters/schemas/generated output and the next ordered migrations
-  - `internal/units/` — Unit CSV import/export
+  - `internal/persistence/ent/schema/`, the stores of the retention participants under `internal/persistence/ent/`, generated Ent code and `internal/persistence/migrations/` (per [package layout](shared-rules.md#package-layout))
+  - `internal/assignments/`, `internal/persistence/ent/assignmentstore/` — bounded Suppression listing ([D-134](../decisions/09-process-and-documentation.md#d-134))
+  - transaction call sites in any `internal/` package — only to route them through the readiness-gated transaction capability
   - `internal/httpapi/` — handlers for status/configuration
   - `cmd/gopager/` and `internal/platform/` — runner/bootstrap/shutdown registration only (composition)
   - `deploy/compose/`, packaging, CI/deployment/operator documentation and disposable fault fixtures
-- **Compatibility context:** [AP-15](ap-15-frontend.md) screens consume the Unit CSV import/export operation; [AP-17](ap-17-integration-evidence.md) receives machine-readable operational APIs, operator procedures, retention tests, topology/fault results and D-32/D-63 limitations (use its evidence expectations, not its unfinished output). No AP-17 sign-off is required.
+- **Compatibility context:** [AP-17](ap-17-integration-evidence.md) receives machine-readable operational APIs, operator procedures, retention tests, topology/fault results and D-32/D-63 limitations (use its evidence expectations, not its unfinished output). No AP-17 sign-off is required.
 
 ## Open User Decisions
 
@@ -44,7 +45,6 @@ T083: document the Lite profile as built by D-135: one `gopager --roles=api,work
     - C-12 `RunRetention` works with configured age/count limits, no default deletion, whole-Message ordering, transaction/chunk/checkpoint/restart, and participant deletion of targets/originals/Processing/search/Submission receipts; the retention list also covers `domain_events`, `consumer_offsets`, receipts, login attempts and audit records ([C-12](../contracts/c-12-persistence-operations.md)).
     - Self-contained Delivery inputs are preserved only within C-09 lifetime/current-rights rules, dependent work ends explicitly unavailable, and only contracted dedup/uncertainty records are kept.
     - The existing database pool settings (10 open, 5 idle, 30 min connection lifetime; [operations](../../docs/operations.md)) stay configurable as they are; no pool tuning is added.
-    - The Unit CSV import/export operation (REQ-128) exists with the AP-15 screens as consumer.
     - Authorized configuration/run/status HTTP or operator commands, removed-history diagnostics and runner registration exist; storage exhaustion triggers no emergency deletion.
     - All production domain/runner transactions go through the running platform's readiness-gated transaction capability, so workers stop starting new work while not ready (incompatible schema, lost authority, shutdown) and resume after recheck; tested with a schema-incompatibility and authority-loss fixture.
     - Unbounded in-memory listing of retained management records (e.g. `ListSuppressions`) is replaced by authorization-before-pagination SQL predicates and bounded pages, with a volume test ([D-134](../decisions/09-process-and-documentation.md#d-134)).
@@ -58,7 +58,7 @@ T083: document the Lite profile as built by D-135: one `gopager --roles=api,work
 
 - [C-12](../contracts/c-12-persistence-operations.md) planned section and, where retention participants change, the supporting [C-01](../contracts/c-01-transmission-acceptance.md), [C-08](../contracts/c-08-events-jobs.md), [C-09](../contracts/c-09-delivery.md) and [C-13](../contracts/c-13-account-lifecycle.md) slices; move implemented behavior into `docs/`.
 - [docs/operations.md](../../docs/operations.md): `Topology` / `Lite with Docker Compose`, `Configuration Reference`, `Roles`, `Database Migrations` / `Upgrade`, `Event Log Retention`, `First Start and Bootstrap`, `Starting the Server`, `Backup and restore responsibility`, `Health Endpoints`, `Failure Handling`, `Graceful Shutdown`.
-- [api/openapi/v1.yaml](../../api/openapi/v1.yaml) and [docs/http-api.md](../../docs/http-api.md) `Route reference` for the status/configuration and Unit import/export routes (`Agencies, Organizations, Unit templates, Units, collections`).
+- [api/openapi/v1.yaml](../../api/openapi/v1.yaml) and [docs/http-api.md](../../docs/http-api.md) `Route reference` for the status/configuration routes.
 - [docs/architecture.md](../../docs/architecture.md): `Cross-cutting mechanisms` (`Readiness and lifecycle`, `Transactions and the store abstraction`, `Migrations and Ent code generation`).
 - [docs/development.md](../../docs/development.md): `Database Schema and Migrations` and `Tests` for fault fixtures and process tests.
 - Root [README.md](../../README.md) `Getting Started` if the compose deployment changes; Go doc comments on exported identifiers; [glossary](../glossary.md) for new terms; [requirement mapping](requirement-mapping.md) if a producer changes.
@@ -69,7 +69,7 @@ Use existing PostgreSQL integration/race/process tests plus disposable topology 
 
 ## Handover
 
-Hand over to AP-17: machine-readable operational APIs, operator procedures, retention tests, topology/fault results and D-32/D-63 limitations. Hand over to AP-15: the Unit CSV import/export operation.
+Hand over to AP-17: machine-readable operational APIs, operator procedures, retention tests, topology/fault results and D-32/D-63 limitations.
 
 ## Non-goals
 
