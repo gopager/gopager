@@ -19,6 +19,7 @@ import (
 )
 
 func TestProcessingInstanceArtifactFixturesLoadFromConfiguredRoot(t *testing.T) {
+	t.Parallel()
 	root, err := os.OpenRoot(pluginFixtureRoot(t))
 	if err != nil {
 		t.Fatal(err)
@@ -47,12 +48,14 @@ func TestProcessingInstanceArtifactFixturesLoadFromConfiguredRoot(t *testing.T) 
 }
 
 func TestProcessingWorkflowHTTPRequiresCurrentCSRFAndUsesSyntheticDeclarations(t *testing.T) {
+	t.Parallel()
 	for _, secureProxy := range []bool{false, true} {
 		name := "direct-http"
 		if secureProxy {
 			name = "https-reverse-proxy"
 		}
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			// The saved definitions select on a payload field, which the author must be able to read.
 			store := newManagementStoreWithFields(t, []string{"unit", "address", "payload"})
 			backend := httptest.NewUnstartedServer(nil)

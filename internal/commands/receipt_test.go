@@ -10,6 +10,7 @@ import (
 )
 
 func TestNextRevisionChecksStalenessAndExhaustionWithoutWrapping(t *testing.T) {
+	t.Parallel()
 	if next, err := NextRevision(math.MaxInt64-1, math.MaxInt64-1); err != nil || next != math.MaxInt64 {
 		t.Fatal("last representable revision was rejected")
 	}
@@ -24,6 +25,7 @@ func TestNextRevisionChecksStalenessAndExhaustionWithoutWrapping(t *testing.T) {
 }
 
 func TestReceiptCheckReplaysIdenticalInputAndRejectsConflictingReuse(t *testing.T) {
+	t.Parallel()
 	first, err := Fingerprint(map[string]int{"a": 1})
 	if err != nil {
 		t.Fatal(err)

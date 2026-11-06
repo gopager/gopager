@@ -22,6 +22,7 @@ func (t *inlineTransactions) WithinTransaction(ctx context.Context, fn platform.
 }
 
 func TestResolverAuthenticateChecksCredentialWithoutGrantsOrTouch(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name   string
 		change func(*authorityFixture)
@@ -36,6 +37,7 @@ func TestResolverAuthenticateChecksCredentialWithoutGrantsOrTouch(t *testing.T) 
 		{"inactive account", func(f *authorityFixture) { f.account.State = "suspended" }, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			fixture, proof := newAuthorityFixture(t)
 			test.change(fixture)
 			resolver, err := NewResolver(fixture, fixture, fixture)
@@ -55,6 +57,7 @@ func TestResolverAuthenticateChecksCredentialWithoutGrantsOrTouch(t *testing.T) 
 }
 
 func TestPreauthenticatorSkipsAnonymousAndUsesOneTransaction(t *testing.T) {
+	t.Parallel()
 	fixture, proof := newAuthorityFixture(t)
 	resolver, err := NewResolver(fixture, fixture, fixture)
 	if err != nil {

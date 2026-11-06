@@ -160,6 +160,7 @@ func revokeReadReviewer(t *testing.T, store *postgres.Store, principalID uuid.UU
 }
 
 func TestProcessingStatusHTTPFiltersWorkflowPagesAndHidesPrivateEvidence(t *testing.T) {
+	t.Parallel()
 	store := newManagementStore(t)
 	shared := mustComposeCore(t, store)
 	runtime, err := composeProcessingAPIRuntime(t.Context(), shared, "")

@@ -10,6 +10,7 @@ import (
 )
 
 func TestParseConfigBindsExplicitInputs(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name string
 		args []string
@@ -44,6 +45,7 @@ func TestParseConfigBindsExplicitInputs(t *testing.T) {
 		{"positional", []string{"synthetic-secret"}, "", false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			config, err := parseConfig(test.args, func(key string) string {
 				switch key {
 				case "GOPAGER_DATABASE_URL":
@@ -89,6 +91,7 @@ func TestParseConfigBindsExplicitInputs(t *testing.T) {
 
 // TestParseConfigReadsPluginRootFromEnvironment covers plugin-directory provisioning through the environment, as used by container deployments.
 func TestParseConfigReadsPluginRootFromEnvironment(t *testing.T) {
+	t.Parallel()
 	fromEnv, fromFlag := t.TempDir(), t.TempDir()
 	environment := func(root string) func(string) string {
 		return func(key string) string {

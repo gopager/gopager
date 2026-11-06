@@ -11,6 +11,7 @@ import (
 // exhausts a scope: the next claim fails it with RETRY_LIMIT and exactly one
 // correction.failed fact records that final failure.
 func TestCorrectionLeaseExpiredOnFifthAttemptEmitsOneFailedFact(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		_, err := f.ruleStore.MarkPending(tx.Context(), tx, []assignments.CorrectionScope{networkScope(f.networks[0])}, "rule-change")

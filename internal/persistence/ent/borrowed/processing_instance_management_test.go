@@ -52,6 +52,7 @@ func (f invalidInstanceFactFixture) AppendProcessingInstance(ctx context.Context
 }
 
 func TestProcessingInstanceManagementFreshAuthorityReceiptsAndAtomicFacts(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	base, capture := newProcessingManagementFixture(t, f, &processingPreparationFixture{}, f.facts)
 	repository, err := processingstore.New(f.store)

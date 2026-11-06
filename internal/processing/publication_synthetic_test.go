@@ -8,6 +8,7 @@ import (
 )
 
 func TestPublicationRejectsSyntheticSourceBinding(t *testing.T) {
+	t.Parallel()
 	binding := PublicationBinding{Source: SourceIdentity{TransmissionID: uuid.New(), NetworkID: uuid.New(),
 		SourceRevision: 1, ContextRevision: 1, Synthetic: true}, MessageID: uuid.New(), SourceFence: 1}
 	if err := binding.Validate(); platform.FailureCode(err) != platform.CodeInvalidInput {

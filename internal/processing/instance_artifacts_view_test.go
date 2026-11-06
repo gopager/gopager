@@ -7,6 +7,7 @@ import (
 )
 
 func TestProjectConfigurationFieldRedactsSecretAndUserScope(t *testing.T) {
+	t.Parallel()
 	schema := FieldSchema{Kind: ObjectValue, Properties: map[string]FieldSchema{
 		"public":   {Kind: StringValue},
 		"secret":   {Kind: StringValue},
@@ -45,6 +46,7 @@ func TestProjectConfigurationFieldRedactsSecretAndUserScope(t *testing.T) {
 }
 
 func TestProjectConfigurationListRedactsSensitiveElementCounts(t *testing.T) {
+	t.Parallel()
 	secret := true
 	schema := FieldSchema{Kind: ListValue, Element: &FieldSchema{Kind: StringValue}}
 	policy := ConfigurationPolicy{Scope: "admin", Secret: new(bool),

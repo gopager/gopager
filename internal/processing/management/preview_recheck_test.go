@@ -55,6 +55,7 @@ func (s *previewRecheckSource) CheckInstalledSource(_ context.Context, _ platfor
 }
 
 func TestPreviewFinalFenceRechecksSourceAndRejectsChangedWorkflowOrAuthority(t *testing.T) {
+	t.Parallel()
 	principal := uuid.NewString()
 	authority := authz.Authority{PrincipalID: principal, Revision: 1, Active: true,
 		Grants: []authz.Grant{{ID: uuid.NewString(), SubjectID: principal, SubjectKind: "principal",

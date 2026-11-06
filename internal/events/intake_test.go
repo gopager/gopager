@@ -9,6 +9,7 @@ import (
 )
 
 func TestIntakeFactEnvelopeUsesTypedSafeVocabularies(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 11, 4, 10, 0, 0, 0, time.UTC)
 	message, transmission := uuid.New(), uuid.New()
 	envelope, err := (IntakeFact{ID: uuid.New(), Type: MessageMerged, MessageID: message,
@@ -26,6 +27,7 @@ func TestIntakeFactEnvelopeUsesTypedSafeVocabularies(t *testing.T) {
 }
 
 func TestIntakeFactRejectsIncompleteGatewayTransitionAndAssignment(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 11, 4, 10, 0, 0, 0, time.UTC)
 	gateway := uuid.New()
 	if _, err := (IntakeFact{ID: uuid.New(), Type: GatewayStateChanged, GatewayID: gateway,
@@ -41,6 +43,7 @@ func TestIntakeFactRejectsIncompleteGatewayTransitionAndAssignment(t *testing.T)
 }
 
 func TestAssignmentChangedCarriesAllTargetsOfOneTransmission(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 11, 4, 10, 0, 0, 0, time.UTC)
 	unit, rule := uuid.New(), uuid.New()
 	targets := []IntakeTarget{

@@ -13,6 +13,7 @@ import (
 )
 
 func TestMigrationCheckWithReadOnlyConnection(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	// This setting applies to every physical test connection, not just one pooled session.
 	readOnly := newStoreAtWithParams(t, storeTestDSN(store), map[string]string{"default_transaction_read_only": "on"})
@@ -31,6 +32,7 @@ func TestMigrationCheckWithReadOnlyConnection(t *testing.T) {
 }
 
 func TestMigrationLockReleasedAfterCancelledWait(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	conn, err := store.db.Conn(context.Background())
 	if err != nil {
@@ -56,6 +58,7 @@ func TestMigrationLockReleasedAfterCancelledWait(t *testing.T) {
 }
 
 func TestMigrationConcurrencyDoesNotExhaustPool(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	store.db.SetMaxOpenConns(2)
 	files := migrationFiles("SELECT pg_sleep(0.02)")
@@ -73,6 +76,7 @@ func TestMigrationConcurrencyDoesNotExhaustPool(t *testing.T) {
 }
 
 func TestMigrationFailureMappingRetainsLibraryCause(t *testing.T) {
+	t.Parallel()
 	err := &goose.PartialError{Err: errors.New("synthetic transport failure")}
 	if !isUnknownCommit(err) {
 		t.Fatal("untyped migration transport outcome was assumed rolled back")

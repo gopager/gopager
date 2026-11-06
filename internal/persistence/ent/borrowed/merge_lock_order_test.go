@@ -43,6 +43,7 @@ func (f *processingSourceFixture) tryAccept(ctx context.Context, id string, obse
 // and then locks that Message; with the merge holding the Message first the two would wait
 // on each other until the deadlock detector aborts one of them.
 func TestMergeLocksTransmissionsBeforeMessages(t *testing.T) {
+	t.Parallel()
 	f := newProcessingSourceFixture(t)
 	f.exec(t, `UPDATE grouping_control SET window_seconds=30 WHERE id=1`)
 	first := f.accept(t, "order-first", f.now, toneOnlyPayload, nil)

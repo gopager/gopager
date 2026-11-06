@@ -12,6 +12,7 @@ import (
 // TestNotFoundOnlyForMissingRow expects only a missing row to become NOT_FOUND; a storage
 // failure must stay a failure the Gateway can retry.
 func TestNotFoundOnlyForMissingRow(t *testing.T) {
+	t.Parallel()
 	if err := notFoundIfNoRows(sql.ErrNoRows); !errors.Is(err, authz.ErrNotFound) {
 		t.Fatalf("missing row mapped to %v, want NOT_FOUND", err)
 	}

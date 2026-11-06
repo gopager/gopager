@@ -60,6 +60,7 @@ func (l channelListener) Listen(ctx context.Context, channel string) (<-chan str
 }
 
 func TestNotificationWakesDispatcherBeforePollInterval(t *testing.T) {
+	t.Parallel()
 	fixture := &wakeFixture{}
 	dispatcher, err := worker.NewDispatcher(fixture, fixture, fixture,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), worker.DispatchConfig{Concurrency: 1, PollInterval: time.Hour})

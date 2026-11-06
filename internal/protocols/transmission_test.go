@@ -7,6 +7,7 @@ import (
 )
 
 func TestTransmissionPayloadIdentityUsesClosedProtocolForms(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		protocol Protocol
@@ -30,6 +31,7 @@ func TestTransmissionPayloadIdentityUsesClosedProtocolForms(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			var payload TransmissionPayload
 			if err := json.Unmarshal([]byte(test.payload), &payload); err != nil {
 				t.Fatal(err)
@@ -44,6 +46,7 @@ func TestTransmissionPayloadIdentityUsesClosedProtocolForms(t *testing.T) {
 }
 
 func TestTransmissionPayloadRejectsWrongFormAndMalformedJSON(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		protocol Protocol
 		payload  string
@@ -72,6 +75,7 @@ func TestTransmissionPayloadRejectsWrongFormAndMalformedJSON(t *testing.T) {
 }
 
 func TestValidateTransmissionTargetsPreservesProtocolLimits(t *testing.T) {
+	t.Parallel()
 	address := TextAddress("12345")
 	if err := ValidateTransmissionTargets(ZVEI, []Target{{Address: address}}); err != nil {
 		t.Fatal(err)

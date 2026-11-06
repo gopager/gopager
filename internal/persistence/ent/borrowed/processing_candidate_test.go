@@ -19,6 +19,7 @@ import (
 )
 
 func TestProcessingCandidateNativeReselectionRetainsResultsAndAttempts(t *testing.T) {
+	t.Parallel()
 	primary := newStore(t)
 	store, err := processingstore.New(primary)
 	if err != nil {

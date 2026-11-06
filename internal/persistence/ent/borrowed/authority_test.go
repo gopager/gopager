@@ -22,6 +22,7 @@ import (
 )
 
 func TestResolverLoadsDirectAndGroupGrantsAndRejectsRevokedSession(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	repository, err := identitystore.New(store)
 	if err != nil {
@@ -218,6 +219,7 @@ func waitForAuthorityLock(t *testing.T, store *postgres.Store, pid int) {
 }
 
 func TestResolverChecksKeyRestrictionAndDeletedScope(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	repository, err := identitystore.New(store)
 	if err != nil {

@@ -17,6 +17,7 @@ import (
 )
 
 func TestProcessingInstanceHTTPUsesRootAndRedactsCurrentConfiguration(t *testing.T) {
+	t.Parallel()
 	store := newManagementStore(t)
 	shared := mustComposeCore(t, store)
 	runtime, err := composeProcessingAPIRuntime(t.Context(), shared, pluginFixtureRoot(t))

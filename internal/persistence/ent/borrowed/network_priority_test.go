@@ -65,6 +65,7 @@ func readStoredResolution(t *testing.T, f matcherFixture, transmission uuid.UUID
 // ambiguity fact, and a target matched by only one Network's rules selects that Network
 // (inferred-address) even when the other Network has the higher priority.
 func TestIntakeResolvesOverlappingNetworksByPriorityAndRecordsAmbiguity(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	gateway := uuid.New()
 	secret, secretHash, err := identity.NewSecret()
@@ -170,6 +171,7 @@ func TestIntakeResolvesOverlappingNetworksByPriorityAndRecordsAmbiguity(t *testi
 // administration API: two Networks of one Gateway cannot share a priority, and a negative
 // priority is rejected.
 func TestGatewayNetworkPriorityIsUniquePerGatewayInTheDatabase(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	gateway := uuid.New()
 	exec := func(query string, args ...any) error {

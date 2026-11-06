@@ -8,6 +8,7 @@ import (
 )
 
 func TestPreviewInputRequiresOneDefinitionAndOneSource(t *testing.T) {
+	t.Parallel()
 	workflowID := uuid.New()
 	definition := processing.Definition{}
 	for _, input := range []PreviewInput{

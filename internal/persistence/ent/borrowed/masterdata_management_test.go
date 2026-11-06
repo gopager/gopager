@@ -11,6 +11,7 @@ import (
 )
 
 func TestOrganizationDefaultsTemplateSnapshotAndAtomicBulkUnits(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	defaultColor := "#AABBCC"
 	changedDefault := "#445566"
@@ -270,6 +271,7 @@ func TestOrganizationDefaultsTemplateSnapshotAndAtomicBulkUnits(t *testing.T) {
 }
 
 func TestDeleteOrganizationRollsBackOnStaleAffectedUnitRevision(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	color := "#AABBCC"
 	organization, err := f.units.CreateOrganization(t.Context(), f.proof, uuid.New(), units.OrganizationInput{
@@ -330,6 +332,7 @@ func TestDeleteOrganizationRollsBackOnStaleAffectedUnitRevision(t *testing.T) {
 
 // TestTemplateActionsAreNotInferredFromUnitOrOrganizationRights covers the rule that template actions require explicit grants.
 func TestTemplateActionsAreNotInferredFromUnitOrOrganizationRights(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	template, err := f.units.CreateUnitTemplate(t.Context(), f.proof, uuid.New(),
 		units.UnitTemplateInput{Name: "Explicit Template"}, checkedMutation)

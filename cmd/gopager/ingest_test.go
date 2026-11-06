@@ -12,6 +12,7 @@ import (
 )
 
 func TestIngestHTTPSubmissionAndGatewayStateRoutes(t *testing.T) {
+	t.Parallel()
 	fixture := newGatewayHTTPFixture(t)
 	issuePath := "/api/v1/gateways/" + fixture.gateway.String() + "/credentials"
 	issueBody := `{"schemaVersion":1,"commandId":"` + uuid.NewString() + `","expectedRevision":"1"}`

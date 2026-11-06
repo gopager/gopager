@@ -10,6 +10,7 @@ import (
 )
 
 func TestEvaluationValidationRejectsNamespacesAndOriginalPositionSubstitution(t *testing.T) {
+	t.Parallel()
 	binding := EvaluationBinding{TransmissionID: uuid.New(), SourceRevision: 1, ContextRevision: 2, TargetLimit: 2}
 	schema := map[string]FieldSchema{}
 	if err := ValidateEvaluation(Evaluation{}, schema, binding); err != nil {
@@ -49,6 +50,7 @@ func TestEvaluationValidationRejectsNamespacesAndOriginalPositionSubstitution(t 
 }
 
 func TestEvaluationValidationMeasuresExactWholeOutputBoundary(t *testing.T) {
+	t.Parallel()
 	binding := EvaluationBinding{TransmissionID: uuid.New(), SourceRevision: 1, ContextRevision: 1}
 	schema := map[string]FieldSchema{"text": {Kind: StringValue}}
 	value, err := Literal(StringValue, "")

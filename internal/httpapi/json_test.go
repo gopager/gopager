@@ -7,6 +7,7 @@ import (
 )
 
 func TestManagementRejectsInvalidShapes(t *testing.T) {
+	t.Parallel()
 	for _, body := range []string{
 		`{"schemaVersion":1,"unexpected":true}`, `{} {}`, `null`,
 		`{"name":"` + strings.Repeat("x", 64*1024) + `"}`,

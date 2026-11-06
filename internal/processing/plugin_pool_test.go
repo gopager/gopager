@@ -93,6 +93,7 @@ func waitFor(t *testing.T, what string, condition func() bool) {
 }
 
 func TestPluginPoolReusesOneProcessAcrossRuns(t *testing.T) {
+	t.Parallel()
 	f := newPoolFixture(t)
 	instance := uuid.New()
 	first := f.load(instance, 1)
@@ -116,6 +117,7 @@ func TestPluginPoolReusesOneProcessAcrossRuns(t *testing.T) {
 }
 
 func TestPluginPoolSerializesConcurrentInvocationsOnOneProcess(t *testing.T) {
+	t.Parallel()
 	f := newPoolFixture(t)
 	instance := uuid.New()
 	var group sync.WaitGroup
@@ -141,7 +143,7 @@ func TestPluginPoolSerializesConcurrentInvocationsOnOneProcess(t *testing.T) {
 	}
 }
 
-func TestPluginPoolIdleTimeoutStopsProcess(t *testing.T) {
+func TestPluginPoolIdleTimeoutStopsProcess(t *testing.T) { //nolint:paralleltest // swaps the package variable pluginIdleTimeout
 	original := pluginIdleTimeout
 	pluginIdleTimeout = 150 * time.Millisecond
 	t.Cleanup(func() { pluginIdleTimeout = original })
@@ -158,7 +160,7 @@ func TestPluginPoolIdleTimeoutStopsProcess(t *testing.T) {
 	}
 }
 
-func TestPluginPoolBusyProcessIsNotStoppedByIdleTimeout(t *testing.T) {
+func TestPluginPoolBusyProcessIsNotStoppedByIdleTimeout(t *testing.T) { //nolint:paralleltest // swaps the package variable pluginIdleTimeout
 	original := pluginIdleTimeout
 	pluginIdleTimeout = 50 * time.Millisecond
 	t.Cleanup(func() { pluginIdleTimeout = original })
@@ -175,6 +177,7 @@ func TestPluginPoolBusyProcessIsNotStoppedByIdleTimeout(t *testing.T) {
 }
 
 func TestPluginPoolInstanceChangedStopsOlderRevisions(t *testing.T) {
+	t.Parallel()
 	f := newPoolFixture(t)
 	instance := uuid.New()
 	artifact := f.load(instance, 1)
@@ -200,6 +203,7 @@ func TestPluginPoolInstanceChangedStopsOlderRevisions(t *testing.T) {
 }
 
 func TestPluginPoolHostCloseStopsPooledAndUnpooledProcesses(t *testing.T) {
+	t.Parallel()
 	f := newPoolFixture(t)
 	pooled := f.load(uuid.New(), 1)
 	unpooled := f.load(uuid.Nil, 0)
@@ -217,6 +221,7 @@ func TestPluginPoolHostCloseStopsPooledAndUnpooledProcesses(t *testing.T) {
 }
 
 func TestPluginPoolClosingIdleHandlesReleasesProcesses(t *testing.T) {
+	t.Parallel()
 	f := newPoolFixture(t)
 	unpooled := f.load(uuid.Nil, 0)
 	f.mustPID(unpooled)
@@ -240,6 +245,7 @@ func TestPluginPoolClosingIdleHandlesReleasesProcesses(t *testing.T) {
 }
 
 func TestPluginSecureConfigRefusesTamperedBinary(t *testing.T) {
+	t.Parallel()
 	f := newPoolFixture(t)
 	artifact := f.load(uuid.New(), 1)
 	defer func() { _ = artifact.Close(context.Background()) }()
@@ -264,6 +270,7 @@ func TestPluginSecureConfigRefusesTamperedBinary(t *testing.T) {
 }
 
 func TestPluginArtifactCacheSkipsRehashAndDetectsChange(t *testing.T) {
+	t.Parallel()
 	f := newPoolFixture(t)
 	instance := uuid.New()
 	first := f.load(instance, 1)
@@ -295,6 +302,7 @@ func TestPluginArtifactCacheSkipsRehashAndDetectsChange(t *testing.T) {
 }
 
 func TestPluginPoolInstanceChangedDropsCachedArtifacts(t *testing.T) {
+	t.Parallel()
 	f := newPoolFixture(t)
 	instance := uuid.New()
 	artifact := f.load(instance, 1)
@@ -308,6 +316,7 @@ func TestPluginPoolInstanceChangedDropsCachedArtifacts(t *testing.T) {
 }
 
 func TestInstalledPreviewModeReachesPlugin(t *testing.T) {
+	t.Parallel()
 	f := newPoolFixture(t)
 	artifact := f.load(uuid.New(), 1)
 	defer func() { _ = artifact.Close(context.Background()) }()
@@ -344,6 +353,7 @@ func TestInstalledPreviewModeReachesPlugin(t *testing.T) {
 // revision to run in their own pooled process, so an editor's preview never holds the call slot
 // of the live process, while repeated previews still share one process.
 func TestPluginPoolSeparatesPreviewFromLiveProcesses(t *testing.T) {
+	t.Parallel()
 	f := newPoolFixture(t)
 	instance := uuid.New()
 	live := f.load(instance, 1)

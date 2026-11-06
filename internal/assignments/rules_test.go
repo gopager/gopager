@@ -19,6 +19,7 @@ func numericRule(network uuid.UUID, first, last uint64, functions []uint16) Rule
 }
 
 func TestRuleSpecificityUsesSetInclusionNotAddressPriority(t *testing.T) {
+	t.Parallel()
 	network := uuid.New()
 	broad := numericRule(network, 100, 200, nil)
 	exact := numericRule(network, 150, 150, []uint16{1})
@@ -58,6 +59,7 @@ func TestRuleSpecificityUsesSetInclusionNotAddressPriority(t *testing.T) {
 }
 
 func TestRuleTemporalAndModeConflicts(t *testing.T) {
+	t.Parallel()
 	network := uuid.New()
 	base := numericRule(network, 100, 200, nil)
 	from := time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)
@@ -101,6 +103,7 @@ func TestRuleTemporalAndModeConflicts(t *testing.T) {
 }
 
 func TestStringRulesAreExactAndEmptyTargetsStayEmpty(t *testing.T) {
+	t.Parallel()
 	for _, protocol := range []protocols.Protocol{protocols.ZVEI, protocols.EAS} {
 		value, other := "00123", "00124"
 		if protocol == protocols.EAS {
@@ -123,6 +126,7 @@ func TestStringRulesAreExactAndEmptyTargetsStayEmpty(t *testing.T) {
 }
 
 func TestRuleInvalidityAndCancellationAreNotUnassigned(t *testing.T) {
+	t.Parallel()
 	rule := numericRule(uuid.New(), 100, 200, nil)
 	now := time.Date(2026, 10, 27, 0, 0, 0, 0, time.UTC)
 	invalid := rule
@@ -152,6 +156,7 @@ func TestRuleInvalidityAndCancellationAreNotUnassigned(t *testing.T) {
 }
 
 func TestSelectorJSONIsTypedAndDoesNotConvertFunctionListsToBase64(t *testing.T) {
+	t.Parallel()
 	first, last := uint64(1), uint64(2)
 	selector := Selector{From: &first, To: &last, Mode: "function-bit", Functions: []uint16{1, 3}}
 	data, err := json.Marshal(selector)

@@ -19,6 +19,7 @@ import (
 // (exactly the window groups, one second more does not) and the index that makes the
 // candidate lookup range-searchable by observation time.
 func TestGroupingWindowIsInclusiveAndIndexed(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	facts, err := eventstore.New(store)
 	if err != nil {

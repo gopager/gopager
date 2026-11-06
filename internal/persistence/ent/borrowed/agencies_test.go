@@ -15,6 +15,7 @@ import (
 // through the master-data service, a Unit to require an existing Agency, an Agency with
 // Units to refuse deletion, and an Agency grant to scope Unit reads to that Agency.
 func TestAgencyLifecycleAndScope(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	north, err := f.units.CreateAgency(t.Context(), f.proof, uuid.New(), units.AgencyInput{Name: "North"}, checkedMutation)
 	if err != nil {

@@ -20,6 +20,7 @@ func receive(t *testing.T, signals <-chan struct{}, within time.Duration, what s
 }
 
 func TestListenDeliversNotificationsAndSurvivesConnectionLoss(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -57,6 +58,7 @@ func TestListenDeliversNotificationsAndSurvivesConnectionLoss(t *testing.T) {
 }
 
 func TestListenRejectsEmptyChannel(t *testing.T) {
+	t.Parallel()
 	store := &Store{}
 	if _, err := store.Listen(t.Context(), ""); err == nil {
 		t.Fatal("empty channel accepted")

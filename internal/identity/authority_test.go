@@ -94,6 +94,7 @@ func newAuthorityFixture(t *testing.T) (*authorityFixture, Proof) {
 }
 
 func TestResolverSessionBoundariesAndAccountState(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name   string
 		change func(*authorityFixture)
@@ -123,6 +124,7 @@ func TestResolverSessionBoundariesAndAccountState(t *testing.T) {
 		{"guest cannot use session", func(f *authorityFixture) { f.account.Kind = "guest" }, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			fixture, proof := newAuthorityFixture(t)
 			test.change(fixture)
 			resolver, err := NewResolver(fixture, fixture, fixture)
@@ -142,6 +144,7 @@ func TestResolverSessionBoundariesAndAccountState(t *testing.T) {
 }
 
 func TestResolverDisablesMissingGrantScopeAndRejectsBrokenKey(t *testing.T) {
+	t.Parallel()
 	fixture, proof := newAuthorityFixture(t)
 	fixture.exists = false
 	resolver, err := NewResolver(fixture, fixture, fixture)
@@ -177,6 +180,7 @@ func TestResolverDisablesMissingGrantScopeAndRejectsBrokenKey(t *testing.T) {
 }
 
 func TestResolverRejectsBrokenGlobalFieldAuthorityWithoutFallback(t *testing.T) {
+	t.Parallel()
 	fixture, proof := newAuthorityFixture(t)
 	resolver, err := NewResolver(fixture, fixture, fixture)
 	if err != nil {
@@ -195,6 +199,7 @@ func TestResolverRejectsBrokenGlobalFieldAuthorityWithoutFallback(t *testing.T) 
 }
 
 func TestResolverBatchesScopeExistenceChecks(t *testing.T) {
+	t.Parallel()
 	fixture, proof := newAuthorityFixture(t)
 	for i := 0; i < 25; i++ {
 		fixture.grants = append(fixture.grants, authz.Grant{SubjectID: fixture.account.ID.String(),
@@ -224,6 +229,7 @@ func TestResolverBatchesScopeExistenceChecks(t *testing.T) {
 }
 
 func TestResolverThrottlesLastUsedWrites(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name string
 		idle time.Duration
@@ -235,6 +241,7 @@ func TestResolverThrottlesLastUsedWrites(t *testing.T) {
 		{"long idle", time.Hour, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			fixture, proof := newAuthorityFixture(t)
 			fixture.credential.LastUsedAt = fixture.now.Add(-test.idle)
 			resolver, err := NewResolver(fixture, fixture, fixture)

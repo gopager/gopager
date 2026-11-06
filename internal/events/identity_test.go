@@ -12,6 +12,7 @@ import (
 )
 
 func TestEvents(t *testing.T) {
+	t.Parallel()
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Identity facts")
 }

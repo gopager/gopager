@@ -28,6 +28,7 @@ import (
 var errRollbackFixture = errors.New("roll back source owner fixture")
 
 func TestProcessingSourceOwnerMapsMissingMessageToNotFound(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	facts, err := eventstore.New(store)
 	if err != nil {
@@ -202,6 +203,7 @@ func TestProcessingSourceOwnerMapsMissingMessageToNotFound(t *testing.T) {
 }
 
 func TestIntakeStoreReadsSyntheticNetwork(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	facts, err := eventstore.New(store)
 	if err != nil {

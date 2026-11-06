@@ -33,6 +33,7 @@ func classificationDefinition() Definition {
 // definition references (the branch arm that did not run included) contributes its own
 // classification to Dependencies(), and no derived output carries a per-value classification.
 func TestEvaluationClassificationIsPerDefinitionNotPerValue(t *testing.T) {
+	t.Parallel()
 	_, source := sourceFixture(t, "111")
 	program, err := CompileWorkflow(t.Context(), classificationDefinition(), source, nil)
 	if err != nil {
@@ -69,6 +70,7 @@ func TestEvaluationClassificationIsPerDefinitionNotPerValue(t *testing.T) {
 // catalog field a definition can reference declares exactly one field group, and the
 // compiled program reports each referenced field with it.
 func TestSyntheticCatalogDeclaresOneGroupPerField(t *testing.T) {
+	t.Parallel()
 	declarations, err := NewSyntheticDeclarationOwner().ProcessingDeclarations(t.Context())
 	if err != nil {
 		t.Fatal(err)

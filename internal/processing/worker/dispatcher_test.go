@@ -113,6 +113,7 @@ func (f *dispatchFixture) counts() (starts, remaining, active, maximum, exited i
 }
 
 func TestDispatcherConcurrencyAndJoinedShutdown(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		f := newDispatchFixture(5)
 		f.release = make(chan struct{})
@@ -144,6 +145,7 @@ func TestDispatcherConcurrencyAndJoinedShutdown(t *testing.T) {
 }
 
 func TestDispatcherFallbackWakeAndFailureCooldown(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		f := newDispatchFixture(0)
 		dispatcher := newTestDispatcher(t, f)
@@ -191,6 +193,7 @@ func TestDispatcherFallbackWakeAndFailureCooldown(t *testing.T) {
 }
 
 func TestDispatcherDrainsQueueAndSurfacesListFailure(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		f := newDispatchFixture(9)
 		dispatcher := newTestDispatcher(t, f)
@@ -216,6 +219,7 @@ func TestDispatcherDrainsQueueAndSurfacesListFailure(t *testing.T) {
 }
 
 func TestDispatcherConfigurationValidationAndCustomScheduling(t *testing.T) {
+	t.Parallel()
 	f := newDispatchFixture(0)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	for _, config := range []DispatchConfig{{Concurrency: -1}, {PollInterval: -time.Second}} {
@@ -307,9 +311,11 @@ func (f *flakyTransactions) snapshot() (calls, failures int) {
 }
 
 func TestDispatcherSurvivesTransientSelectionFailures(t *testing.T) {
+	t.Parallel()
 	for _, code := range []platform.ErrorCode{platform.CodeStorageUnavailable,
 		platform.CodeAuthorityUnavailable, platform.CodeCommitUncertain} {
 		t.Run(string(code), func(t *testing.T) {
+			t.Parallel()
 			synctest.Test(t, func(t *testing.T) {
 				f := newDispatchFixture(3)
 				transactions := &flakyTransactions{inner: f, failures: 3,
@@ -372,6 +378,7 @@ func TestDispatcherSurvivesTransientSelectionFailures(t *testing.T) {
 }
 
 func TestDispatcherStopsPromptlyWhileBackingOff(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		f := newDispatchFixture(1)
 		transactions := &flakyTransactions{inner: f, failures: 1000,
@@ -407,6 +414,7 @@ func TestDispatcherStopsPromptlyWhileBackingOff(t *testing.T) {
 }
 
 func TestDispatcherSelectsAtMostConcurrencyRowsPerAttempt(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		f := newDispatchFixture(5)
 		f.release = make(chan struct{})

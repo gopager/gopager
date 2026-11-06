@@ -8,6 +8,7 @@ import (
 )
 
 func TestGatewayBearerRequiresOneValidAuthorizationHeader(t *testing.T) {
+	t.Parallel()
 	secret, _, err := identity.NewSecret()
 	if err != nil {
 		t.Fatal(err)
@@ -25,6 +26,7 @@ func TestGatewayBearerRequiresOneValidAuthorizationHeader(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			request := httptest.NewRequest("POST", "/api/v1/transmissions", nil)
 			for _, value := range test.headers {
 				request.Header.Add("Authorization", value)

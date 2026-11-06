@@ -10,6 +10,7 @@ import (
 )
 
 func TestInternalExecutionAuthorityUsesCurrentOwnerWithoutCredentialProof(t *testing.T) {
+	t.Parallel()
 	fixture, _ := newAuthorityFixture(t)
 	principal := fixture.account.ID
 	fixture.fields = []authz.FieldPermission{{ID: uuid.NewString(), Revision: 1,

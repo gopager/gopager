@@ -51,6 +51,7 @@ type runnerFunc func(context.Context) error
 func (f runnerFunc) Run(ctx context.Context) error { return f(ctx) }
 
 func TestReadinessRequiresEveryAuthorityCheck(t *testing.T) {
+	t.Parallel()
 	store := &probeStore{}
 	h, err := Start(context.Background(), Config{
 		Profile: "full", Roles: []Role{RoleWorker}, DatabaseURL: "synthetic",
@@ -101,6 +102,7 @@ func TestReadinessRequiresEveryAuthorityCheck(t *testing.T) {
 }
 
 func TestShutdownCancelsActiveOperationsAndRejectsNewOnes(t *testing.T) {
+	t.Parallel()
 	store := &cancellingStore{started: make(chan struct{})}
 	h, err := Start(context.Background(), Config{
 		Profile: "full", Roles: []Role{RoleWorker}, DatabaseURL: "synthetic",
@@ -136,7 +138,9 @@ func (s *cancellingStore) WithinTransaction(ctx context.Context, _ TxFunc) error
 }
 
 func TestShutdownDeadlineAndRunnerFailureAreVisible(t *testing.T) {
+	t.Parallel()
 	t.Run("deadline", func(t *testing.T) {
+		t.Parallel()
 		release := make(chan struct{})
 		exited := make(chan struct{})
 		h, err := Start(context.Background(), Config{
@@ -165,6 +169,7 @@ func TestShutdownDeadlineAndRunnerFailureAreVisible(t *testing.T) {
 		}
 	})
 	t.Run("runner failure on cancellation", func(t *testing.T) {
+		t.Parallel()
 		h, err := Start(context.Background(), Config{
 			Profile: "full", Roles: []Role{RoleWorker}, DatabaseURL: "synthetic",
 		}, nil, &fakeStore{}, []Runner{runnerFunc(func(ctx context.Context) error {
@@ -180,7 +185,7 @@ func TestShutdownDeadlineAndRunnerFailureAreVisible(t *testing.T) {
 	})
 }
 
-func TestSafeDiagnosticsDoNotDependOnDisplayPreferences(t *testing.T) {
+func TestSafeDiagnosticsDoNotDependOnDisplayPreferences(t *testing.T) { //nolint:paralleltest // sets the process environment variable LANG with t.Setenv
 	for _, locale := range []string{"en", "de", "different-format"} {
 		t.Run(locale, func(t *testing.T) {
 			t.Setenv("LANG", locale)
@@ -197,6 +202,7 @@ func TestSafeDiagnosticsDoNotDependOnDisplayPreferences(t *testing.T) {
 }
 
 func TestNewHTTPServerBoundsEveryConnectionPhase(t *testing.T) {
+	t.Parallel()
 	server := newHTTPServer(context.Background(), http.NotFoundHandler())
 	if server.ReadHeaderTimeout != httpReadHeaderTimeout || server.ReadTimeout != httpReadTimeout ||
 		server.WriteTimeout != httpWriteTimeout || server.IdleTimeout != httpIdleTimeout ||

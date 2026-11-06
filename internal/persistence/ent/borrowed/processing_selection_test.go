@@ -63,6 +63,7 @@ func seedPendingCandidates(t *testing.T, primary *postgres.Store, repository *pr
 }
 
 func TestSelectDueWorkGivesConcurrentOpenSelectionsDisjointRows(t *testing.T) {
+	t.Parallel()
 	primary := newStore(t)
 	repository, err := processingstore.New(primary)
 	if err != nil {
@@ -109,6 +110,7 @@ func TestSelectDueWorkGivesConcurrentOpenSelectionsDisjointRows(t *testing.T) {
 }
 
 func TestSelectDueWorkDoesNotWaitForExclusiveControlLock(t *testing.T) {
+	t.Parallel()
 	primary := newStore(t)
 	repository, err := processingstore.New(primary)
 	if err != nil {

@@ -12,6 +12,7 @@ import (
 // separate session and expects an ordinary transaction to proceed anyway: only startup,
 // apply and the readiness recheck take that lock.
 func TestTransactionDoesNotWaitForMigrationLock(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	ctx := context.Background()
 	migrations := migrationFiles("CREATE TABLE synthetic_state (id int PRIMARY KEY)")
@@ -49,6 +50,7 @@ func TestTransactionDoesNotWaitForMigrationLock(t *testing.T) {
 // process whose registered collection is behind the database fails INCOMPATIBLE_VERSION
 // at transaction start.
 func TestTransactionDetectsForeignMigrationWithoutLock(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	ctx := context.Background()
 	first := migrationFiles("CREATE TABLE synthetic_state (id int PRIMARY KEY)")
@@ -69,6 +71,7 @@ func TestTransactionDetectsForeignMigrationWithoutLock(t *testing.T) {
 // TestReadinessCheckKeepsPooledConnections expects the locked check to return its
 // physical session to the pool after a successful unlock instead of discarding it.
 func TestReadinessCheckKeepsPooledConnections(t *testing.T) {
+	t.Parallel()
 	store := newTestStore(t)
 	ctx := context.Background()
 	migrations := migrationFiles("CREATE TABLE synthetic_state (id int PRIMARY KEY)")

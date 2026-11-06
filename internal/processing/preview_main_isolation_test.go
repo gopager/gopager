@@ -3,6 +3,7 @@ package processing
 import "testing"
 
 func TestInstalledPreviewDoesNotRunLiveBehaviour(t *testing.T) {
+	t.Parallel()
 	owner := newInstalledOwnerFixture(t)
 	owner.previewMode = true
 	_, source := sourceFixture(t)

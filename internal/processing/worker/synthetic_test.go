@@ -26,6 +26,7 @@ func (syntheticCandidateSource) CheckCandidate(context.Context, platform.Transac
 }
 
 func TestWorkerRejectsSyntheticSourceBeforeClaimOrEvaluation(t *testing.T) {
+	t.Parallel()
 	now := time.Now().UTC()
 	pending := processing.Candidate{ID: uuid.New(), Revision: 1, State: "pending",
 		CandidateBinding: processing.CandidateBinding{TransmissionID: uuid.New(), WorkflowID: uuid.New(),

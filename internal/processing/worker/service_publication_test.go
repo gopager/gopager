@@ -38,6 +38,7 @@ func (p *publicationFixture) Publish(_ context.Context, tx platform.TransactionC
 }
 
 func TestFinishPublishesCompletionInTheSameTransaction(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name string
 		err  error
@@ -46,6 +47,7 @@ func TestFinishPublishesCompletionInTheSameTransaction(t *testing.T) {
 		{name: "publication failure rolls completion back", err: errors.New("publication failed")},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			now := time.Now().UTC()
 			pending := processing.Candidate{ID: uuid.New(), Revision: 1, State: "pending",
 				CandidateBinding: processing.CandidateBinding{TransmissionID: uuid.New(), WorkflowID: uuid.New(),

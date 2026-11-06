@@ -12,6 +12,7 @@ import (
 // unitCollection and account: a Radio network is not a grant scope any more, and an Agency
 // grant covers targets that carry that Agency.
 func TestAgencyScopeReplacesNetwork(t *testing.T) {
+	t.Parallel()
 	agency := uuid.New()
 	if ValidScope(Scope{Kind: "network", References: []string{agency.String()}}) {
 		t.Fatal("network is still a valid scope kind")
@@ -41,6 +42,7 @@ func TestAgencyScopeReplacesNetwork(t *testing.T) {
 // Agency, including Unit targets whose Unit belongs to it and unassigned traffic of its
 // Radio networks, and to reject other Agencies.
 func TestAuthorizeMatchesAgencyTargets(t *testing.T) {
+	t.Parallel()
 	principal, agency, other := uuid.New(), uuid.New(), uuid.New()
 	authority := Authority{PrincipalID: principal.String(), Revision: 1, Active: true,
 		Grants: []Grant{{ID: uuid.NewString(), SubjectID: principal.String(), SubjectKind: "principal",

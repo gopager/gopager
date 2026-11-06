@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestIdentityErrorLogsCodeWithRequestID(t *testing.T) {
+func TestIdentityErrorLogsCodeWithRequestID(t *testing.T) { //nolint:paralleltest // replaces the process-wide slog default logger
 	var buffer bytes.Buffer
 	previous := slog.Default()
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&buffer, nil)))

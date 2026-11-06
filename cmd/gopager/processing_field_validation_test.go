@@ -21,6 +21,7 @@ import (
 // definition that reads gateway fields, but a selector or output that references a payload
 // field is rejected with INVALID_INPUT, both on save and on the preview of an unsaved draft.
 func TestProcessingSaveAndDraftPreviewRejectUnreadableFieldGroups(t *testing.T) {
+	t.Parallel()
 	store := newManagementStoreWithFields(t, []string{"gateway"})
 	identityRepository, err := identitystore.New(store)
 	if err != nil {

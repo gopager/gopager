@@ -21,6 +21,7 @@ func (a *rejectingAuthenticator) Authenticate(_ context.Context, proof identity.
 }
 
 func TestAuthenticatedRoutesRejectBadCredentialsBeforeReadingTheBody(t *testing.T) {
+	t.Parallel()
 	transport, err := identity.NewHTTPTransport("http://localhost:8080")
 	if err != nil {
 		t.Fatal(err)
@@ -41,6 +42,7 @@ func TestAuthenticatedRoutesRejectBadCredentialsBeforeReadingTheBody(t *testing.
 		{"processing", "/api/v1/workflows", http.Header{"Authorization": {"Bearer " + secret}}, identity.AccessKeyProof},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			auth := &rejectingAuthenticator{}
 			mux := http.NewServeMux()
 			RegisterManagementRoutes(mux, transport, auth, nil, nil)
@@ -63,6 +65,7 @@ func TestAuthenticatedRoutesRejectBadCredentialsBeforeReadingTheBody(t *testing.
 }
 
 func TestMalformedCredentialIsRejectedWithoutAuthenticatorOrBody(t *testing.T) {
+	t.Parallel()
 	transport, err := identity.NewHTTPTransport("http://localhost:8080")
 	if err != nil {
 		t.Fatal(err)
@@ -89,6 +92,7 @@ func (a *countingAuthenticator) Authenticate(context.Context, identity.Proof) er
 }
 
 func TestAnonymousProofIsRejectedOnUnsafeMethodsBeforeReadingTheBody(t *testing.T) {
+	t.Parallel()
 	transport, err := identity.NewHTTPTransport("http://localhost:8080")
 	if err != nil {
 		t.Fatal(err)
@@ -102,6 +106,7 @@ func TestAnonymousProofIsRejectedOnUnsafeMethodsBeforeReadingTheBody(t *testing.
 		{http.MethodPost, "/api/v1/workflows"},
 	} {
 		t.Run(test.method+" "+test.path, func(t *testing.T) {
+			t.Parallel()
 			auth := &countingAuthenticator{}
 			mux := http.NewServeMux()
 			RegisterManagementRoutes(mux, transport, auth, nil, nil)
@@ -119,6 +124,7 @@ func TestAnonymousProofIsRejectedOnUnsafeMethodsBeforeReadingTheBody(t *testing.
 }
 
 func TestAnonymousProofStillReachesSafeMethods(t *testing.T) {
+	t.Parallel()
 	transport, err := identity.NewHTTPTransport("http://localhost:8080")
 	if err != nil {
 		t.Fatal(err)

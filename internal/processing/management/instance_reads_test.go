@@ -13,6 +13,7 @@ import (
 )
 
 func TestInstanceSummaryOmitsLocalPathsDigestsAndConfiguration(t *testing.T) {
+	t.Parallel()
 	digest := sha256.Sum256([]byte("pinned artifact"))
 	configuration := processing.InstanceConfiguration{
 		ID: uuid.New(), Revision: 3, Enabled: true, ExecutionPrincipalID: uuid.New(),
@@ -42,6 +43,7 @@ func TestInstanceSummaryOmitsLocalPathsDigestsAndConfiguration(t *testing.T) {
 }
 
 func TestInstancePageBounds(t *testing.T) {
+	t.Parallel()
 	for _, input := range []processing.PageInput{
 		{Offset: -1, Limit: 1},
 		{Limit: 0},

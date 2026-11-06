@@ -11,6 +11,7 @@ import (
 // targets: the processing context is derived from the targets' assignment revision (1 for a
 // targetless Transmission), so the worker completes the candidate instead of superseding it.
 func TestProcessingContextFollowsOwnTargetsNotTheGlobalRevision(t *testing.T) {
+	t.Parallel()
 	f := newProcessingSourceFixture(t)
 	f.seedWorkflow(t, "any", protocolSelectorDefinition(t))
 	function := uint8(1)

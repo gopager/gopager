@@ -71,39 +71,42 @@ func (a blockingWorkerArtifactsFixture) PrepareInstalled(ctx context.Context, _ 
 }
 
 func TestProcessingWorkerPrivateEvaluationAndCurrentSourceRecheck(t *testing.T) {
-	primary := newStore(t)
-	repository, err := processingstore.New(primary)
-	if err != nil {
-		t.Fatal(err)
-	}
-	actor := uuid.New()
-	authority := processingAuthorityFixture(actor, authz.Scope{Kind: "all"})
-	configuration := processing.WorkflowConfiguration{ID: uuid.New(), Revision: 1, Name: "worker",
-		Scope: authz.Scope{Kind: "all"}, Enabled: true}
-	version := processing.Version{ID: uuid.New(), WorkflowID: configuration.ID,
-		CreatedBy: actor, Definition: preparedProcessingDefinition(t)}
-	if err := primary.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-		if _, err := repository.LockRevision(tx.Context(), tx); err != nil {
-			return err
-		}
-		now, err := primary.Now(tx.Context(), tx)
-		if err != nil {
-			return err
-		}
-		configuration.CreatedAt, configuration.UpdatedAt, version.CreatedAt = now, now, now
-		if err := repository.SaveWorkflow(tx.Context(), tx, authority, "workflow.create", configuration, 0, now); err != nil {
-			return err
-		}
-		if err := repository.SaveVersion(tx.Context(), tx, version); err != nil {
-			return err
-		}
-		configuration.Revision, configuration.ActiveVersionID = 2, &version.ID
-		return repository.SaveWorkflow(tx.Context(), tx, authority, "workflow.activate", configuration, 1, now)
-	}); err != nil {
-		t.Fatal(err)
-	}
+	t.Parallel()
 	for _, name := range []string{"selected", "false", "dispatch", "dispatch-recovery", "invalid-definition", "renewed-preparation", "source-changed", "cancelled-preparation"} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			// Every case selects the single due candidate of its database, so each owns one.
+			primary := newStore(t)
+			repository, err := processingstore.New(primary)
+			if err != nil {
+				t.Fatal(err)
+			}
+			actor := uuid.New()
+			authority := processingAuthorityFixture(actor, authz.Scope{Kind: "all"})
+			configuration := processing.WorkflowConfiguration{ID: uuid.New(), Revision: 1, Name: "worker",
+				Scope: authz.Scope{Kind: "all"}, Enabled: true}
+			version := processing.Version{ID: uuid.New(), WorkflowID: configuration.ID,
+				CreatedBy: actor, Definition: preparedProcessingDefinition(t)}
+			if err := primary.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+				if _, err := repository.LockRevision(tx.Context(), tx); err != nil {
+					return err
+				}
+				now, err := primary.Now(tx.Context(), tx)
+				if err != nil {
+					return err
+				}
+				configuration.CreatedAt, configuration.UpdatedAt, version.CreatedAt = now, now, now
+				if err := repository.SaveWorkflow(tx.Context(), tx, authority, "workflow.create", configuration, 0, now); err != nil {
+					return err
+				}
+				if err := repository.SaveVersion(tx.Context(), tx, version); err != nil {
+					return err
+				}
+				configuration.Revision, configuration.ActiveVersionID = 2, &version.ID
+				return repository.SaveWorkflow(tx.Context(), tx, authority, "workflow.activate", configuration, 1, now)
+			}); err != nil {
+				t.Fatal(err)
+			}
 			var pending processing.Candidate
 			binding := processing.CandidateBinding{TransmissionID: uuid.New(),
 				WorkflowID: configuration.ID, WorkflowRevision: configuration.Revision,

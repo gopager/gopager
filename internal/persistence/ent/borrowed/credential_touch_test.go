@@ -18,6 +18,7 @@ import (
 // TestResolveThrottlesLastUsedWrites expects two resolutions within five minutes to write
 // last_used_at once, and a later one to write it again.
 func TestResolveThrottlesLastUsedWrites(t *testing.T) {
+	t.Parallel()
 	store := newStore(t)
 	repository, err := identitystore.New(store)
 	if err != nil {

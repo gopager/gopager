@@ -242,6 +242,7 @@ func (f failingConfigurationFacts) AppendMasterDataFact(context.Context, platfor
 }
 
 func TestCurrentMatcherAtomicCreationRetryPreviewAndRollback(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	command := uuid.New()
 	input := units.UnitInput{AgencyID: f.agency, Name: "Station", CollectionIDs: []uuid.UUID{}}
@@ -288,6 +289,7 @@ func TestCurrentMatcherAtomicCreationRetryPreviewAndRollback(t *testing.T) {
 }
 
 func TestCurrentMatcherSelectionCandidatesAndDeletionInvalidation(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{AgencyID: f.agency, Name: "Station"}, checkedMutation)
 	if err != nil {
@@ -360,6 +362,7 @@ func TestCurrentMatcherSelectionCandidatesAndDeletionInvalidation(t *testing.T) 
 }
 
 func TestCurrentMatcherConcurrentConflictsAndCollectionDetach(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	collection, err := f.units.CreateCollection(t.Context(), f.proof, uuid.New(), "Stations", checkedMutation)
 	if err != nil {
@@ -436,6 +439,7 @@ func replaceManagementGrants(t *testing.T, f matcherFixture, grants []authz.Gran
 }
 
 func TestCurrentMatcherNativeFilteringAndAllUseChecks(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	collection, err := f.units.CreateCollection(t.Context(), f.proof, uuid.New(), "Shared", checkedMutation)
 	if err != nil {
@@ -521,6 +525,7 @@ func restrictingManagementKey(t *testing.T, f matcherFixture, restrictions *auth
 }
 
 func TestCurrentMatcherNativeMixedScopesAndRestrictingKeysMatchPointDecisions(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	collection, err := f.units.CreateCollection(t.Context(), f.proof, uuid.New(), "Shared", checkedMutation)
 	if err != nil {
@@ -623,6 +628,7 @@ func TestCurrentMatcherNativeMixedScopesAndRestrictingKeysMatchPointDecisions(t 
 // supersedes nor rebases earlier ones, because each scope re-resolves against current rules and
 // skips targets a newer scope already restamped.
 func TestPendingScopesRunIndependentlyWithoutSupersession(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	mark := func(scope assignments.CorrectionScope, reason string) int64 {
 		t.Helper()
@@ -677,6 +683,7 @@ func TestPendingScopesRunIndependentlyWithoutSupersession(t *testing.T) {
 }
 
 func TestCorrectionLeaseExpiryReclaimsAndFencesPriorToken(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		_, err := f.ruleStore.MarkPending(tx.Context(), tx, []assignments.CorrectionScope{networkScope(f.networks[0])}, "rule-change")
@@ -739,6 +746,7 @@ func TestCorrectionLeaseExpiryReclaimsAndFencesPriorToken(t *testing.T) {
 }
 
 func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidence(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	networkID, gatewayID := f.networks[0], uuid.New()
 	unitA, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
@@ -1186,6 +1194,7 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 }
 
 func TestCurrentMatcherCollectionScopeDeletionAndActualRevisionExhaustion(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	collection, err := f.units.CreateCollection(t.Context(), f.proof, uuid.New(), "Stations", checkedMutation)
 	if err != nil {
@@ -1415,11 +1424,19 @@ func verifyCurrentMatcherSerialization(t *testing.T, deleting bool) {
 // which invalidates rules, to wait for an in-flight evaluation under the shared assignment
 // lock, while a Unit edit commits meanwhile; a later evaluation sees the current Unit either way.
 func TestCurrentMatcherEvaluationSerializesWithUnitDeletionNotEdits(t *testing.T) {
-	t.Run("edit", func(t *testing.T) { verifyCurrentMatcherSerialization(t, false) })
-	t.Run("delete", func(t *testing.T) { verifyCurrentMatcherSerialization(t, true) })
+	t.Parallel()
+	t.Run("edit", func(t *testing.T) {
+		t.Parallel()
+		verifyCurrentMatcherSerialization(t, false)
+	})
+	t.Run("delete", func(t *testing.T) {
+		t.Parallel()
+		verifyCurrentMatcherSerialization(t, true)
+	})
 }
 
 func TestCurrentMatcherCreationReceiptsAreActorBound(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	command := uuid.New()
 	values := units.UnitInput{AgencyID: f.agency, Name: "Station"}

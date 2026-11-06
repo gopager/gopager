@@ -113,6 +113,7 @@ func (f failingPublicationFacts) AppendProcessingCompletion(ctx context.Context,
 // source status refresh to commit together, completed evidence to be applied even while a sibling
 // candidate is pending, and repeated or concurrent publication to be idempotent.
 func TestProcessingPublicationAtomicEvidenceAndFences(t *testing.T) {
+	t.Parallel()
 	primary := newStore(t)
 	repository, err := processingstore.New(primary)
 	if err != nil {
@@ -169,6 +170,7 @@ func TestProcessingPublicationAtomicEvidenceAndFences(t *testing.T) {
 		"stale-fence", "principal-revoked", "fact-failure", "status-failure", "duplicate-set",
 		"source-changed", "context-changed", "network-changed", "superseded", "detached-check", "concurrent"} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			source := processing.PublicationBinding{Source: processing.SourceIdentity{
 				TransmissionID: uuid.New(), NetworkID: uuid.New(), SourceRevision: 1, ContextRevision: 1},
 				MessageID: uuid.New(), SourceFence: 1}

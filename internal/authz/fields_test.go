@@ -24,6 +24,7 @@ func fieldAuthority() (authz.Authority, uuid.UUID, uuid.UUID) {
 }
 
 func TestGlobalFieldsDoNotDependOnUnitAndDoNotGrantData(t *testing.T) {
+	t.Parallel()
 	authority, first, second := fieldAuthority()
 	now := time.Now().UTC()
 	for _, unit := range []uuid.UUID{first, second} {
@@ -44,6 +45,7 @@ func TestGlobalFieldsDoNotDependOnUnitAndDoNotGrantData(t *testing.T) {
 }
 
 func TestGlobalFieldRemovalAndKeyRestrictionApplyToPointAndSQL(t *testing.T) {
+	t.Parallel()
 	authority, first, _ := fieldAuthority()
 	authority.FieldPermissions = authority.FieldPermissions[1:]
 	now := time.Now().UTC()
@@ -66,6 +68,7 @@ func TestGlobalFieldRemovalAndKeyRestrictionApplyToPointAndSQL(t *testing.T) {
 }
 
 func TestFieldPermissionValidationAndIndependentDelegation(t *testing.T) {
+	t.Parallel()
 	authority, _, _ := fieldAuthority()
 	valid := authority.FieldPermissions[0]
 	for _, invalid := range []authz.FieldPermission{

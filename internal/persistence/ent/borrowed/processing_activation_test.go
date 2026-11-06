@@ -16,6 +16,7 @@ import (
 // is refused with INVALID_INPUT, the Workflow revision does not move, and a readable version
 // still activates.
 func TestProcessingActivationValidatesReferencesForTheActivator(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	service, _ := newProcessingManagementFixture(t, f, &processingPreparationFixture{}, f.facts)
 	created, err := service.CreateWorkflow(t.Context(), f.proof, uuid.New(),

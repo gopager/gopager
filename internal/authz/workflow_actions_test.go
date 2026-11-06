@@ -6,6 +6,7 @@ import "testing"
 // (rule.* is ambiguous next to address-rule.*), the old names to be unknown, and each new name
 // to accept the scopes its predecessor accepted.
 func TestWorkflowActionsReplaceRuleActions(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"read", "create", "update", "delete", "preview", "activate", "reprocess"} {
 		if ValidAction("rule." + name) {
 			t.Fatalf("rule.%s is still a valid action", name)

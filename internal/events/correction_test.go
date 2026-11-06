@@ -9,6 +9,7 @@ import (
 )
 
 func TestCorrectionAssignmentChangedCarriesChangedTargetsBeforeAndAfter(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 11, 4, 10, 0, 0, 0, time.UTC)
 	unit, rule := uuid.New(), uuid.New()
 	message := uuid.New()

@@ -13,6 +13,7 @@ import (
 )
 
 func TestProcessingHTTPCodecPreservesKernelBoundaries(t *testing.T) {
+	t.Parallel()
 	const prefix = `{"value":"`
 	const suffix = `"}`
 	exact := prefix + strings.Repeat("x", processing.MaxInputBytes-len(prefix)-len(suffix)) + suffix
@@ -28,6 +29,7 @@ func TestProcessingHTTPCodecPreservesKernelBoundaries(t *testing.T) {
 		{"trailing", `{"value":"first"} {}`, platform.CodeInvalidInput},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			request := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(test.body))
 			request.Header.Set("Content-Type", "application/json")
 			var input struct {
@@ -46,6 +48,7 @@ func TestProcessingHTTPCodecPreservesKernelBoundaries(t *testing.T) {
 }
 
 func TestProcessingStatusRevisionsUseLosslessDecimalStrings(t *testing.T) {
+	t.Parallel()
 	for _, status := range []any{
 		processingmanagement.CandidateStatus{Revision: 9223372036854775807},
 		processingmanagement.PrivateResultMetadata{Revision: 9223372036854775807},

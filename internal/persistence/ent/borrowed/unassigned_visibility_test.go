@@ -19,6 +19,7 @@ import (
 // already uses), so the Agency sees it as unassigned; once a rule assigns the address and the
 // correction has run, the Message carries the Unit's row and no unassigned row remains.
 func TestUnassignedTargetsAreVisibleToTheNetworkAgency(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	networkID, gatewayID := f.networks[1], uuid.New()
 	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {

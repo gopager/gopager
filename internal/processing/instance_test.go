@@ -14,6 +14,7 @@ import (
 )
 
 func TestInstanceInspectionPinsConfigurationAndDedicatedPreviewWithoutExecution(t *testing.T) {
+	t.Parallel()
 	host := NewPluginHost()
 	t.Cleanup(func() {
 		if err := host.Close(context.Background()); err != nil {

@@ -10,6 +10,7 @@ import (
 )
 
 func TestExplicitActionScopeCatalog(t *testing.T) {
+	t.Parallel()
 	for _, action := range authz.Actions() {
 		if !authz.ValidAction(action) {
 			t.Fatalf("enumerated action %q is invalid", action)
@@ -36,6 +37,7 @@ func TestExplicitActionScopeCatalog(t *testing.T) {
 }
 
 func TestGrantValidationRejectsMalformedOrImplicitAuthority(t *testing.T) {
+	t.Parallel()
 	valid := authz.Grant{SubjectID: uuid.NewString(), SubjectKind: "principal",
 		Actions: []string{"account.read"}, Scope: authz.Scope{Kind: "account", References: []string{uuid.NewString()}}}
 	if err := authz.ValidateGrant(valid); err != nil {
@@ -56,6 +58,7 @@ func TestGrantValidationRejectsMalformedOrImplicitAuthority(t *testing.T) {
 	}
 	for name, change := range tests {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			grant := valid
 			change(&grant)
 			if err := authz.ValidateGrant(grant); !errors.Is(err, authz.ErrInvalidInput) {

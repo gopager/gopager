@@ -71,6 +71,7 @@ func newSourceTestService(t *testing.T, repository LoginRepository) *LoginServic
 }
 
 func TestDefaultLoginRateLimitsIncludeSourceLimit(t *testing.T) {
+	t.Parallel()
 	if limits := DefaultLoginRateLimits(); limits.SourceAttempts != 30 || limits.AccountAttempts != 10 || limits.InstanceAttempts != 300 {
 		t.Fatalf("default limits = %+v", limits)
 	}
@@ -83,6 +84,7 @@ func TestDefaultLoginRateLimitsIncludeSourceLimit(t *testing.T) {
 // TestSourceBucketSpansUsernames: one source cycling through usernames is stopped by the
 // 31st attempt, while another source is unaffected.
 func TestSourceBucketSpansUsernames(t *testing.T) {
+	t.Parallel()
 	repository := &recordingLoginRepository{}
 	service := newSourceTestService(t, repository)
 	for i := range 30 {
@@ -107,6 +109,7 @@ func TestSourceBucketSpansUsernames(t *testing.T) {
 }
 
 func TestLoginSourceFromRequestUsesRemoteHostOnly(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct{ remote, header, want string }{
 		{"203.0.113.7:51234", "", "203.0.113.7"},
 		{"[2001:db8::1]:443", "", "2001:db8::1"},

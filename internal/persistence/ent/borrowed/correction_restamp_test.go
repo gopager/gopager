@@ -205,6 +205,7 @@ func (f *restampFixture) assignmentRevision(t *testing.T) int64 {
 // Transmission's targets without changing their resolution to replace its stale failed candidate
 // by a pending one at the new context, so the failure is neither permanent nor unretryable.
 func TestRestampWithoutResolutionChangeReadmitsFailedCandidate(t *testing.T) {
+	t.Parallel()
 	f := newRestampFixture(t)
 	f.seedWorkflow(t, undeclaredFieldDefinition(t))
 	receipt := f.accept(t, "failed-restamp", 10)
@@ -231,6 +232,7 @@ func TestRestampWithoutResolutionChangeReadmitsFailedCandidate(t *testing.T) {
 // target's resolution, to admit a fresh candidate so results computed with the suppressed target
 // do not stay current.
 func TestSuppressionReprocessesCompletedCandidate(t *testing.T) {
+	t.Parallel()
 	f := newRestampFixture(t)
 	f.seedWorkflow(t, protocolSelectorDefinition(t))
 	if _, err := f.rules.CreateRule(t.Context(), f.proof, uuid.New(), ruleInput(f.network, f.unit, 10, 20, 1),
@@ -261,6 +263,7 @@ func TestSuppressionReprocessesCompletedCandidate(t *testing.T) {
 // Batches of one scope cannot be split in tests (the batch size is fixed at 100), so two scopes
 // cover the case.
 func TestMessageStaysCorrectingWhileAnotherScopeHoldsStaleTargets(t *testing.T) {
+	t.Parallel()
 	f := newRestampFixture(t)
 	other, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
 		units.UnitInput{AgencyID: f.agency, Name: "Restamp other", CollectionIDs: []uuid.UUID{}}, checkedMutation)

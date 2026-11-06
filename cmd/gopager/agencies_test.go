@@ -15,6 +15,7 @@ import (
 // rename and refuse to delete an Agency that owns a Unit, and Unit creation to require an
 // Agency (400 without one, 201 with one, and the Unit reports its agencyId).
 func TestAgencyRoutesManageAgenciesAndUnitsRequireOne(t *testing.T) {
+	t.Parallel()
 	store := newManagementStore(t)
 	backend := httptest.NewUnstartedServer(nil)
 	t.Cleanup(backend.Close)

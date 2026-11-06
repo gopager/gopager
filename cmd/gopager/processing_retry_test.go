@@ -78,6 +78,7 @@ func rawProcessingRequest(t *testing.T, client *http.Client, origin, path, body,
 }
 
 func TestProcessingCandidateRetryHTTPUsesCurrentSourceOwner(t *testing.T) {
+	t.Parallel()
 	// The saved definitions select on a payload field, which the author must be able to read.
 	store := newManagementStoreWithFields(t, []string{"unit", "address", "payload"})
 	network, gateway := uuid.New(), uuid.New()

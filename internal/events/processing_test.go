@@ -31,6 +31,7 @@ func completionFixture(t *testing.T) ProcessingCompletionFact {
 }
 
 func TestProcessingFactFactoriesClosedVocabularyAndDetachedEnvelope(t *testing.T) {
+	t.Parallel()
 	now := time.Unix(101, 0)
 	causation := uuid.New()
 	fact := ProcessingConfigurationFact{ID: uuid.New(), WorkflowID: uuid.New(), Revision: 1,
@@ -70,6 +71,7 @@ func TestProcessingFactFactoriesClosedVocabularyAndDetachedEnvelope(t *testing.T
 }
 
 func TestProcessingCompletionRejectsPartialHiddenUncorrelatedAndUnpublishedResults(t *testing.T) {
+	t.Parallel()
 	cases := map[string]func(*ProcessingCompletionFact){
 		"missing message":     func(f *ProcessingCompletionFact) { f.MessageID = uuid.Nil },
 		"missing schema":      func(f *ProcessingCompletionFact) { f.OutputSchema = nil },
@@ -100,6 +102,7 @@ func TestProcessingCompletionRejectsPartialHiddenUncorrelatedAndUnpublishedResul
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			fact := completionFixture(t)
 			mutate(&fact)
 			if _, err := fact.Envelope(time.Unix(101, 0)); platform.FailureCode(err) != platform.CodeInvalidInput {

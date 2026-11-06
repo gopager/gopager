@@ -122,6 +122,7 @@ func findField(fields []processing.CapturedField, path ...string) (processing.Ca
 }
 
 func TestSyntheticOwnerCapturesEveryFrozenForm(t *testing.T) {
+	t.Parallel()
 	unit := uuid.New()
 	allowed := testAuthority("payload", "gateway", "address", "unit")
 	cases := []struct {
@@ -143,6 +144,7 @@ func TestSyntheticOwnerCapturesEveryFrozenForm(t *testing.T) {
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			protocol := protocols.Protocol("pocsag")
 			switch test.name[:4] {
 			case "flex":
@@ -176,6 +178,7 @@ func TestSyntheticOwnerCapturesEveryFrozenForm(t *testing.T) {
 }
 
 func TestSyntheticOwnerUsesMatcherAndWorkflowUnitScope(t *testing.T) {
+	t.Parallel()
 	unit := uuid.New()
 	owner, network, tx := testOwner(protocols.POCSAG, &unit)
 	authority := testAuthority("payload", "gateway", "address", "unit")
@@ -197,6 +200,7 @@ func TestSyntheticOwnerUsesMatcherAndWorkflowUnitScope(t *testing.T) {
 }
 
 func TestSyntheticOwnerCapturesEveryFieldRegardlessOfEditorRightsAndFailsClosedWithoutNetwork(t *testing.T) {
+	t.Parallel()
 	owner, network, tx := testOwner(protocols.POCSAG, nil)
 	authority := testAuthority("payload")
 	raw := replaceNetworkID(`{"schemaVersion":1,"protocol":"pocsag","form":"text","networkId":"NETWORK","payload":{"value":"x"},"targets":[]}`, network.ID)
@@ -223,6 +227,7 @@ func TestSyntheticOwnerCapturesEveryFieldRegardlessOfEditorRightsAndFailsClosedW
 }
 
 func TestSyntheticOwnerRejectsUnfrozenInputAndOutOfScopeNetwork(t *testing.T) {
+	t.Parallel()
 	owner, network, tx := testOwner(protocols.POCSAG, nil)
 	authority := testAuthority("payload", "gateway", "address", "unit")
 	workflow := testWorkflow(authz.Scope{Kind: "network", References: []string{uuid.NewString()}})
@@ -260,6 +265,7 @@ func (m *fixedMatcher) MatchTargets(context.Context, platform.TransactionContext
 }
 
 func TestSyntheticUnionDeclarationsRemainAvailableAcrossForms(t *testing.T) {
+	t.Parallel()
 	owner, network, tx := testOwner(protocols.POCSAG, nil)
 	projection, _ := capture(t, owner, network, tx, testAuthority("payload", "gateway"),
 		testWorkflow(authz.Scope{Kind: "all"}),
@@ -311,6 +317,7 @@ func TestSyntheticUnionDeclarationsRemainAvailableAcrossForms(t *testing.T) {
 }
 
 func TestSyntheticRecheckRejectsNetworkUnitAndFieldChanges(t *testing.T) {
+	t.Parallel()
 	owner, network, tx := testOwner(protocols.POCSAG, nil)
 	unit := uuid.New()
 	matcher := &fixedMatcher{result: assignments.MatchResult{Revision: 7,
@@ -368,6 +375,7 @@ func TestSyntheticRecheckRejectsNetworkUnitAndFieldChanges(t *testing.T) {
 }
 
 func TestSyntheticUnitScopeDoesNotReturnSiblingTargetContext(t *testing.T) {
+	t.Parallel()
 	owner, network, tx := testOwner(protocols.POCSAG, nil)
 	unit, sibling := uuid.New(), uuid.New()
 	owner.matcher = &fixedMatcher{result: assignments.MatchResult{Revision: 7,

@@ -65,6 +65,7 @@ func referencingDefinition(t *testing.T, ref processing.FieldRef) *processing.Wo
 // validation: the definition is judged by the author's current field permissions and the
 // declared groups of every referenced source field, wherever the reference occurs.
 func TestAuthorizeReferencesRejectsUnreadableFieldGroupNamingTheReference(t *testing.T) {
+	t.Parallel()
 	program := referencingDefinition(t, processing.FieldRef{Namespace: "source", Path: []string{"secret"}})
 	references := program.SourceReferences()
 
@@ -89,6 +90,7 @@ func TestAuthorizeReferencesRejectsUnreadableFieldGroupNamingTheReference(t *tes
 // TestAuthorizeReferencesFailsClosedWithoutDeclaredGroups rejects a reference whose owner
 // declared no field group, because its classification cannot be proven readable.
 func TestAuthorizeReferencesFailsClosedWithoutDeclaredGroups(t *testing.T) {
+	t.Parallel()
 	err := authorizeReferences(authorWithFields("payload"), []processing.SourceReference{{
 		Field: processing.FieldRef{Namespace: "source", Path: []string{"flag"}}}})
 	if platform.FailureCode(err) != platform.CodeInvalidInput || !strings.Contains(cause(err), "source.flag") {

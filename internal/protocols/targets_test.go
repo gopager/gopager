@@ -7,6 +7,7 @@ import (
 )
 
 func TestTargetJSONPreservesTypesAndExactValues(t *testing.T) {
+	t.Parallel()
 	function := uint8(3)
 	for _, test := range []struct {
 		protocol Protocol
@@ -20,6 +21,7 @@ func TestTargetJSONPreservesTypesAndExactValues(t *testing.T) {
 		{EAS, Target{Address: TextAddress("001234")}, `{"address":"001234"}`},
 	} {
 		t.Run(string(test.protocol)+test.wire, func(t *testing.T) {
+			t.Parallel()
 			encoded, err := json.Marshal(test.target)
 			if err != nil || string(encoded) != test.wire {
 				t.Fatalf("changed original target type/value: %s %v", encoded, err)
@@ -50,6 +52,7 @@ func TestTargetJSONPreservesTypesAndExactValues(t *testing.T) {
 }
 
 func TestTargetValidationRejectsMissingWrongAndUnsupportedAttributes(t *testing.T) {
+	t.Parallel()
 	zero, four := uint8(0), uint8(4)
 	for _, test := range []struct {
 		protocol Protocol
@@ -76,6 +79,7 @@ func TestTargetValidationRejectsMissingWrongAndUnsupportedAttributes(t *testing.
 }
 
 func TestFLEXAddressClassesAndUnsupportedGaps(t *testing.T) {
+	t.Parallel()
 	for _, interval := range flexIntervals {
 		for _, address := range []uint64{interval.first, interval.last} {
 			class, err := FLEXClass(address)

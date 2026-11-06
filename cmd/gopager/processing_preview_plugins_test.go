@@ -20,6 +20,7 @@ import (
 )
 
 func TestProcessingSyntheticPreviewUsesProductionNetworkOwner(t *testing.T) {
+	t.Parallel()
 	store := newManagementStoreWithFields(t,
 		[]string{"unit", "address", "payload", "gateway", "derived"})
 	live, deleted := uuid.New(), uuid.New()
@@ -117,6 +118,7 @@ func TestProcessingSyntheticPreviewUsesProductionNetworkOwner(t *testing.T) {
 // TestProcessingSyntheticPreviewUsesOnlyPreviewSupportingInstalledPlugins checks that an editor preview
 // reaches an installed plugin in preview mode only when its manifest declares supportsPreview.
 func TestProcessingSyntheticPreviewUsesOnlyPreviewSupportingInstalledPlugins(t *testing.T) {
+	t.Parallel()
 	store := newManagementStoreWithFields(t,
 		[]string{"unit", "address", "payload", "gateway", "derived"})
 	identityRepository, err := identitystore.New(store)

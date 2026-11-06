@@ -20,12 +20,14 @@ import (
 )
 
 func TestProcessingSyntheticPreviewHTTPUsesCurrentFixtureNetworks(t *testing.T) {
+	t.Parallel()
 	for _, secureProxy := range []bool{false, true} {
 		name := "direct-http"
 		if secureProxy {
 			name = "https-reverse-proxy"
 		}
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			store := newManagementStoreWithFields(t,
 				[]string{"unit", "address", "payload", "gateway", "derived"})
 			identityRepository, err := identitystore.New(store)
@@ -194,6 +196,7 @@ func TestProcessingSyntheticPreviewHTTPUsesCurrentFixtureNetworks(t *testing.T) 
 }
 
 func TestProcessingSyntheticPreviewHonorsCurrentUnitScope(t *testing.T) {
+	t.Parallel()
 	store := newManagementStoreWithFields(t,
 		[]string{"unit", "address", "payload", "gateway", "derived"})
 	identityRepository, err := identitystore.New(store)

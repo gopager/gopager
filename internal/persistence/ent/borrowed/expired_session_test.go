@@ -20,6 +20,7 @@ import (
 // TestMutationsWithAnExpiredSessionRequireLogin expects Unit and address-rule mutations to answer
 // LOGIN_REQUIRED, and to commit nothing, once the caller's session has expired.
 func TestMutationsWithAnExpiredSessionRequireLogin(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
 		units.UnitInput{AgencyID: f.agency, Name: "Before", CollectionIDs: []uuid.UUID{}}, checkedMutation)

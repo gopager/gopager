@@ -10,7 +10,8 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
-func TestWorkflowExactResultAndStepBoundaries(t *testing.T) {
+func TestWorkflowExactResultAndStepBoundaries(t *testing.T) { //nolint:paralleltest // swaps the package variables computeAllowance and predicateTimeout
+	withoutWallClockBounds(t)
 	ctx := context.Background()
 	_, source := sourceFixture(t)
 	definition := selectedDefinition()
@@ -71,6 +72,7 @@ func TestWorkflowExactResultAndStepBoundaries(t *testing.T) {
 }
 
 func TestWorkflowAggregateIntermediateBoundaryAndLiteralOwnership(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	_, source := sourceFixture(t, "111", "222")
 	ref := FieldRef{"target", []string{"address"}}
@@ -113,6 +115,7 @@ func TestWorkflowAggregateIntermediateBoundaryAndLiteralOwnership(t *testing.T) 
 }
 
 func TestWorkflowConversionsAreExplicitAndExact(t *testing.T) {
+	t.Parallel()
 	for _, item := range []struct {
 		text string
 		kind ValueKind
@@ -126,6 +129,7 @@ func TestWorkflowConversionsAreExplicitAndExact(t *testing.T) {
 		{"2026-11-01T12:00:00+01:00", TimestampValue, true}, {"2026-11-01T12:00:00", TimestampValue, false},
 	} {
 		t.Run(item.text, func(t *testing.T) {
+			t.Parallel()
 			value, err := Literal(StringValue, item.text)
 			if err != nil {
 				t.Fatal(err)

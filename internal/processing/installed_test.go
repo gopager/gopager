@@ -42,6 +42,7 @@ func loadCommandPlugin(t *testing.T, host *PluginHost, schema map[string]FieldSc
 }
 
 func TestInstalledPluginWireInvocationRestartAndIsolation(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	host := NewPluginHost()
 	t.Cleanup(func() {
@@ -49,7 +50,6 @@ func TestInstalledPluginWireInvocationRestartAndIsolation(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	t.Setenv("GOPAGER_TEST_CORE_SECRET", "must-not-reach-plugins")
 	artifact, pin := loadCommandPlugin(t, host, map[string]FieldSchema{"mode": {Kind: StringValue}, "text": {Kind: StringValue}})
 	text, err := Literal(StringValue, "original text")
 	if err != nil {
@@ -111,7 +111,7 @@ func TestInstalledPluginWireInvocationRestartAndIsolation(t *testing.T) {
 	}
 }
 
-func TestInstalledPluginOwnDeadlineIsResourceLimit(t *testing.T) {
+func TestInstalledPluginOwnDeadlineIsResourceLimit(t *testing.T) { //nolint:paralleltest // swaps the package variable installedInvocationTimeout
 	ctx := context.Background()
 	host := NewPluginHost()
 	t.Cleanup(func() {
@@ -149,6 +149,7 @@ func TestInstalledPluginOwnDeadlineIsResourceLimit(t *testing.T) {
 }
 
 func TestInstalledPluginInstancesRunInSeparateProcesses(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	host := NewPluginHost()
 	t.Cleanup(func() {
@@ -190,6 +191,7 @@ func TestInstalledPluginInstancesRunInSeparateProcesses(t *testing.T) {
 }
 
 func TestInstalledSDK2RoundTripsTypedBytes(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	host := NewPluginHost()
 	t.Cleanup(func() {

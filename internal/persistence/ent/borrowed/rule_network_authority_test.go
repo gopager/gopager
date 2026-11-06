@@ -13,6 +13,7 @@ import (
 // insufficient for a Network of another Agency: otherwise a manager of one Unit of Agency B could
 // claim addresses on Agency A's Network. An additional Agency grant on the Network's Agency allows it.
 func TestRuleWritesNeedAuthorityOverTheNetworkAgency(t *testing.T) {
+	t.Parallel()
 	f := newMatcherFixture(t)
 	unitB, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
 		units.UnitInput{AgencyID: f.agencies[1], Name: "Unit of B", CollectionIDs: []uuid.UUID{}}, checkedMutation)

@@ -17,7 +17,7 @@ import (
 )
 
 // TestRunProcessHelper invokes the actual command entry in an isolated test process.
-func TestRunProcessHelper(t *testing.T) {
+func TestRunProcessHelper(t *testing.T) { //nolint:paralleltest // child-process entry point that replaces os.Args and exits the process
 	roles := os.Getenv("GOPAGER_TEST_PROCESS_HELPER")
 	if roles == "" {
 		return
@@ -32,12 +32,14 @@ func TestRunProcessHelper(t *testing.T) {
 }
 
 func TestFullCommandProcessStartupAndSignalShutdown(t *testing.T) {
+	t.Parallel()
 	url := os.Getenv("GOPAGER_TEST_DATABASE_URL")
 	if url == "" {
 		t.Skip("GOPAGER_TEST_DATABASE_URL is not set; command/PostgreSQL process evidence not run")
 	}
 	for _, roles := range []string{"api,worker", "worker"} {
 		t.Run(roles, func(t *testing.T) {
+			t.Parallel()
 			connectionURL := testpostgres.EmptyDatabase(t)
 			address := ""
 			if roles == "api,worker" {

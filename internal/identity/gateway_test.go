@@ -22,6 +22,7 @@ func (f *gatewayCredentialFixture) AuthenticateGatewayCredential(_ context.Conte
 }
 
 func TestGatewayAuthenticatorKeepsGatewayProofSeparate(t *testing.T) {
+	t.Parallel()
 	secret, hash, err := NewSecret()
 	if err != nil {
 		t.Fatal(err)
@@ -42,6 +43,7 @@ func TestGatewayAuthenticatorKeepsGatewayProofSeparate(t *testing.T) {
 }
 
 func TestGatewayAuthenticatorRejectsMissingRepositoryIdentity(t *testing.T) {
+	t.Parallel()
 	authenticator, err := NewGatewayAuthenticator(&gatewayCredentialFixture{})
 	if err != nil {
 		t.Fatal(err)

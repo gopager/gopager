@@ -13,6 +13,7 @@ import (
 // on the due channel in its transaction, like intake does, so a dispatcher wakes without
 // waiting for its poll interval.
 func TestReadmissionNotifiesDispatchers(t *testing.T) {
+	t.Parallel()
 	f := newProcessingSourceFixture(t)
 	receipt := f.accept(t, "readmit-notify", f.now, toneOnlyPayload, nil)
 	if status := f.transmissionStatus(t, receipt.TransmissionID); status != "none" {
