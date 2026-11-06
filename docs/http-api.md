@@ -204,6 +204,30 @@ What callers can do depends on these concepts:
   `address` and `unit`.
 - **Access-key restrictions** intersect with the owning account's rights.
 
+Scope kinds each action accepts (`internal/authz/grants.go` is the source; a grant with another kind is invalid):
+
+| Actions | Scope kinds |
+| --- | --- |
+| `message.read`, `message.detail` | `all`, `agency`, `unit`, `unitCollection` |
+| `without-unit.read` | `all`, `agency` |
+| `unit.*`, `organization.*`, `unit-collection.*`, `address-rule.*`, `suppression.*`, `assignment-correction.read`, `assignment-correction.retry` | `all`, `agency`, `unit`, `unitCollection` |
+| `unit-template.*`, `agency.create`, `agency.delete`, `grouping.configure`, `notice.manage`, `plugin.configure`, `operations.manage` | `all` only |
+| `agency.read`, `agency.update`, `gateway.*`, `network.*` | `all`, `agency` |
+| `account.*`, `grant.manage`, `password.local`, `recovery.*`, `session.manage-own`, `key.*`, `subscription.manage-*` | `all`, `account` |
+| `delivery.read`, `delivery.retry`, `delivery.redeliver` | `all`, `agency`, `unit`, `unitCollection`, `account` |
+| `workflow.*`, `presentation.manage` | `all`, `agency`, `unit` |
+| `audit.read` | `all`, `agency`, `account` |
+| `plugin.internal-read` | `all`, `agency`, `unit`, `unitCollection` |
+
+Grant semantics:
+
+- Grants from the account and its groups are additive; read and write scopes are separate grants. Actions are an explicit catalog (see [Operations](operations.md#first-start-and-bootstrap)); there are no wildcards and no implicit administrator. A grant whose scope object was deleted stops applying and never becomes unrestricted. A new account and the guest start with no rights.
+- A restricting access key lists actions, scopes, fields and an optional shorter maximum age; the effective right is the owner's rights intersected with the key, and the key can never add a right.
+- The maximum data age is optional (absent means unlimited). The largest permitted age among matching grants wins; a key's age is intersected. It is evaluated against the `message_units.age_anchor` of the Unit appearance within the permitted scope, inclusively (`now - anchor <= maxAgeSeconds`), identically for lists, details and Delivery. A later repeat for the same Unit does not renew eligibility.
+- Authorization has two independent steps: current action, scope and age rights first establish which rows are eligible, then the global field permissions decide which fields of those rows are projected. A field permission never makes a row readable, and `message.detail` additionally needs `message.read`. Hidden co-targets need their own rights.
+- Changing global field permissions needs installation-wide `grant.manage` plus the delegable field groups; a scoped `grant.manage` cannot create global field access, and delegation never exceeds the actor's own delegable rights.
+- Passwords are Argon2id hashes (19 MiB, 2 iterations, parallelism 1, random salt, parameters encoded in the hash), 12–1024 characters, valid UTF-8, with no truncation or composition rules. Session, key and gateway secrets are 256-bit random values stored only as hashes and shown once.
+
 Errors:
 
 | Status | Meaning for the caller |
@@ -420,6 +444,16 @@ the form `{"mode":"inherit"|"unset"}` or `{"mode":"value","value":…}`.
 `effectiveSettings` reports the resolved value and its `source` (`unit`, `organization`
 or `unset`). Create and update commands return `{"id","revision"}`.
 
+#### Master data semantics
+
+- **Units** have their own identity, belong to exactly one Agency, may belong to several collections and are not subordinate to a Network. Names (Unit, Organization, template, collection, Agency) are 1–256 Unicode scalars, valid UTF-8, not blank and not trimmed; names are not identity keys.
+- **Settings** cover `color` (`#RRGGBB`, stored upper case), `icon` (1–128 ASCII letters, digits, `.`, `_`, `-`; the server stores the identifier and has no icon catalog) and `functionMeanings` (POCSAG function `0..3` mapped to a label of 1–256 scalars). A Unit setting is `inherit`, `value` or `unset`; `inherit` resolves to the Organization's current default, or to `unset` without an Organization. A null effective value means unset, never a fabricated default. An Organization change reaches only Units that still inherit that setting. Color and icon changes never cause correction work.
+- **Templates** are standalone: creating a Unit from a template copies the template's current Organization reference and effective settings in one transaction, requires an explicit Unit name and collection list, and leaves no link, so later template or Organization edits do not change the Unit.
+- **Organization deletion** requires `organization.delete` plus `unit.update` for every Unit and `unit-template.update` for every template it detaches, checked against the complete set before the change. In one transaction it materializes each still-inherited effective value on the Unit or template as `value` or `unset`, detaches them, keeps explicit overrides and deletes the Organization. A stale revision of any affected Unit or template rolls back everything; an unmanageable reference returns a generic `FORBIDDEN` or `REVISION_CONFLICT` without foreign IDs. No correction work is scheduled.
+- **Unit deletion** marks the Unit non-selectable, disables its rules and records correction work atomically; the response is `pending` until the correction ran. Current grants on the ID stop applying. Unit updates carry the complete supported field set and collection list, so they cannot erase fields owned by later features.
+- **Bulk** operations take 1–100 distinct Unit IDs, each with its `expectedRevision`. Preview is read-only and reveals only caller-safe per-item results. Execution repeats all checks under ordered row locks and is all or nothing: one stale, unauthorized, invalid, duplicate or over-limit item aborts every item. Bulk update changes only the explicitly supported shared settings (not name, Organization, membership, templates or rules); bulk delete behaves like single Unit deletion. One compact receipt covers the command; an identical retry returns it.
+- **Rights.** Template operations need explicit `unit-template.*` rights with `all` scope. Creating a Unit from a template needs `unit.create` and `unit-template.read` (plus `organization.read` for a referenced Organization); an inline new Organization needs `organization.create` and `unit.create`. An Organization without members needs `all` scope. References (Organization, template) never grant access to anything.
+
 ### Address rules, suppressions, corrections
 
 | Method | Path | Right | Success | Purpose |
@@ -492,10 +526,68 @@ Field rules:
 
   A Gateway without a Network for the protocol gets `400 INVALID_INPUT`. The stored resolution is
   `declared`, `inferred-single`, `inferred-address`, `address-priority` or `priority`.
-- Idempotency is keyed on (Gateway, `submissionId`). An identical re-submission returns
-  the stored receipt. Different content under the same ID returns
-  `409 IDEMPOTENCY_CONFLICT`. Rejected submissions (`400`, `409`, `413`) create no
-  transmission.
+- `observationTime` is mandatory and must carry an offset or `Z`; the server never
+  substitutes the acceptance time. Fractional seconds are truncated (see
+  [Time, IDs and numbers](#time-ids-and-numbers)); the supplied offset is stored with the
+  truncated instant. Times in the past are accepted without limit. A time more than 15
+  minutes after the acceptance time (a fixed tolerance, not configurable) is still
+  accepted and grouped normally, but the intake fact `operation.observation-time-implausible`
+  is appended and a warning is logged.
+- Idempotency is keyed on (Gateway, `submissionId`). The submitted content is compared after
+  truncating `observationTime`, so a retry that differs only in fractional digits returns the
+  stored receipt, as does any identical re-submission. A different truncated instant, a
+  different offset or any other different content under the same ID returns
+  `409 IDEMPOTENCY_CONFLICT` and never changes the accepted transmission. Rejected submissions
+  (`400`, `409`, `413`) create no transmission; a rejection is recorded as the intake fact
+  `operation.submission-rejected` (Gateway, `submissionId`, reason code, no payload) in its own
+  transaction.
+- The submission is a finalized Gateway report, not raw radio data. The server keeps the
+  payload and the ordered targets exactly as submitted, including a partial reception with
+  `incomplete: true`; it never merges transmissions, interprets payloads or maps addresses to
+  Units on the Gateway's behalf. Quality metrics are optional, already evaluated by the
+  Gateway and stored without interpretation.
+
+#### Protocols, targets and payload identity
+
+Targets (`address`, `function`) are validated per protocol and never rewritten; order, duplicates
+and positions are preserved.
+
+| Protocol | Address | Function | Payload forms |
+| --- | --- | --- | --- |
+| `pocsag` | JSON integer 0–2097151 (RIC) | required, 0–3; the Address rule decides whether it is a function bit or a subaddress | `text`, `numeric`, `tone-only` |
+| `flex` | JSON integer in a supported address class, not CAPCODE notation | forbidden | `text`, `numeric`, `tone-only`, `binary`, `flex-short-signal` |
+| `zvei` | string of exactly 5 digits; leading zeros kept | forbidden | `zvei-signal`; at least one target |
+| `eas` | string of exactly 6 digits (`PSSCCC` location code); leading zeros kept, no geographic expansion | forbidden | `eas-header`; 1–31 targets |
+
+FLEX addresses must lie in one of the classes of ARIB RCR STD-43A Appendix A, Table A-1 that
+can address a message: short `1..1933312`, information service `2009088..2025471`, temporary
+`2029568..2029583`, operator messaging `2029584..2029599`, long `2101249..3923326750` (split
+into the sub-ranges 1-2, 1-3, 1-4 and 2-3) and long information service `4280000001..4291000000`.
+Network-control, unused, illegal and reserved addresses are rejected. Address-rule ranges must
+consist of supported addresses only (a range may not span a gap). A temporary-group call is
+submitted with the known member addresses as targets, or with the group address if the Gateway
+does not know the members. The server never asserts group completeness.
+
+Payload forms and their comparison identity. Two transmissions are payload-identical only when
+their form (and subtype) and canonical value are exactly equal, whatever the protocol;
+hashes never replace the equality check. Identity ignores Gateway, Network, address, function,
+quality metrics and the `incomplete` marker. The stored payload is always the unchanged
+original.
+
+| Form | Submitted | Canonical identity |
+| --- | --- | --- |
+| `text` | Unicode string; protocol terminators, padding and character-set decoding (for example the German DIN 66003 variant) are the Gateway's job | CRLF and CR become LF, leading and trailing whitespace is removed, then Unicode NFC; no case folding, no compatibility normalization |
+| `numeric` | the 4-bit code sequence as `0-9`, `.` (0xA), `U` (0xB), space (0xC), `-` (0xD), `)` (0xE), `(` (0xF); other characters are invalid | the string with leading and trailing spaces removed; never equal to a `text` payload |
+| `tone-only` | no payload (`value` omitted) | the empty value; an address-only POCSAG call and a FLEX tone-only call are identical |
+| `binary` (FLEX) | `subtype` `transparent` or `secure`, `encoding` `base64`, `data` | subtype plus the exact bytes; never shown as text, never decrypted |
+| `flex-short-signal` (FLEX) | `sourceCode` 0–7 | the source code; matches neither `tone-only`, `numeric` nor `text` |
+| `zvei-signal` | `double_tone`: technical tone name or `null` for no double tone (`"none"` is an ordinary name) | the name or `null` |
+| `eas-header` | `originator` and `eventCode` (3 characters `A-Z0-9`), `purgeTime` (`TTTT`, minutes 00–59), `issueTime` (`JJJHHMM`, day 1–366) | the four values; the station identifier and the location areas (targets) are not identity, so a rebroadcast by another station joins the original Message |
+
+Short numeric FLEX messages map to `numeric`; short-signal source codes `01` and `10` map to
+`flex-short-signal`. Pure network-control data stays with the Gateway and is not submitted.
+Audio and video payloads are not supported. A shorter or different canonical value never joins a
+fuller one by similarity; only exact equality groups.
 
 Receipt (`data`): `submissionId`, `transmissionId`, `acceptanceTime`,
 `processingStatus`, `messageId`. `processingStatus` is `"none"` when no Workflow was
@@ -506,6 +598,20 @@ every case; the accepted evidence is visible to readers while Processing runs.
 Gateway state: `{"schemaVersion":1,"operation":"degraded","reasonCode":"LOW_SIGNAL","detail":"…"}`.
 `reasonCode` is required for `degraded` and only allowed there: printable ASCII,
 1–64 bytes. `detail` is optional, up to 512 bytes. Other operations take no extra fields.
+
+Gateway state semantics:
+
+- The states are `active`, `degraded`, `stopped` and `contact-lost`. A caller can report only
+  `heartbeat`, `degraded`, `recovered` and `terminated`; `active` and `contact-lost` are
+  server-derived.
+- Every report records authenticated contact. A `heartbeat` does not clear `degraded`.
+  `recovered` sets `active` (idempotent). `terminated` sets `stopped`. An authenticated
+  Submission or report from a `stopped` or `contact-lost` Gateway makes it `active` again
+  without inventing a cause.
+- `gateway.state-changed` is appended only when the effective state changes, including a
+  change caused by a Submission; a contact-only heartbeat or a repeated report appends
+  nothing. The `degraded` fields are diagnostic only and drive no authorization or automation.
+- Detecting `contact-lost` after a missed heartbeat is not implemented yet.
 
 ### Gateway administration
 

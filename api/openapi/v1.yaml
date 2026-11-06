@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: GoPager API
-  version: 1.0.0
+  version: 1.1.0
   description: |
     GoPager application API. Human guide: docs/http-api.md.
 
@@ -14,17 +14,16 @@ info:
       are wrapped as `{"schemaVersion": 1, "data": ...}`. Exceptions: `/auth/*` and
       `/gateways/*` return unwrapped bodies that carry `schemaVersion` directly. 204 responses
       have no body.
-    - Body limits: login 16 KiB; master-data, assignment, correction and Gateway administration
-      64 KiB; workflow, instance and preview routes 1 MiB; POST /transmissions 1 MiB;
-      POST /gateway/state 4 KiB. Overflow is 413 `RESOURCE_LIMIT`.
+    - Body size limits per route group are listed in docs/http-api.md (Request size limits).
+      Overflow is 413 `RESOURCE_LIMIT`.
     - Revisions are positive decimal strings. Updates and deletes send `expectedRevision` in the
       JSON body (no ETag/If-Match); DELETE requests carry a body.
     - Creating operations take a client-generated `commandId` (UUID). Re-sending the same input
       with the same `commandId` returns the original result without a second change; a different
       operation or input is 409 `IDEMPOTENCY_CONFLICT` (not retryable). Revision-based updates and the preview routes must not
       send a `commandId`.
-    - Lists use `offset` (default 0) and `limit` (default 50, 1–200). Any other, repeated or
-      non-integer query parameter is 400. Responses are `{"items": [...], "total": N}` where
+    - Lists use `offset` and `limit` (defaults and range: docs/http-api.md, Pagination). Any
+      other, repeated or non-integer query parameter is 400. Responses are `{"items": [...], "total": N}` where
       `total` counts only caller-visible rows.
     - Timestamps are RFC 3339 in UTC, possibly with fractional seconds. IDs are UUIDs; the nil
       UUID is always invalid.
