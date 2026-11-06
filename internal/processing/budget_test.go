@@ -52,15 +52,15 @@ func TestWorkflowComputeBudgetPreservesCallerCancellationDuringGuest(t *testing.
 
 func TestWorkflowComputeBudgetExcludesActualElapsedGuestWait(t *testing.T) {
 	budget := &executionBudget{}
-	budget.startCompute(context.Background(), 200*time.Millisecond)
+	budget.startCompute(context.Background(), 50*time.Millisecond)
 	defer budget.closeCompute()
 	if err := budget.guestWait(func(ctx context.Context) error {
-		time.Sleep(1100 * time.Millisecond)
+		time.Sleep(300 * time.Millisecond) // several times the allowance
 		return ctx.Err()
 	}); err != nil || budget.computeContext().Err() != nil {
 		t.Fatalf("elapsed guest wait canceled resumed host compute: %v", err)
 	}
-	if budget.remaining <= 0 || budget.remaining > 200*time.Millisecond {
+	if budget.remaining <= 0 || budget.remaining > 50*time.Millisecond {
 		t.Fatalf("guest wait renewed/exhausted host allowance: %s", budget.remaining)
 	}
 	<-budget.computeContext().Done()

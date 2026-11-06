@@ -63,7 +63,13 @@ func (noFacts) AppendIdentityFact(context.Context, platform.TransactionContext, 
 func newSourceTestService(t *testing.T, repository LoginRepository) *LoginService {
 	t.Helper()
 	resolver := &Resolver{clock: fixedClock{time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)}}
-	service, err := NewLoginService(fakeTransactions{}, resolver, repository, noFacts{}, DefaultLoginRateLimits())
+	// Reduced costs: the throttle, not Argon2id, is under test. The internal package cannot use
+	// testutil/passwords without an import cycle.
+	hasher, err := NewPasswordHasher(PasswordParams{MemoryKiB: 8, Iterations: 1, Parallelism: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewLoginService(fakeTransactions{}, resolver, repository, noFacts{}, DefaultLoginRateLimits(), WithPasswordHasher(hasher))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -103,6 +103,7 @@ type LoginService struct {
 	repository   LoginRepository
 	facts        events.Appender
 	dummyHash    string
+	hasher       PasswordHasher
 	limits       LoginRateLimits
 }
 
@@ -125,7 +126,8 @@ func DefaultLoginRateLimits() LoginRateLimits {
 }
 
 // NewLoginService composes ordinary login and prepares one salted dummy password hash.
-func NewLoginService(transactions Transactions, resolver *Resolver, repository LoginRepository, facts events.Appender, limits LoginRateLimits) (*LoginService, error) {
+// Options are optional; see WithPasswordHasher.
+func NewLoginService(transactions Transactions, resolver *Resolver, repository LoginRepository, facts events.Appender, limits LoginRateLimits, options ...Option) (*LoginService, error) {
 	if transactions == nil || resolver == nil || repository == nil || facts == nil ||
 		limits.AccountAttempts <= 0 || limits.SourceAttempts <= 0 || limits.InstanceAttempts <= 0 {
 		return nil, ErrInvalidInput
@@ -134,12 +136,13 @@ func NewLoginService(transactions Transactions, resolver *Resolver, repository L
 	if err != nil {
 		return nil, err
 	}
-	hash, err := HashPassword(dummy)
+	hasher := newSettings(options).hasher
+	hash, err := hasher.Hash(dummy)
 	if err != nil {
 		return nil, err
 	}
 	return &LoginService{transactions: transactions, resolver: resolver, repository: repository,
-		facts: facts, dummyHash: hash, limits: limits}, nil
+		facts: facts, dummyHash: hash, hasher: hasher, limits: limits}, nil
 }
 
 // AuthenticateLocal verifies current credentials/rights and commits one new Session.
@@ -194,7 +197,7 @@ func (s *LoginService) AuthenticateLocal(ctx context.Context, source, username, 
 	if hash == "" {
 		hash = s.dummyHash
 	}
-	valid, err := VerifyPassword(hash, password)
+	valid, err := s.hasher.Verify(hash, password)
 	if err != nil {
 		return SessionResult{}, platform.NewFailure(platform.CodeAuthorityUnavailable, err)
 	}

@@ -47,6 +47,7 @@ type BootstrapRepository interface {
 // Existing installations are rejected; there is no remote first-administrator route.
 func Bootstrap(ctx context.Context, transactions Transactions, repository BootstrapRepository,
 	clock platform.Clock, facts events.Appender, username, password string, permissions BootstrapPermissions,
+	options ...Option,
 ) (uuid.UUID, error) {
 	if transactions == nil || repository == nil || clock == nil || facts == nil {
 		return uuid.Nil, ErrInvalidInput
@@ -68,7 +69,7 @@ func Bootstrap(ctx context.Context, transactions Transactions, repository Bootst
 			return uuid.Nil, err
 		}
 	}
-	input.PasswordHash, err = HashPassword(password)
+	input.PasswordHash, err = newSettings(options).hasher.Hash(password)
 	if err != nil {
 		return uuid.Nil, err
 	}

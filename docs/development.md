@@ -135,6 +135,14 @@ GOPAGER_INTEGRATION=1 go run github.com/onsi/ginkgo/v2/ginkgo --procs=2 --label-
 
 Suite conventions: qualified imports (`ginkgo.Describe`), no focused/pending specs, no automatic retries, per-spec cleanup, helpers take `testing.TB` and are passed `ginkgo.GinkgoTB()`. Do not add Testify.
 
+### Keeping tests off the wall clock
+
+Tests must not wait on production timers or pay production costs they are not testing:
+
+- Password hashing: pass `passwords.Option()` (`internal/testutil/passwords`) to `identity.NewLoginService` and `identity.Bootstrap`, and use `passwords.Hasher().Hash` for fixture hashes. It uses cheap Argon2id parameters and still verifies production-parameter hashes. The production verifier (`identity.VerifyPassword`) accepts only the production parameters, and one test pins them. Packages that cannot import `testutil/passwords` (`internal/identity` itself) build a hasher with `identity.NewPasswordHasher`.
+- Candidate lease renewal: `worker.Service.WithRenewInterval` shortens the renew period (default 20 s; it must stay at most a third of the 60 s lease). Tests that observe renewal against a real database use it; the `synctest` tests in `internal/processing/worker` use fake time instead.
+- Prefer injection over package-level overrides so tests can run in parallel.
+
 ### Process tests
 
 `cmd/gopager/process_test.go` re-executes the test binary as a real `gopager` process (selected by an environment variable the test sets for the child; `TestMain` in `testmain_test.go` skips fixture setup in that child) to verify startup, health endpoints and signal shutdown.

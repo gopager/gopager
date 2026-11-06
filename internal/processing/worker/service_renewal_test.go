@@ -113,3 +113,23 @@ func TestRunToleratesTransientRenewalFailureInsideLease(t *testing.T) {
 		})
 	}
 }
+
+// TestWithRenewIntervalKeepsTwoMissedRenewalsInsideTheLease pins the safety invariant that
+// the renew interval times three never exceeds the lease.
+func TestWithRenewIntervalKeepsTwoMissedRenewalsInsideTheLease(t *testing.T) {
+	service := &Service{}
+	if got := service.renewInterval(); got != processing.CandidateRenewInterval {
+		t.Fatalf("default renew interval=%v", got)
+	}
+	for _, bad := range []time.Duration{0, -time.Second, processing.CandidateLeaseDuration/3 + 1, processing.CandidateLeaseDuration} {
+		if err := service.WithRenewInterval(bad); platform.FailureCode(err) != platform.CodeInvalidInput {
+			t.Fatalf("interval %v accepted: %v", bad, err)
+		}
+	}
+	if err := service.WithRenewInterval(processing.CandidateLeaseDuration / 3); err != nil {
+		t.Fatal(err)
+	}
+	if got := service.renewInterval(); got != processing.CandidateLeaseDuration/3 {
+		t.Fatalf("renew interval=%v", got)
+	}
+}

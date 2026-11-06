@@ -58,6 +58,28 @@ type Service struct {
 	regex        processing.RegexEvaluator
 	id           uuid.UUID
 	publisher    Publisher
+	// renewEvery is the lease renewal period; zero selects processing.CandidateRenewInterval.
+	renewEvery time.Duration
+}
+
+// WithRenewInterval overrides how often a held candidate lease is renewed. Production uses
+// processing.CandidateRenewInterval; shorter values let tests observe periodic renewal without
+// waiting. The interval must be positive and leave room for two missed renewals before
+// processing.CandidateLeaseDuration expires. It must be called before the Service is shared.
+func (s *Service) WithRenewInterval(interval time.Duration) error {
+	if interval <= 0 || 3*interval > processing.CandidateLeaseDuration {
+		return platform.NewFailure(platform.CodeInvalidInput, errors.New("candidate renew interval must be positive and at most a third of the lease duration"))
+	}
+	s.renewEvery = interval
+	return nil
+}
+
+// renewInterval returns the effective lease renewal period.
+func (s *Service) renewInterval() time.Duration {
+	if s.renewEvery == 0 {
+		return processing.CandidateRenewInterval
+	}
+	return s.renewEvery
 }
 
 // New requires real owner participants; an absent source cannot be treated as eligible work.
@@ -244,7 +266,7 @@ func (s *Service) run(ctx context.Context, pending processing.Candidate, publish
 		evaluation, err := program.EvaluateScoped(compute, captured.Source, captured.Scope, captured.Invocations)
 		results <- outcome{evaluation: evaluation, err: err}
 	}()
-	ticker := time.NewTicker(processing.CandidateRenewInterval)
+	ticker := time.NewTicker(s.renewInterval())
 	defer ticker.Stop()
 	for {
 		select {
@@ -262,7 +284,7 @@ func (s *Service) run(ctx context.Context, pending processing.Candidate, publish
 			// A transient failure is retried at the next tick while the lease still outlives it;
 			// anything else, or a lease that would lapse first, ends the claim.
 			if transientFailure(err) && platform.FailureCode(err) != platform.CodeRevisionConflict &&
-				attemptStart.Add(processing.CandidateRenewInterval).Before(leaseStart.Add(processing.CandidateLeaseDuration)) {
+				attemptStart.Add(s.renewInterval()).Before(leaseStart.Add(processing.CandidateLeaseDuration)) {
 				continue
 			}
 			cancel()

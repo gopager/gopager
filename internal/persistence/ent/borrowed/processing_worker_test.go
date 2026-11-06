@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
@@ -180,6 +181,12 @@ func TestProcessingWorkerPrivateEvaluationAndCurrentSourceRecheck(t *testing.T) 
 			runner, err := worker.New(primary, repository, owner, processing.CoreRegex{}, workerID)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if name == "renewed-preparation" {
+				// A short period still proves periodic renewal without waiting for the 20 s default.
+				if err := runner.WithRenewInterval(50 * time.Millisecond); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if name == "dispatch-recovery" {
 				var claimed processing.Candidate
