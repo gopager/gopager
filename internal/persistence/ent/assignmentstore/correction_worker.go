@@ -153,7 +153,7 @@ func (s *Store) ReadCorrectionBatch(ctx context.Context, tx platform.Transaction
 		current.AssignmentRev != lease.AssignmentRev {
 		return nil, authz.ErrRevisionConflict
 	}
-	rows, err := executor.QueryContext(ctx, `SELECT t.id,t.message_id,t.network_id,t.protocol,t.targets,
+	rows, err := executor.QueryContext(ctx, `SELECT t.id,t.message_id,t.network_id,t.protocol,(SELECT COALESCE(json_agg(tt.original ORDER BY tt.position),'[]'::json) FROM transmission_targets tt WHERE tt.transmission_id=t.id),
 		t.observed_at,t.accepted_at,t.source_revision,true
 		FROM correction_dirty_transmissions dirty JOIN transmissions t ON t.id=dirty.transmission_id
 		WHERE dirty.scope_id=$1 ORDER BY dirty.accepted_at,dirty.transmission_id LIMIT $2`, lease.ID, limit)
@@ -167,7 +167,7 @@ func (s *Store) ReadCorrectionBatch(ctx context.Context, tx platform.Transaction
 	if lease.HighWaterAt == nil || lease.HighWaterID == nil {
 		return []assignments.CorrectionBatchItem{}, nil
 	}
-	rows, err = executor.QueryContext(ctx, `SELECT t.id,t.message_id,t.network_id,t.protocol,t.targets,
+	rows, err = executor.QueryContext(ctx, `SELECT t.id,t.message_id,t.network_id,t.protocol,(SELECT COALESCE(json_agg(tt.original ORDER BY tt.position),'[]'::json) FROM transmission_targets tt WHERE tt.transmission_id=t.id),
 		t.observed_at,t.accepted_at,t.source_revision,false
 		FROM transmissions t
 		WHERE (cardinality($1::uuid[])=0 OR t.network_id=ANY($1::uuid[]))
@@ -326,7 +326,7 @@ func (s *Store) ApplyCorrectionBatch(ctx context.Context, tx platform.Transactio
 	}
 	revisionByMessage := make(map[uuid.UUID]int64, len(messages))
 	for _, message := range messages {
-		if err := rebuildMessageContributions(ctx, executor, message); err != nil {
+		if err := refreshMessageUnits(ctx, executor, message); err != nil {
 			return nil, err
 		}
 	}
@@ -385,154 +385,32 @@ func resolutionEqual(left, right assignments.Resolution) bool {
 			left.AddressRuleID != nil && right.AddressRuleID != nil && *left.AddressRuleID == *right.AddressRuleID)
 }
 
-func rebuildMessageContributions(ctx context.Context, executor postgres.Executor, message uuid.UUID) error {
-	if _, err := executor.ExecContext(ctx, `DELETE FROM contribution_supports support USING transmissions t
-		WHERE support.transmission_id=t.id AND t.message_id=$1`, message); err != nil {
-		return err
-	}
-	rows, err := executor.QueryContext(ctx, `SELECT target.unit_id,MIN(t.observed_at),
-		MIN(LEAST(t.observed_at,t.accepted_at))
+// refreshMessageUnits rebuilds a Message's cache rows from its current evidence: one row per Unit
+// of an unsuppressed assigned target, carrying the Unit's Agency, and one Unit-less row per
+// Network Agency of its targetless Transmissions; the rebuilt rows are current.
+func refreshMessageUnits(ctx context.Context, executor postgres.Executor, message uuid.UUID) error {
+	for _, statement := range []string{
+		`DELETE FROM message_units WHERE message_id=$1`,
+		`INSERT INTO message_units (message_id,unit_id,agency_id,first_observed_at,age_anchor)
+		SELECT t.message_id,target.unit_id,u.agency_id,MIN(t.observed_at),MIN(LEAST(t.observed_at,t.accepted_at))
 		FROM transmissions t JOIN transmission_targets target ON target.transmission_id=t.id
-		WHERE t.message_id=$1 AND target.resolution_status='assigned' AND target.unit_id IS NOT NULL
+		JOIN units u ON u.id=target.unit_id
+		WHERE t.message_id=$1 AND target.resolution_status='assigned'
 		AND NOT EXISTS (SELECT 1 FROM target_suppressions suppression
 			WHERE suppression.transmission_id=target.transmission_id
 			AND suppression.target_position=target.position AND suppression.removed_at IS NULL)
-		GROUP BY target.unit_id ORDER BY target.unit_id`, message)
-	if err != nil {
-		return err
-	}
-	type unitAggregate struct {
-		unit      uuid.UUID
-		observed  time.Time
-		ageAnchor time.Time
-	}
-	var aggregates []unitAggregate
-	for rows.Next() {
-		var value unitAggregate
-		if err := rows.Scan(&value.unit, &value.observed, &value.ageAnchor); err != nil {
-			rows.Close()
-			return err
-		}
-		aggregates = append(aggregates, value)
-	}
-	if err := rows.Close(); err != nil {
-		return err
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	for _, value := range aggregates {
-		if _, err := executor.ExecContext(ctx, `INSERT INTO message_contributions
-			(id,message_id,unit_id,contribution_time,age_anchor)
-			VALUES($1,$2,$3,$4,$5)
-			ON CONFLICT (message_id,unit_id) WHERE unit_id IS NOT NULL DO UPDATE SET
-				contribution_time=EXCLUDED.contribution_time,age_anchor=EXCLUDED.age_anchor`,
-			uuid.New(), message, value.unit, value.observed, value.ageAnchor); err != nil {
+		GROUP BY t.message_id,target.unit_id,u.agency_id`,
+		`INSERT INTO message_units (message_id,unit_id,agency_id,first_observed_at,age_anchor)
+		SELECT t.message_id,NULL,n.agency_id,MIN(t.observed_at),MIN(LEAST(t.observed_at,t.accepted_at))
+		FROM transmissions t JOIN networks n ON n.id=t.network_id
+		WHERE t.message_id=$1 AND NOT EXISTS (SELECT 1 FROM transmission_targets target WHERE target.transmission_id=t.id)
+		GROUP BY t.message_id,n.agency_id`,
+	} {
+		if _, err := executor.ExecContext(ctx, statement, message); err != nil {
 			return err
 		}
 	}
-	var targetless bool
-	if err := executor.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM transmissions t
-		WHERE t.message_id=$1 AND jsonb_array_length(t.targets::jsonb)=0)`, message).Scan(&targetless); err != nil {
-		return err
-	}
-	if targetless {
-		if _, err := executor.ExecContext(ctx, `INSERT INTO message_contributions
-			(id,message_id,unit_id,contribution_time,age_anchor)
-			SELECT $1,$2,NULL,MIN(t.observed_at),MIN(LEAST(t.observed_at,t.accepted_at))
-			FROM transmissions t WHERE t.message_id=$2 AND jsonb_array_length(t.targets::jsonb)=0
-			ON CONFLICT (message_id) WHERE unit_id IS NULL DO UPDATE SET
-				contribution_time=EXCLUDED.contribution_time,age_anchor=EXCLUDED.age_anchor`,
-			uuid.New(), message); err != nil {
-			return err
-		}
-	}
-	rows, err = executor.QueryContext(ctx, `SELECT contribution.id,t.id,target.position,t.observed_at,t.accepted_at
-		FROM transmissions t JOIN transmission_targets target ON target.transmission_id=t.id
-		JOIN message_contributions contribution ON contribution.message_id=t.message_id
-			AND contribution.unit_id=target.unit_id
-		WHERE t.message_id=$1 AND target.resolution_status='assigned' AND target.unit_id IS NOT NULL
-		AND NOT EXISTS (SELECT 1 FROM target_suppressions suppression
-			WHERE suppression.transmission_id=target.transmission_id
-			AND suppression.target_position=target.position AND suppression.removed_at IS NULL)`,
-		message)
-	if err != nil {
-		return err
-	}
-	type support struct {
-		contribution uuid.UUID
-		transmission uuid.UUID
-		position     int
-		observed     time.Time
-		accepted     time.Time
-	}
-	var supports []support
-	for rows.Next() {
-		var value support
-		if err := rows.Scan(&value.contribution, &value.transmission, &value.position, &value.observed, &value.accepted); err != nil {
-			rows.Close()
-			return err
-		}
-		supports = append(supports, value)
-	}
-	if err := rows.Close(); err != nil {
-		return err
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	for _, value := range supports {
-		if _, err := executor.ExecContext(ctx, `INSERT INTO contribution_supports
-			(id,contribution_id,transmission_id,target_position,observed_at,accepted_at)
-			VALUES($1,$2,$3,$4,$5,$6)`, uuid.New(), value.contribution, value.transmission,
-			value.position, value.observed, value.accepted); err != nil {
-			return err
-		}
-	}
-	rows, err = executor.QueryContext(ctx, `SELECT contribution.id,t.id,t.observed_at,t.accepted_at
-		FROM transmissions t JOIN message_contributions contribution ON contribution.message_id=t.message_id
-			AND contribution.unit_id IS NULL
-		WHERE t.message_id=$1 AND jsonb_array_length(t.targets::jsonb)=0`, message)
-	if err != nil {
-		return err
-	}
-	var targetlessSupports []struct {
-		contribution uuid.UUID
-		transmission uuid.UUID
-		observed     time.Time
-		accepted     time.Time
-	}
-	for rows.Next() {
-		var value struct {
-			contribution uuid.UUID
-			transmission uuid.UUID
-			observed     time.Time
-			accepted     time.Time
-		}
-		if err := rows.Scan(&value.contribution, &value.transmission, &value.observed, &value.accepted); err != nil {
-			rows.Close()
-			return err
-		}
-		targetlessSupports = append(targetlessSupports, value)
-	}
-	if err := rows.Close(); err != nil {
-		return err
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	for _, value := range targetlessSupports {
-		if _, err := executor.ExecContext(ctx, `INSERT INTO contribution_supports
-			(id,contribution_id,transmission_id,target_position,observed_at,accepted_at)
-			VALUES($1,$2,$3,NULL,$4,$5)`, uuid.New(), value.contribution, value.transmission,
-			value.observed, value.accepted); err != nil {
-			return err
-		}
-	}
-	_, err = executor.ExecContext(ctx, `DELETE FROM message_contributions contribution
-		WHERE contribution.message_id=$1 AND NOT EXISTS (
-			SELECT 1 FROM contribution_supports support WHERE support.contribution_id=contribution.id)`, message)
-	return err
+	return nil
 }
 
 // CompleteCorrection marks the leased scope completed if nothing remains: no dirty

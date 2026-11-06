@@ -26,8 +26,6 @@ type Tx struct {
 	CommandReceipt *CommandReceiptClient
 	// ConsumerOffset is the client for interacting with the ConsumerOffset builders.
 	ConsumerOffset *ConsumerOffsetClient
-	// ContributionSupport is the client for interacting with the ContributionSupport builders.
-	ContributionSupport *ContributionSupportClient
 	// CorrectionDirtyTransmission is the client for interacting with the CorrectionDirtyTransmission builders.
 	CorrectionDirtyTransmission *CorrectionDirtyTransmissionClient
 	// Credential is the client for interacting with the Credential builders.
@@ -54,8 +52,8 @@ type Tx struct {
 	Membership *MembershipClient
 	// Message is the client for interacting with the Message builders.
 	Message *MessageClient
-	// MessageContribution is the client for interacting with the MessageContribution builders.
-	MessageContribution *MessageContributionClient
+	// MessageUnit is the client for interacting with the MessageUnit builders.
+	MessageUnit *MessageUnitClient
 	// Network is the client for interacting with the Network builders.
 	Network *NetworkClient
 	// Organization is the client for interacting with the Organization builders.
@@ -230,7 +228,6 @@ func (tx *Tx) init() {
 	tx.AuditRecord = NewAuditRecordClient(tx.config)
 	tx.CommandReceipt = NewCommandReceiptClient(tx.config)
 	tx.ConsumerOffset = NewConsumerOffsetClient(tx.config)
-	tx.ContributionSupport = NewContributionSupportClient(tx.config)
 	tx.CorrectionDirtyTransmission = NewCorrectionDirtyTransmissionClient(tx.config)
 	tx.Credential = NewCredentialClient(tx.config)
 	tx.DomainEvent = NewDomainEventClient(tx.config)
@@ -244,7 +241,7 @@ func (tx *Tx) init() {
 	tx.LoginAttempt = NewLoginAttemptClient(tx.config)
 	tx.Membership = NewMembershipClient(tx.config)
 	tx.Message = NewMessageClient(tx.config)
-	tx.MessageContribution = NewMessageContributionClient(tx.config)
+	tx.MessageUnit = NewMessageUnitClient(tx.config)
 	tx.Network = NewNetworkClient(tx.config)
 	tx.Organization = NewOrganizationClient(tx.config)
 	tx.PendingAssignmentScope = NewPendingAssignmentScopeClient(tx.config)

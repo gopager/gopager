@@ -93,7 +93,6 @@ CREATE TABLE transmissions (
     network_resolution varchar NOT NULL CHECK (network_resolution IN ('declared', 'inferred-single', 'inferred-address', 'default')),
     protocol varchar NOT NULL CHECK (protocol IN ('pocsag', 'flex', 'zvei', 'eas')),
     payload json NOT NULL,
-    targets json NOT NULL,
     observed_at timestamptz NOT NULL,
     observation_offset_seconds integer NOT NULL CHECK (observation_offset_seconds BETWEEN -86400 AND 86400),
     accepted_at timestamptz NOT NULL,
@@ -107,47 +106,51 @@ CREATE TABLE transmissions (
 );
 CREATE INDEX transmissions_protocol_observed ON transmissions (protocol, observed_at, id);
 CREATE INDEX transmissions_message_observed ON transmissions (message_id, observed_at, id);
+-- Each target carries its Network, Protocol, observation time and typed address so that a
+-- selector-scoped correction and the Unit history are index lookups; original stays the evidence.
 CREATE TABLE transmission_targets (
     transmission_id uuid NOT NULL REFERENCES transmissions(id) ON DELETE CASCADE,
     position integer NOT NULL CHECK (position >= 0),
     original json NOT NULL,
+    network_id uuid NOT NULL REFERENCES networks(id),
+    protocol varchar NOT NULL CHECK (protocol IN ('pocsag', 'flex', 'zvei', 'eas')),
+    observed_at timestamptz NOT NULL,
+    accepted_at timestamptz NOT NULL,
+    address_number bigint,
+    address_text varchar,
+    function smallint CHECK (function BETWEEN 0 AND 255),
     resolution_status varchar NOT NULL CHECK (resolution_status IN ('unresolved', 'unassigned', 'assigned', 'pending', 'failed')),
     unit_id uuid REFERENCES units(id),
     matched_rule_id uuid,
     assignment_revision bigint NOT NULL CHECK (assignment_revision > 0),
-    PRIMARY KEY (transmission_id, position)
+    PRIMARY KEY (transmission_id, position),
+    CHECK ((address_number IS NULL) <> (address_text IS NULL))
 );
-CREATE INDEX transmission_targets_unit ON transmission_targets (unit_id, transmission_id);
-CREATE TABLE message_contributions (
-    id uuid PRIMARY KEY,
+CREATE INDEX transmission_targets_numeric_address ON transmission_targets (network_id, protocol, address_number, observed_at)
+    WHERE address_number IS NOT NULL;
+CREATE INDEX transmission_targets_text_address ON transmission_targets (network_id, protocol, address_text, observed_at)
+    WHERE address_text IS NOT NULL;
+CREATE INDEX transmission_targets_unit ON transmission_targets (unit_id, observed_at);
+-- message_units is the rebuildable cache of which Units a Message alerts: one row per Message and
+-- Unit (with the Unit's Agency) and one Unit-less row per Message and Network Agency for
+-- targetless Transmissions. Intake upserts it, a correction rebuilds it per affected Message.
+CREATE TABLE message_units (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     message_id uuid NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
     unit_id uuid REFERENCES units(id),
-    contribution_time timestamptz NOT NULL,
-    age_anchor timestamptz NOT NULL
+    agency_id uuid NOT NULL REFERENCES agencies(id),
+    first_observed_at timestamptz NOT NULL,
+    age_anchor timestamptz NOT NULL,
+    correction_status varchar NOT NULL DEFAULT 'current' CHECK (correction_status IN ('current', 'correcting'))
 );
-CREATE UNIQUE INDEX message_contributions_message_unit
-    ON message_contributions (message_id, unit_id) WHERE unit_id IS NOT NULL;
-CREATE UNIQUE INDEX message_contributions_message_targetless
-    ON message_contributions (message_id) WHERE unit_id IS NULL;
-CREATE INDEX message_contributions_unit_age ON message_contributions (unit_id, age_anchor);
-CREATE TABLE contribution_supports (
-    id uuid PRIMARY KEY,
-    contribution_id uuid NOT NULL REFERENCES message_contributions(id) ON DELETE CASCADE,
-    transmission_id uuid NOT NULL REFERENCES transmissions(id) ON DELETE CASCADE,
-    target_position integer CHECK (target_position >= 0),
-    observed_at timestamptz NOT NULL,
-    accepted_at timestamptz NOT NULL
-);
-CREATE UNIQUE INDEX contribution_support_original_target
-    ON contribution_supports (transmission_id, target_position) WHERE target_position IS NOT NULL;
-CREATE UNIQUE INDEX contribution_support_targetless_transmission
-    ON contribution_supports (transmission_id) WHERE target_position IS NULL;
-CREATE INDEX contribution_supports_contribution ON contribution_supports (contribution_id);
+CREATE UNIQUE INDEX message_units_message_unit ON message_units (message_id, unit_id) WHERE unit_id IS NOT NULL;
+CREATE UNIQUE INDEX message_units_message_targetless ON message_units (message_id, agency_id) WHERE unit_id IS NULL;
+CREATE INDEX message_units_unit_age ON message_units (unit_id, age_anchor);
+CREATE INDEX message_units_agency_time ON message_units (agency_id, first_observed_at);
 
 -- +goose Down
 ALTER TABLE processing_results DROP CONSTRAINT processing_results_message;
-DROP TABLE contribution_supports;
-DROP TABLE message_contributions;
+DROP TABLE message_units;
 DROP TABLE transmission_targets;
 DROP TABLE transmissions;
 DROP TABLE messages;

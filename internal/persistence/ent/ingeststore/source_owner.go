@@ -486,7 +486,8 @@ func (o *ProcessingSourceOwner) readSource(ctx context.Context, tx platform.Tran
 	var snapshot sourceSnapshot
 	var protocolValue, networkProtocol string
 	var payloadJSON, targetsJSON []byte
-	err = executor.QueryRowContext(ctx, `SELECT t.network_id,n.agency_id,t.message_id,t.protocol,t.payload,t.targets,
+	err = executor.QueryRowContext(ctx, `SELECT t.network_id,n.agency_id,t.message_id,t.protocol,t.payload,
+		(SELECT COALESCE(json_agg(tt.original ORDER BY tt.position),'[]'::json) FROM transmission_targets tt WHERE tt.transmission_id=t.id),
 		t.observed_at,t.source_revision,t.processing_status,n.name,n.protocol
 		FROM transmissions t JOIN networks n ON n.id=t.network_id AND n.deleted=false
 		WHERE t.id=$1 FOR UPDATE OF t`, transmission).Scan(

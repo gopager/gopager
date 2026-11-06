@@ -19,7 +19,6 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/auditrecord"
 	"github.com/gopager/gopager/internal/persistence/ent/commandreceipt"
 	"github.com/gopager/gopager/internal/persistence/ent/consumeroffset"
-	"github.com/gopager/gopager/internal/persistence/ent/contributionsupport"
 	"github.com/gopager/gopager/internal/persistence/ent/correctiondirtytransmission"
 	"github.com/gopager/gopager/internal/persistence/ent/credential"
 	"github.com/gopager/gopager/internal/persistence/ent/domainevent"
@@ -33,7 +32,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/loginattempt"
 	"github.com/gopager/gopager/internal/persistence/ent/membership"
 	"github.com/gopager/gopager/internal/persistence/ent/message"
-	"github.com/gopager/gopager/internal/persistence/ent/messagecontribution"
+	"github.com/gopager/gopager/internal/persistence/ent/messageunit"
 	"github.com/gopager/gopager/internal/persistence/ent/network"
 	"github.com/gopager/gopager/internal/persistence/ent/organization"
 	"github.com/gopager/gopager/internal/persistence/ent/pendingassignmentscope"
@@ -119,7 +118,6 @@ func checkColumn(t, c string) error {
 			auditrecord.Table:                 auditrecord.ValidColumn,
 			commandreceipt.Table:              commandreceipt.ValidColumn,
 			consumeroffset.Table:              consumeroffset.ValidColumn,
-			contributionsupport.Table:         contributionsupport.ValidColumn,
 			correctiondirtytransmission.Table: correctiondirtytransmission.ValidColumn,
 			credential.Table:                  credential.ValidColumn,
 			domainevent.Table:                 domainevent.ValidColumn,
@@ -133,7 +131,7 @@ func checkColumn(t, c string) error {
 			loginattempt.Table:                loginattempt.ValidColumn,
 			membership.Table:                  membership.ValidColumn,
 			message.Table:                     message.ValidColumn,
-			messagecontribution.Table:         messagecontribution.ValidColumn,
+			messageunit.Table:                 messageunit.ValidColumn,
 			network.Table:                     network.ValidColumn,
 			organization.Table:                organization.ValidColumn,
 			pendingassignmentscope.Table:      pendingassignmentscope.ValidColumn,

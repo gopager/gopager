@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"sort"
 	"time"
 
@@ -23,7 +24,7 @@ import (
 	"github.com/gopager/gopager/internal/protocols"
 )
 
-// Store persists gateway intake (Transmissions, Messages, targets and contributions),
+// Store persists gateway intake (Transmissions, Messages, typed targets and the message_units cache),
 // Networks, gateways and gateway credentials, and appends the matching intake facts. It
 // holds no transaction of its own: every method runs in the caller's active primary
 // transaction.
@@ -304,10 +305,6 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 	messageID := decision.MessageID
 	transmissionID := uuid.New()
 	payload := submission.Payload
-	targets, err := json.Marshal(submission.TransmissionTargets)
-	if err != nil {
-		return ingest.Receipt{}, err
-	}
 	incomplete := submission.IncompleteValue()
 	var quality any
 	if len(submission.QualityMetrics) != 0 {
@@ -315,12 +312,12 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 	}
 	_, observationOffset := submission.ObservedAt.Zone()
 	if _, err := executor.ExecContext(ctx, `INSERT INTO transmissions
-		(id,gateway_id,network_id,submission_id,submission_fingerprint,network_resolution,protocol,payload,targets,
+		(id,gateway_id,network_id,submission_id,submission_fingerprint,network_resolution,protocol,payload,
 		 observed_at,observation_offset_seconds,accepted_at,source_revision,incomplete,quality_metrics,message_id,
 		 processing_status)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,1,$13,$14,$15,'pending')`,
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,1,$12,$13,$14,'pending')`,
 		transmissionID, gateway, submission.ResolvedNetwork, submission.SubmissionID, submission.Fingerprint[:],
-		submission.Resolution, string(submission.Protocol), string(payload), string(targets),
+		submission.Resolution, string(submission.Protocol), string(payload),
 		submission.ObservedAt, observationOffset, accepted, incomplete, quality, messageID); err != nil {
 		return ingest.Receipt{}, err
 	}
@@ -346,7 +343,7 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 		return ingest.Receipt{}, err
 	}
 	for _, id := range decision.AbsorbedMessage {
-		if err := s.mergeContributions(ctx, executor, messageID, id); err != nil {
+		if err := s.mergeMessageUnits(ctx, executor, messageID, id); err != nil {
 			return ingest.Receipt{}, err
 		}
 	}
@@ -571,10 +568,17 @@ func (s *Store) storeTargets(ctx context.Context, tx platform.TransactionContext
 		if resolution.TargetPosition != position || resolution.Status != "assigned" && resolution.Status != "unassigned" {
 			return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("matcher returned invalid target resolution"))
 		}
+		addressNumber, addressText, function, err := typedTarget(target)
+		if err != nil {
+			return err
+		}
 		if _, err := executor.ExecContext(ctx, `INSERT INTO transmission_targets
-			(transmission_id,position,original,resolution_status,unit_id,matched_rule_id,assignment_revision)
-			VALUES($1,$2,$3,$4,$5,$6,$7)`, transmission, position, string(original),
-			resolution.Status, resolution.UnitID, resolution.AddressRuleID, match.Revision); err != nil {
+			(transmission_id,position,original,resolution_status,unit_id,matched_rule_id,assignment_revision,
+			 network_id,protocol,observed_at,accepted_at,address_number,address_text,function)
+			VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`, transmission, position, string(original),
+			resolution.Status, resolution.UnitID, resolution.AddressRuleID, match.Revision,
+			submission.ResolvedNetwork, string(submission.Protocol), submission.ObservedAt, accepted,
+			addressNumber, addressText, function); err != nil {
 			return err
 		}
 		after := &events.IntakeResolution{Status: resolution.Status, UnitID: resolution.UnitID, AddressRuleID: resolution.AddressRuleID}
@@ -587,67 +591,55 @@ func (s *Store) storeTargets(ctx context.Context, tx platform.TransactionContext
 		if resolution.UnitID == nil {
 			continue
 		}
-		var contributionID uuid.UUID
-		err = executor.QueryRowContext(ctx, `SELECT id FROM message_contributions
-			WHERE message_id=$1 AND unit_id=$2`, message, *resolution.UnitID).Scan(&contributionID)
-		if errors.Is(err, sql.ErrNoRows) {
-			contributionID = uuid.New()
-			ageAnchor := submission.ObservedAt
-			if accepted.Before(ageAnchor) {
-				ageAnchor = accepted
-			}
-			if _, err := executor.ExecContext(ctx, `INSERT INTO message_contributions
-				(id,message_id,unit_id,contribution_time,age_anchor)
-				VALUES($1,$2,$3,$4,$5)`, contributionID, message, *resolution.UnitID,
-				submission.ObservedAt, ageAnchor); err != nil {
-				return err
-			}
-		} else if err == nil {
-			if _, err := executor.ExecContext(ctx, `UPDATE message_contributions SET
-				contribution_time=LEAST(contribution_time,$2), age_anchor=LEAST(age_anchor,LEAST($2,$3))
-				WHERE id=$1`, contributionID, submission.ObservedAt, accepted); err != nil {
-				return err
-			}
-		} else {
-			return err
-		}
-		if _, err = executor.ExecContext(ctx, `INSERT INTO contribution_supports
-			(id,contribution_id,transmission_id,target_position,observed_at,accepted_at)
-			VALUES($1,$2,$3,$4,$5,$6)`, uuid.New(), contributionID, transmission, position,
-			submission.ObservedAt, accepted); err != nil {
+		// The cache row carries the Unit's Agency; an earlier observation moves both times back.
+		if _, err := executor.ExecContext(ctx, `INSERT INTO message_units
+			(message_id,unit_id,agency_id,first_observed_at,age_anchor)
+			SELECT $1::uuid,$2::uuid,u.agency_id,$3::timestamptz,LEAST($3::timestamptz,$4::timestamptz) FROM units u WHERE u.id=$2
+			ON CONFLICT (message_id,unit_id) WHERE unit_id IS NOT NULL DO UPDATE SET
+				first_observed_at=LEAST(message_units.first_observed_at,EXCLUDED.first_observed_at),
+				age_anchor=LEAST(message_units.age_anchor,EXCLUDED.age_anchor)`,
+			message, *resolution.UnitID, submission.ObservedAt, accepted); err != nil {
 			return err
 		}
 	}
 	if len(submission.TransmissionTargets) == 0 {
-		var contributionID uuid.UUID
-		err := executor.QueryRowContext(ctx, `SELECT id FROM message_contributions
-			WHERE message_id=$1 AND unit_id IS NULL`, message).Scan(&contributionID)
-		if errors.Is(err, sql.ErrNoRows) {
-			contributionID = uuid.New()
-			ageAnchor := submission.ObservedAt
-			if accepted.Before(ageAnchor) {
-				ageAnchor = accepted
-			}
-			if _, err := executor.ExecContext(ctx, `INSERT INTO message_contributions
-				(id,message_id,unit_id,contribution_time,age_anchor)
-				VALUES($1,$2,NULL,$3,$4)`, contributionID, message, submission.ObservedAt, ageAnchor); err != nil {
-				return err
-			}
-		} else if err != nil {
-			return err
-		} else if _, err := executor.ExecContext(ctx, `UPDATE message_contributions SET
-			contribution_time=LEAST(contribution_time,$2),age_anchor=LEAST(age_anchor,LEAST($2,$3))
-			WHERE id=$1`, contributionID, submission.ObservedAt, accepted); err != nil {
-			return err
-		}
-		_, err = executor.ExecContext(ctx, `INSERT INTO contribution_supports
-			(id,contribution_id,transmission_id,target_position,observed_at,accepted_at)
-			VALUES($1,$2,$3,NULL,$4,$5)`, uuid.New(), contributionID, transmission, submission.ObservedAt, accepted)
-		if err != nil {
+		// Targetless traffic is cached per Message and Network Agency without a Unit.
+		if _, err := executor.ExecContext(ctx, `INSERT INTO message_units
+			(message_id,unit_id,agency_id,first_observed_at,age_anchor)
+			SELECT $1::uuid,NULL,n.agency_id,$3::timestamptz,LEAST($3::timestamptz,$4::timestamptz) FROM networks n WHERE n.id=$2
+			ON CONFLICT (message_id,agency_id) WHERE unit_id IS NULL DO UPDATE SET
+				first_observed_at=LEAST(message_units.first_observed_at,EXCLUDED.first_observed_at),
+				age_anchor=LEAST(message_units.age_anchor,EXCLUDED.age_anchor)`,
+			message, submission.ResolvedNetwork, submission.ObservedAt, accepted); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// typedTarget returns the indexed address columns of a target: exactly one of the numeric and
+// the text address is set, and the function is carried as a small integer.
+func typedTarget(target protocols.Target) (*int64, *string, *int16, error) {
+	var addressNumber *int64
+	var addressText *string
+	if number, ok := target.Address.Number(); ok {
+		if number > math.MaxInt64 {
+			return nil, nil, nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("numeric address exceeds the stored range"))
+		}
+		value := int64(number)
+		addressNumber = &value
+	} else if text, ok := target.Address.Text(); ok {
+		value := text
+		addressText = &value
+	} else {
+		return nil, nil, nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("target without an address"))
+	}
+	var function *int16
+	if target.Function != nil {
+		value := int16(*target.Function)
+		function = &value
+	}
+	return addressNumber, addressText, function, nil
 }
 
 func (s *Store) captureCorrectionDirty(ctx context.Context, executor postgres.Executor,
@@ -663,60 +655,25 @@ func (s *Store) captureCorrectionDirty(ctx context.Context, executor postgres.Ex
 	return err
 }
 
-func (s *Store) mergeContributions(ctx context.Context, executor postgres.Executor, survivor, absorbed uuid.UUID) error {
-	rows, err := executor.QueryContext(ctx, `SELECT id,unit_id,contribution_time,age_anchor
-		FROM message_contributions WHERE message_id=$1 ORDER BY id FOR UPDATE`, absorbed)
-	if err != nil {
-		return err
-	}
-	type contribution struct {
-		id     uuid.UUID
-		unit   *uuid.UUID
-		time   time.Time
-		anchor time.Time
-	}
-	var rowsToMove []contribution
-	for rows.Next() {
-		var item contribution
-		if err := rows.Scan(&item.id, &item.unit, &item.time, &item.anchor); err != nil {
-			rows.Close()
-			return err
-		}
-		rowsToMove = append(rowsToMove, item)
-	}
-	if err := rows.Close(); err != nil {
-		return err
-	}
-	for _, item := range rowsToMove {
-		var target uuid.UUID
-		var err error
-		if item.unit != nil {
-			err = executor.QueryRowContext(ctx, `SELECT id FROM message_contributions
-				WHERE message_id=$1 AND unit_id=$2 FOR UPDATE`, survivor, *item.unit).Scan(&target)
-		} else {
-			err = executor.QueryRowContext(ctx, `SELECT id FROM message_contributions
-				WHERE message_id=$1 AND unit_id IS NULL FOR UPDATE`, survivor).Scan(&target)
-		}
-		if errors.Is(err, sql.ErrNoRows) {
-			if _, err := executor.ExecContext(ctx, `UPDATE message_contributions SET message_id=$2
-				WHERE id=$1`, item.id, survivor); err != nil {
-				return err
-			}
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		if _, err := executor.ExecContext(ctx, `UPDATE contribution_supports SET contribution_id=$2
-			WHERE contribution_id=$1`, item.id, target); err != nil {
-			return err
-		}
-		if _, err := executor.ExecContext(ctx, `UPDATE message_contributions SET
-			contribution_time=LEAST(contribution_time,$2),age_anchor=LEAST(age_anchor,$3) WHERE id=$1`,
-			target, item.time, item.anchor); err != nil {
-			return err
-		}
-		if _, err := executor.ExecContext(ctx, `DELETE FROM message_contributions WHERE id=$1`, item.id); err != nil {
+// mergeMessageUnits folds the cache rows of an absorbed Message into the survivor: equal rows
+// keep the earliest times and stay correcting if either side was; the absorbed rows vanish with
+// their Message (ON DELETE CASCADE).
+func (s *Store) mergeMessageUnits(ctx context.Context, executor postgres.Executor, survivor, absorbed uuid.UUID) error {
+	const merged = `first_observed_at=LEAST(message_units.first_observed_at,EXCLUDED.first_observed_at),
+			age_anchor=LEAST(message_units.age_anchor,EXCLUDED.age_anchor),
+			correction_status=CASE WHEN 'correcting' IN (message_units.correction_status,EXCLUDED.correction_status)
+				THEN 'correcting' ELSE 'current' END`
+	for _, statement := range []string{
+		`INSERT INTO message_units (message_id,unit_id,agency_id,first_observed_at,age_anchor,correction_status)
+		SELECT $1::uuid,unit_id,agency_id,first_observed_at,age_anchor,correction_status FROM message_units
+		WHERE message_id=$2 AND unit_id IS NOT NULL
+		ON CONFLICT (message_id,unit_id) WHERE unit_id IS NOT NULL DO UPDATE SET ` + merged,
+		`INSERT INTO message_units (message_id,unit_id,agency_id,first_observed_at,age_anchor,correction_status)
+		SELECT $1::uuid,NULL,agency_id,first_observed_at,age_anchor,correction_status FROM message_units
+		WHERE message_id=$2 AND unit_id IS NULL
+		ON CONFLICT (message_id,agency_id) WHERE unit_id IS NULL DO UPDATE SET ` + merged,
+	} {
+		if _, err := executor.ExecContext(ctx, statement, survivor, absorbed); err != nil {
 			return err
 		}
 	}

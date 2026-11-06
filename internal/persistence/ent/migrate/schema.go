@@ -148,33 +148,6 @@ var (
 		Columns:    ConsumerOffsetsColumns,
 		PrimaryKey: []*schema.Column{ConsumerOffsetsColumns[0]},
 	}
-	// ContributionSupportsColumns holds the columns for the "contribution_supports" table.
-	ContributionSupportsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeUUID},
-		{Name: "contribution_id", Type: field.TypeUUID},
-		{Name: "transmission_id", Type: field.TypeUUID},
-		{Name: "target_position", Type: field.TypeInt, Nullable: true},
-		{Name: "observed_at", Type: field.TypeTime},
-		{Name: "accepted_at", Type: field.TypeTime},
-	}
-	// ContributionSupportsTable holds the schema information for the "contribution_supports" table.
-	ContributionSupportsTable = &schema.Table{
-		Name:       "contribution_supports",
-		Columns:    ContributionSupportsColumns,
-		PrimaryKey: []*schema.Column{ContributionSupportsColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "contributionsupport_transmission_id_target_position",
-				Unique:  true,
-				Columns: []*schema.Column{ContributionSupportsColumns[2], ContributionSupportsColumns[3]},
-			},
-			{
-				Name:    "contributionsupport_contribution_id",
-				Unique:  false,
-				Columns: []*schema.Column{ContributionSupportsColumns[1]},
-			},
-		},
-	}
 	// CorrectionDirtyTransmissionsColumns holds the columns for the "correction_dirty_transmissions" table.
 	CorrectionDirtyTransmissionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -464,40 +437,47 @@ var (
 			},
 		},
 	}
-	// MessageContributionsColumns holds the columns for the "message_contributions" table.
-	MessageContributionsColumns = []*schema.Column{
+	// MessageUnitsColumns holds the columns for the "message_units" table.
+	MessageUnitsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "message_id", Type: field.TypeUUID},
 		{Name: "unit_id", Type: field.TypeUUID, Nullable: true},
-		{Name: "contribution_time", Type: field.TypeTime},
+		{Name: "agency_id", Type: field.TypeUUID},
+		{Name: "first_observed_at", Type: field.TypeTime},
 		{Name: "age_anchor", Type: field.TypeTime},
+		{Name: "correction_status", Type: field.TypeEnum, Enums: []string{"current", "correcting"}, Default: "current"},
 	}
-	// MessageContributionsTable holds the schema information for the "message_contributions" table.
-	MessageContributionsTable = &schema.Table{
-		Name:       "message_contributions",
-		Columns:    MessageContributionsColumns,
-		PrimaryKey: []*schema.Column{MessageContributionsColumns[0]},
+	// MessageUnitsTable holds the schema information for the "message_units" table.
+	MessageUnitsTable = &schema.Table{
+		Name:       "message_units",
+		Columns:    MessageUnitsColumns,
+		PrimaryKey: []*schema.Column{MessageUnitsColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "messagecontribution_message_id_unit_id",
+				Name:    "messageunit_message_id_unit_id",
 				Unique:  true,
-				Columns: []*schema.Column{MessageContributionsColumns[1], MessageContributionsColumns[2]},
+				Columns: []*schema.Column{MessageUnitsColumns[1], MessageUnitsColumns[2]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "unit_id IS NOT NULL",
 				},
 			},
 			{
-				Name:    "messagecontribution_message_id",
+				Name:    "messageunit_message_id_agency_id",
 				Unique:  true,
-				Columns: []*schema.Column{MessageContributionsColumns[1]},
+				Columns: []*schema.Column{MessageUnitsColumns[1], MessageUnitsColumns[3]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "unit_id IS NULL",
 				},
 			},
 			{
-				Name:    "messagecontribution_unit_id_age_anchor",
+				Name:    "messageunit_unit_id_age_anchor",
 				Unique:  false,
-				Columns: []*schema.Column{MessageContributionsColumns[2], MessageContributionsColumns[4]},
+				Columns: []*schema.Column{MessageUnitsColumns[2], MessageUnitsColumns[5]},
+			},
+			{
+				Name:    "messageunit_agency_id_first_observed_at",
+				Unique:  false,
+				Columns: []*schema.Column{MessageUnitsColumns[3], MessageUnitsColumns[4]},
 			},
 		},
 	}
@@ -716,7 +696,6 @@ var (
 		{Name: "network_resolution", Type: field.TypeString},
 		{Name: "protocol", Type: field.TypeEnum, Enums: []string{"pocsag", "flex", "zvei", "eas"}},
 		{Name: "payload", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "json"}},
-		{Name: "targets", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "json"}},
 		{Name: "observed_at", Type: field.TypeTime},
 		{Name: "observation_offset_seconds", Type: field.TypeInt},
 		{Name: "accepted_at", Type: field.TypeTime},
@@ -740,12 +719,12 @@ var (
 			{
 				Name:    "transmission_protocol_observed_at_id",
 				Unique:  false,
-				Columns: []*schema.Column{TransmissionsColumns[6], TransmissionsColumns[9], TransmissionsColumns[0]},
+				Columns: []*schema.Column{TransmissionsColumns[6], TransmissionsColumns[8], TransmissionsColumns[0]},
 			},
 			{
 				Name:    "transmission_message_id_observed_at_id",
 				Unique:  false,
-				Columns: []*schema.Column{TransmissionsColumns[15], TransmissionsColumns[9], TransmissionsColumns[0]},
+				Columns: []*schema.Column{TransmissionsColumns[14], TransmissionsColumns[8], TransmissionsColumns[0]},
 			},
 		},
 	}
@@ -759,6 +738,13 @@ var (
 		{Name: "unit_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "matched_rule_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "assignment_revision", Type: field.TypeInt64},
+		{Name: "network_id", Type: field.TypeUUID},
+		{Name: "protocol", Type: field.TypeEnum, Enums: []string{"pocsag", "flex", "zvei", "eas"}},
+		{Name: "observed_at", Type: field.TypeTime},
+		{Name: "accepted_at", Type: field.TypeTime},
+		{Name: "address_number", Type: field.TypeInt64, Nullable: true},
+		{Name: "address_text", Type: field.TypeString, Nullable: true},
+		{Name: "function", Type: field.TypeInt16, Nullable: true},
 	}
 	// TransmissionTargetsTable holds the schema information for the "transmission_targets" table.
 	TransmissionTargetsTable = &schema.Table{
@@ -772,9 +758,25 @@ var (
 				Columns: []*schema.Column{TransmissionTargetsColumns[1], TransmissionTargetsColumns[2]},
 			},
 			{
-				Name:    "transmissiontarget_unit_id",
+				Name:    "transmissiontarget_network_id_protocol_address_number_observed_at",
 				Unique:  false,
-				Columns: []*schema.Column{TransmissionTargetsColumns[5]},
+				Columns: []*schema.Column{TransmissionTargetsColumns[8], TransmissionTargetsColumns[9], TransmissionTargetsColumns[12], TransmissionTargetsColumns[10]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "address_number IS NOT NULL",
+				},
+			},
+			{
+				Name:    "transmissiontarget_network_id_protocol_address_text_observed_at",
+				Unique:  false,
+				Columns: []*schema.Column{TransmissionTargetsColumns[8], TransmissionTargetsColumns[9], TransmissionTargetsColumns[13], TransmissionTargetsColumns[10]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "address_text IS NOT NULL",
+				},
+			},
+			{
+				Name:    "transmissiontarget_unit_id_observed_at",
+				Unique:  false,
+				Columns: []*schema.Column{TransmissionTargetsColumns[5], TransmissionTargetsColumns[10]},
 			},
 		},
 	}
@@ -1005,7 +1007,6 @@ var (
 		IdentityAuditTable,
 		CommandReceiptsTable,
 		ConsumerOffsetsTable,
-		ContributionSupportsTable,
 		CorrectionDirtyTransmissionsTable,
 		IdentityCredentialsTable,
 		DomainEventsTable,
@@ -1019,7 +1020,7 @@ var (
 		IdentityLoginAttemptsTable,
 		IdentityMembershipsTable,
 		MessagesTable,
-		MessageContributionsTable,
+		MessageUnitsTable,
 		NetworksTable,
 		OrganizationsTable,
 		AssignmentPendingScopesTable,
@@ -1066,9 +1067,6 @@ func init() {
 	ConsumerOffsetsTable.Annotation = &entsql.Annotation{
 		Table: "consumer_offsets",
 	}
-	ContributionSupportsTable.Annotation = &entsql.Annotation{
-		Table: "contribution_supports",
-	}
 	CorrectionDirtyTransmissionsTable.Annotation = &entsql.Annotation{
 		Table: "correction_dirty_transmissions",
 	}
@@ -1108,8 +1106,8 @@ func init() {
 	MessagesTable.Annotation = &entsql.Annotation{
 		Table: "messages",
 	}
-	MessageContributionsTable.Annotation = &entsql.Annotation{
-		Table: "message_contributions",
+	MessageUnitsTable.Annotation = &entsql.Annotation{
+		Table: "message_units",
 	}
 	NetworksTable.ForeignKeys[0].RefTable = AgenciesTable
 	NetworksTable.Annotation = &entsql.Annotation{

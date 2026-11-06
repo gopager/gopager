@@ -44,14 +44,14 @@ flowchart TD
     C --> D[Resolve Network]
     D --> E[Match targets to Units]
     E --> F[Group into Message]
-    F --> G[Store transmission, targets, contributions, facts]
+    F --> G[Store transmission, typed targets, message_units cache, facts]
     G --> H{Workflows in scope?}
     H -- no --> N[processing_status none]
     H -- yes --> I[Insert processing candidates, status pending]
     I --> J[Worker: claim, evaluate, call plugins]
     J --> K[Store result, publish it, refresh status]
     R[Rule / Unit / suppression change] --> S[Pending correction scope]
-    S --> T[Correction runner: rematch, rebuild contributions]
+    S --> T[Correction runner: rematch, refresh message_units]
     T --> U[Re-admit candidates of changed transmissions]
     U --> J
 ```
@@ -69,8 +69,8 @@ flowchart TD
 | Payload identity | Each payload form maps to a comparison-only identity (form, subtype, normalized value). The submitted payload is stored unchanged. | `protocols.TransmissionPayload.Identity` |
 | Network resolution | In order: declared gateway network identifier (`declared`), the gateway's only network for the protocol (`inferred-single`), the only network whose rules match the targets (`inferred-address`), the gateway default (`default`). If the address match is ambiguous, the default is used and `operation.network-ambiguous` is emitted. | `ingest.ResolveNetwork`, `assignments.Service.NetworksWithMatches` |
 | Target matching | Each target position is resolved against the current address rules at its observation time: `assigned` (Unit plus rule) or `unassigned`. Overlapping rules resolve to the most specific selector. Ambiguity is a conflict. | `assignments.Resolve`, `assignments.Service.MatchTargets` |
-| Grouping | Find Messages with equal payload identity that have a member within the grouping window (`grouping_control.window_seconds`). None found: create a Message. One found: join it. Several found: merge them into the lowest ID and move their transmissions and contributions. | `ingeststore.groupMessage` (decision type from `messages`) |
-| Persistence | Transmission, ordered targets with their resolution, Message contributions (one per Message and Unit, or one Unit-less row for targetless input), contribution supports | `ingeststore.AcceptTransmission` |
+| Grouping | Find Messages with equal payload identity that have a member within the grouping window (`grouping_control.window_seconds`). None found: create a Message. One found: join it. Several found: merge them into the lowest ID and move their transmissions and `message_units` rows. | `ingeststore.groupMessage` (decision type from `messages`) |
+| Persistence | Transmission, ordered targets with their resolution and typed address columns (`network_id`, `protocol`, `observed_at`, `address_number` or `address_text`, `function`), `message_units` cache rows (one per Message and Unit with the Unit's Agency, or one Unit-less row per Message and Network Agency for targetless input) | `ingeststore.AcceptTransmission` |
 | Correction capture | If a correction for the current assignment revision is queued or running, the transmission is recorded in `correction_dirty_transmissions` | `ingeststore.captureCorrectionDirty` |
 | Facts | `gateway.state-changed`, `message.created` / `message.transmission-joined` / `message.merged`, `assignment.changed` (reason `created`) per target, `operation.observation-time-implausible` | `events`, `eventstore` |
 | Processing admission | Select enabled workflows with an active version and scope `all`, the matching Network, or one of the matched Units. Insert one `processing_candidates` row per selected workflow and set `processing_status` to `pending`, or to `none` when no workflow is selected. | `ingeststore.admitProcessing` |
@@ -109,7 +109,7 @@ Creating, updating or deleting a rule, deleting a Unit, or changing a suppressio
 
 1. It claims the oldest due scope with a lease and fencing token (`assignmentstore.ClaimCorrection`).
 2. It reads affected transmissions in batches of 100, ordered by `(accepted_at, id)` up to a high-water mark, plus any dirty transmissions. Each batch runs `MatchTargets` again at the original observation time.
-3. `ApplyCorrectionBatch` updates changed target resolutions and rebuilds the Message's contributions and supports. Suppressed targets are excluded. Each change emits `assignment.changed` (reason `corrected`).
+3. `ApplyCorrectionBatch` updates changed target resolutions and rebuilds the Message's `message_units` rows. Suppressed targets are excluded. Each change emits `assignment.changed` (reason `corrected`).
 4. In the same batch transaction, the runner re-admits processing for every transmission whose resolution changed (`ProcessingSourceOwner.ReadmitProcessing`): candidates bound to the old assignment context are superseded, a candidate is admitted for every currently selected workflow and the transmission's processing status becomes `pending`. Unchanged transmissions keep their candidates and status.
 5. On failure, the scope is rescheduled with backoff and a failure code. It can be retried through `POST /api/v1/assignment-corrections/{id}/retry`.
 
@@ -184,7 +184,7 @@ The layering rules that the code follows:
 | `internal/persistence/ent/identitystore` | Accounts, credentials, grants, field permissions, login attempts, audit, access revision |
 | `internal/persistence/ent/unitstore` | Units, collections, Organizations, templates |
 | `internal/persistence/ent/assignmentstore` | Address rules, assignment revision, pending scopes, suppressions, correction worker queries |
-| `internal/persistence/ent/ingeststore` | Gateways, Networks, credentials, transmission intake, grouping, contributions, processing admission. `ProcessingSourceOwner` provides the source, reconciliation and publication readiness. Uses SQL directly through `postgres.Executor`. |
+| `internal/persistence/ent/ingeststore` | Gateways, Networks, credentials, transmission intake, grouping, the message_units cache, processing admission. `ProcessingSourceOwner` provides the source, reconciliation and publication readiness. Uses SQL directly through `postgres.Executor`. |
 | `internal/persistence/ent/processingstore` | Workflows, versions, scope references, instances, candidates, results, publication items |
 | `internal/persistence/ent/commandstore` | Command receipt persistence |
 | `internal/persistence/ent/eventstore` | Appends domain events and their outbox references |
@@ -210,10 +210,9 @@ erDiagram
     UNIT |o--o{ TRANSMISSION_TARGET : "resolved Unit"
     NETWORK ||--o{ ADDRESS_RULE : scopes
     UNIT ||--o{ ADDRESS_RULE : targets
-    MESSAGE ||--o{ MESSAGE_CONTRIBUTION : summarizes
-    UNIT |o--o{ MESSAGE_CONTRIBUTION : "per Unit"
-    MESSAGE_CONTRIBUTION ||--|{ CONTRIBUTION_SUPPORT : "supported by"
-    TRANSMISSION ||--o{ CONTRIBUTION_SUPPORT : evidence
+    MESSAGE ||--o{ MESSAGE_UNIT : "cache row per Unit or Network Agency"
+    UNIT |o--o{ MESSAGE_UNIT : "per Unit"
+    AGENCY ||--o{ MESSAGE_UNIT : "owning Agency"
     TRANSMISSION ||--o{ TARGET_SUPPRESSION : "hides target"
     PENDING_ASSIGNMENT_SCOPE ||--o{ CORRECTION_DIRTY_TRANSMISSION : tracks
     TRANSMISSION ||--o{ CORRECTION_DIRTY_TRANSMISSION : ""
@@ -273,11 +272,10 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 | Transmission | `transmissions` | Immutable record that one gateway observed one emission: payload, ordered targets, observation and acceptance time, resolved Network, quality metrics, incomplete flag |
 | Payload / payload form | `protocols.TransmissionPayload` | Submitted content in a closed per-protocol form (`text`, `numeric`, `tone-only`, `binary`, `flex-short-signal`, `zvei-signal`, `eas-header`) |
 | Payload identity | `protocols.PayloadIdentity` | Normalized form, subtype and value used only to compare transmissions for grouping |
-| Transmission target | `transmission_targets` | One original address/function at a position, with its current resolution status, Unit, matched rule and assignment revision |
+| Transmission target | `transmission_targets` | One original address/function at a position, with typed address columns for indexed lookups and its current resolution status, Unit, matched rule and assignment revision |
 | Message | `messages` | Group of transmissions with equal payload identity within the grouping window. Has first/last observation time. |
 | Grouping window | `grouping_control.window_seconds` | Maximum observation-time distance for joining an existing Message. `0` disables grouping. |
-| Message contribution | `message_contributions` | Derived per-Message, per-Unit read row (or Unit-less for targetless input) with contribution time and age anchor |
-| Contribution support | `contribution_supports` | Link from a contribution to the transmission/target position that supports it |
+| Message unit (cache) | `message_units` | Rebuildable per-Message, per-Unit row (or Unit-less per Network Agency for targetless input) with the Unit's Agency, first observation, age anchor and correction status; feeds and authorization predicates read it directly. A target's support is derivable from `transmission_targets` and Message membership, so no support table exists. |
 | Unit | `units` | Logical recipient that addresses resolve to. Optional Organization, settings, collection membership. Deletion is soft (`deleted`). |
 | Organization | `organizations` | Container of Units and templates that supplies inherited setting defaults |
 | Unit collection | `unit_collections` | Named set of Units used as an authorization scope |
@@ -286,7 +284,7 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 | Address rule | `address_rules`, `assignments.Rule` | Mutable rule mapping a selector (address value or range, function set/mode) on a Network and protocol to a Unit, with optional `valid_from`/`valid_until` |
 | Assignment | `assignments.Resolution` | Result of resolving one target against current rules at its observation time: `assigned` or `unassigned` |
 | Assignment revision | `assignment_control.revision` | Global counter incremented by every rule, Unit or suppression change. Stamped on targets and candidates. |
-| Suppression | `target_suppressions` | Active marker that excludes one transmission target from contributions |
+| Suppression | `target_suppressions` | Active marker that excludes one transmission target from the `message_units` cache |
 | Correction (pending scope) | `assignment_pending_scopes` | Durable rematch work for one assignment revision and affected Networks/Unit, with lease, cursor, attempts and failure code |
 | Principal / Account | `identity_accounts` | Internal identity of kind `human`, `technical` or `guest`. Grants and credentials attach to it. |
 | User group | `identity_user_groups` | Set of accounts used as a grant subject |

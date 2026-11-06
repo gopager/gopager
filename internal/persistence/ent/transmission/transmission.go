@@ -28,8 +28,6 @@ const (
 	FieldProtocol = "protocol"
 	// FieldPayload holds the string denoting the payload field in the database.
 	FieldPayload = "payload"
-	// FieldTargets holds the string denoting the targets field in the database.
-	FieldTargets = "targets"
 	// FieldObservedAt holds the string denoting the observed_at field in the database.
 	FieldObservedAt = "observed_at"
 	// FieldObservationOffsetSeconds holds the string denoting the observation_offset_seconds field in the database.
@@ -60,7 +58,6 @@ var Columns = []string{
 	FieldNetworkResolution,
 	FieldProtocol,
 	FieldPayload,
-	FieldTargets,
 	FieldObservedAt,
 	FieldObservationOffsetSeconds,
 	FieldAcceptedAt,

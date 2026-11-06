@@ -14,7 +14,6 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/auditrecord"
 	"github.com/gopager/gopager/internal/persistence/ent/commandreceipt"
 	"github.com/gopager/gopager/internal/persistence/ent/consumeroffset"
-	"github.com/gopager/gopager/internal/persistence/ent/contributionsupport"
 	"github.com/gopager/gopager/internal/persistence/ent/correctiondirtytransmission"
 	"github.com/gopager/gopager/internal/persistence/ent/credential"
 	"github.com/gopager/gopager/internal/persistence/ent/domainevent"
@@ -28,7 +27,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/loginattempt"
 	"github.com/gopager/gopager/internal/persistence/ent/membership"
 	"github.com/gopager/gopager/internal/persistence/ent/message"
-	"github.com/gopager/gopager/internal/persistence/ent/messagecontribution"
+	"github.com/gopager/gopager/internal/persistence/ent/messageunit"
 	"github.com/gopager/gopager/internal/persistence/ent/network"
 	"github.com/gopager/gopager/internal/persistence/ent/organization"
 	"github.com/gopager/gopager/internal/persistence/ent/pendingassignmentscope"
@@ -246,21 +245,6 @@ func init() {
 	consumeroffsetDescLastSeq := consumeroffsetFields[1].Descriptor()
 	// consumeroffset.LastSeqValidator is a validator for the "last_seq" field. It is called by the builders before save.
 	consumeroffset.LastSeqValidator = consumeroffsetDescLastSeq.Validators[0].(func(int64) error)
-	contributionsupport.Policy = privacy.NewPolicies(schema.ContributionSupport{})
-	contributionsupport.Hooks[0] = func(next ent.Mutator) ent.Mutator {
-		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-			if err := contributionsupport.Policy.EvalMutation(ctx, m); err != nil {
-				return nil, err
-			}
-			return next.Mutate(ctx, m)
-		})
-	}
-	contributionsupportFields := schema.ContributionSupport{}.Fields()
-	_ = contributionsupportFields
-	// contributionsupportDescTargetPosition is the schema descriptor for target_position field.
-	contributionsupportDescTargetPosition := contributionsupportFields[3].Descriptor()
-	// contributionsupport.TargetPositionValidator is a validator for the "target_position" field. It is called by the builders before save.
-	contributionsupport.TargetPositionValidator = contributionsupportDescTargetPosition.Validators[0].(func(int) error)
 	correctiondirtytransmission.Policy = privacy.NewPolicies(schema.CorrectionDirtyTransmission{})
 	correctiondirtytransmission.Hooks[0] = func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
@@ -534,15 +518,21 @@ func init() {
 	messageDescIdentitySubtype := messageFields[3].Descriptor()
 	// message.DefaultIdentitySubtype holds the default value on creation for the identity_subtype field.
 	message.DefaultIdentitySubtype = messageDescIdentitySubtype.Default.(string)
-	messagecontribution.Policy = privacy.NewPolicies(schema.MessageContribution{})
-	messagecontribution.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+	messageunit.Policy = privacy.NewPolicies(schema.MessageUnit{})
+	messageunit.Hooks[0] = func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-			if err := messagecontribution.Policy.EvalMutation(ctx, m); err != nil {
+			if err := messageunit.Policy.EvalMutation(ctx, m); err != nil {
 				return nil, err
 			}
 			return next.Mutate(ctx, m)
 		})
 	}
+	messageunitFields := schema.MessageUnit{}.Fields()
+	_ = messageunitFields
+	// messageunitDescID is the schema descriptor for id field.
+	messageunitDescID := messageunitFields[0].Descriptor()
+	// messageunit.DefaultID holds the default value on creation for the id field.
+	messageunit.DefaultID = messageunitDescID.Default.(func() uuid.UUID)
 	network.Policy = privacy.NewPolicies(schema.Network{})
 	network.Hooks[0] = func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
@@ -845,11 +835,11 @@ func init() {
 	// transmission.NetworkResolutionValidator is a validator for the "network_resolution" field. It is called by the builders before save.
 	transmission.NetworkResolutionValidator = transmissionDescNetworkResolution.Validators[0].(func(string) error)
 	// transmissionDescSourceRevision is the schema descriptor for source_revision field.
-	transmissionDescSourceRevision := transmissionFields[12].Descriptor()
+	transmissionDescSourceRevision := transmissionFields[11].Descriptor()
 	// transmission.SourceRevisionValidator is a validator for the "source_revision" field. It is called by the builders before save.
 	transmission.SourceRevisionValidator = transmissionDescSourceRevision.Validators[0].(func(int64) error)
 	// transmissionDescIncomplete is the schema descriptor for incomplete field.
-	transmissionDescIncomplete := transmissionFields[13].Descriptor()
+	transmissionDescIncomplete := transmissionFields[12].Descriptor()
 	// transmission.DefaultIncomplete holds the default value on creation for the incomplete field.
 	transmission.DefaultIncomplete = transmissionDescIncomplete.Default.(bool)
 	transmissiontarget.Policy = privacy.NewPolicies(schema.TransmissionTarget{})

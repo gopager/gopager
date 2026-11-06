@@ -127,6 +127,8 @@ Lease loss/restart permits reclaim after expiry with a higher Fencing token. Int
 
 ### Contribution and publication invariants
 
+**Superseded under [D-135](../authoritative-plan.md#foundation-redesign-after-the-2026-11-06-re-evaluation) (2026-11-06):** the stored read model is the `message_units` cache, one row per Message and Unit carrying the Unit's Agency, the earliest observation and the age anchor, plus one Unit-less row per Message and Network Agency for targetless Transmissions. Intake upserts it with `LEAST` times; a correction batch rebuilds the rows of each affected Message from its current, unsuppressed assigned targets. A target's support is the target itself (`transmission_targets` plus Message membership), so no support table and no support movement exist; `assignment.changed` is still emitted only for an actual resolution transition. Historical text:
+
 For each Message, rebuild contributions and supports from all current, unsuppressed original target evidence. A support belongs to one original target and at most one current contribution; targetless support remains Transmission-only. Contribution time and age anchor are recomputed from surviving supports using the existing C-05/C-07 rules. Remove contributions with no valid support. Emit `assignment.changed` only for an actual target-resolution transition and `suppression.changed` for suppression state; support-only movement is not a fabricated Assignment. Correction publication is fenced by current Assignment/Suppression and C-11 source revisions. No exact replay of previous derived state is promised.
 
 ### Post-correction publication re-entry

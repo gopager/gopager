@@ -331,7 +331,7 @@ func TestTransmissionGroupingMergeRollbackAndOffsetPersistence(t *testing.T) {
 			WHERE processing_status='none'`).Scan(&unprocessedTransmissions); err != nil {
 			return err
 		}
-		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM message_contributions`).Scan(&contributions); err != nil {
+		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM message_units`).Scan(&contributions); err != nil {
 			return err
 		}
 		return executor.QueryRowContext(tx.Context(), `SELECT observation_offset_seconds FROM transmissions
@@ -401,7 +401,7 @@ func TestTransmissionGroupingMergeRollbackAndOffsetPersistence(t *testing.T) {
 		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM domain_events`).Scan(&afterEvents); err != nil {
 			return err
 		}
-		return executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM message_contributions`).Scan(&afterContributions)
+		return executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM message_units`).Scan(&afterContributions)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -421,7 +421,7 @@ func TestTransmissionAcceptanceRollsBackAtEachParticipant(t *testing.T) {
 		{"original and receipt", "transmissions", "BEFORE", false},
 		{"grouping membership", "transmissions", "AFTER", false},
 		{"target resolution", "transmission_targets", "BEFORE", false},
-		{"contribution", "message_contributions", "BEFORE", false},
+		{"message unit cache", "message_units", "BEFORE", false},
 		{"required facts", "domain_events", "BEFORE", false},
 		{"selected Processing work", "processing_candidates", "BEFORE", true},
 	}
@@ -541,7 +541,7 @@ func TestTransmissionAcceptanceRollsBackAtEachParticipant(t *testing.T) {
 					{`SELECT count(*) FROM transmissions`, &transmissions},
 					{`SELECT count(*) FROM messages`, &messages},
 					{`SELECT count(*) FROM transmission_targets`, &targets},
-					{`SELECT count(*) FROM message_contributions`, &contributions},
+					{`SELECT count(*) FROM message_units`, &contributions},
 					{`SELECT count(*) FROM domain_events`, &domainEvents},
 					{`SELECT count(*) FROM processing_candidates`, &candidates},
 				} {

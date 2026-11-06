@@ -120,18 +120,6 @@ func (_u *TransmissionUpdate) AppendPayload(v json.RawMessage) *TransmissionUpda
 	return _u
 }
 
-// SetTargets sets the "targets" field.
-func (_u *TransmissionUpdate) SetTargets(v json.RawMessage) *TransmissionUpdate {
-	_u.mutation.SetTargets(v)
-	return _u
-}
-
-// AppendTargets appends value to the "targets" field.
-func (_u *TransmissionUpdate) AppendTargets(v json.RawMessage) *TransmissionUpdate {
-	_u.mutation.AppendTargets(v)
-	return _u
-}
-
 // SetObservedAt sets the "observed_at" field.
 func (_u *TransmissionUpdate) SetObservedAt(v time.Time) *TransmissionUpdate {
 	_u.mutation.SetObservedAt(v)
@@ -368,14 +356,6 @@ func (_u *TransmissionUpdate) sqlSave(ctx context.Context) (_node int, err error
 			sqljson.Append(u, transmission.FieldPayload, value)
 		})
 	}
-	if value, ok := _u.mutation.Targets(); ok {
-		_spec.SetField(transmission.FieldTargets, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.AppendedTargets(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, transmission.FieldTargets, value)
-		})
-	}
 	if value, ok := _u.mutation.ObservedAt(); ok {
 		_spec.SetField(transmission.FieldObservedAt, field.TypeTime, value)
 	}
@@ -521,18 +501,6 @@ func (_u *TransmissionUpdateOne) SetPayload(v json.RawMessage) *TransmissionUpda
 // AppendPayload appends value to the "payload" field.
 func (_u *TransmissionUpdateOne) AppendPayload(v json.RawMessage) *TransmissionUpdateOne {
 	_u.mutation.AppendPayload(v)
-	return _u
-}
-
-// SetTargets sets the "targets" field.
-func (_u *TransmissionUpdateOne) SetTargets(v json.RawMessage) *TransmissionUpdateOne {
-	_u.mutation.SetTargets(v)
-	return _u
-}
-
-// AppendTargets appends value to the "targets" field.
-func (_u *TransmissionUpdateOne) AppendTargets(v json.RawMessage) *TransmissionUpdateOne {
-	_u.mutation.AppendTargets(v)
 	return _u
 }
 
@@ -800,14 +768,6 @@ func (_u *TransmissionUpdateOne) sqlSave(ctx context.Context) (_node *Transmissi
 	if value, ok := _u.mutation.AppendedPayload(); ok {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, transmission.FieldPayload, value)
-		})
-	}
-	if value, ok := _u.mutation.Targets(); ok {
-		_spec.SetField(transmission.FieldTargets, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.AppendedTargets(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, transmission.FieldTargets, value)
 		})
 	}
 	if value, ok := _u.mutation.ObservedAt(); ok {

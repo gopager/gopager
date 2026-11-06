@@ -279,30 +279,6 @@ func (f ConsumerOffsetMutationRuleFunc) EvalMutation(ctx context.Context, m ent.
 	return Denyf("ent/privacy: unexpected mutation type %T, expect *ent.ConsumerOffsetMutation", m)
 }
 
-// The ContributionSupportQueryRuleFunc type is an adapter to allow the use of ordinary
-// functions as a query rule.
-type ContributionSupportQueryRuleFunc func(context.Context, *ent.ContributionSupportQuery) error
-
-// EvalQuery return f(ctx, q).
-func (f ContributionSupportQueryRuleFunc) EvalQuery(ctx context.Context, q ent.Query) error {
-	if q, ok := q.(*ent.ContributionSupportQuery); ok {
-		return f(ctx, q)
-	}
-	return Denyf("ent/privacy: unexpected query type %T, expect *ent.ContributionSupportQuery", q)
-}
-
-// The ContributionSupportMutationRuleFunc type is an adapter to allow the use of ordinary
-// functions as a mutation rule.
-type ContributionSupportMutationRuleFunc func(context.Context, *ent.ContributionSupportMutation) error
-
-// EvalMutation calls f(ctx, m).
-func (f ContributionSupportMutationRuleFunc) EvalMutation(ctx context.Context, m ent.Mutation) error {
-	if m, ok := m.(*ent.ContributionSupportMutation); ok {
-		return f(ctx, m)
-	}
-	return Denyf("ent/privacy: unexpected mutation type %T, expect *ent.ContributionSupportMutation", m)
-}
-
 // The CorrectionDirtyTransmissionQueryRuleFunc type is an adapter to allow the use of ordinary
 // functions as a query rule.
 type CorrectionDirtyTransmissionQueryRuleFunc func(context.Context, *ent.CorrectionDirtyTransmissionQuery) error
@@ -615,28 +591,28 @@ func (f MessageMutationRuleFunc) EvalMutation(ctx context.Context, m ent.Mutatio
 	return Denyf("ent/privacy: unexpected mutation type %T, expect *ent.MessageMutation", m)
 }
 
-// The MessageContributionQueryRuleFunc type is an adapter to allow the use of ordinary
+// The MessageUnitQueryRuleFunc type is an adapter to allow the use of ordinary
 // functions as a query rule.
-type MessageContributionQueryRuleFunc func(context.Context, *ent.MessageContributionQuery) error
+type MessageUnitQueryRuleFunc func(context.Context, *ent.MessageUnitQuery) error
 
 // EvalQuery return f(ctx, q).
-func (f MessageContributionQueryRuleFunc) EvalQuery(ctx context.Context, q ent.Query) error {
-	if q, ok := q.(*ent.MessageContributionQuery); ok {
+func (f MessageUnitQueryRuleFunc) EvalQuery(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.MessageUnitQuery); ok {
 		return f(ctx, q)
 	}
-	return Denyf("ent/privacy: unexpected query type %T, expect *ent.MessageContributionQuery", q)
+	return Denyf("ent/privacy: unexpected query type %T, expect *ent.MessageUnitQuery", q)
 }
 
-// The MessageContributionMutationRuleFunc type is an adapter to allow the use of ordinary
+// The MessageUnitMutationRuleFunc type is an adapter to allow the use of ordinary
 // functions as a mutation rule.
-type MessageContributionMutationRuleFunc func(context.Context, *ent.MessageContributionMutation) error
+type MessageUnitMutationRuleFunc func(context.Context, *ent.MessageUnitMutation) error
 
 // EvalMutation calls f(ctx, m).
-func (f MessageContributionMutationRuleFunc) EvalMutation(ctx context.Context, m ent.Mutation) error {
-	if m, ok := m.(*ent.MessageContributionMutation); ok {
+func (f MessageUnitMutationRuleFunc) EvalMutation(ctx context.Context, m ent.Mutation) error {
+	if m, ok := m.(*ent.MessageUnitMutation); ok {
 		return f(ctx, m)
 	}
-	return Denyf("ent/privacy: unexpected mutation type %T, expect *ent.MessageContributionMutation", m)
+	return Denyf("ent/privacy: unexpected mutation type %T, expect *ent.MessageUnitMutation", m)
 }
 
 // The NetworkQueryRuleFunc type is an adapter to allow the use of ordinary
@@ -1120,8 +1096,6 @@ func queryFilter(q ent.Query) (Filter, error) {
 		return q.Filter(), nil
 	case *ent.ConsumerOffsetQuery:
 		return q.Filter(), nil
-	case *ent.ContributionSupportQuery:
-		return q.Filter(), nil
 	case *ent.CorrectionDirtyTransmissionQuery:
 		return q.Filter(), nil
 	case *ent.CredentialQuery:
@@ -1148,7 +1122,7 @@ func queryFilter(q ent.Query) (Filter, error) {
 		return q.Filter(), nil
 	case *ent.MessageQuery:
 		return q.Filter(), nil
-	case *ent.MessageContributionQuery:
+	case *ent.MessageUnitQuery:
 		return q.Filter(), nil
 	case *ent.NetworkQuery:
 		return q.Filter(), nil
@@ -1207,8 +1181,6 @@ func mutationFilter(m ent.Mutation) (Filter, error) {
 		return m.Filter(), nil
 	case *ent.ConsumerOffsetMutation:
 		return m.Filter(), nil
-	case *ent.ContributionSupportMutation:
-		return m.Filter(), nil
 	case *ent.CorrectionDirtyTransmissionMutation:
 		return m.Filter(), nil
 	case *ent.CredentialMutation:
@@ -1235,7 +1207,7 @@ func mutationFilter(m ent.Mutation) (Filter, error) {
 		return m.Filter(), nil
 	case *ent.MessageMutation:
 		return m.Filter(), nil
-	case *ent.MessageContributionMutation:
+	case *ent.MessageUnitMutation:
 		return m.Filter(), nil
 	case *ent.NetworkMutation:
 		return m.Filter(), nil

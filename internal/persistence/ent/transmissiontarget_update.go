@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -153,6 +154,136 @@ func (_u *TransmissionTargetUpdate) AddAssignmentRevision(v int64) *Transmission
 	return _u
 }
 
+// SetNetworkID sets the "network_id" field.
+func (_u *TransmissionTargetUpdate) SetNetworkID(v uuid.UUID) *TransmissionTargetUpdate {
+	_u.mutation.SetNetworkID(v)
+	return _u
+}
+
+// SetNillableNetworkID sets the "network_id" field if the given value is not nil.
+func (_u *TransmissionTargetUpdate) SetNillableNetworkID(v *uuid.UUID) *TransmissionTargetUpdate {
+	if v != nil {
+		_u.SetNetworkID(*v)
+	}
+	return _u
+}
+
+// SetProtocol sets the "protocol" field.
+func (_u *TransmissionTargetUpdate) SetProtocol(v transmissiontarget.Protocol) *TransmissionTargetUpdate {
+	_u.mutation.SetProtocol(v)
+	return _u
+}
+
+// SetNillableProtocol sets the "protocol" field if the given value is not nil.
+func (_u *TransmissionTargetUpdate) SetNillableProtocol(v *transmissiontarget.Protocol) *TransmissionTargetUpdate {
+	if v != nil {
+		_u.SetProtocol(*v)
+	}
+	return _u
+}
+
+// SetObservedAt sets the "observed_at" field.
+func (_u *TransmissionTargetUpdate) SetObservedAt(v time.Time) *TransmissionTargetUpdate {
+	_u.mutation.SetObservedAt(v)
+	return _u
+}
+
+// SetNillableObservedAt sets the "observed_at" field if the given value is not nil.
+func (_u *TransmissionTargetUpdate) SetNillableObservedAt(v *time.Time) *TransmissionTargetUpdate {
+	if v != nil {
+		_u.SetObservedAt(*v)
+	}
+	return _u
+}
+
+// SetAcceptedAt sets the "accepted_at" field.
+func (_u *TransmissionTargetUpdate) SetAcceptedAt(v time.Time) *TransmissionTargetUpdate {
+	_u.mutation.SetAcceptedAt(v)
+	return _u
+}
+
+// SetNillableAcceptedAt sets the "accepted_at" field if the given value is not nil.
+func (_u *TransmissionTargetUpdate) SetNillableAcceptedAt(v *time.Time) *TransmissionTargetUpdate {
+	if v != nil {
+		_u.SetAcceptedAt(*v)
+	}
+	return _u
+}
+
+// SetAddressNumber sets the "address_number" field.
+func (_u *TransmissionTargetUpdate) SetAddressNumber(v int64) *TransmissionTargetUpdate {
+	_u.mutation.ResetAddressNumber()
+	_u.mutation.SetAddressNumber(v)
+	return _u
+}
+
+// SetNillableAddressNumber sets the "address_number" field if the given value is not nil.
+func (_u *TransmissionTargetUpdate) SetNillableAddressNumber(v *int64) *TransmissionTargetUpdate {
+	if v != nil {
+		_u.SetAddressNumber(*v)
+	}
+	return _u
+}
+
+// AddAddressNumber adds value to the "address_number" field.
+func (_u *TransmissionTargetUpdate) AddAddressNumber(v int64) *TransmissionTargetUpdate {
+	_u.mutation.AddAddressNumber(v)
+	return _u
+}
+
+// ClearAddressNumber clears the value of the "address_number" field.
+func (_u *TransmissionTargetUpdate) ClearAddressNumber() *TransmissionTargetUpdate {
+	_u.mutation.ClearAddressNumber()
+	return _u
+}
+
+// SetAddressText sets the "address_text" field.
+func (_u *TransmissionTargetUpdate) SetAddressText(v string) *TransmissionTargetUpdate {
+	_u.mutation.SetAddressText(v)
+	return _u
+}
+
+// SetNillableAddressText sets the "address_text" field if the given value is not nil.
+func (_u *TransmissionTargetUpdate) SetNillableAddressText(v *string) *TransmissionTargetUpdate {
+	if v != nil {
+		_u.SetAddressText(*v)
+	}
+	return _u
+}
+
+// ClearAddressText clears the value of the "address_text" field.
+func (_u *TransmissionTargetUpdate) ClearAddressText() *TransmissionTargetUpdate {
+	_u.mutation.ClearAddressText()
+	return _u
+}
+
+// SetFunction sets the "function" field.
+func (_u *TransmissionTargetUpdate) SetFunction(v int16) *TransmissionTargetUpdate {
+	_u.mutation.ResetFunction()
+	_u.mutation.SetFunction(v)
+	return _u
+}
+
+// SetNillableFunction sets the "function" field if the given value is not nil.
+func (_u *TransmissionTargetUpdate) SetNillableFunction(v *int16) *TransmissionTargetUpdate {
+	if v != nil {
+		_u.SetFunction(*v)
+	}
+	return _u
+}
+
+// AddFunction adds value to the "function" field.
+func (_u *TransmissionTargetUpdate) AddFunction(v int16) *TransmissionTargetUpdate {
+	_u.mutation.AddFunction(v)
+	return _u
+}
+
+// ClearFunction clears the value of the "function" field.
+func (_u *TransmissionTargetUpdate) ClearFunction() *TransmissionTargetUpdate {
+	_u.mutation.ClearFunction()
+	return _u
+}
+
 // Mutation returns the TransmissionTargetMutation object of the builder.
 func (_u *TransmissionTargetUpdate) Mutation() *TransmissionTargetMutation {
 	return _u.mutation
@@ -200,6 +331,11 @@ func (_u *TransmissionTargetUpdate) check() error {
 	if v, ok := _u.mutation.AssignmentRevision(); ok {
 		if err := transmissiontarget.AssignmentRevisionValidator(v); err != nil {
 			return &ValidationError{Name: "assignment_revision", err: fmt.Errorf(`ent: validator failed for field "TransmissionTarget.assignment_revision": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Protocol(); ok {
+		if err := transmissiontarget.ProtocolValidator(v); err != nil {
+			return &ValidationError{Name: "protocol", err: fmt.Errorf(`ent: validator failed for field "TransmissionTarget.protocol": %w`, err)}
 		}
 	}
 	return nil
@@ -260,6 +396,42 @@ func (_u *TransmissionTargetUpdate) sqlSave(ctx context.Context) (_node int, err
 	}
 	if value, ok := _u.mutation.AddedAssignmentRevision(); ok {
 		_spec.AddField(transmissiontarget.FieldAssignmentRevision, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.NetworkID(); ok {
+		_spec.SetField(transmissiontarget.FieldNetworkID, field.TypeUUID, value)
+	}
+	if value, ok := _u.mutation.Protocol(); ok {
+		_spec.SetField(transmissiontarget.FieldProtocol, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.ObservedAt(); ok {
+		_spec.SetField(transmissiontarget.FieldObservedAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.AcceptedAt(); ok {
+		_spec.SetField(transmissiontarget.FieldAcceptedAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.AddressNumber(); ok {
+		_spec.SetField(transmissiontarget.FieldAddressNumber, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedAddressNumber(); ok {
+		_spec.AddField(transmissiontarget.FieldAddressNumber, field.TypeInt64, value)
+	}
+	if _u.mutation.AddressNumberCleared() {
+		_spec.ClearField(transmissiontarget.FieldAddressNumber, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.AddressText(); ok {
+		_spec.SetField(transmissiontarget.FieldAddressText, field.TypeString, value)
+	}
+	if _u.mutation.AddressTextCleared() {
+		_spec.ClearField(transmissiontarget.FieldAddressText, field.TypeString)
+	}
+	if value, ok := _u.mutation.Function(); ok {
+		_spec.SetField(transmissiontarget.FieldFunction, field.TypeInt16, value)
+	}
+	if value, ok := _u.mutation.AddedFunction(); ok {
+		_spec.AddField(transmissiontarget.FieldFunction, field.TypeInt16, value)
+	}
+	if _u.mutation.FunctionCleared() {
+		_spec.ClearField(transmissiontarget.FieldFunction, field.TypeInt16)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
@@ -405,6 +577,136 @@ func (_u *TransmissionTargetUpdateOne) AddAssignmentRevision(v int64) *Transmiss
 	return _u
 }
 
+// SetNetworkID sets the "network_id" field.
+func (_u *TransmissionTargetUpdateOne) SetNetworkID(v uuid.UUID) *TransmissionTargetUpdateOne {
+	_u.mutation.SetNetworkID(v)
+	return _u
+}
+
+// SetNillableNetworkID sets the "network_id" field if the given value is not nil.
+func (_u *TransmissionTargetUpdateOne) SetNillableNetworkID(v *uuid.UUID) *TransmissionTargetUpdateOne {
+	if v != nil {
+		_u.SetNetworkID(*v)
+	}
+	return _u
+}
+
+// SetProtocol sets the "protocol" field.
+func (_u *TransmissionTargetUpdateOne) SetProtocol(v transmissiontarget.Protocol) *TransmissionTargetUpdateOne {
+	_u.mutation.SetProtocol(v)
+	return _u
+}
+
+// SetNillableProtocol sets the "protocol" field if the given value is not nil.
+func (_u *TransmissionTargetUpdateOne) SetNillableProtocol(v *transmissiontarget.Protocol) *TransmissionTargetUpdateOne {
+	if v != nil {
+		_u.SetProtocol(*v)
+	}
+	return _u
+}
+
+// SetObservedAt sets the "observed_at" field.
+func (_u *TransmissionTargetUpdateOne) SetObservedAt(v time.Time) *TransmissionTargetUpdateOne {
+	_u.mutation.SetObservedAt(v)
+	return _u
+}
+
+// SetNillableObservedAt sets the "observed_at" field if the given value is not nil.
+func (_u *TransmissionTargetUpdateOne) SetNillableObservedAt(v *time.Time) *TransmissionTargetUpdateOne {
+	if v != nil {
+		_u.SetObservedAt(*v)
+	}
+	return _u
+}
+
+// SetAcceptedAt sets the "accepted_at" field.
+func (_u *TransmissionTargetUpdateOne) SetAcceptedAt(v time.Time) *TransmissionTargetUpdateOne {
+	_u.mutation.SetAcceptedAt(v)
+	return _u
+}
+
+// SetNillableAcceptedAt sets the "accepted_at" field if the given value is not nil.
+func (_u *TransmissionTargetUpdateOne) SetNillableAcceptedAt(v *time.Time) *TransmissionTargetUpdateOne {
+	if v != nil {
+		_u.SetAcceptedAt(*v)
+	}
+	return _u
+}
+
+// SetAddressNumber sets the "address_number" field.
+func (_u *TransmissionTargetUpdateOne) SetAddressNumber(v int64) *TransmissionTargetUpdateOne {
+	_u.mutation.ResetAddressNumber()
+	_u.mutation.SetAddressNumber(v)
+	return _u
+}
+
+// SetNillableAddressNumber sets the "address_number" field if the given value is not nil.
+func (_u *TransmissionTargetUpdateOne) SetNillableAddressNumber(v *int64) *TransmissionTargetUpdateOne {
+	if v != nil {
+		_u.SetAddressNumber(*v)
+	}
+	return _u
+}
+
+// AddAddressNumber adds value to the "address_number" field.
+func (_u *TransmissionTargetUpdateOne) AddAddressNumber(v int64) *TransmissionTargetUpdateOne {
+	_u.mutation.AddAddressNumber(v)
+	return _u
+}
+
+// ClearAddressNumber clears the value of the "address_number" field.
+func (_u *TransmissionTargetUpdateOne) ClearAddressNumber() *TransmissionTargetUpdateOne {
+	_u.mutation.ClearAddressNumber()
+	return _u
+}
+
+// SetAddressText sets the "address_text" field.
+func (_u *TransmissionTargetUpdateOne) SetAddressText(v string) *TransmissionTargetUpdateOne {
+	_u.mutation.SetAddressText(v)
+	return _u
+}
+
+// SetNillableAddressText sets the "address_text" field if the given value is not nil.
+func (_u *TransmissionTargetUpdateOne) SetNillableAddressText(v *string) *TransmissionTargetUpdateOne {
+	if v != nil {
+		_u.SetAddressText(*v)
+	}
+	return _u
+}
+
+// ClearAddressText clears the value of the "address_text" field.
+func (_u *TransmissionTargetUpdateOne) ClearAddressText() *TransmissionTargetUpdateOne {
+	_u.mutation.ClearAddressText()
+	return _u
+}
+
+// SetFunction sets the "function" field.
+func (_u *TransmissionTargetUpdateOne) SetFunction(v int16) *TransmissionTargetUpdateOne {
+	_u.mutation.ResetFunction()
+	_u.mutation.SetFunction(v)
+	return _u
+}
+
+// SetNillableFunction sets the "function" field if the given value is not nil.
+func (_u *TransmissionTargetUpdateOne) SetNillableFunction(v *int16) *TransmissionTargetUpdateOne {
+	if v != nil {
+		_u.SetFunction(*v)
+	}
+	return _u
+}
+
+// AddFunction adds value to the "function" field.
+func (_u *TransmissionTargetUpdateOne) AddFunction(v int16) *TransmissionTargetUpdateOne {
+	_u.mutation.AddFunction(v)
+	return _u
+}
+
+// ClearFunction clears the value of the "function" field.
+func (_u *TransmissionTargetUpdateOne) ClearFunction() *TransmissionTargetUpdateOne {
+	_u.mutation.ClearFunction()
+	return _u
+}
+
 // Mutation returns the TransmissionTargetMutation object of the builder.
 func (_u *TransmissionTargetUpdateOne) Mutation() *TransmissionTargetMutation {
 	return _u.mutation
@@ -465,6 +767,11 @@ func (_u *TransmissionTargetUpdateOne) check() error {
 	if v, ok := _u.mutation.AssignmentRevision(); ok {
 		if err := transmissiontarget.AssignmentRevisionValidator(v); err != nil {
 			return &ValidationError{Name: "assignment_revision", err: fmt.Errorf(`ent: validator failed for field "TransmissionTarget.assignment_revision": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Protocol(); ok {
+		if err := transmissiontarget.ProtocolValidator(v); err != nil {
+			return &ValidationError{Name: "protocol", err: fmt.Errorf(`ent: validator failed for field "TransmissionTarget.protocol": %w`, err)}
 		}
 	}
 	return nil
@@ -542,6 +849,42 @@ func (_u *TransmissionTargetUpdateOne) sqlSave(ctx context.Context) (_node *Tran
 	}
 	if value, ok := _u.mutation.AddedAssignmentRevision(); ok {
 		_spec.AddField(transmissiontarget.FieldAssignmentRevision, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.NetworkID(); ok {
+		_spec.SetField(transmissiontarget.FieldNetworkID, field.TypeUUID, value)
+	}
+	if value, ok := _u.mutation.Protocol(); ok {
+		_spec.SetField(transmissiontarget.FieldProtocol, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.ObservedAt(); ok {
+		_spec.SetField(transmissiontarget.FieldObservedAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.AcceptedAt(); ok {
+		_spec.SetField(transmissiontarget.FieldAcceptedAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.AddressNumber(); ok {
+		_spec.SetField(transmissiontarget.FieldAddressNumber, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedAddressNumber(); ok {
+		_spec.AddField(transmissiontarget.FieldAddressNumber, field.TypeInt64, value)
+	}
+	if _u.mutation.AddressNumberCleared() {
+		_spec.ClearField(transmissiontarget.FieldAddressNumber, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.AddressText(); ok {
+		_spec.SetField(transmissiontarget.FieldAddressText, field.TypeString, value)
+	}
+	if _u.mutation.AddressTextCleared() {
+		_spec.ClearField(transmissiontarget.FieldAddressText, field.TypeString)
+	}
+	if value, ok := _u.mutation.Function(); ok {
+		_spec.SetField(transmissiontarget.FieldFunction, field.TypeInt16, value)
+	}
+	if value, ok := _u.mutation.AddedFunction(); ok {
+		_spec.AddField(transmissiontarget.FieldFunction, field.TypeInt16, value)
+	}
+	if _u.mutation.FunctionCleared() {
+		_spec.ClearField(transmissiontarget.FieldFunction, field.TypeInt16)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	_node = &TransmissionTarget{config: _u.config}

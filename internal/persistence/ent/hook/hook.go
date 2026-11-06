@@ -93,18 +93,6 @@ func (f ConsumerOffsetFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Val
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ConsumerOffsetMutation", m)
 }
 
-// The ContributionSupportFunc type is an adapter to allow the use of ordinary
-// function as ContributionSupport mutator.
-type ContributionSupportFunc func(context.Context, *ent.ContributionSupportMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f ContributionSupportFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.ContributionSupportMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ContributionSupportMutation", m)
-}
-
 // The CorrectionDirtyTransmissionFunc type is an adapter to allow the use of ordinary
 // function as CorrectionDirtyTransmission mutator.
 type CorrectionDirtyTransmissionFunc func(context.Context, *ent.CorrectionDirtyTransmissionMutation) (ent.Value, error)
@@ -261,16 +249,16 @@ func (f MessageFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, err
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MessageMutation", m)
 }
 
-// The MessageContributionFunc type is an adapter to allow the use of ordinary
-// function as MessageContribution mutator.
-type MessageContributionFunc func(context.Context, *ent.MessageContributionMutation) (ent.Value, error)
+// The MessageUnitFunc type is an adapter to allow the use of ordinary
+// function as MessageUnit mutator.
+type MessageUnitFunc func(context.Context, *ent.MessageUnitMutation) (ent.Value, error)
 
 // Mutate calls f(ctx, m).
-func (f MessageContributionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.MessageContributionMutation); ok {
+func (f MessageUnitFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.MessageUnitMutation); ok {
 		return f(ctx, mv)
 	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MessageContributionMutation", m)
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MessageUnitMutation", m)
 }
 
 // The NetworkFunc type is an adapter to allow the use of ordinary

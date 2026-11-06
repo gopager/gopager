@@ -33,8 +33,6 @@ type Transmission struct {
 	Protocol transmission.Protocol `json:"protocol,omitempty"`
 	// Payload holds the value of the "payload" field.
 	Payload json.RawMessage `json:"-"`
-	// Targets holds the value of the "targets" field.
-	Targets json.RawMessage `json:"-"`
 	// ObservedAt holds the value of the "observed_at" field.
 	ObservedAt time.Time `json:"observed_at,omitempty"`
 	// ObservationOffsetSeconds holds the value of the "observation_offset_seconds" field.
@@ -59,7 +57,7 @@ func (*Transmission) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case transmission.FieldSubmissionFingerprint, transmission.FieldPayload, transmission.FieldTargets, transmission.FieldQualityMetrics:
+		case transmission.FieldSubmissionFingerprint, transmission.FieldPayload, transmission.FieldQualityMetrics:
 			values[i] = new([]byte)
 		case transmission.FieldIncomplete:
 			values[i] = new(sql.NullBool)
@@ -134,14 +132,6 @@ func (_m *Transmission) assignValues(columns []string, values []any) error {
 			} else if value != nil && len(*value) > 0 {
 				if err := json.Unmarshal(*value, &_m.Payload); err != nil {
 					return fmt.Errorf("unmarshal field payload: %w", err)
-				}
-			}
-		case transmission.FieldTargets:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field targets", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &_m.Targets); err != nil {
-					return fmt.Errorf("unmarshal field targets: %w", err)
 				}
 			}
 		case transmission.FieldObservedAt:
@@ -248,8 +238,6 @@ func (_m *Transmission) String() string {
 	builder.WriteString(fmt.Sprintf("%v", _m.Protocol))
 	builder.WriteString(", ")
 	builder.WriteString("payload=<sensitive>")
-	builder.WriteString(", ")
-	builder.WriteString("targets=<sensitive>")
 	builder.WriteString(", ")
 	builder.WriteString("observed_at=")
 	builder.WriteString(_m.ObservedAt.Format(time.ANSIC))

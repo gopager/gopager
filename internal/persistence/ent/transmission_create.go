@@ -64,12 +64,6 @@ func (_c *TransmissionCreate) SetPayload(v json.RawMessage) *TransmissionCreate 
 	return _c
 }
 
-// SetTargets sets the "targets" field.
-func (_c *TransmissionCreate) SetTargets(v json.RawMessage) *TransmissionCreate {
-	_c.mutation.SetTargets(v)
-	return _c
-}
-
 // SetObservedAt sets the "observed_at" field.
 func (_c *TransmissionCreate) SetObservedAt(v time.Time) *TransmissionCreate {
 	_c.mutation.SetObservedAt(v)
@@ -226,9 +220,6 @@ func (_c *TransmissionCreate) check() error {
 	if _, ok := _c.mutation.Payload(); !ok {
 		return &ValidationError{Name: "payload", err: errors.New(`ent: missing required field "Transmission.payload"`)}
 	}
-	if _, ok := _c.mutation.Targets(); !ok {
-		return &ValidationError{Name: "targets", err: errors.New(`ent: missing required field "Transmission.targets"`)}
-	}
 	if _, ok := _c.mutation.ObservedAt(); !ok {
 		return &ValidationError{Name: "observed_at", err: errors.New(`ent: missing required field "Transmission.observed_at"`)}
 	}
@@ -322,10 +313,6 @@ func (_c *TransmissionCreate) createSpec() (*Transmission, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.Payload(); ok {
 		_spec.SetField(transmission.FieldPayload, field.TypeJSON, value)
 		_node.Payload = value
-	}
-	if value, ok := _c.mutation.Targets(); ok {
-		_spec.SetField(transmission.FieldTargets, field.TypeJSON, value)
-		_node.Targets = value
 	}
 	if value, ok := _c.mutation.ObservedAt(); ok {
 		_spec.SetField(transmission.FieldObservedAt, field.TypeTime, value)

@@ -769,10 +769,6 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 	if err != nil {
 		t.Fatal(err)
 	}
-	targets, err := json.Marshal([]protocols.Target{target})
-	if err != nil {
-		t.Fatal(err)
-	}
 	observed := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	accepted := observed.Add(time.Second)
 	submission := ingest.Submission{SchemaVersion: 1, SubmissionID: "correction-dirty-intake",
@@ -813,28 +809,23 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO transmissions
-			(id,gateway_id,network_id,submission_id,submission_fingerprint,network_resolution,protocol,payload,targets,
+			(id,gateway_id,network_id,submission_id,submission_fingerprint,network_resolution,protocol,payload,
 			 observed_at,observation_offset_seconds,accepted_at,source_revision,message_id,processing_status)
-			VALUES($1,$2,$3,$4,$5,'declared','pocsag','{}',$6,$7,0,$8,1,$9,'none')`,
-			transmissionID, gatewayID, networkID, uuid.NewString(), make([]byte, 32), string(targets),
+			VALUES($1,$2,$3,$4,$5,'declared','pocsag','{}',$6,0,$7,1,$8,'none')`,
+			transmissionID, gatewayID, networkID, uuid.NewString(), make([]byte, 32),
 			observed, accepted, messageID); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO transmission_targets
-			(transmission_id,position,original,resolution_status,unit_id,matched_rule_id,assignment_revision)
-			VALUES($1,0,$2,'assigned',$3,$4,$5)`,
-			transmissionID, string(original), unitA.ID, rule.ID, assignmentRevision); err != nil {
+			(transmission_id,position,original,resolution_status,unit_id,matched_rule_id,assignment_revision,
+			 network_id,protocol,observed_at,accepted_at,address_number,function)
+			VALUES($1,0,$2,'assigned',$3,$4,$5,$6,'pocsag',$7,$8,10,1)`,
+			transmissionID, string(original), unitA.ID, rule.ID, assignmentRevision, networkID, observed, accepted); err != nil {
 			return err
 		}
-		var contributionID = uuid.New()
-		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO message_contributions
-			(id,message_id,unit_id,contribution_time,age_anchor) VALUES($1,$2,$3,$4,$4)`,
-			contributionID, messageID, unitA.ID, observed); err != nil {
-			return err
-		}
-		_, err = executor.ExecContext(tx.Context(), `INSERT INTO contribution_supports
-			(id,contribution_id,transmission_id,target_position,observed_at,accepted_at)
-			VALUES($1,$2,$3,0,$4,$5)`, uuid.New(), contributionID, transmissionID, observed, accepted)
+		_, err = executor.ExecContext(tx.Context(), `INSERT INTO message_units
+			(message_id,unit_id,agency_id,first_observed_at,age_anchor) VALUES($1,$2,$3,$4,$4)`,
+			messageID, unitA.ID, f.agency, observed)
 		return err
 	})
 	if err != nil {
@@ -1002,21 +993,20 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 			if lateUnitID != wantUnit || !bytes.Equal(lateOriginal, original) {
 				t.Fatalf("r3 did not rebuild the dirty intake target: unit=%s", lateUnitID)
 			}
-			var supports int
-			if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM contribution_supports
-				WHERE transmission_id=$1 AND target_position=0`, transmissionID).Scan(&supports); err != nil {
+			// The Unit's cache row survives while any unsuppressed target supports it; its first
+			// observation moves to the late intake while the historical target is suppressed.
+			var cached int
+			var firstObserved time.Time
+			if err := executor.QueryRowContext(tx.Context(), `SELECT count(*),MIN(first_observed_at) FROM message_units
+				WHERE message_id=$1 AND unit_id=$2`, messageID, wantUnit).Scan(&cached, &firstObserved); err != nil {
 				return err
 			}
-			if wantSupport && supports != 1 || !wantSupport && supports != 0 {
-				t.Fatalf("unexpected support count %d (wantSupport=%t)", supports, wantSupport)
+			wantFirst := observed
+			if !wantSupport {
+				wantFirst = observed.Add(2 * time.Second)
 			}
-			var lateSupports int
-			if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM contribution_supports
-				WHERE transmission_id=$1 AND target_position=0`, lateReceipt.TransmissionID).Scan(&lateSupports); err != nil {
-				return err
-			}
-			if lateSupports != 1 {
-				t.Fatalf("dirty-intake support count=%d, want 1", lateSupports)
+			if cached != 1 || !firstObserved.Equal(wantFirst) {
+				t.Fatalf("cache row for Unit %s: count=%d first=%s, want 1 at %s", wantUnit, cached, firstObserved, wantFirst)
 			}
 			if err := executor.QueryRowContext(tx.Context(), `SELECT revision FROM assignment_control WHERE id=1`).
 				Scan(&revision); err != nil {
@@ -1074,7 +1064,7 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 		}
 		var contributions int
 		var contributionTime time.Time
-		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*),MIN(contribution_time) FROM message_contributions
+		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*),MIN(first_observed_at) FROM message_units
 			WHERE message_id=$1 AND unit_id=$2`, messageID, unitA.ID).Scan(&contributions, &contributionTime); err != nil {
 			return err
 		}
@@ -1102,10 +1092,6 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 	if err != nil {
 		t.Fatal(err)
 	}
-	unassignedTargets, err := json.Marshal([]protocols.Target{unassignedTarget})
-	if err != nil {
-		t.Fatal(err)
-	}
 	unassignedMessageID, unassignedTransmissionID := uuid.New(), uuid.New()
 	unassignedFingerprint := make([]byte, 32)
 	fingerprintID := uuid.New()
@@ -1130,17 +1116,19 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO transmissions
-			(id,gateway_id,network_id,submission_id,submission_fingerprint,network_resolution,protocol,payload,targets,
+			(id,gateway_id,network_id,submission_id,submission_fingerprint,network_resolution,protocol,payload,
 			 observed_at,observation_offset_seconds,accepted_at,source_revision,message_id,processing_status)
-			VALUES($1,$2,$3,$4,$5,'declared','pocsag','{}',$6,$7,0,$8,1,$9,'none')`,
+			VALUES($1,$2,$3,$4,$5,'declared','pocsag','{}',$6,0,$7,1,$8,'none')`,
 			unassignedTransmissionID, gatewayID, networkID, uuid.NewString(), unassignedFingerprint,
-			string(unassignedTargets), observed.Add(3*time.Second), accepted.Add(3*time.Second), unassignedMessageID); err != nil {
+			observed.Add(3*time.Second), accepted.Add(3*time.Second), unassignedMessageID); err != nil {
 			return err
 		}
 		_, err = executor.ExecContext(tx.Context(), `INSERT INTO transmission_targets
-			(transmission_id,position,original,resolution_status,unit_id,matched_rule_id,assignment_revision)
-			VALUES($1,0,$2,'unassigned',NULL,NULL,$3)`,
-			unassignedTransmissionID, string(unassignedOriginal), currentRevision)
+			(transmission_id,position,original,resolution_status,unit_id,matched_rule_id,assignment_revision,
+			 network_id,protocol,observed_at,accepted_at,address_number,function)
+			VALUES($1,0,$2,'unassigned',NULL,NULL,$3,$4,'pocsag',$5,$6,99,1)`,
+			unassignedTransmissionID, string(unassignedOriginal), currentRevision, networkID,
+			observed.Add(3*time.Second), accepted.Add(3*time.Second))
 		return err
 	})
 	if err != nil {
@@ -1169,12 +1157,12 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 				WHERE transmission_id=$1 AND position=0`, unassignedTransmissionID).Scan(&resolution, &unitID); err != nil {
 				return err
 			}
-			if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM contribution_supports
-				WHERE transmission_id=$1 AND target_position=0`, unassignedTransmissionID).Scan(&supports); err != nil {
+			if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM message_units
+				WHERE message_id=$1`, unassignedMessageID).Scan(&supports); err != nil {
 				return err
 			}
 			if resolution != "unassigned" || unitID.Valid || supports != 0 {
-				t.Fatalf("unassigned target acquired a Unit/support: resolution=%s unit=%+v supports=%d",
+				t.Fatalf("unassigned target acquired a Unit/cache row: resolution=%s unit=%+v rows=%d",
 					resolution, unitID, supports)
 			}
 			return nil
