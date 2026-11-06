@@ -19,7 +19,7 @@ import (
 // Service implements authorized Address-rule, suppression and correction
 // management and the ingest-time matcher. Management methods resolve the
 // caller's proof in a new platform transaction and require a non-nil check
-// callback for mutations; MatchTargets joins the
+// callback for mutations; MatchTargets and NetworksWithMatches join the
 // caller's transaction instead. Create it with NewService.
 type Service struct {
 	transactions    identity.Transactions

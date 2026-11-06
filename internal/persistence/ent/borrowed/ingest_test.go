@@ -65,6 +65,11 @@ func (r *intakeFailAfterAccept) AcceptTransmission(ctx context.Context, tx platf
 	return receipt, nil
 }
 
+func (noTargetMatcher) NetworksWithMatches(context.Context, platform.TransactionContext, []uuid.UUID,
+	protocols.Protocol, time.Time, []protocols.Target) (assignments.NetworkCandidates, error) {
+	return assignments.NetworkCandidates{Revision: 1, Networks: []uuid.UUID{}}, nil
+}
+
 func (noTargetMatcher) MatchTargets(context.Context, platform.TransactionContext, uuid.UUID,
 	protocols.Protocol, time.Time, []protocols.Target) (assignments.MatchResult, error) {
 	return assignments.MatchResult{Revision: 1, Resolutions: []assignments.Resolution{}}, nil
@@ -150,8 +155,8 @@ func TestGatewayCredentialCutoverStateAndNetworkReplacement(t *testing.T) {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateway_networks
-			(id,gateway_id,gateway_network_identifier,network_id,is_default)
-			VALUES($1,$2,'default',$3,true)`, uuid.New(), gateway, network); err != nil {
+			(id,gateway_id,gateway_network_identifier,network_id,priority)
+			VALUES($1,$2,'default',$3,0)`, uuid.New(), gateway, network); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateway_credentials
@@ -208,7 +213,7 @@ func TestGatewayCredentialCutoverStateAndNetworkReplacement(t *testing.T) {
 		var err error
 		revision, err = repository.ReplaceGatewayNetworks(tx.Context(), tx, gateway, 3,
 			[]ingest.GatewayNetwork{{Identifier: "replacement", NetworkID: network,
-				Protocol: protocols.POCSAG, Default: true}})
+				Protocol: protocols.POCSAG, Priority: 0}})
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -266,8 +271,8 @@ func TestTransmissionGroupingMergeRollbackAndOffsetPersistence(t *testing.T) {
 			return err
 		}
 		_, err = executor.ExecContext(tx.Context(), `INSERT INTO gateway_networks
-			(id,gateway_id,gateway_network_identifier,network_id,is_default)
-			VALUES($1,$2,'default',$3,true)`, uuid.New(), gateway, network)
+			(id,gateway_id,gateway_network_identifier,network_id,priority)
+			VALUES($1,$2,'default',$3,0)`, uuid.New(), gateway, network)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -459,8 +464,8 @@ func TestTransmissionAcceptanceRollsBackAtEachParticipant(t *testing.T) {
 					return err
 				}
 				if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateway_networks
-					(id,gateway_id,gateway_network_identifier,network_id,is_default)
-					VALUES($1,$2,'default',$3,true)`, uuid.New(), gateway, network); err != nil {
+					(id,gateway_id,gateway_network_identifier,network_id,priority)
+					VALUES($1,$2,'default',$3,0)`, uuid.New(), gateway, network); err != nil {
 					return err
 				}
 				if _, err := executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id)
@@ -596,8 +601,8 @@ func TestConcurrentTransmissionReceiptsAreIdempotent(t *testing.T) {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateway_networks
-			(id,gateway_id,gateway_network_identifier,network_id,is_default)
-			VALUES($1,$2,'default',$3,true)`, uuid.New(), gateway, network); err != nil {
+			(id,gateway_id,gateway_network_identifier,network_id,priority)
+			VALUES($1,$2,'default',$3,0)`, uuid.New(), gateway, network); err != nil {
 			return err
 		}
 		_, err = executor.ExecContext(tx.Context(), `INSERT INTO gateway_credentials
@@ -764,8 +769,8 @@ func TestSubmissionRetryAfterKnownRollbackAndLostCommitAcknowledgment(t *testing
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateway_networks
-			(id,gateway_id,gateway_network_identifier,network_id,is_default)
-			VALUES($1,$2,'default',$3,true)`, uuid.New(), gateway, network); err != nil {
+			(id,gateway_id,gateway_network_identifier,network_id,priority)
+			VALUES($1,$2,'default',$3,0)`, uuid.New(), gateway, network); err != nil {
 			return err
 		}
 		_, err = executor.ExecContext(tx.Context(), `INSERT INTO gateway_credentials
@@ -905,8 +910,8 @@ func TestSelectedWorkflowKeepsProcessingPending(t *testing.T) {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateway_networks
-			(id,gateway_id,gateway_network_identifier,network_id,is_default)
-			VALUES($1,$2,'default',$3,true)`, uuid.New(), gateway, network); err != nil {
+			(id,gateway_id,gateway_network_identifier,network_id,priority)
+			VALUES($1,$2,'default',$3,0)`, uuid.New(), gateway, network); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO processing_workflows
@@ -1061,8 +1066,8 @@ func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateway_networks
-			(id,gateway_id,gateway_network_identifier,network_id,is_default)
-			VALUES($1,$2,'default',$3,true)`, uuid.New(), gateway, network); err != nil {
+			(id,gateway_id,gateway_network_identifier,network_id,priority)
+			VALUES($1,$2,'default',$3,0)`, uuid.New(), gateway, network); err != nil {
 			return err
 		}
 		for i, workflow := range workflows {

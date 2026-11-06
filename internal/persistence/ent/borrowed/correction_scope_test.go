@@ -109,7 +109,7 @@ func TestCorrectionScopesBySelectorAndLeavesUnrelatedTargetsAlone(t *testing.T) 
 			return err
 		}
 		_, err = executor.ExecContext(tx.Context(), `INSERT INTO gateway_networks
-			(id,gateway_id,gateway_network_identifier,network_id,is_default) VALUES($1,$2,'n0',$3,true),($4,$2,'n1',$5,false)`,
+			(id,gateway_id,gateway_network_identifier,network_id,priority) VALUES($1,$2,'n0',$3,0),($4,$2,'n1',$5,1)`,
 			uuid.New(), gatewayID, f.networks[0], uuid.New(), f.networks[1])
 		return err
 	}); err != nil {

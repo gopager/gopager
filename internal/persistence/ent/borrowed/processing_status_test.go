@@ -109,8 +109,8 @@ func newProcessingSourceFixture(t *testing.T) *processingSourceFixture {
 		network: uuid.New(), gateway: uuid.New(), now: time.Now().UTC().Truncate(time.Second)}
 	f.exec(t, `WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id) INSERT INTO networks(id,name,protocol,agency_id) SELECT $1,'status network','pocsag',a.id FROM a`, f.network)
 	f.exec(t, `INSERT INTO gateways(id,state) VALUES($1,'active')`, f.gateway)
-	f.exec(t, `INSERT INTO gateway_networks(id,gateway_id,gateway_network_identifier,network_id,is_default)
-		VALUES($1,$2,'default',$3,true)`, uuid.New(), f.gateway, f.network)
+	f.exec(t, `INSERT INTO gateway_networks(id,gateway_id,gateway_network_identifier,network_id,priority)
+		VALUES($1,$2,'default',$3,0)`, uuid.New(), f.gateway, f.network)
 	return f
 }
 

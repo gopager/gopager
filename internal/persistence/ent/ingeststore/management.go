@@ -56,8 +56,8 @@ func (s *Store) ReplaceGatewayNetworks(ctx context.Context, tx platform.Transact
 	}
 	for _, network := range networks {
 		if _, err := executor.ExecContext(ctx, `INSERT INTO gateway_networks
-			(id,gateway_id,gateway_network_identifier,network_id,is_default)
-			VALUES($1,$2,$3,$4,$5)`, uuid.New(), gateway, network.Identifier, network.NetworkID, network.Default); err != nil {
+			(id,gateway_id,gateway_network_identifier,network_id,priority)
+			VALUES($1,$2,$3,$4,$5)`, uuid.New(), gateway, network.Identifier, network.NetworkID, network.Priority); err != nil {
 			return 0, err
 		}
 	}
@@ -85,9 +85,9 @@ func (s *Store) GatewayNetworksForAuthorization(ctx context.Context, tx platform
 		}
 		return nil, err
 	}
-	rows, err := executor.QueryContext(ctx, `SELECT gn.gateway_network_identifier,gn.network_id,n.protocol,n.agency_id,gn.is_default
+	rows, err := executor.QueryContext(ctx, `SELECT gn.gateway_network_identifier,gn.network_id,n.protocol,n.agency_id,gn.priority
 		FROM gateway_networks gn JOIN networks n ON n.id=gn.network_id
-		WHERE gn.gateway_id=$1 ORDER BY gn.gateway_network_identifier`, gateway)
+		WHERE gn.gateway_id=$1 ORDER BY gn.priority`, gateway)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +96,7 @@ func (s *Store) GatewayNetworksForAuthorization(ctx context.Context, tx platform
 	for rows.Next() {
 		var network ingest.GatewayNetwork
 		var protocol string
-		if err := rows.Scan(&network.Identifier, &network.NetworkID, &protocol, &network.AgencyID, &network.Default); err != nil {
+		if err := rows.Scan(&network.Identifier, &network.NetworkID, &protocol, &network.AgencyID, &network.Priority); err != nil {
 			return nil, err
 		}
 		network.Protocol = protocols.Protocol(protocol)

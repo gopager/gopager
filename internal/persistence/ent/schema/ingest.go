@@ -77,7 +77,7 @@ func (Gateway) Fields() []ent.Field {
 }
 
 // GatewayNetwork defines the gateway_networks table: the mapping from a gateway's own network
-// identifier to a Network; identifiers and Networks are each unique per gateway.
+// identifier to a Network; identifiers, Networks and priorities (lower number first) are each unique per gateway.
 type GatewayNetwork struct{ ent.Schema }
 
 // Policy returns the privacy policy that guards queries and mutations of the GatewayNetwork schema.
@@ -95,7 +95,7 @@ func (GatewayNetwork) Fields() []ent.Field {
 		field.UUID("gateway_id", uuid.UUID{}),
 		field.String("gateway_network_identifier").NotEmpty().MaxRuneLen(128),
 		field.UUID("network_id", uuid.UUID{}),
-		field.Bool("default"),
+		field.Int("priority").NonNegative(),
 	}
 }
 
@@ -104,6 +104,7 @@ func (GatewayNetwork) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("gateway_id", "gateway_network_identifier").Unique(),
 		index.Fields("gateway_id", "network_id").Unique(),
+		index.Fields("gateway_id", "priority").Unique(),
 	}
 }
 

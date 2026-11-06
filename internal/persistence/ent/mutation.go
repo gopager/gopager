@@ -8348,7 +8348,8 @@ type GatewayNetworkMutation struct {
 	gateway_id                 *uuid.UUID
 	gateway_network_identifier *string
 	network_id                 *uuid.UUID
-	_default                   *bool
+	priority                   *int
+	addpriority                *int
 	clearedFields              map[string]struct{}
 	done                       bool
 	oldValue                   func(context.Context) (*GatewayNetwork, error)
@@ -8567,40 +8568,60 @@ func (m *GatewayNetworkMutation) ResetNetworkID() {
 	m.network_id = nil
 }
 
-// SetDefault sets the "default" field.
-func (m *GatewayNetworkMutation) SetDefault(b bool) {
-	m._default = &b
+// SetPriority sets the "priority" field.
+func (m *GatewayNetworkMutation) SetPriority(i int) {
+	m.priority = &i
+	m.addpriority = nil
 }
 
-// Default returns the value of the "default" field in the mutation.
-func (m *GatewayNetworkMutation) Default() (r bool, exists bool) {
-	v := m._default
+// Priority returns the value of the "priority" field in the mutation.
+func (m *GatewayNetworkMutation) Priority() (r int, exists bool) {
+	v := m.priority
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldDefault returns the old "default" field's value of the GatewayNetwork entity.
+// OldPriority returns the old "priority" field's value of the GatewayNetwork entity.
 // If the GatewayNetwork object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *GatewayNetworkMutation) OldDefault(ctx context.Context) (v bool, err error) {
+func (m *GatewayNetworkMutation) OldPriority(ctx context.Context) (v int, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldDefault is only allowed on UpdateOne operations")
+		return v, errors.New("OldPriority is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldDefault requires an ID field in the mutation")
+		return v, errors.New("OldPriority requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldDefault: %w", err)
+		return v, fmt.Errorf("querying old value for OldPriority: %w", err)
 	}
-	return oldValue.Default, nil
+	return oldValue.Priority, nil
 }
 
-// ResetDefault resets all changes to the "default" field.
-func (m *GatewayNetworkMutation) ResetDefault() {
-	m._default = nil
+// AddPriority adds i to the "priority" field.
+func (m *GatewayNetworkMutation) AddPriority(i int) {
+	if m.addpriority != nil {
+		*m.addpriority += i
+	} else {
+		m.addpriority = &i
+	}
+}
+
+// AddedPriority returns the value that was added to the "priority" field in this mutation.
+func (m *GatewayNetworkMutation) AddedPriority() (r int, exists bool) {
+	v := m.addpriority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPriority resets all changes to the "priority" field.
+func (m *GatewayNetworkMutation) ResetPriority() {
+	m.priority = nil
+	m.addpriority = nil
 }
 
 // Where appends a list predicates to the GatewayNetworkMutation builder.
@@ -8647,8 +8668,8 @@ func (m *GatewayNetworkMutation) Fields() []string {
 	if m.network_id != nil {
 		fields = append(fields, gatewaynetwork.FieldNetworkID)
 	}
-	if m._default != nil {
-		fields = append(fields, gatewaynetwork.FieldDefault)
+	if m.priority != nil {
+		fields = append(fields, gatewaynetwork.FieldPriority)
 	}
 	return fields
 }
@@ -8664,8 +8685,8 @@ func (m *GatewayNetworkMutation) Field(name string) (ent.Value, bool) {
 		return m.GatewayNetworkIdentifier()
 	case gatewaynetwork.FieldNetworkID:
 		return m.NetworkID()
-	case gatewaynetwork.FieldDefault:
-		return m.Default()
+	case gatewaynetwork.FieldPriority:
+		return m.Priority()
 	}
 	return nil, false
 }
@@ -8681,8 +8702,8 @@ func (m *GatewayNetworkMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldGatewayNetworkIdentifier(ctx)
 	case gatewaynetwork.FieldNetworkID:
 		return m.OldNetworkID(ctx)
-	case gatewaynetwork.FieldDefault:
-		return m.OldDefault(ctx)
+	case gatewaynetwork.FieldPriority:
+		return m.OldPriority(ctx)
 	}
 	return nil, fmt.Errorf("unknown GatewayNetwork field %s", name)
 }
@@ -8713,12 +8734,12 @@ func (m *GatewayNetworkMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetNetworkID(v)
 		return nil
-	case gatewaynetwork.FieldDefault:
-		v, ok := value.(bool)
+	case gatewaynetwork.FieldPriority:
+		v, ok := value.(int)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetDefault(v)
+		m.SetPriority(v)
 		return nil
 	}
 	return fmt.Errorf("unknown GatewayNetwork field %s", name)
@@ -8727,13 +8748,21 @@ func (m *GatewayNetworkMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *GatewayNetworkMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	if m.addpriority != nil {
+		fields = append(fields, gatewaynetwork.FieldPriority)
+	}
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *GatewayNetworkMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case gatewaynetwork.FieldPriority:
+		return m.AddedPriority()
+	}
 	return nil, false
 }
 
@@ -8742,6 +8771,13 @@ func (m *GatewayNetworkMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *GatewayNetworkMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case gatewaynetwork.FieldPriority:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPriority(v)
+		return nil
 	}
 	return fmt.Errorf("unknown GatewayNetwork numeric field %s", name)
 }
@@ -8778,8 +8814,8 @@ func (m *GatewayNetworkMutation) ResetField(name string) error {
 	case gatewaynetwork.FieldNetworkID:
 		m.ResetNetworkID()
 		return nil
-	case gatewaynetwork.FieldDefault:
-		m.ResetDefault()
+	case gatewaynetwork.FieldPriority:
+		m.ResetPriority()
 		return nil
 	}
 	return fmt.Errorf("unknown GatewayNetwork field %s", name)

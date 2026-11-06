@@ -1730,9 +1730,13 @@ paths:
         limited to 1 MiB. Idempotency is keyed on (Gateway, `submissionId`): an identical
         re-submission returns the stored receipt; different content under the same ID is 409
         `IDEMPOTENCY_CONFLICT`. Rejected submissions (400, 409, 413) create no transmission.
-        Network resolution uses only the Gateway's Networks, in order: the declared
-        `gatewayNetworkIdentifier`, the only Network for the protocol, the only Network with a
-        matching Address rule, the protocol's default Network; if none applies, 400 `INVALID_INPUT`.
+        Network resolution uses only the Gateway's Networks of the submission's protocol, in order:
+        the declared `gatewayNetworkIdentifier` (unknown: 400 `INVALID_INPUT`), the only Network of
+        the protocol, the only Network with an Address rule matching the targets at the observation
+        time, the highest-priority of several matching Networks (this also appends the intake fact
+        `operation.network-ambiguous`), and, when none matches (including targetless submissions),
+        the highest-priority Network of the protocol. A Gateway without a Network of the protocol is
+        400 `INVALID_INPUT`.
         The status is 202 while the receipt's `processingStatus` is `pending`, else 200. Accepted evidence
         is visible to readers in every case; Workflow results attach to the Message when they complete.
       security:
@@ -1807,8 +1811,9 @@ paths:
       - Gateways
       summary: Replace the Gateway's Network assignments
       description: Requires `gateway.update` on every current and every proposed Network. 1–1024 entries with unique
-        identifiers and Network IDs; every protocol in the set needs exactly one `default`. An unknown Network is
-        400. Optimistic concurrency via `expectedRevision`; a stale value is 409 `REVISION_CONFLICT`. Authorized
+        identifiers and Network IDs. Each entry carries an explicit `priority`; the priorities of the set must be
+        exactly 0..n-1 (unique, contiguous, 0 is the highest), otherwise 400 `INVALID_INPUT`. The priority breaks ties
+        between Networks of one protocol at intake. An unknown Network is 400. Optimistic concurrency via `expectedRevision`; a stale value is 409 `REVISION_CONFLICT`. Authorized
         against every Network currently assigned to the Gateway; a Gateway without Networks needs an `all` grant.
         The response is not wrapped in `data`.
       security:
@@ -5081,6 +5086,7 @@ components:
       required:
       - gatewayNetworkIdentifier
       - networkId
+      - priority
       properties:
         gatewayNetworkIdentifier:
           type: string
@@ -5091,10 +5097,11 @@ components:
         networkId:
           type: string
           format: uuid
-        default:
-          type: boolean
-          default: false
-          description: Default Network for its protocol; exactly one per protocol in the set.
+        priority:
+          type: integer
+          minimum: 0
+          description: Position in the Gateway's resolution order, 0 is the highest priority. Across the set the
+            values are exactly 0..n-1 without duplicates.
       additionalProperties: false
     ReplaceGatewayNetworksRequest:
       type: object

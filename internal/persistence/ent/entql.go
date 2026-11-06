@@ -291,7 +291,7 @@ var schemaGraph = func() *sqlgraph.Schema {
 			gatewaynetwork.FieldGatewayID:                {Type: field.TypeUUID, Column: gatewaynetwork.FieldGatewayID},
 			gatewaynetwork.FieldGatewayNetworkIdentifier: {Type: field.TypeString, Column: gatewaynetwork.FieldGatewayNetworkIdentifier},
 			gatewaynetwork.FieldNetworkID:                {Type: field.TypeUUID, Column: gatewaynetwork.FieldNetworkID},
-			gatewaynetwork.FieldDefault:                  {Type: field.TypeBool, Column: gatewaynetwork.FieldDefault},
+			gatewaynetwork.FieldPriority:                 {Type: field.TypeInt, Column: gatewaynetwork.FieldPriority},
 		},
 	}
 	graph.Nodes[13] = &sqlgraph.Node{
@@ -1961,9 +1961,9 @@ func (f *GatewayNetworkFilter) WhereNetworkID(p entql.ValueP) {
 	f.Where(p.Field(gatewaynetwork.FieldNetworkID))
 }
 
-// WhereDefault applies the entql bool predicate on the default field.
-func (f *GatewayNetworkFilter) WhereDefault(p entql.BoolP) {
-	f.Where(p.Field(gatewaynetwork.FieldDefault))
+// WherePriority applies the entql int predicate on the priority field.
+func (f *GatewayNetworkFilter) WherePriority(p entql.IntP) {
+	f.Where(p.Field(gatewaynetwork.FieldPriority))
 }
 
 // addPredicate implements the predicateAdder interface.

@@ -22,36 +22,13 @@ CREATE TABLE gateway_networks (
     gateway_id uuid NOT NULL REFERENCES gateways(id),
     gateway_network_identifier varchar(128) NOT NULL CHECK (gateway_network_identifier <> ''),
     network_id uuid NOT NULL REFERENCES networks(id),
-    is_default boolean NOT NULL DEFAULT false,
+    -- Resolution order among the Gateway's Networks: a lower number is a higher priority.
+    priority integer NOT NULL CHECK (priority >= 0),
     UNIQUE (gateway_id, gateway_network_identifier),
-    UNIQUE (gateway_id, network_id)
+    UNIQUE (gateway_id, network_id),
+    UNIQUE (gateway_id, priority)
 );
 CREATE INDEX gateway_networks_network_id ON gateway_networks (network_id, gateway_id);
--- +goose StatementBegin
-CREATE FUNCTION check_gateway_network_defaults() RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE
-    affected_gateway uuid;
-BEGIN
-    affected_gateway := COALESCE(NEW.gateway_id, OLD.gateway_id);
-    IF EXISTS (
-        SELECT 1
-        FROM gateway_networks assignments
-        JOIN networks ON networks.id = assignments.network_id
-        WHERE assignments.gateway_id = affected_gateway
-        GROUP BY networks.protocol
-        HAVING count(*) FILTER (WHERE assignments.is_default) <> 1
-    ) THEN
-        RAISE EXCEPTION 'Gateway must have exactly one default Network per assigned Protocol'
-            USING ERRCODE = '23514';
-    END IF;
-    RETURN NULL;
-END;
-$$;
--- +goose StatementEnd
-CREATE CONSTRAINT TRIGGER gateway_network_defaults
-    AFTER INSERT OR UPDATE OR DELETE ON gateway_networks
-    DEFERRABLE INITIALLY DEFERRED
-    FOR EACH ROW EXECUTE FUNCTION check_gateway_network_defaults();
 CREATE TABLE gateway_credentials (
     id uuid PRIMARY KEY,
     gateway_id uuid NOT NULL REFERENCES gateways(id),
@@ -90,7 +67,7 @@ CREATE TABLE transmissions (
     network_id uuid NOT NULL REFERENCES networks(id),
     submission_id varchar(128) NOT NULL CHECK (submission_id <> ''),
     submission_fingerprint bytea NOT NULL CHECK (octet_length(submission_fingerprint) = 32),
-    network_resolution varchar NOT NULL CHECK (network_resolution IN ('declared', 'inferred-single', 'default')),
+    network_resolution varchar NOT NULL CHECK (network_resolution IN ('declared', 'inferred-single', 'inferred-address', 'address-priority', 'priority')),
     protocol varchar NOT NULL CHECK (protocol IN ('pocsag', 'flex', 'zvei', 'eas')),
     payload json NOT NULL,
     observed_at timestamptz NOT NULL,

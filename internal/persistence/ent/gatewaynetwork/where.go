@@ -68,9 +68,9 @@ func NetworkID(v uuid.UUID) predicate.GatewayNetwork {
 	return predicate.GatewayNetwork(sql.FieldEQ(FieldNetworkID, v))
 }
 
-// Default applies equality check predicate on the "default" field. It's identical to DefaultEQ.
-func Default(v bool) predicate.GatewayNetwork {
-	return predicate.GatewayNetwork(sql.FieldEQ(FieldDefault, v))
+// Priority applies equality check predicate on the "priority" field. It's identical to PriorityEQ.
+func Priority(v int) predicate.GatewayNetwork {
+	return predicate.GatewayNetwork(sql.FieldEQ(FieldPriority, v))
 }
 
 // GatewayIDEQ applies the EQ predicate on the "gateway_id" field.
@@ -218,14 +218,44 @@ func NetworkIDLTE(v uuid.UUID) predicate.GatewayNetwork {
 	return predicate.GatewayNetwork(sql.FieldLTE(FieldNetworkID, v))
 }
 
-// DefaultEQ applies the EQ predicate on the "default" field.
-func DefaultEQ(v bool) predicate.GatewayNetwork {
-	return predicate.GatewayNetwork(sql.FieldEQ(FieldDefault, v))
+// PriorityEQ applies the EQ predicate on the "priority" field.
+func PriorityEQ(v int) predicate.GatewayNetwork {
+	return predicate.GatewayNetwork(sql.FieldEQ(FieldPriority, v))
 }
 
-// DefaultNEQ applies the NEQ predicate on the "default" field.
-func DefaultNEQ(v bool) predicate.GatewayNetwork {
-	return predicate.GatewayNetwork(sql.FieldNEQ(FieldDefault, v))
+// PriorityNEQ applies the NEQ predicate on the "priority" field.
+func PriorityNEQ(v int) predicate.GatewayNetwork {
+	return predicate.GatewayNetwork(sql.FieldNEQ(FieldPriority, v))
+}
+
+// PriorityIn applies the In predicate on the "priority" field.
+func PriorityIn(vs ...int) predicate.GatewayNetwork {
+	return predicate.GatewayNetwork(sql.FieldIn(FieldPriority, vs...))
+}
+
+// PriorityNotIn applies the NotIn predicate on the "priority" field.
+func PriorityNotIn(vs ...int) predicate.GatewayNetwork {
+	return predicate.GatewayNetwork(sql.FieldNotIn(FieldPriority, vs...))
+}
+
+// PriorityGT applies the GT predicate on the "priority" field.
+func PriorityGT(v int) predicate.GatewayNetwork {
+	return predicate.GatewayNetwork(sql.FieldGT(FieldPriority, v))
+}
+
+// PriorityGTE applies the GTE predicate on the "priority" field.
+func PriorityGTE(v int) predicate.GatewayNetwork {
+	return predicate.GatewayNetwork(sql.FieldGTE(FieldPriority, v))
+}
+
+// PriorityLT applies the LT predicate on the "priority" field.
+func PriorityLT(v int) predicate.GatewayNetwork {
+	return predicate.GatewayNetwork(sql.FieldLT(FieldPriority, v))
+}
+
+// PriorityLTE applies the LTE predicate on the "priority" field.
+func PriorityLTE(v int) predicate.GatewayNetwork {
+	return predicate.GatewayNetwork(sql.FieldLTE(FieldPriority, v))
 }
 
 // And groups predicates with the AND operator between them.

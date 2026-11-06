@@ -71,17 +71,24 @@ func (_u *GatewayNetworkUpdate) SetNillableNetworkID(v *uuid.UUID) *GatewayNetwo
 	return _u
 }
 
-// SetDefault sets the "default" field.
-func (_u *GatewayNetworkUpdate) SetDefault(v bool) *GatewayNetworkUpdate {
-	_u.mutation.SetDefault(v)
+// SetPriority sets the "priority" field.
+func (_u *GatewayNetworkUpdate) SetPriority(v int) *GatewayNetworkUpdate {
+	_u.mutation.ResetPriority()
+	_u.mutation.SetPriority(v)
 	return _u
 }
 
-// SetNillableDefault sets the "default" field if the given value is not nil.
-func (_u *GatewayNetworkUpdate) SetNillableDefault(v *bool) *GatewayNetworkUpdate {
+// SetNillablePriority sets the "priority" field if the given value is not nil.
+func (_u *GatewayNetworkUpdate) SetNillablePriority(v *int) *GatewayNetworkUpdate {
 	if v != nil {
-		_u.SetDefault(*v)
+		_u.SetPriority(*v)
 	}
+	return _u
+}
+
+// AddPriority adds value to the "priority" field.
+func (_u *GatewayNetworkUpdate) AddPriority(v int) *GatewayNetworkUpdate {
+	_u.mutation.AddPriority(v)
 	return _u
 }
 
@@ -124,6 +131,11 @@ func (_u *GatewayNetworkUpdate) check() error {
 			return &ValidationError{Name: "gateway_network_identifier", err: fmt.Errorf(`ent: validator failed for field "GatewayNetwork.gateway_network_identifier": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Priority(); ok {
+		if err := gatewaynetwork.PriorityValidator(v); err != nil {
+			return &ValidationError{Name: "priority", err: fmt.Errorf(`ent: validator failed for field "GatewayNetwork.priority": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -154,8 +166,11 @@ func (_u *GatewayNetworkUpdate) sqlSave(ctx context.Context) (_node int, err err
 	if value, ok := _u.mutation.NetworkID(); ok {
 		_spec.SetField(gatewaynetwork.FieldNetworkID, field.TypeUUID, value)
 	}
-	if value, ok := _u.mutation.Default(); ok {
-		_spec.SetField(gatewaynetwork.FieldDefault, field.TypeBool, value)
+	if value, ok := _u.mutation.Priority(); ok {
+		_spec.SetField(gatewaynetwork.FieldPriority, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedPriority(); ok {
+		_spec.AddField(gatewaynetwork.FieldPriority, field.TypeInt, value)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
@@ -221,17 +236,24 @@ func (_u *GatewayNetworkUpdateOne) SetNillableNetworkID(v *uuid.UUID) *GatewayNe
 	return _u
 }
 
-// SetDefault sets the "default" field.
-func (_u *GatewayNetworkUpdateOne) SetDefault(v bool) *GatewayNetworkUpdateOne {
-	_u.mutation.SetDefault(v)
+// SetPriority sets the "priority" field.
+func (_u *GatewayNetworkUpdateOne) SetPriority(v int) *GatewayNetworkUpdateOne {
+	_u.mutation.ResetPriority()
+	_u.mutation.SetPriority(v)
 	return _u
 }
 
-// SetNillableDefault sets the "default" field if the given value is not nil.
-func (_u *GatewayNetworkUpdateOne) SetNillableDefault(v *bool) *GatewayNetworkUpdateOne {
+// SetNillablePriority sets the "priority" field if the given value is not nil.
+func (_u *GatewayNetworkUpdateOne) SetNillablePriority(v *int) *GatewayNetworkUpdateOne {
 	if v != nil {
-		_u.SetDefault(*v)
+		_u.SetPriority(*v)
 	}
+	return _u
+}
+
+// AddPriority adds value to the "priority" field.
+func (_u *GatewayNetworkUpdateOne) AddPriority(v int) *GatewayNetworkUpdateOne {
+	_u.mutation.AddPriority(v)
 	return _u
 }
 
@@ -287,6 +309,11 @@ func (_u *GatewayNetworkUpdateOne) check() error {
 			return &ValidationError{Name: "gateway_network_identifier", err: fmt.Errorf(`ent: validator failed for field "GatewayNetwork.gateway_network_identifier": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Priority(); ok {
+		if err := gatewaynetwork.PriorityValidator(v); err != nil {
+			return &ValidationError{Name: "priority", err: fmt.Errorf(`ent: validator failed for field "GatewayNetwork.priority": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -334,8 +361,11 @@ func (_u *GatewayNetworkUpdateOne) sqlSave(ctx context.Context) (_node *GatewayN
 	if value, ok := _u.mutation.NetworkID(); ok {
 		_spec.SetField(gatewaynetwork.FieldNetworkID, field.TypeUUID, value)
 	}
-	if value, ok := _u.mutation.Default(); ok {
-		_spec.SetField(gatewaynetwork.FieldDefault, field.TypeBool, value)
+	if value, ok := _u.mutation.Priority(); ok {
+		_spec.SetField(gatewaynetwork.FieldPriority, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedPriority(); ok {
+		_spec.AddField(gatewaynetwork.FieldPriority, field.TypeInt, value)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	_node = &GatewayNetwork{config: _u.config}

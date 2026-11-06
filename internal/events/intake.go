@@ -21,6 +21,10 @@ const (
 	// ObservationTimeImplausible records that a transmission's reported
 	// observation time was implausible (requires TransmissionID, GatewayID).
 	ObservationTimeImplausible IntakeType = "operation.observation-time-implausible"
+	// NetworkAmbiguous records that several of a Gateway's Networks matched a
+	// transmission's targets and the highest-priority matching Network was
+	// used (also requires NetworkID and Resolution).
+	NetworkAmbiguous IntakeType = "operation.network-ambiguous"
 	// GatewayStateChanged records a gateway connectivity state transition
 	// (requires distinct OldState/NewState and ContactTime).
 	GatewayStateChanged IntakeType = "gateway.state-changed"
@@ -61,7 +65,9 @@ type IntakeData struct {
 	GatewayID      uuid.UUID      `json:"gatewayId,omitempty"`
 	TransmissionID uuid.UUID      `json:"transmissionId,omitempty"`
 	MessageID      uuid.UUID      `json:"messageId,omitempty"`
+	NetworkID      uuid.UUID      `json:"networkId,omitempty"`
 	SubmissionID   string         `json:"submissionId,omitempty"`
+	Resolution     string         `json:"resolution,omitempty"`
 	ContactTime    *time.Time     `json:"contactTime,omitempty"`
 	OldState       string         `json:"oldState,omitempty"`
 	NewState       string         `json:"newState,omitempty"`
@@ -82,7 +88,9 @@ type IntakeFact struct {
 	GatewayID      uuid.UUID
 	TransmissionID uuid.UUID
 	MessageID      uuid.UUID
+	NetworkID      uuid.UUID
 	SubmissionID   string
+	Resolution     string
 	Revision       int64
 	OccurredAt     time.Time
 	ContactTime    *time.Time
@@ -139,13 +147,15 @@ func (f IntakeFact) Envelope(recorded time.Time) (IntakeEnvelope, error) {
 		envelope.Producer = Producer{Domain: "intake", Version: "transmission-intake1.0"}
 		envelope.AggregateRef = EntityRef{Type: "gateway", ID: f.GatewayID}
 		envelope.Data = IntakeData{GatewayID: f.GatewayID, SubmissionID: f.SubmissionID, ReasonCode: f.ReasonCode}
-	case ObservationTimeImplausible:
-		if f.TransmissionID == uuid.Nil || f.GatewayID == uuid.Nil {
+	case ObservationTimeImplausible, NetworkAmbiguous:
+		if f.TransmissionID == uuid.Nil || f.GatewayID == uuid.Nil ||
+			f.Type == NetworkAmbiguous && (f.NetworkID == uuid.Nil || f.Resolution == "") {
 			return IntakeEnvelope{}, ErrInvalidFact
 		}
 		envelope.Producer = Producer{Domain: "intake", Version: "transmission-intake1.0"}
 		envelope.AggregateRef = EntityRef{Type: "transmission", ID: f.TransmissionID}
-		envelope.Data = IntakeData{GatewayID: f.GatewayID, TransmissionID: f.TransmissionID}
+		envelope.Data = IntakeData{GatewayID: f.GatewayID, TransmissionID: f.TransmissionID,
+			NetworkID: f.NetworkID, Resolution: f.Resolution}
 	case GatewayStateChanged:
 		if f.GatewayID == uuid.Nil || f.OldState == "" || f.NewState == "" ||
 			f.OldState == f.NewState || f.ContactTime == nil || f.ContactTime.IsZero() {

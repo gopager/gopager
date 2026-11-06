@@ -366,6 +366,10 @@ func init() {
 			return nil
 		}
 	}()
+	// gatewaynetworkDescPriority is the schema descriptor for priority field.
+	gatewaynetworkDescPriority := gatewaynetworkFields[4].Descriptor()
+	// gatewaynetwork.PriorityValidator is a validator for the "priority" field. It is called by the builders before save.
+	gatewaynetwork.PriorityValidator = gatewaynetworkDescPriority.Validators[0].(func(int) error)
 	// gatewaynetworkDescID is the schema descriptor for id field.
 	gatewaynetworkDescID := gatewaynetworkFields[0].Descriptor()
 	// gatewaynetwork.DefaultID holds the default value on creation for the id field.
