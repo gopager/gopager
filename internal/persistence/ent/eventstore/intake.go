@@ -12,8 +12,8 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
-// AppendIntakeFact records a typed ingest intake state change as a DomainEvent and publishes its
-// transport reference, both in the caller's transaction. It returns the fact ID.
+// AppendIntakeFact records a typed ingest intake state change as a DomainEvent and announces it with
+// NOTIFY, both in the caller's transaction. It returns the fact ID.
 func (s *Store) AppendIntakeFact(ctx context.Context, tx platform.TransactionContext, fact events.IntakeFact) (uuid.UUID, error) {
 	driver, err := borrowed.New(s.primary, tx)
 	if err != nil {
@@ -36,7 +36,7 @@ func (s *Store) AppendIntakeFact(ctx context.Context, tx platform.TransactionCon
 	if err := client.DomainEvent.Create().SetID(fact.ID).SetEnvelope(encoded).Exec(scope); err != nil {
 		return uuid.Nil, err
 	}
-	if err := s.publishReference(tx, fact.ID); err != nil {
+	if err := s.notify(ctx, tx, fact.ID); err != nil {
 		return uuid.Nil, err
 	}
 	return fact.ID, nil

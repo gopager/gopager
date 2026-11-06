@@ -255,6 +255,30 @@ func (f CommandReceiptMutationRuleFunc) EvalMutation(ctx context.Context, m ent.
 	return Denyf("ent/privacy: unexpected mutation type %T, expect *ent.CommandReceiptMutation", m)
 }
 
+// The ConsumerOffsetQueryRuleFunc type is an adapter to allow the use of ordinary
+// functions as a query rule.
+type ConsumerOffsetQueryRuleFunc func(context.Context, *ent.ConsumerOffsetQuery) error
+
+// EvalQuery return f(ctx, q).
+func (f ConsumerOffsetQueryRuleFunc) EvalQuery(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.ConsumerOffsetQuery); ok {
+		return f(ctx, q)
+	}
+	return Denyf("ent/privacy: unexpected query type %T, expect *ent.ConsumerOffsetQuery", q)
+}
+
+// The ConsumerOffsetMutationRuleFunc type is an adapter to allow the use of ordinary
+// functions as a mutation rule.
+type ConsumerOffsetMutationRuleFunc func(context.Context, *ent.ConsumerOffsetMutation) error
+
+// EvalMutation calls f(ctx, m).
+func (f ConsumerOffsetMutationRuleFunc) EvalMutation(ctx context.Context, m ent.Mutation) error {
+	if m, ok := m.(*ent.ConsumerOffsetMutation); ok {
+		return f(ctx, m)
+	}
+	return Denyf("ent/privacy: unexpected mutation type %T, expect *ent.ConsumerOffsetMutation", m)
+}
+
 // The ContributionSupportQueryRuleFunc type is an adapter to allow the use of ordinary
 // functions as a query rule.
 type ContributionSupportQueryRuleFunc func(context.Context, *ent.ContributionSupportQuery) error
@@ -1094,6 +1118,8 @@ func queryFilter(q ent.Query) (Filter, error) {
 		return q.Filter(), nil
 	case *ent.CommandReceiptQuery:
 		return q.Filter(), nil
+	case *ent.ConsumerOffsetQuery:
+		return q.Filter(), nil
 	case *ent.ContributionSupportQuery:
 		return q.Filter(), nil
 	case *ent.CorrectionDirtyTransmissionQuery:
@@ -1178,6 +1204,8 @@ func mutationFilter(m ent.Mutation) (Filter, error) {
 	case *ent.AuditRecordMutation:
 		return m.Filter(), nil
 	case *ent.CommandReceiptMutation:
+		return m.Filter(), nil
+	case *ent.ConsumerOffsetMutation:
 		return m.Filter(), nil
 	case *ent.ContributionSupportMutation:
 		return m.Filter(), nil

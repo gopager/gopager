@@ -81,6 +81,18 @@ func (f CommandReceiptFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Val
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CommandReceiptMutation", m)
 }
 
+// The ConsumerOffsetFunc type is an adapter to allow the use of ordinary
+// function as ConsumerOffset mutator.
+type ConsumerOffsetFunc func(context.Context, *ent.ConsumerOffsetMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ConsumerOffsetFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ConsumerOffsetMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ConsumerOffsetMutation", m)
+}
+
 // The ContributionSupportFunc type is an adapter to allow the use of ordinary
 // function as ContributionSupport mutator.
 type ContributionSupportFunc func(context.Context, *ent.ContributionSupportMutation) (ent.Value, error)

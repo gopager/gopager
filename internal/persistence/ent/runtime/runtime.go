@@ -13,6 +13,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/assignmentcontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/auditrecord"
 	"github.com/gopager/gopager/internal/persistence/ent/commandreceipt"
+	"github.com/gopager/gopager/internal/persistence/ent/consumeroffset"
 	"github.com/gopager/gopager/internal/persistence/ent/contributionsupport"
 	"github.com/gopager/gopager/internal/persistence/ent/correctiondirtytransmission"
 	"github.com/gopager/gopager/internal/persistence/ent/credential"
@@ -230,6 +231,21 @@ func init() {
 	commandreceiptDescID := commandreceiptFields[0].Descriptor()
 	// commandreceipt.DefaultID holds the default value on creation for the id field.
 	commandreceipt.DefaultID = commandreceiptDescID.Default.(func() uuid.UUID)
+	consumeroffset.Policy = privacy.NewPolicies(schema.ConsumerOffset{})
+	consumeroffset.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := consumeroffset.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
+	consumeroffsetFields := schema.ConsumerOffset{}.Fields()
+	_ = consumeroffsetFields
+	// consumeroffsetDescLastSeq is the schema descriptor for last_seq field.
+	consumeroffsetDescLastSeq := consumeroffsetFields[1].Descriptor()
+	// consumeroffset.LastSeqValidator is a validator for the "last_seq" field. It is called by the builders before save.
+	consumeroffset.LastSeqValidator = consumeroffsetDescLastSeq.Validators[0].(func(int64) error)
 	contributionsupport.Policy = privacy.NewPolicies(schema.ContributionSupport{})
 	contributionsupport.Hooks[0] = func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {

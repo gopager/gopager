@@ -89,6 +89,9 @@ func (_u *DomainEventUpdate) sqlSave(ctx context.Context) (_node int, err error)
 			}
 		}
 	}
+	if _u.mutation.SeqCleared() {
+		_spec.ClearField(domainevent.FieldSeq, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.Envelope(); ok {
 		_spec.SetField(domainevent.FieldEnvelope, field.TypeJSON, value)
 	}
@@ -96,6 +99,12 @@ func (_u *DomainEventUpdate) sqlSave(ctx context.Context) (_node int, err error)
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, domainevent.FieldEnvelope, value)
 		})
+	}
+	if _u.mutation.TypeCleared() {
+		_spec.ClearField(domainevent.FieldType, field.TypeString)
+	}
+	if _u.mutation.OccurredAtCleared() {
+		_spec.ClearField(domainevent.FieldOccurredAt, field.TypeTime)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
@@ -208,6 +217,9 @@ func (_u *DomainEventUpdateOne) sqlSave(ctx context.Context) (_node *DomainEvent
 			}
 		}
 	}
+	if _u.mutation.SeqCleared() {
+		_spec.ClearField(domainevent.FieldSeq, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.Envelope(); ok {
 		_spec.SetField(domainevent.FieldEnvelope, field.TypeJSON, value)
 	}
@@ -215,6 +227,12 @@ func (_u *DomainEventUpdateOne) sqlSave(ctx context.Context) (_node *DomainEvent
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, domainevent.FieldEnvelope, value)
 		})
+	}
+	if _u.mutation.TypeCleared() {
+		_spec.ClearField(domainevent.FieldType, field.TypeString)
+	}
+	if _u.mutation.OccurredAtCleared() {
+		_spec.ClearField(domainevent.FieldOccurredAt, field.TypeTime)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	_node = &DomainEvent{config: _u.config}

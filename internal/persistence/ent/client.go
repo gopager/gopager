@@ -22,6 +22,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/assignmentcontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/auditrecord"
 	"github.com/gopager/gopager/internal/persistence/ent/commandreceipt"
+	"github.com/gopager/gopager/internal/persistence/ent/consumeroffset"
 	"github.com/gopager/gopager/internal/persistence/ent/contributionsupport"
 	"github.com/gopager/gopager/internal/persistence/ent/correctiondirtytransmission"
 	"github.com/gopager/gopager/internal/persistence/ent/credential"
@@ -74,6 +75,8 @@ type Client struct {
 	AuditRecord *AuditRecordClient
 	// CommandReceipt is the client for interacting with the CommandReceipt builders.
 	CommandReceipt *CommandReceiptClient
+	// ConsumerOffset is the client for interacting with the ConsumerOffset builders.
+	ConsumerOffset *ConsumerOffsetClient
 	// ContributionSupport is the client for interacting with the ContributionSupport builders.
 	ContributionSupport *ContributionSupportClient
 	// CorrectionDirtyTransmission is the client for interacting with the CorrectionDirtyTransmission builders.
@@ -157,6 +160,7 @@ func (c *Client) init() {
 	c.AssignmentControl = NewAssignmentControlClient(c.config)
 	c.AuditRecord = NewAuditRecordClient(c.config)
 	c.CommandReceipt = NewCommandReceiptClient(c.config)
+	c.ConsumerOffset = NewConsumerOffsetClient(c.config)
 	c.ContributionSupport = NewContributionSupportClient(c.config)
 	c.CorrectionDirtyTransmission = NewCorrectionDirtyTransmissionClient(c.config)
 	c.Credential = NewCredentialClient(c.config)
@@ -288,6 +292,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		AssignmentControl:           NewAssignmentControlClient(cfg),
 		AuditRecord:                 NewAuditRecordClient(cfg),
 		CommandReceipt:              NewCommandReceiptClient(cfg),
+		ConsumerOffset:              NewConsumerOffsetClient(cfg),
 		ContributionSupport:         NewContributionSupportClient(cfg),
 		CorrectionDirtyTransmission: NewCorrectionDirtyTransmissionClient(cfg),
 		Credential:                  NewCredentialClient(cfg),
@@ -346,6 +351,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		AssignmentControl:           NewAssignmentControlClient(cfg),
 		AuditRecord:                 NewAuditRecordClient(cfg),
 		CommandReceipt:              NewCommandReceiptClient(cfg),
+		ConsumerOffset:              NewConsumerOffsetClient(cfg),
 		ContributionSupport:         NewContributionSupportClient(cfg),
 		CorrectionDirtyTransmission: NewCorrectionDirtyTransmissionClient(cfg),
 		Credential:                  NewCredentialClient(cfg),
@@ -409,15 +415,15 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.Account, c.AddressRule, c.Agency, c.AssignmentControl, c.AuditRecord,
-		c.CommandReceipt, c.ContributionSupport, c.CorrectionDirtyTransmission,
-		c.Credential, c.DomainEvent, c.FieldPermission, c.Gateway, c.GatewayCredential,
-		c.GatewayNetwork, c.Grant, c.GroupingControl, c.IdentityControl,
-		c.LoginAttempt, c.Membership, c.Message, c.MessageContribution, c.Network,
-		c.Organization, c.PendingAssignmentScope, c.ProcessingCandidate,
-		c.ProcessingControl, c.ProcessingInstance, c.ProcessingInstanceVersion,
-		c.ProcessingResult, c.TargetSuppression, c.Transmission, c.TransmissionTarget,
-		c.Unit, c.UnitCollection, c.UnitTemplate, c.UserGroup, c.Workflow,
-		c.WorkflowScopeReference, c.WorkflowVersion,
+		c.CommandReceipt, c.ConsumerOffset, c.ContributionSupport,
+		c.CorrectionDirtyTransmission, c.Credential, c.DomainEvent, c.FieldPermission,
+		c.Gateway, c.GatewayCredential, c.GatewayNetwork, c.Grant, c.GroupingControl,
+		c.IdentityControl, c.LoginAttempt, c.Membership, c.Message,
+		c.MessageContribution, c.Network, c.Organization, c.PendingAssignmentScope,
+		c.ProcessingCandidate, c.ProcessingControl, c.ProcessingInstance,
+		c.ProcessingInstanceVersion, c.ProcessingResult, c.TargetSuppression,
+		c.Transmission, c.TransmissionTarget, c.Unit, c.UnitCollection, c.UnitTemplate,
+		c.UserGroup, c.Workflow, c.WorkflowScopeReference, c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
 	}
@@ -428,15 +434,15 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.Account, c.AddressRule, c.Agency, c.AssignmentControl, c.AuditRecord,
-		c.CommandReceipt, c.ContributionSupport, c.CorrectionDirtyTransmission,
-		c.Credential, c.DomainEvent, c.FieldPermission, c.Gateway, c.GatewayCredential,
-		c.GatewayNetwork, c.Grant, c.GroupingControl, c.IdentityControl,
-		c.LoginAttempt, c.Membership, c.Message, c.MessageContribution, c.Network,
-		c.Organization, c.PendingAssignmentScope, c.ProcessingCandidate,
-		c.ProcessingControl, c.ProcessingInstance, c.ProcessingInstanceVersion,
-		c.ProcessingResult, c.TargetSuppression, c.Transmission, c.TransmissionTarget,
-		c.Unit, c.UnitCollection, c.UnitTemplate, c.UserGroup, c.Workflow,
-		c.WorkflowScopeReference, c.WorkflowVersion,
+		c.CommandReceipt, c.ConsumerOffset, c.ContributionSupport,
+		c.CorrectionDirtyTransmission, c.Credential, c.DomainEvent, c.FieldPermission,
+		c.Gateway, c.GatewayCredential, c.GatewayNetwork, c.Grant, c.GroupingControl,
+		c.IdentityControl, c.LoginAttempt, c.Membership, c.Message,
+		c.MessageContribution, c.Network, c.Organization, c.PendingAssignmentScope,
+		c.ProcessingCandidate, c.ProcessingControl, c.ProcessingInstance,
+		c.ProcessingInstanceVersion, c.ProcessingResult, c.TargetSuppression,
+		c.Transmission, c.TransmissionTarget, c.Unit, c.UnitCollection, c.UnitTemplate,
+		c.UserGroup, c.Workflow, c.WorkflowScopeReference, c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -457,6 +463,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.AuditRecord.mutate(ctx, m)
 	case *CommandReceiptMutation:
 		return c.CommandReceipt.mutate(ctx, m)
+	case *ConsumerOffsetMutation:
+		return c.ConsumerOffset.mutate(ctx, m)
 	case *ContributionSupportMutation:
 		return c.ContributionSupport.mutate(ctx, m)
 	case *CorrectionDirtyTransmissionMutation:
@@ -1393,6 +1401,140 @@ func (c *CommandReceiptClient) mutate(ctx context.Context, m *CommandReceiptMuta
 		return (&CommandReceiptDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown CommandReceipt mutation op: %q", m.Op())
+	}
+}
+
+// ConsumerOffsetClient is a client for the ConsumerOffset schema.
+type ConsumerOffsetClient struct {
+	config
+}
+
+// NewConsumerOffsetClient returns a client for the ConsumerOffset from the given config.
+func NewConsumerOffsetClient(c config) *ConsumerOffsetClient {
+	return &ConsumerOffsetClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `consumeroffset.Hooks(f(g(h())))`.
+func (c *ConsumerOffsetClient) Use(hooks ...Hook) {
+	c.hooks.ConsumerOffset = append(c.hooks.ConsumerOffset, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `consumeroffset.Intercept(f(g(h())))`.
+func (c *ConsumerOffsetClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ConsumerOffset = append(c.inters.ConsumerOffset, interceptors...)
+}
+
+// Create returns a builder for creating a ConsumerOffset entity.
+func (c *ConsumerOffsetClient) Create() *ConsumerOffsetCreate {
+	mutation := newConsumerOffsetMutation(c.config, OpCreate)
+	return &ConsumerOffsetCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ConsumerOffset entities.
+func (c *ConsumerOffsetClient) CreateBulk(builders ...*ConsumerOffsetCreate) *ConsumerOffsetCreateBulk {
+	return &ConsumerOffsetCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ConsumerOffsetClient) MapCreateBulk(slice any, setFunc func(*ConsumerOffsetCreate, int)) *ConsumerOffsetCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ConsumerOffsetCreateBulk{err: fmt.Errorf("calling to ConsumerOffsetClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ConsumerOffsetCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ConsumerOffsetCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ConsumerOffset.
+func (c *ConsumerOffsetClient) Update() *ConsumerOffsetUpdate {
+	mutation := newConsumerOffsetMutation(c.config, OpUpdate)
+	return &ConsumerOffsetUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ConsumerOffsetClient) UpdateOne(_m *ConsumerOffset) *ConsumerOffsetUpdateOne {
+	mutation := newConsumerOffsetMutation(c.config, OpUpdateOne, withConsumerOffset(_m))
+	return &ConsumerOffsetUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ConsumerOffsetClient) UpdateOneID(id string) *ConsumerOffsetUpdateOne {
+	mutation := newConsumerOffsetMutation(c.config, OpUpdateOne, withConsumerOffsetID(id))
+	return &ConsumerOffsetUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ConsumerOffset.
+func (c *ConsumerOffsetClient) Delete() *ConsumerOffsetDelete {
+	mutation := newConsumerOffsetMutation(c.config, OpDelete)
+	return &ConsumerOffsetDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ConsumerOffsetClient) DeleteOne(_m *ConsumerOffset) *ConsumerOffsetDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ConsumerOffsetClient) DeleteOneID(id string) *ConsumerOffsetDeleteOne {
+	builder := c.Delete().Where(consumeroffset.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ConsumerOffsetDeleteOne{builder}
+}
+
+// Query returns a query builder for ConsumerOffset.
+func (c *ConsumerOffsetClient) Query() *ConsumerOffsetQuery {
+	return &ConsumerOffsetQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeConsumerOffset},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ConsumerOffset entity by its id.
+func (c *ConsumerOffsetClient) Get(ctx context.Context, id string) (*ConsumerOffset, error) {
+	return c.Query().Where(consumeroffset.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ConsumerOffsetClient) GetX(ctx context.Context, id string) *ConsumerOffset {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ConsumerOffsetClient) Hooks() []Hook {
+	hooks := c.hooks.ConsumerOffset
+	return append(hooks[:len(hooks):len(hooks)], consumeroffset.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *ConsumerOffsetClient) Interceptors() []Interceptor {
+	return c.inters.ConsumerOffset
+}
+
+func (c *ConsumerOffsetClient) mutate(ctx context.Context, m *ConsumerOffsetMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ConsumerOffsetCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ConsumerOffsetUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ConsumerOffsetUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ConsumerOffsetDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ConsumerOffset mutation op: %q", m.Op())
 	}
 }
 
@@ -6078,9 +6220,9 @@ func (c *WorkflowVersionClient) mutate(ctx context.Context, m *WorkflowVersionMu
 type (
 	hooks struct {
 		Account, AddressRule, Agency, AssignmentControl, AuditRecord, CommandReceipt,
-		ContributionSupport, CorrectionDirtyTransmission, Credential, DomainEvent,
-		FieldPermission, Gateway, GatewayCredential, GatewayNetwork, Grant,
-		GroupingControl, IdentityControl, LoginAttempt, Membership, Message,
+		ConsumerOffset, ContributionSupport, CorrectionDirtyTransmission, Credential,
+		DomainEvent, FieldPermission, Gateway, GatewayCredential, GatewayNetwork,
+		Grant, GroupingControl, IdentityControl, LoginAttempt, Membership, Message,
 		MessageContribution, Network, Organization, PendingAssignmentScope,
 		ProcessingCandidate, ProcessingControl, ProcessingInstance,
 		ProcessingInstanceVersion, ProcessingResult, TargetSuppression, Transmission,
@@ -6089,9 +6231,9 @@ type (
 	}
 	inters struct {
 		Account, AddressRule, Agency, AssignmentControl, AuditRecord, CommandReceipt,
-		ContributionSupport, CorrectionDirtyTransmission, Credential, DomainEvent,
-		FieldPermission, Gateway, GatewayCredential, GatewayNetwork, Grant,
-		GroupingControl, IdentityControl, LoginAttempt, Membership, Message,
+		ConsumerOffset, ContributionSupport, CorrectionDirtyTransmission, Credential,
+		DomainEvent, FieldPermission, Gateway, GatewayCredential, GatewayNetwork,
+		Grant, GroupingControl, IdentityControl, LoginAttempt, Membership, Message,
 		MessageContribution, Network, Organization, PendingAssignmentScope,
 		ProcessingCandidate, ProcessingControl, ProcessingInstance,
 		ProcessingInstanceVersion, ProcessingResult, TargetSuppression, Transmission,

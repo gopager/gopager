@@ -30,7 +30,7 @@ func (s *Store) appendProcessing(ctx context.Context, tx platform.TransactionCon
 	if err := client.DomainEvent.Create().SetID(envelope.DomainEventID).SetEnvelope(encoded).Exec(scope); err != nil {
 		return uuid.Nil, err
 	}
-	if err := s.publishReference(tx, envelope.DomainEventID); err != nil {
+	if err := s.notify(ctx, tx, envelope.DomainEventID); err != nil {
 		return uuid.Nil, err
 	}
 	return envelope.DomainEventID, nil
