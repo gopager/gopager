@@ -14,6 +14,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/persistence/ent/network"
 	"github.com/gopager/gopager/internal/persistence/ent/predicate"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
 	"github.com/gopager/gopager/internal/persistence/ent/workflow"
@@ -29,6 +30,7 @@ type WorkflowScopeReferenceQuery struct {
 	predicates   []predicate.WorkflowScopeReference
 	withWorkflow *WorkflowQuery
 	withUnit     *UnitQuery
+	withNetwork  *NetworkQuery
 	modifiers    []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
@@ -103,6 +105,28 @@ func (_q *WorkflowScopeReferenceQuery) QueryUnit() *UnitQuery {
 			sqlgraph.From(workflowscopereference.Table, workflowscopereference.FieldID, selector),
 			sqlgraph.To(unit.Table, unit.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, false, workflowscopereference.UnitTable, workflowscopereference.UnitColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryNetwork chains the current query on the "network" edge.
+func (_q *WorkflowScopeReferenceQuery) QueryNetwork() *NetworkQuery {
+	query := (&NetworkClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(workflowscopereference.Table, workflowscopereference.FieldID, selector),
+			sqlgraph.To(network.Table, network.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, workflowscopereference.NetworkTable, workflowscopereference.NetworkColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -304,6 +328,7 @@ func (_q *WorkflowScopeReferenceQuery) Clone() *WorkflowScopeReferenceQuery {
 		predicates:   append([]predicate.WorkflowScopeReference{}, _q.predicates...),
 		withWorkflow: _q.withWorkflow.Clone(),
 		withUnit:     _q.withUnit.Clone(),
+		withNetwork:  _q.withNetwork.Clone(),
 		// clone intermediate query.
 		sql:       _q.sql.Clone(),
 		path:      _q.path,
@@ -330,6 +355,17 @@ func (_q *WorkflowScopeReferenceQuery) WithUnit(opts ...func(*UnitQuery)) *Workf
 		opt(query)
 	}
 	_q.withUnit = query
+	return _q
+}
+
+// WithNetwork tells the query-builder to eager-load the nodes that are connected to
+// the "network" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *WorkflowScopeReferenceQuery) WithNetwork(opts ...func(*NetworkQuery)) *WorkflowScopeReferenceQuery {
+	query := (&NetworkClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withNetwork = query
 	return _q
 }
 
@@ -417,9 +453,10 @@ func (_q *WorkflowScopeReferenceQuery) sqlAll(ctx context.Context, hooks ...quer
 	var (
 		nodes       = []*WorkflowScopeReference{}
 		_spec       = _q.querySpec()
-		loadedTypes = [2]bool{
+		loadedTypes = [3]bool{
 			_q.withWorkflow != nil,
 			_q.withUnit != nil,
+			_q.withNetwork != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -452,6 +489,12 @@ func (_q *WorkflowScopeReferenceQuery) sqlAll(ctx context.Context, hooks ...quer
 	if query := _q.withUnit; query != nil {
 		if err := _q.loadUnit(ctx, query, nodes, nil,
 			func(n *WorkflowScopeReference, e *Unit) { n.Edges.Unit = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withNetwork; query != nil {
+		if err := _q.loadNetwork(ctx, query, nodes, nil,
+			func(n *WorkflowScopeReference, e *Network) { n.Edges.Network = e }); err != nil {
 			return nil, err
 		}
 	}
@@ -519,6 +562,38 @@ func (_q *WorkflowScopeReferenceQuery) loadUnit(ctx context.Context, query *Unit
 	}
 	return nil
 }
+func (_q *WorkflowScopeReferenceQuery) loadNetwork(ctx context.Context, query *NetworkQuery, nodes []*WorkflowScopeReference, init func(*WorkflowScopeReference), assign func(*WorkflowScopeReference, *Network)) error {
+	ids := make([]uuid.UUID, 0, len(nodes))
+	nodeids := make(map[uuid.UUID][]*WorkflowScopeReference)
+	for i := range nodes {
+		if nodes[i].NetworkID == nil {
+			continue
+		}
+		fk := *nodes[i].NetworkID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(network.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "network_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
 
 func (_q *WorkflowScopeReferenceQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := _q.querySpec()
@@ -553,6 +628,9 @@ func (_q *WorkflowScopeReferenceQuery) querySpec() *sqlgraph.QuerySpec {
 		}
 		if _q.withUnit != nil {
 			_spec.Node.AddColumnOnce(workflowscopereference.FieldUnitID)
+		}
+		if _q.withNetwork != nil {
+			_spec.Node.AddColumnOnce(workflowscopereference.FieldNetworkID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

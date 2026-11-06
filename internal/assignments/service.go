@@ -94,19 +94,20 @@ func canonicalInput(input RuleInput) (RuleInput, error) {
 	return input, nil
 }
 
-// networkProtocol never substitutes a default Protocol when the owning domain is unavailable.
-func (s *Service) networkProtocol(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (protocols.Protocol, error) {
+// network reads a Radio network's Protocol and Agency through the owning domain; it never
+// substitutes defaults when the owner is unavailable or the Protocol is invalid.
+func (s *Service) network(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (protocols.Protocol, uuid.UUID, error) {
 	if s.networks == nil {
-		return "", platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Network owner is not wired"))
+		return "", uuid.Nil, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Network owner is not wired"))
 	}
-	value, err := s.networks.ReadNetworkProtocol(ctx, tx, id)
+	protocol, agency, err := s.networks.ReadNetwork(ctx, tx, id)
 	if err != nil {
-		return "", err
+		return "", uuid.Nil, err
 	}
-	if !value.Valid() {
-		return "", platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("invalid current Network Protocol"))
+	if !protocol.Valid() {
+		return "", uuid.Nil, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("invalid current Network Protocol"))
 	}
-	return value, nil
+	return protocol, agency, nil
 }
 
 // authorizeCandidate derives current owner references without exposing configuration from hidden uses.
@@ -121,16 +122,16 @@ func (s *Service) authorizeCandidate(ctx context.Context, tx platform.Transactio
 	if unit.Deleted {
 		return authz.ErrForbidden
 	}
-	if err := authz.Authorize(authority, action, nil, authz.Target{
-		NetworkID: candidate.NetworkID, UnitID: unit.ID, UnitCollections: unit.CollectionIDs,
-	}, now); err != nil {
-		return err
-	}
-	protocol, err := s.networkProtocol(ctx, tx, candidate.NetworkID)
+	protocol, agency, err := s.network(ctx, tx, candidate.NetworkID)
 	if errors.Is(err, authz.ErrNotFound) {
 		return authz.ErrForbidden
 	}
 	if err != nil {
+		return err
+	}
+	if err := authz.Authorize(authority, action, nil, authz.Target{
+		AgencyID: agency, UnitID: unit.ID, UnitCollections: unit.CollectionIDs,
+	}, now); err != nil {
 		return err
 	}
 	if protocol != candidate.Protocol {
@@ -369,7 +370,7 @@ func (s *Service) DeleteRule(ctx context.Context, proof identity.Proof, id uuid.
 
 // resolve loads only winning current Unit contexts; missing/deleted owners are never unassigned.
 func (s *Service) resolve(ctx context.Context, tx platform.TransactionContext, network uuid.UUID, protocol protocols.Protocol, observed time.Time, targets []protocols.Target, rules []Rule, revision int64) (MatchResult, error) {
-	actual, err := s.networkProtocol(ctx, tx, network)
+	actual, _, err := s.network(ctx, tx, network)
 	if err != nil {
 		return MatchResult{}, err
 	}
@@ -443,7 +444,7 @@ func (s *Service) NetworksWithMatches(ctx context.Context, tx platform.Transacti
 			continue
 		}
 		seen[network] = true
-		actual, err := s.networkProtocol(ctx, tx, network)
+		actual, _, err := s.network(ctx, tx, network)
 		if err != nil {
 			return NetworkCandidates{}, err
 		}

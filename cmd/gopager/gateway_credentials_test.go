@@ -27,6 +27,8 @@ type gatewayHTTPFixture struct {
 	current  uuid.UUID
 	sibling  uuid.UUID
 	proposed uuid.UUID
+	// agencies maps each fixture Network to the Agency that owns it.
+	agencies map[uuid.UUID]uuid.UUID
 }
 
 type gatewayCredentialResponse struct {
@@ -49,12 +51,20 @@ func newGatewayHTTPFixture(t *testing.T) gatewayHTTPFixture {
 		if err != nil {
 			return err
 		}
+		// Every fixture Network has its own Agency, so grants on one Network stay distinguishable.
+		fixture.agencies = make(map[uuid.UUID]uuid.UUID)
 		for _, network := range []struct {
 			id   uuid.UUID
 			name string
 		}{{fixture.current, "Current"}, {fixture.sibling, "Sibling"}, {fixture.proposed, "Proposed"}} {
-			if _, err := executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol)
-				VALUES($1,$2,'pocsag')`, network.id, network.name); err != nil {
+			agency := uuid.New()
+			fixture.agencies[network.id] = agency
+			if _, err := executor.ExecContext(tx.Context(), `INSERT INTO agencies(id,name) VALUES($1,$2)`,
+				agency, network.name+" agency"); err != nil {
+				return err
+			}
+			if _, err := executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol,agency_id)
+				VALUES($1,$2,'pocsag',$3)`, network.id, network.name, agency); err != nil {
 				return err
 			}
 		}
@@ -85,7 +95,7 @@ func newGatewayHTTPFixture(t *testing.T) gatewayHTTPFixture {
 	backend := httptest.NewUnstartedServer(nil)
 	t.Cleanup(backend.Close)
 	fixture.origin = "http://" + backend.Listener.Addr().String()
-	handler, err := composeApplicationAPI(fixture.origin, identity.DefaultLoginRateLimits(), store, nil, nil)
+	handler, err := composeApplicationAPI(fixture.origin, identity.DefaultLoginRateLimits(), store, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,9 +156,9 @@ func (fixture gatewayHTTPFixture) request(t *testing.T, method, path, body, csrf
 
 func (fixture gatewayHTTPFixture) setGrant(t *testing.T, networks []uuid.UUID, actions ...string) {
 	t.Helper()
-	scope := authz.Scope{Kind: "network"}
+	scope := authz.Scope{Kind: "agency"}
 	for _, network := range networks {
-		scope.References = append(scope.References, network.String())
+		scope.References = append(scope.References, fixture.agencies[network].String())
 	}
 	scopeJSON, err := json.Marshal(scope)
 	if err != nil {

@@ -12,6 +12,9 @@ type Account func(*sql.Selector)
 // AddressRule is the predicate function for addressrule builders.
 type AddressRule func(*sql.Selector)
 
+// Agency is the predicate function for agency builders.
+type Agency func(*sql.Selector)
+
 // AssignmentControl is the predicate function for assignmentcontrol builders.
 type AssignmentControl func(*sql.Selector)
 

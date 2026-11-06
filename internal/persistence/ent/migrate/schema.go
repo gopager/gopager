@@ -32,12 +32,12 @@ var (
 	AddressRulesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "revision", Type: field.TypeInt64, Default: 1},
-		{Name: "network_id", Type: field.TypeUUID},
 		{Name: "protocol", Type: field.TypeEnum, Enums: []string{"pocsag", "flex", "zvei", "eas"}},
 		{Name: "selector", Type: field.TypeJSON},
 		{Name: "valid_from", Type: field.TypeTime, Nullable: true},
 		{Name: "valid_until", Type: field.TypeTime, Nullable: true},
 		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "network_id", Type: field.TypeUUID},
 		{Name: "unit_id", Type: field.TypeUUID},
 	}
 	// AddressRulesTable holds the schema information for the "address_rules" table.
@@ -46,6 +46,12 @@ var (
 		Columns:    AddressRulesColumns,
 		PrimaryKey: []*schema.Column{AddressRulesColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "address_rules_networks_address_rules",
+				Columns:    []*schema.Column{AddressRulesColumns[7]},
+				RefColumns: []*schema.Column{NetworksColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
 			{
 				Symbol:     "address_rules_units_address_rules",
 				Columns:    []*schema.Column{AddressRulesColumns[8]},
@@ -57,7 +63,7 @@ var (
 			{
 				Name:    "addressrule_network_id_protocol_enabled",
 				Unique:  false,
-				Columns: []*schema.Column{AddressRulesColumns[2], AddressRulesColumns[3], AddressRulesColumns[7]},
+				Columns: []*schema.Column{AddressRulesColumns[7], AddressRulesColumns[2], AddressRulesColumns[6]},
 			},
 			{
 				Name:    "addressrule_unit_id",
@@ -65,6 +71,18 @@ var (
 				Columns: []*schema.Column{AddressRulesColumns[8]},
 			},
 		},
+	}
+	// AgenciesColumns holds the columns for the "agencies" table.
+	AgenciesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "revision", Type: field.TypeInt64, Default: 1},
+		{Name: "name", Type: field.TypeString, Size: 256},
+	}
+	// AgenciesTable holds the schema information for the "agencies" table.
+	AgenciesTable = &schema.Table{
+		Name:       "agencies",
+		Columns:    AgenciesColumns,
+		PrimaryKey: []*schema.Column{AgenciesColumns[0]},
 	}
 	// AssignmentControlColumns holds the columns for the "assignment_control" table.
 	AssignmentControlColumns = []*schema.Column{
@@ -469,12 +487,28 @@ var (
 		{Name: "name", Type: field.TypeString, Size: 256},
 		{Name: "protocol", Type: field.TypeEnum, Enums: []string{"pocsag", "flex", "zvei", "eas"}},
 		{Name: "deleted", Type: field.TypeBool, Default: false},
+		{Name: "agency_id", Type: field.TypeUUID},
 	}
 	// NetworksTable holds the schema information for the "networks" table.
 	NetworksTable = &schema.Table{
 		Name:       "networks",
 		Columns:    NetworksColumns,
 		PrimaryKey: []*schema.Column{NetworksColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "networks_agencies_networks",
+				Columns:    []*schema.Column{NetworksColumns[5]},
+				RefColumns: []*schema.Column{AgenciesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "network_agency_id",
+				Unique:  false,
+				Columns: []*schema.Column{NetworksColumns[5]},
+			},
+		},
 	}
 	// OrganizationsColumns holds the columns for the "organizations" table.
 	OrganizationsColumns = []*schema.Column{
@@ -730,6 +764,7 @@ var (
 		{Name: "name", Type: field.TypeString, Size: 256},
 		{Name: "deleted", Type: field.TypeBool, Default: false},
 		{Name: "settings", Type: field.TypeJSON},
+		{Name: "agency_id", Type: field.TypeUUID},
 		{Name: "organization_id", Type: field.TypeUUID, Nullable: true},
 	}
 	// UnitsTable holds the schema information for the "units" table.
@@ -739,8 +774,14 @@ var (
 		PrimaryKey: []*schema.Column{UnitsColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "units_organizations_units",
+				Symbol:     "units_agencies_units",
 				Columns:    []*schema.Column{UnitsColumns[5]},
+				RefColumns: []*schema.Column{AgenciesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "units_organizations_units",
+				Columns:    []*schema.Column{UnitsColumns[6]},
 				RefColumns: []*schema.Column{OrganizationsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -748,6 +789,11 @@ var (
 		Indexes: []*schema.Index{
 			{
 				Name:    "unit_organization_id",
+				Unique:  false,
+				Columns: []*schema.Column{UnitsColumns[6]},
+			},
+			{
+				Name:    "unit_agency_id",
 				Unique:  false,
 				Columns: []*schema.Column{UnitsColumns[5]},
 			},
@@ -828,9 +874,9 @@ var (
 	// ProcessingWorkflowScopeReferencesColumns holds the columns for the "processing_workflow_scope_references" table.
 	ProcessingWorkflowScopeReferencesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
-		{Name: "network_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "workflow_id", Type: field.TypeUUID},
 		{Name: "unit_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "network_id", Type: field.TypeUUID, Nullable: true},
 	}
 	// ProcessingWorkflowScopeReferencesTable holds the schema information for the "processing_workflow_scope_references" table.
 	ProcessingWorkflowScopeReferencesTable = &schema.Table{
@@ -840,14 +886,20 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "processing_workflow_scope_references_processing_workflows_scope_references",
-				Columns:    []*schema.Column{ProcessingWorkflowScopeReferencesColumns[2]},
+				Columns:    []*schema.Column{ProcessingWorkflowScopeReferencesColumns[1]},
 				RefColumns: []*schema.Column{ProcessingWorkflowsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "processing_workflow_scope_references_units_unit",
-				Columns:    []*schema.Column{ProcessingWorkflowScopeReferencesColumns[3]},
+				Columns:    []*schema.Column{ProcessingWorkflowScopeReferencesColumns[2]},
 				RefColumns: []*schema.Column{UnitsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "processing_workflow_scope_references_networks_network",
+				Columns:    []*schema.Column{ProcessingWorkflowScopeReferencesColumns[3]},
+				RefColumns: []*schema.Column{NetworksColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 		},
@@ -855,12 +907,12 @@ var (
 			{
 				Name:    "workflowscopereference_workflow_id_network_id",
 				Unique:  true,
-				Columns: []*schema.Column{ProcessingWorkflowScopeReferencesColumns[2], ProcessingWorkflowScopeReferencesColumns[1]},
+				Columns: []*schema.Column{ProcessingWorkflowScopeReferencesColumns[1], ProcessingWorkflowScopeReferencesColumns[3]},
 			},
 			{
 				Name:    "workflowscopereference_workflow_id_unit_id",
 				Unique:  true,
-				Columns: []*schema.Column{ProcessingWorkflowScopeReferencesColumns[2], ProcessingWorkflowScopeReferencesColumns[3]},
+				Columns: []*schema.Column{ProcessingWorkflowScopeReferencesColumns[1], ProcessingWorkflowScopeReferencesColumns[2]},
 			},
 		},
 	}
@@ -927,6 +979,7 @@ var (
 	Tables = []*schema.Table{
 		IdentityAccountsTable,
 		AddressRulesTable,
+		AgenciesTable,
 		AssignmentControlTable,
 		IdentityAuditTable,
 		CommandReceiptsTable,
@@ -971,9 +1024,13 @@ func init() {
 	IdentityAccountsTable.Annotation = &entsql.Annotation{
 		Table: "identity_accounts",
 	}
-	AddressRulesTable.ForeignKeys[0].RefTable = UnitsTable
+	AddressRulesTable.ForeignKeys[0].RefTable = NetworksTable
+	AddressRulesTable.ForeignKeys[1].RefTable = UnitsTable
 	AddressRulesTable.Annotation = &entsql.Annotation{
 		Table: "address_rules",
+	}
+	AgenciesTable.Annotation = &entsql.Annotation{
+		Table: "agencies",
 	}
 	AssignmentControlTable.Annotation = &entsql.Annotation{
 		Table: "assignment_control",
@@ -1029,6 +1086,7 @@ func init() {
 	MessageContributionsTable.Annotation = &entsql.Annotation{
 		Table: "message_contributions",
 	}
+	NetworksTable.ForeignKeys[0].RefTable = AgenciesTable
 	NetworksTable.Annotation = &entsql.Annotation{
 		Table: "networks",
 	}
@@ -1062,7 +1120,8 @@ func init() {
 	TransmissionTargetsTable.Annotation = &entsql.Annotation{
 		Table: "transmission_targets",
 	}
-	UnitsTable.ForeignKeys[0].RefTable = OrganizationsTable
+	UnitsTable.ForeignKeys[0].RefTable = AgenciesTable
+	UnitsTable.ForeignKeys[1].RefTable = OrganizationsTable
 	UnitsTable.Annotation = &entsql.Annotation{
 		Table: "units",
 	}
@@ -1081,6 +1140,7 @@ func init() {
 	}
 	ProcessingWorkflowScopeReferencesTable.ForeignKeys[0].RefTable = ProcessingWorkflowsTable
 	ProcessingWorkflowScopeReferencesTable.ForeignKeys[1].RefTable = UnitsTable
+	ProcessingWorkflowScopeReferencesTable.ForeignKeys[2].RefTable = NetworksTable
 	ProcessingWorkflowScopeReferencesTable.Annotation = &entsql.Annotation{
 		Table: "processing_workflow_scope_references",
 	}

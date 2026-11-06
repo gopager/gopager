@@ -111,7 +111,7 @@ func TestProcessingSourceOwnerMapsMissingMessageToNotFound(t *testing.T) {
 			query string
 			args  []any
 		}{
-			{`INSERT INTO networks(id,name,protocol) VALUES($1,'owner network','pocsag')`, []any{network}},
+			{`WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id) INSERT INTO networks(id,name,protocol,agency_id) SELECT $1,'owner network','pocsag',a.id FROM a`, []any{network}},
 			{`INSERT INTO gateways(id,state) VALUES($1,'active')`, []any{gateway}},
 			{`INSERT INTO gateway_networks(id,gateway_id,gateway_network_identifier,network_id,is_default)
 				VALUES($1,$2,'default',$3,true)`, []any{uuid.New(), gateway, network}},
@@ -217,8 +217,8 @@ func TestIntakeStoreReadsSyntheticNetwork(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol,deleted)
-			VALUES($1,'Live FLEX','flex',false),($2,'Deleted ZVEI','zvei',true)`, live, deleted); err != nil {
+		if _, err := executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id)
+			INSERT INTO networks(id,name,protocol,deleted,agency_id) SELECT v.id,v.name,v.protocol,v.deleted,a.id FROM (VALUES ($1::uuid,'Live FLEX','flex',false),($2::uuid,'Deleted ZVEI','zvei',true)) AS v(id,name,protocol,deleted), a`, live, deleted); err != nil {
 			return err
 		}
 		got, err := intakeRepository.ReadSyntheticNetwork(tx.Context(), tx, live)

@@ -56,34 +56,13 @@ func (owner previewFixtureNetworks) ReadSyntheticNetwork(ctx context.Context, _ 
 	return network, nil
 }
 
-func (owner previewFixtureNetworks) ReadNetworkProtocol(ctx context.Context, tx platform.TransactionContext,
-	id uuid.UUID) (protocols.Protocol, error) {
+func (owner previewFixtureNetworks) ReadNetwork(ctx context.Context, tx platform.TransactionContext,
+	id uuid.UUID) (protocols.Protocol, uuid.UUID, error) {
 	network, err := owner.ReadSyntheticNetwork(ctx, tx, id)
 	if err != nil {
-		return "", err
+		return "", uuid.Nil, err
 	}
-	return network.Protocol, nil
-}
-
-func (owner previewFixtureNetworks) ScopeExists(ctx context.Context, tx platform.TransactionContext,
-	scope authz.Scope) (bool, error) {
-	switch scope.Kind {
-	case "network":
-		for _, reference := range scope.References {
-			id, err := uuid.Parse(reference)
-			if err != nil {
-				return false, err
-			}
-			if _, exists := owner.values[id]; !exists {
-				return false, nil
-			}
-		}
-		return true, ctx.Err()
-	case "unit", "unitCollection":
-		return owner.units.ScopeExists(ctx, tx, scope)
-	default:
-		return owner.identity.ScopeExists(ctx, tx, scope)
-	}
+	return network.Protocol, network.AgencyID, nil
 }
 
 func TestWorkflowRetryResponseIsBounded(t *testing.T) {
@@ -185,7 +164,7 @@ func TestProcessingWorkflowHTTPRequiresCurrentCSRFAndUsesSyntheticDeclarations(t
 				t.Cleanup(proxy.Close)
 				origin = "https://" + proxy.Listener.Addr().String()
 			}
-			runtime, err := composeProcessingAPIRuntime(t.Context(), store, nil, "")
+			runtime, err := composeProcessingAPIRuntime(t.Context(), store, "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -194,7 +173,7 @@ func TestProcessingWorkflowHTTPRequiresCurrentCSRFAndUsesSyntheticDeclarations(t
 					t.Error(err)
 				}
 			})
-			handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, nil, nil, runtime.routes)
+			handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, nil, runtime.routes)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -329,7 +308,7 @@ func TestProcessingSyntheticPreviewHTTPUsesCurrentFixtureNetworks(t *testing.T) 
 				id := uuid.New()
 				networks.values[id] = synthetic.Network{ID: id, Name: "Standalone " + string(protocol), Protocol: protocol}
 			}
-			runtime, err := composeProcessingAPIRuntime(t.Context(), store, networks, "", networks)
+			runtime, err := composeProcessingAPIRuntime(t.Context(), store, "", networks)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -353,7 +332,7 @@ func TestProcessingSyntheticPreviewHTTPUsesCurrentFixtureNetworks(t *testing.T) 
 				origin = "https://" + proxy.Listener.Addr().String()
 			}
 			handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store,
-				networks, networks, runtime.routes)
+				networks, runtime.routes)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -495,8 +474,7 @@ func TestProcessingSyntheticPreviewHonorsCurrentUnitScope(t *testing.T) {
 		identity: identityRepository,
 		units:    unitRepository,
 	}
-	runtime, err := composeProcessingAPIRuntime(t.Context(), store, networks,
-		pluginFixtureRoot(t), networks)
+	runtime, err := composeProcessingAPIRuntime(t.Context(), store, pluginFixtureRoot(t), networks)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -509,7 +487,7 @@ func TestProcessingSyntheticPreviewHonorsCurrentUnitScope(t *testing.T) {
 	t.Cleanup(backend.Close)
 	origin := "http://" + backend.Listener.Addr().String()
 	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store,
-		networks, networks, runtime.routes)
+		networks, runtime.routes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -524,7 +502,8 @@ func TestProcessingSyntheticPreviewHonorsCurrentUnitScope(t *testing.T) {
 	login := managementRequest(t, client, origin, http.MethodPost, "/api/v1/auth/login",
 		`{"schemaVersion":1,"username":"operator","password":"initial-password"}`, "", "", http.StatusOK)
 	unitResponse := managementRequest(t, client, origin, http.MethodPost, "/api/v1/units",
-		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Matched Unit","collectionIds":[],"organizationId":null,"settings":{}}`,
+		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","agencyId":"`+seedAgency(t, store).String()+
+			`","name":"Matched Unit","collectionIds":[],"organizationId":null,"settings":{}}`,
 		login.CSRFToken, "", http.StatusCreated)
 	unitID, _ := managementResultID(t, unitResponse)
 	managementRequest(t, client, origin, http.MethodPost, "/api/v1/address-rules",
@@ -605,13 +584,13 @@ func TestProcessingSyntheticPreviewUsesProductionNetworkOwner(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		_, err = executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol,deleted)
-			VALUES($1,'Live POCSAG','pocsag',false),($2,'Deleted POCSAG','pocsag',true)`, live, deleted)
+		_, err = executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id)
+			INSERT INTO networks(id,name,protocol,deleted,agency_id) SELECT v.id,v.name,v.protocol,v.deleted,a.id FROM (VALUES ($1::uuid,'Live POCSAG','pocsag',false),($2::uuid,'Deleted POCSAG','pocsag',true)) AS v(id,name,protocol,deleted), a`, live, deleted)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := composeProcessingAPIRuntime(t.Context(), store, nil, pluginFixtureRoot(t))
+	runtime, err := composeProcessingAPIRuntime(t.Context(), store, pluginFixtureRoot(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -623,7 +602,7 @@ func TestProcessingSyntheticPreviewUsesProductionNetworkOwner(t *testing.T) {
 	backend := httptest.NewUnstartedServer(nil)
 	t.Cleanup(backend.Close)
 	origin := "http://" + backend.Listener.Addr().String()
-	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, nil, nil, runtime.routes)
+	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, nil, runtime.routes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -710,7 +689,7 @@ func TestProcessingSyntheticPreviewUsesOnlyDedicatedInstalledPreview(t *testing.
 		units:    unitRepository,
 	}
 	artifactRoot, mainArtifact, dedicatedPreview := installedPreviewArtifacts(t)
-	runtime, err := composeProcessingAPIRuntime(t.Context(), store, networks, artifactRoot, networks)
+	runtime, err := composeProcessingAPIRuntime(t.Context(), store, artifactRoot, networks)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -723,7 +702,7 @@ func TestProcessingSyntheticPreviewUsesOnlyDedicatedInstalledPreview(t *testing.
 	t.Cleanup(backend.Close)
 	origin := "http://" + backend.Listener.Addr().String()
 	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store,
-		networks, networks, runtime.routes)
+		networks, runtime.routes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1102,7 +1081,7 @@ func seedCurrentInstance(t *testing.T, store *postgres.Store, value processing.I
 
 func TestProcessingInstanceHTTPUsesRootAndRedactsCurrentConfiguration(t *testing.T) {
 	store := newManagementStore(t)
-	runtime, err := composeProcessingAPIRuntime(t.Context(), store, nil, pluginFixtureRoot(t))
+	runtime, err := composeProcessingAPIRuntime(t.Context(), store, pluginFixtureRoot(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1114,7 +1093,7 @@ func TestProcessingInstanceHTTPUsesRootAndRedactsCurrentConfiguration(t *testing
 	backend := httptest.NewUnstartedServer(nil)
 	t.Cleanup(backend.Close)
 	origin := "http://" + backend.Listener.Addr().String()
-	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, nil, nil, runtime.routes)
+	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, nil, runtime.routes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1399,7 +1378,7 @@ func revokeReadReviewer(t *testing.T, store *postgres.Store, principalID uuid.UU
 
 func TestProcessingStatusHTTPFiltersWorkflowPagesAndHidesPrivateEvidence(t *testing.T) {
 	store := newManagementStore(t)
-	runtime, err := composeProcessingAPIRuntime(t.Context(), store, nil, "")
+	runtime, err := composeProcessingAPIRuntime(t.Context(), store, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1411,7 +1390,7 @@ func TestProcessingStatusHTTPFiltersWorkflowPagesAndHidesPrivateEvidence(t *test
 	originServer := httptest.NewUnstartedServer(nil)
 	t.Cleanup(originServer.Close)
 	origin := "http://" + originServer.Listener.Addr().String()
-	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, nil, nil, runtime.routes)
+	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, nil, runtime.routes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1614,8 +1593,8 @@ func TestProcessingCandidateRetryHTTPUsesCurrentSourceOwner(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol)
-			VALUES($1,'Retry Network','pocsag')`, network); err != nil {
+		if _, err := executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id)
+			INSERT INTO networks(id,name,protocol,agency_id) SELECT $1,'Retry Network','pocsag',a.id FROM a`, network); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateways(id) VALUES($1)`, gateway); err != nil {
@@ -1628,7 +1607,7 @@ func TestProcessingCandidateRetryHTTPUsesCurrentSourceOwner(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := composeProcessingAPIRuntime(t.Context(), store, nil, "")
+	runtime, err := composeProcessingAPIRuntime(t.Context(), store, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1640,7 +1619,7 @@ func TestProcessingCandidateRetryHTTPUsesCurrentSourceOwner(t *testing.T) {
 	backend := httptest.NewUnstartedServer(nil)
 	t.Cleanup(backend.Close)
 	origin := "http://" + backend.Listener.Addr().String()
-	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, nil, nil, runtime.routes)
+	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, nil, runtime.routes)
 	if err != nil {
 		t.Fatal(err)
 	}

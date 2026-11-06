@@ -35,6 +35,7 @@ type unitMutation struct {
 	CommandID        uuid.UUID                `json:"commandId"`
 	ExpectedRevision int64                    `json:"expectedRevision,string"`
 	Name             string                   `json:"name"`
+	AgencyID         uuid.UUID                `json:"agencyId"`
 	CollectionIDs    *[]uuid.UUID             `json:"collectionIds"`
 	OrganizationID   json.RawMessage          `json:"organizationId"`
 	Settings         *units.Settings          `json:"settings"`
@@ -59,6 +60,14 @@ func (input unitMutation) organizationID(required bool) (*uuid.UUID, error) {
 }
 
 type collectionMutation struct {
+	SchemaVersion    int       `json:"schemaVersion"`
+	CommandID        uuid.UUID `json:"commandId"`
+	ExpectedRevision int64     `json:"expectedRevision,string"`
+	Name             string    `json:"name"`
+}
+
+// agencyMutation is the create and rename body of an Agency.
+type agencyMutation struct {
 	SchemaVersion    int       `json:"schemaVersion"`
 	CommandID        uuid.UUID `json:"commandId"`
 	ExpectedRevision int64     `json:"expectedRevision,string"`
@@ -103,6 +112,7 @@ type fromTemplateMutation struct {
 	SchemaVersion int          `json:"schemaVersion"`
 	CommandID     uuid.UUID    `json:"commandId"`
 	TemplateID    uuid.UUID    `json:"templateId"`
+	AgencyID      uuid.UUID    `json:"agencyId"`
 	Name          string       `json:"name"`
 	CollectionIDs *[]uuid.UUID `json:"collectionIds"`
 }
@@ -170,6 +180,7 @@ func (input ruleMutation) input() (assignments.RuleInput, error) {
 // registerManagementRoutes adds the current master-data and assignment management surfaces.
 func registerManagementRoutes(mux *http.ServeMux, transport *identity.HTTPTransport, unitService *units.Service, ruleService *assignments.Service) {
 	api := managementAPI{transport: transport, units: unitService, rules: ruleService}
+	api.registerAgencies(mux)
 	api.registerOrganizations(mux)
 	api.registerUnitTemplates(mux)
 	api.registerUnits(mux)
@@ -264,6 +275,62 @@ func managementID(r *http.Request) (uuid.UUID, error) {
 		return uuid.Nil, authz.ErrInvalidInput
 	}
 	return id, nil
+}
+
+// registerAgencies binds the revisioned Agency lifecycle: list, create, read, rename, delete.
+func (api managementAPI) registerAgencies(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/v1/agencies", api.route(func(r *http.Request, proof identity.Proof, _ func(identity.Authentication) error) (any, error) {
+		page, err := managementPage(r)
+		if err != nil {
+			return nil, err
+		}
+		return api.units.ListAgencies(r.Context(), proof, page)
+	}, http.StatusOK))
+	mux.HandleFunc("POST /api/v1/agencies", api.route(func(r *http.Request, proof identity.Proof, check func(identity.Authentication) error) (any, error) {
+		var input agencyMutation
+		if err := decodeManagementJSON(r, &input); err != nil {
+			return nil, err
+		}
+		if input.SchemaVersion != 1 || input.CommandID == uuid.Nil || input.ExpectedRevision != 0 {
+			return nil, authz.ErrInvalidInput
+		}
+		return api.units.CreateAgency(r.Context(), proof, input.CommandID, units.AgencyInput{Name: input.Name}, check)
+	}, http.StatusCreated))
+	mux.HandleFunc("GET /api/v1/agencies/{id}", api.route(func(r *http.Request, proof identity.Proof, _ func(identity.Authentication) error) (any, error) {
+		id, err := managementID(r)
+		if err != nil {
+			return nil, err
+		}
+		return api.units.ReadAgency(r.Context(), proof, id)
+	}, http.StatusOK))
+	mux.HandleFunc("PUT /api/v1/agencies/{id}", api.route(func(r *http.Request, proof identity.Proof, check func(identity.Authentication) error) (any, error) {
+		var input agencyMutation
+		if err := decodeManagementJSON(r, &input); err != nil {
+			return nil, err
+		}
+		if input.SchemaVersion != 1 || input.CommandID != uuid.Nil {
+			return nil, authz.ErrInvalidInput
+		}
+		id, err := managementID(r)
+		if err != nil {
+			return nil, err
+		}
+		return api.units.ChangeAgency(r.Context(), proof, id, input.ExpectedRevision, units.AgencyInput{Name: input.Name}, check)
+	}, http.StatusOK))
+	mux.HandleFunc("DELETE /api/v1/agencies/{id}", api.route(func(r *http.Request, proof identity.Proof, check func(identity.Authentication) error) (any, error) {
+		var input deleteMutation
+		if err := decodeManagementJSON(r, &input); err != nil {
+			return nil, err
+		}
+		if input.SchemaVersion != 1 {
+			return nil, authz.ErrInvalidInput
+		}
+		id, err := managementID(r)
+		if err != nil {
+			return nil, err
+		}
+		return api.units.DeleteAgency(r.Context(), proof, id, input.ExpectedRevision, check)
+	}, http.StatusOK))
 }
 
 // registerOrganizations binds the revisioned Organization lifecycle.
@@ -417,7 +484,7 @@ func (api managementAPI) registerUnits(mux *http.ServeMux) {
 			return nil, authz.ErrInvalidInput
 		}
 		return api.units.CreateUnitFromTemplate(r.Context(), proof, input.CommandID, input.TemplateID,
-			units.UnitInput{Name: input.Name, CollectionIDs: *input.CollectionIDs}, check)
+			units.UnitInput{Name: input.Name, AgencyID: input.AgencyID, CollectionIDs: *input.CollectionIDs}, check)
 	}, http.StatusCreated))
 	mux.HandleFunc("POST /api/v1/units/bulk/preview", api.route(func(r *http.Request, proof identity.Proof, check func(identity.Authentication) error) (any, error) {
 		var input bulkUnitMutation
@@ -467,7 +534,7 @@ func (api managementAPI) registerUnits(mux *http.ServeMux) {
 			if err != nil {
 				return nil, err
 			}
-			values := units.UnitInput{Name: input.Name, OrganizationID: organizationID,
+			values := units.UnitInput{Name: input.Name, AgencyID: input.AgencyID, OrganizationID: organizationID,
 				CollectionIDs: *input.CollectionIDs, Settings: *input.Settings, NewOrganization: input.NewOrganization}
 			if r.Method == "PUT" && input.NewOrganization != nil {
 				return nil, authz.ErrInvalidInput
@@ -752,7 +819,7 @@ func writeManagementError(w http.ResponseWriter, err error) {
 		code, fallback, status = "FORBIDDEN", "This action is not permitted.", http.StatusForbidden
 	case errors.Is(err, authz.ErrNotFound):
 		code, fallback, status = "NOT_FOUND", "The requested item is not available.", http.StatusNotFound
-	case errors.Is(err, authz.ErrRevisionConflict), errors.Is(err, assignments.ErrRuleConflict):
+	case errors.Is(err, authz.ErrRevisionConflict), errors.Is(err, assignments.ErrRuleConflict), errors.Is(err, units.ErrAgencyInUse):
 		code, fallback, status, retryable = "REVISION_CONFLICT", "This item changed. Reload before saving.", http.StatusConflict, true
 	case errors.As(err, &failure):
 		code, fallback, retryable = string(failure.Code()), failure.Error(), failure.Retryable()

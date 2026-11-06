@@ -9,6 +9,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/persistence/ent/agency"
 	"github.com/gopager/gopager/internal/persistence/ent/network"
 )
 
@@ -23,9 +24,45 @@ type Network struct {
 	Name string `json:"name,omitempty"`
 	// Protocol holds the value of the "protocol" field.
 	Protocol network.Protocol `json:"protocol,omitempty"`
+	// AgencyID holds the value of the "agency_id" field.
+	AgencyID uuid.UUID `json:"agency_id,omitempty"`
 	// Deleted holds the value of the "deleted" field.
-	Deleted      bool `json:"deleted,omitempty"`
+	Deleted bool `json:"deleted,omitempty"`
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the NetworkQuery when eager-loading is set.
+	Edges        NetworkEdges `json:"edges"`
 	selectValues sql.SelectValues
+}
+
+// NetworkEdges holds the relations/edges for other nodes in the graph.
+type NetworkEdges struct {
+	// Agency holds the value of the agency edge.
+	Agency *Agency `json:"agency,omitempty"`
+	// AddressRules holds the value of the address_rules edge.
+	AddressRules []*AddressRule `json:"address_rules,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [2]bool
+}
+
+// AgencyOrErr returns the Agency value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e NetworkEdges) AgencyOrErr() (*Agency, error) {
+	if e.Agency != nil {
+		return e.Agency, nil
+	} else if e.loadedTypes[0] {
+		return nil, &NotFoundError{label: agency.Label}
+	}
+	return nil, &NotLoadedError{edge: "agency"}
+}
+
+// AddressRulesOrErr returns the AddressRules value or an error if the edge
+// was not loaded in eager-loading.
+func (e NetworkEdges) AddressRulesOrErr() ([]*AddressRule, error) {
+	if e.loadedTypes[1] {
+		return e.AddressRules, nil
+	}
+	return nil, &NotLoadedError{edge: "address_rules"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -39,7 +76,7 @@ func (*Network) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullInt64)
 		case network.FieldName, network.FieldProtocol:
 			values[i] = new(sql.NullString)
-		case network.FieldID:
+		case network.FieldID, network.FieldAgencyID:
 			values[i] = new(uuid.UUID)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -80,6 +117,12 @@ func (_m *Network) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Protocol = network.Protocol(value.String)
 			}
+		case network.FieldAgencyID:
+			if value, ok := values[i].(*uuid.UUID); !ok {
+				return fmt.Errorf("unexpected type %T for field agency_id", values[i])
+			} else if value != nil {
+				_m.AgencyID = *value
+			}
 		case network.FieldDeleted:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field deleted", values[i])
@@ -97,6 +140,16 @@ func (_m *Network) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (_m *Network) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
+}
+
+// QueryAgency queries the "agency" edge of the Network entity.
+func (_m *Network) QueryAgency() *AgencyQuery {
+	return NewNetworkClient(_m.config).QueryAgency(_m)
+}
+
+// QueryAddressRules queries the "address_rules" edge of the Network entity.
+func (_m *Network) QueryAddressRules() *AddressRuleQuery {
+	return NewNetworkClient(_m.config).QueryAddressRules(_m)
 }
 
 // Update returns a builder for updating this Network.
@@ -130,6 +183,9 @@ func (_m *Network) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("protocol=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Protocol))
+	builder.WriteString(", ")
+	builder.WriteString("agency_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AgencyID))
 	builder.WriteString(", ")
 	builder.WriteString("deleted=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Deleted))

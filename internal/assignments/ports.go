@@ -11,11 +11,11 @@ import (
 	"github.com/gopager/gopager/internal/protocols"
 )
 
-// NetworkOwner is implemented by the Network owner (transmission intake) and
-// reports a Network's current existence and Protocol inside the caller's
-// transaction.
+// NetworkOwner is implemented by the Radio network owner (transmission intake) and
+// reports a Network's current existence, Protocol and home Agency inside the
+// caller's transaction.
 type NetworkOwner interface {
-	ReadNetworkProtocol(context.Context, platform.TransactionContext, uuid.UUID) (protocols.Protocol, error)
+	ReadNetwork(context.Context, platform.TransactionContext, uuid.UUID) (protocols.Protocol, uuid.UUID, error)
 }
 
 // Repository owns current rules and durable invalidation, not historical Message/support tables.

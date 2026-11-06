@@ -61,7 +61,9 @@ func TestProcessingConfigurationNativeUnionBeforeCountPagingAndVersionLookup(t *
 		t.Fatal(err)
 	}
 	actor, network1, network2 := uuid.New(), uuid.New(), uuid.New()
+	agency1, agency2 := uuid.New(), uuid.New()
 	admin := processingAuthorityFixture(actor, authz.Scope{Kind: "all"})
+	// Workflow selection scopes name Networks; grants name the Agencies that own them.
 	scopes := []authz.Scope{{Kind: "all"}, {Kind: "network", References: []string{network1.String()}},
 		{Kind: "network", References: []string{network2.String()}},
 		{Kind: "network", References: []string{network1.String(), network2.String()}}}
@@ -69,6 +71,18 @@ func TestProcessingConfigurationNativeUnionBeforeCountPagingAndVersionLookup(t *
 	versions := make([]processing.Version, len(scopes))
 	definition := preparedProcessingDefinition(t)
 	if err := primary.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := primary.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO agencies(id,name) VALUES($1,'Agency 1'),($2,'Agency 2')`,
+			agency1, agency2); err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol,agency_id) VALUES($1,'Network 1','pocsag',$3),($2,'Network 2','pocsag',$4)`,
+			network1, network2, agency1, agency2); err != nil {
+			return err
+		}
 		if _, err := store.LockRevision(tx.Context(), tx); err != nil {
 			return err
 		}
@@ -125,11 +139,13 @@ func TestProcessingConfigurationNativeUnionBeforeCountPagingAndVersionLookup(t *
 			t.Fatal(err)
 		}
 	}
-	networkOnly := processingAuthorityFixture(actor, scopes[1])
-	check(networkOnly, 1, []uuid.UUID{configs[1].ID})
-	union := processingAuthorityFixture(actor, scopes[1], scopes[2])
+	first := authz.Scope{Kind: "agency", References: []string{agency1.String()}}
+	second := authz.Scope{Kind: "agency", References: []string{agency2.String()}}
+	agencyOnly := processingAuthorityFixture(actor, first)
+	check(agencyOnly, 1, []uuid.UUID{configs[1].ID})
+	union := processingAuthorityFixture(actor, first, second)
 	check(union, 3, []uuid.UUID{configs[1].ID, configs[2].ID, configs[3].ID})
-	union.Key = &authz.Restrictions{Actions: []string{"rule.read"}, Scopes: []authz.Scope{scopes[1]}}
+	union.Key = &authz.Restrictions{Actions: []string{"rule.read"}, Scopes: []authz.Scope{first}}
 	check(union, 1, []uuid.UUID{configs[1].ID})
 }
 

@@ -145,20 +145,24 @@ func (s *Store) GatewayNetworks(ctx context.Context, tx platform.TransactionCont
 	return result, rows.Err()
 }
 
-// ReadNetworkProtocol implements current Network ownership for matching and identity-scope checks.
-func (s *Store) ReadNetworkProtocol(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (protocols.Protocol, error) {
+// ReadNetwork implements current Radio network ownership for matching and authorization: it
+// returns the Network's Protocol and home Agency, or authz.ErrNotFound for an unknown or
+// deleted Network.
+func (s *Store) ReadNetwork(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (protocols.Protocol, uuid.UUID, error) {
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {
-		return "", err
+		return "", uuid.Nil, err
 	}
 	var protocol string
-	if err := executor.QueryRowContext(ctx, `SELECT protocol FROM networks WHERE id=$1 AND deleted=false`, id).Scan(&protocol); err != nil {
+	var agency uuid.UUID
+	if err := executor.QueryRowContext(ctx, `SELECT protocol,agency_id FROM networks WHERE id=$1 AND deleted=false`, id).
+		Scan(&protocol, &agency); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", authz.ErrNotFound
+			return "", uuid.Nil, authz.ErrNotFound
 		}
-		return "", err
+		return "", uuid.Nil, err
 	}
-	return protocols.Protocol(protocol), nil
+	return protocols.Protocol(protocol), agency, nil
 }
 
 // ReportGatewayState retains authenticated contact/report data and emits only effective state changes.
@@ -209,32 +213,6 @@ func (s *Store) ReportGatewayState(ctx context.Context, tx platform.TransactionC
 	return s.appendFact(ctx, tx, events.IntakeFact{ID: uuid.New(), Type: events.GatewayStateChanged,
 		GatewayID: gateway, Revision: revision + 1, OccurredAt: now, ContactTime: &now,
 		OldState: oldState, NewState: newState, ReasonCode: report.ReasonCode, Detail: report.Detail})
-}
-
-// ScopeExists checks all referenced current Network IDs without inventing scope support elsewhere.
-func (s *Store) ScopeExists(ctx context.Context, tx platform.TransactionContext, scope authz.Scope) (bool, error) {
-	if scope.Kind != "network" || !authz.ValidScope(scope) {
-		return false, nil
-	}
-	executor, err := s.primary.Resolve(tx)
-	if err != nil {
-		return false, err
-	}
-	for _, reference := range scope.References {
-		id, err := uuid.Parse(reference)
-		if err != nil {
-			return false, nil
-		}
-		var exists bool
-		if err := executor.QueryRowContext(ctx, `SELECT EXISTS(
-			SELECT 1 FROM networks WHERE id=$1 AND deleted=false)`, id).Scan(&exists); err != nil {
-			return false, err
-		}
-		if !exists {
-			return false, nil
-		}
-	}
-	return true, nil
 }
 
 // SubmissionReceipt serializes all retries for a Gateway while the operation's fingerprint is checked.
@@ -780,4 +758,3 @@ func boolInt64(value bool) int64 {
 
 var _ ingest.Repository = (*Store)(nil)
 var _ assignments.NetworkOwner = (*Store)(nil)
-var _ identity.ScopeReferences = (*Store)(nil)

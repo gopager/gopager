@@ -109,26 +109,6 @@ func NetworkIDNotIn(vs ...uuid.UUID) predicate.WorkflowScopeReference {
 	return predicate.WorkflowScopeReference(sql.FieldNotIn(FieldNetworkID, vs...))
 }
 
-// NetworkIDGT applies the GT predicate on the "network_id" field.
-func NetworkIDGT(v uuid.UUID) predicate.WorkflowScopeReference {
-	return predicate.WorkflowScopeReference(sql.FieldGT(FieldNetworkID, v))
-}
-
-// NetworkIDGTE applies the GTE predicate on the "network_id" field.
-func NetworkIDGTE(v uuid.UUID) predicate.WorkflowScopeReference {
-	return predicate.WorkflowScopeReference(sql.FieldGTE(FieldNetworkID, v))
-}
-
-// NetworkIDLT applies the LT predicate on the "network_id" field.
-func NetworkIDLT(v uuid.UUID) predicate.WorkflowScopeReference {
-	return predicate.WorkflowScopeReference(sql.FieldLT(FieldNetworkID, v))
-}
-
-// NetworkIDLTE applies the LTE predicate on the "network_id" field.
-func NetworkIDLTE(v uuid.UUID) predicate.WorkflowScopeReference {
-	return predicate.WorkflowScopeReference(sql.FieldLTE(FieldNetworkID, v))
-}
-
 // NetworkIDIsNil applies the IsNil predicate on the "network_id" field.
 func NetworkIDIsNil() predicate.WorkflowScopeReference {
 	return predicate.WorkflowScopeReference(sql.FieldIsNull(FieldNetworkID))
@@ -207,6 +187,29 @@ func HasUnit() predicate.WorkflowScopeReference {
 func HasUnitWith(preds ...predicate.Unit) predicate.WorkflowScopeReference {
 	return predicate.WorkflowScopeReference(func(s *sql.Selector) {
 		step := newUnitStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasNetwork applies the HasEdge predicate on the "network" edge.
+func HasNetwork() predicate.WorkflowScopeReference {
+	return predicate.WorkflowScopeReference(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, NetworkTable, NetworkColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasNetworkWith applies the HasEdge predicate on the "network" edge with a given conditions (other predicates).
+func HasNetworkWith(preds ...predicate.Network) predicate.WorkflowScopeReference {
+	return predicate.WorkflowScopeReference(func(s *sql.Selector) {
+		step := newNetworkStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

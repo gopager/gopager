@@ -264,8 +264,8 @@ func TestIntakeOfDistinctIdentitiesOverlaps(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol)
-			VALUES($1,'overlap network','pocsag')`, network); err != nil {
+		if _, err := executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id)
+			INSERT INTO networks(id,name,protocol,agency_id) SELECT $1,'overlap network','pocsag',a.id FROM a`, network); err != nil {
 			return err
 		}
 		for i, gateway := range gateways {

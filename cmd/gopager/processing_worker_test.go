@@ -31,8 +31,8 @@ func TestInstalledWorkflowRunsOnProductionWiring(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol)
-			VALUES($1,'Installed Network','pocsag')`, network); err != nil {
+		if _, err := executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id)
+			INSERT INTO networks(id,name,protocol,agency_id) SELECT $1,'Installed Network','pocsag',a.id FROM a`, network); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateways(id) VALUES($1)`, gateway); err != nil {
@@ -46,7 +46,7 @@ func TestInstalledWorkflowRunsOnProductionWiring(t *testing.T) {
 		t.Fatal(err)
 	}
 	artifactRoot, mainArtifact, _ := installedPreviewArtifacts(t)
-	runtime, err := composeProcessingAPIRuntime(t.Context(), store, nil, artifactRoot)
+	runtime, err := composeProcessingAPIRuntime(t.Context(), store, artifactRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestInstalledWorkflowRunsOnProductionWiring(t *testing.T) {
 	backend := httptest.NewUnstartedServer(nil)
 	t.Cleanup(backend.Close)
 	origin := "http://" + backend.Listener.Addr().String()
-	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, nil, nil, runtime.routes)
+	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, nil, runtime.routes)
 	if err != nil {
 		t.Fatal(err)
 	}

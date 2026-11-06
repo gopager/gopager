@@ -9,6 +9,7 @@ import (
 	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/persistence/ent/account"
 	"github.com/gopager/gopager/internal/persistence/ent/addressrule"
+	"github.com/gopager/gopager/internal/persistence/ent/agency"
 	"github.com/gopager/gopager/internal/persistence/ent/assignmentcontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/auditrecord"
 	"github.com/gopager/gopager/internal/persistence/ent/commandreceipt"
@@ -111,6 +112,48 @@ func init() {
 	addressruleDescID := addressruleMixinFields0[0].Descriptor()
 	// addressrule.DefaultID holds the default value on creation for the id field.
 	addressrule.DefaultID = addressruleDescID.Default.(func() uuid.UUID)
+	agencyMixin := schema.Agency{}.Mixin()
+	agency.Policy = privacy.NewPolicies(schema.Agency{})
+	agency.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := agency.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
+	agencyMixinFields0 := agencyMixin[0].Fields()
+	_ = agencyMixinFields0
+	agencyFields := schema.Agency{}.Fields()
+	_ = agencyFields
+	// agencyDescRevision is the schema descriptor for revision field.
+	agencyDescRevision := agencyMixinFields0[1].Descriptor()
+	// agency.DefaultRevision holds the default value on creation for the revision field.
+	agency.DefaultRevision = agencyDescRevision.Default.(int64)
+	// agency.RevisionValidator is a validator for the "revision" field. It is called by the builders before save.
+	agency.RevisionValidator = agencyDescRevision.Validators[0].(func(int64) error)
+	// agencyDescName is the schema descriptor for name field.
+	agencyDescName := agencyFields[0].Descriptor()
+	// agency.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	agency.NameValidator = func() func(string) error {
+		validators := agencyDescName.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(name string) error {
+			for _, fn := range fns {
+				if err := fn(name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// agencyDescID is the schema descriptor for id field.
+	agencyDescID := agencyMixinFields0[0].Descriptor()
+	// agency.DefaultID holds the default value on creation for the id field.
+	agency.DefaultID = agencyDescID.Default.(func() uuid.UUID)
 	assignmentcontrol.Policy = privacy.NewPolicies(schema.AssignmentControl{})
 	assignmentcontrol.Hooks[0] = func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
@@ -520,7 +563,7 @@ func init() {
 		}
 	}()
 	// networkDescDeleted is the schema descriptor for deleted field.
-	networkDescDeleted := networkFields[4].Descriptor()
+	networkDescDeleted := networkFields[5].Descriptor()
 	// network.DefaultDeleted holds the default value on creation for the deleted field.
 	network.DefaultDeleted = networkDescDeleted.Default.(bool)
 	organizationMixin := schema.Organization{}.Mixin()
@@ -851,7 +894,7 @@ func init() {
 		}
 	}()
 	// unitDescDeleted is the schema descriptor for deleted field.
-	unitDescDeleted := unitFields[1].Descriptor()
+	unitDescDeleted := unitFields[2].Descriptor()
 	// unit.DefaultDeleted holds the default value on creation for the deleted field.
 	unit.DefaultDeleted = unitDescDeleted.Default.(bool)
 	// unitDescID is the schema descriptor for id field.

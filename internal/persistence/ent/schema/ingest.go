@@ -7,6 +7,7 @@ import (
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema"
+	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	"github.com/google/uuid"
@@ -32,8 +33,22 @@ func (Network) Fields() []ent.Field {
 		field.Int64("revision").Default(1).Positive(),
 		field.String("name").NotEmpty().MaxRuneLen(256),
 		field.Enum("protocol").Values("pocsag", "flex", "zvei", "eas"),
+		field.UUID("agency_id", uuid.UUID{}),
 		field.Bool("deleted").Default(false),
 	}
+}
+
+// Edges returns the relations of the Network schema: its home Agency and the Address rules in it.
+func (Network) Edges() []ent.Edge {
+	return []ent.Edge{
+		edge.From("agency", Agency.Type).Ref("networks").Field("agency_id").Unique().Required(),
+		edge.To("address_rules", AddressRule.Type),
+	}
+}
+
+// Indexes returns the indexes of the Network schema.
+func (Network) Indexes() []ent.Index {
+	return []ent.Index{index.Fields("agency_id")}
 }
 
 // Gateway defines the gateways table: an ingest gateway with its health state and last

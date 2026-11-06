@@ -38,36 +38,35 @@ import (
 	"github.com/gopager/gopager/internal/protocols"
 )
 
+// fixtureNetwork is one declared standalone Network: its Protocol and its Agency.
+type fixtureNetwork struct {
+	protocol protocols.Protocol
+	agency   uuid.UUID
+}
+
 // matcherOwners supplies declared standalone fixture Networks, not production Intake composition.
 type matcherOwners struct {
 	identity *identitystore.Store
 	units    *unitstore.Store
-	networks map[uuid.UUID]protocols.Protocol
+	networks map[uuid.UUID]fixtureNetwork
 }
 
-func (o matcherOwners) ReadNetworkProtocol(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (protocols.Protocol, error) {
+func (o matcherOwners) ReadNetwork(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (protocols.Protocol, uuid.UUID, error) {
 	value, found := o.networks[id]
 	if !found {
-		return "", authz.ErrNotFound
+		return "", uuid.Nil, authz.ErrNotFound
 	}
-	return value, ctx.Err()
+	return value.protocol, value.agency, ctx.Err()
+}
+
+func (o matcherOwners) ReadUnitContext(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (units.Context, error) {
+	return o.units.ReadUnitContext(ctx, tx, id)
 }
 
 func (o matcherOwners) ScopeExists(ctx context.Context, tx platform.TransactionContext, scope authz.Scope) (bool, error) {
 	switch scope.Kind {
-	case "unit", "unitCollection":
+	case "unit", "unitCollection", "agency":
 		return o.units.ScopeExists(ctx, tx, scope)
-	case "network":
-		for _, reference := range scope.References {
-			id, err := uuid.Parse(reference)
-			if err != nil {
-				return false, err
-			}
-			if _, found := o.networks[id]; !found {
-				return false, nil
-			}
-		}
-		return true, ctx.Err()
 	default:
 		return o.identity.ScopeExists(ctx, tx, scope)
 	}
@@ -86,6 +85,9 @@ type matcherFixture struct {
 	proof     identity.Proof
 	principal uuid.UUID
 	networks  []uuid.UUID
+	// agencies[0] owns networks[0]; agencies[1] owns networks[1] and networks[2]; agency is agencies[0].
+	agencies [2]uuid.UUID
+	agency   uuid.UUID
 }
 
 type staleUnitSaveRepository struct {
@@ -135,8 +137,28 @@ func newMatcherFixture(t *testing.T) matcherFixture {
 		t.Fatal(err)
 	}
 	networks := []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}
+	agencies := [2]uuid.UUID{uuid.New(), uuid.New()}
+	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO agencies(id,name) VALUES($1,'Fixture agency A'),($2,'Fixture agency B')`,
+			agencies[0], agencies[1]); err != nil {
+			return err
+		}
+		// Rule scoping resolves a Network's Agency through the networks table, so the fixture
+		// Networks exist as rows and not only in the fake owner.
+		_, err = executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol,agency_id) VALUES
+			($1,'Fixture POCSAG A','pocsag',$4),($2,'Fixture POCSAG B','pocsag',$5),($3,'Fixture FLEX B','flex',$5)`,
+			networks[0], networks[1], networks[2], agencies[0], agencies[1])
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
 	owners := matcherOwners{identity: repository, units: unitRepository,
-		networks: map[uuid.UUID]protocols.Protocol{networks[0]: protocols.POCSAG, networks[1]: protocols.POCSAG, networks[2]: protocols.FLEX}}
+		networks: map[uuid.UUID]fixtureNetwork{networks[0]: {protocols.POCSAG, agencies[0]},
+			networks[1]: {protocols.POCSAG, agencies[1]}, networks[2]: {protocols.FLEX, agencies[1]}}}
 	resolver, err := identity.NewResolver(repository, store, owners)
 	if err != nil {
 		t.Fatal(err)
@@ -164,7 +186,8 @@ func newMatcherFixture(t *testing.T) matcherFixture {
 	}
 	return matcherFixture{store: store, units: unitService, rules: ruleService, unitStore: unitRepository,
 		ruleStore: ruleRepository, resolver: resolver, owners: owners, facts: facts, receipts: receipts,
-		proof: identity.Proof{Kind: identity.SessionProof, Secret: session.Secret}, principal: principal, networks: networks}
+		proof: identity.Proof{Kind: identity.SessionProof, Secret: session.Secret}, principal: principal, networks: networks,
+		agencies: agencies, agency: agencies[0]}
 }
 
 // checkedMutation represents successful fixture-only transport validation, not a production bypass.
@@ -211,7 +234,7 @@ func (f failingConfigurationFacts) AppendMasterDataFact(context.Context, platfor
 func TestCurrentMatcherAtomicCreationRetryPreviewAndRollback(t *testing.T) {
 	f := newMatcherFixture(t)
 	command := uuid.New()
-	input := units.UnitInput{Name: "Station", CollectionIDs: []uuid.UUID{}}
+	input := units.UnitInput{AgencyID: f.agency, Name: "Station", CollectionIDs: []uuid.UUID{}}
 	unit, err := f.units.CreateUnit(t.Context(), f.proof, command, input, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
@@ -256,7 +279,7 @@ func TestCurrentMatcherAtomicCreationRetryPreviewAndRollback(t *testing.T) {
 
 func TestCurrentMatcherSelectionCandidatesAndDeletionInvalidation(t *testing.T) {
 	f := newMatcherFixture(t)
-	unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{Name: "Station"}, checkedMutation)
+	unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{AgencyID: f.agency, Name: "Station"}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -340,7 +363,7 @@ func TestCurrentMatcherConcurrentConflictsAndCollectionDetach(t *testing.T) {
 		t.Fatal(err)
 	}
 	unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
-		units.UnitInput{Name: "Station", CollectionIDs: []uuid.UUID{collection.ID}}, checkedMutation)
+		units.UnitInput{AgencyID: f.agency, Name: "Station", CollectionIDs: []uuid.UUID{collection.ID}}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -415,11 +438,12 @@ func TestCurrentMatcherNativeFilteringAndAllUseChecks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	shared, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{Name: "Shared", CollectionIDs: []uuid.UUID{collection.ID}}, checkedMutation)
+	shared, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{AgencyID: f.agency, Name: "Shared", CollectionIDs: []uuid.UUID{collection.ID}}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
-	hidden, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{Name: "Hidden"}, checkedMutation)
+	hidden, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
+		units.UnitInput{AgencyID: f.agencies[1], Name: "Hidden", CollectionIDs: []uuid.UUID{collection.ID}}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -434,7 +458,7 @@ func TestCurrentMatcherNativeFilteringAndAllUseChecks(t *testing.T) {
 	}
 	replaceManagementGrants(t, f, []authz.Grant{{
 		Actions: []string{"unit.read", "unit.update", "unit-collection.read", "unit-collection.update", "unit-collection.delete", "address-rule.read", "address-rule.create"},
-		Scope:   authz.Scope{Kind: "network", References: []string{f.networks[0].String()}},
+		Scope:   authz.Scope{Kind: "agency", References: []string{f.agencies[0].String()}},
 	}})
 	page, err := f.units.ListUnits(t.Context(), f.proof, units.PageInput{Offset: 1, Limit: 1})
 	if err != nil || page.Total != 1 || len(page.Items) != 0 {
@@ -447,11 +471,12 @@ func TestCurrentMatcherNativeFilteringAndAllUseChecks(t *testing.T) {
 	if _, err := f.units.ReadUnit(t.Context(), f.proof, hidden.ID); !errors.Is(err, authz.ErrNotFound) {
 		t.Fatalf("hidden Unit existence exposed: %v", err)
 	}
-	before := configurationCounts(t, f)
+	// A Unit alerted through another Agency's Network is still governed by its own Agency alone.
 	if _, err := f.units.ChangeUnit(t.Context(), f.proof, shared.ID, shared.Revision,
-		units.UnitInput{Name: "unauthorized shared rename", CollectionIDs: []uuid.UUID{collection.ID}}, checkedMutation); !errors.Is(err, authz.ErrForbidden) {
-		t.Fatalf("shared hidden Network use permitted rename: %v", err)
+		units.UnitInput{AgencyID: f.agency, Name: "Shared renamed", CollectionIDs: []uuid.UUID{collection.ID}}, checkedMutation); err != nil {
+		t.Fatalf("own-Agency Unit rename refused because of a foreign Network use: %v", err)
 	}
+	before := configurationCounts(t, f)
 	if _, err := f.units.DeleteCollection(t.Context(), f.proof, collection.ID, collection.Revision, checkedMutation); !errors.Is(err, authz.ErrForbidden) {
 		t.Fatalf("collection deletion skipped hidden member use: %v", err)
 	}
@@ -505,15 +530,15 @@ func TestCurrentMatcherNativeMixedScopesAndRestrictingKeysMatchPointDecisions(t 
 		if i != 1 {
 			memberships = append(memberships, collection.ID)
 		}
-		unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{Name: "Station", CollectionIDs: memberships}, checkedMutation)
+		network, agency := f.networks[1], f.agencies[1]
+		if i == 0 {
+			network, agency = f.networks[0], f.agencies[0]
+		}
+		unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{AgencyID: agency, Name: "Station", CollectionIDs: memberships}, checkedMutation)
 		if err != nil {
 			t.Fatal(err)
 		}
 		ids[i] = unit.ID
-		network := f.networks[1]
-		if i == 0 {
-			network = f.networks[0]
-		}
 		input := ruleInput(network, unit.ID, uint64(10+i*10), uint64(10+i*10))
 		input.Enabled = i != 0
 		rule, err := f.rules.CreateRule(t.Context(), f.proof, uuid.New(), input, checkedMutation)
@@ -524,12 +549,12 @@ func TestCurrentMatcherNativeMixedScopesAndRestrictingKeysMatchPointDecisions(t 
 	}
 	actions := []string{"unit.read", "address-rule.read", "address-rule.create"}
 	replaceManagementGrants(t, f, []authz.Grant{
-		{Actions: actions, Scope: authz.Scope{Kind: "network", References: []string{f.networks[0].String()}}},
+		{Actions: actions, Scope: authz.Scope{Kind: "agency", References: []string{f.agencies[0].String()}}},
 		{Actions: actions, Scope: authz.Scope{Kind: "unit", References: []string{ids[1].String()}}},
 		{Actions: actions, Scope: authz.Scope{Kind: "unitCollection", References: []string{collection.ID.String()}}},
 	})
 	for _, scope := range []authz.Scope{
-		{Kind: "network", References: []string{f.networks[1].String()}},
+		{Kind: "agency", References: []string{f.agencies[1].String()}},
 		{Kind: "unitCollection", References: []string{collection.ID.String()}},
 		{Kind: "unit", References: []string{ids[0].String()}},
 	} {
@@ -549,11 +574,7 @@ func TestCurrentMatcherNativeMixedScopesAndRestrictingKeysMatchPointDecisions(t 
 				if err != nil {
 					return err
 				}
-				networks, err := f.ruleStore.NetworksForUnit(tx.Context(), tx, id)
-				if err != nil {
-					return err
-				}
-				target := authz.Target{NetworkID: networks[0], UnitID: id, UnitCollections: unit.CollectionIDs}
+				target := authz.Target{AgencyID: unit.AgencyID, UnitID: id, UnitCollections: unit.CollectionIDs}
 				if err := authz.Authorize(authentication.Authority, "unit.read", []string{"unit"}, target, now); err == nil {
 					expectedUnits = append(expectedUnits, id)
 				} else if !errors.Is(err, authz.ErrForbidden) {
@@ -728,12 +749,12 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 	f := newMatcherFixture(t)
 	networkID, gatewayID := f.networks[0], uuid.New()
 	unitA, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
-		units.UnitInput{Name: "Station A", CollectionIDs: []uuid.UUID{}}, checkedMutation)
+		units.UnitInput{AgencyID: f.agency, Name: "Station A", CollectionIDs: []uuid.UUID{}}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
 	unitB, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
-		units.UnitInput{Name: "Station B", CollectionIDs: []uuid.UUID{}}, checkedMutation)
+		units.UnitInput{AgencyID: f.agency, Name: "Station B", CollectionIDs: []uuid.UUID{}}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -775,9 +796,6 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 		var assignmentRevision int64
 		if err := executor.QueryRowContext(tx.Context(), `SELECT revision FROM assignment_control WHERE id=1`).
 			Scan(&assignmentRevision); err != nil {
-			return err
-		}
-		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO networks (id,name,protocol) VALUES($1,'Test','pocsag')`, networkID); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateways (id) VALUES($1)`, gatewayID); err != nil {
@@ -1211,7 +1229,7 @@ func TestCurrentMatcherCollectionScopeDeletionAndActualRevisionExhaustion(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{Name: "Station", CollectionIDs: []uuid.UUID{collection.ID}}, checkedMutation)
+	unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{AgencyID: f.agency, Name: "Station", CollectionIDs: []uuid.UUID{collection.ID}}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1237,7 +1255,7 @@ func TestCurrentMatcherCollectionScopeDeletionAndActualRevisionExhaustion(t *tes
 		t.Fatal(err)
 	}
 	before = configurationCounts(t, f)
-	if _, err := f.units.ChangeUnit(t.Context(), f.proof, unit.ID, math.MaxInt64, units.UnitInput{Name: "Exhausted"},
+	if _, err := f.units.ChangeUnit(t.Context(), f.proof, unit.ID, math.MaxInt64, units.UnitInput{AgencyID: f.agency, Name: "Exhausted"},
 		checkedMutation); platform.FailureCode(err) != platform.CodeResourceLimit || configurationCounts(t, f) != before {
 		t.Fatalf("actual revision exhaustion did not fail atomically with RESOURCE_LIMIT: %v", err)
 	}
@@ -1297,7 +1315,7 @@ func (o observedTransactions) WithinTransaction(ctx context.Context, operation p
 func verifyCurrentMatcherSerialization(t *testing.T, deleting bool) {
 	t.Helper()
 	f := newMatcherFixture(t)
-	unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{Name: "Station"}, checkedMutation)
+	unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{AgencyID: f.agency, Name: "Station"}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1363,7 +1381,7 @@ func verifyCurrentMatcherSerialization(t *testing.T, deleting bool) {
 		if deleting {
 			_, err = service.DeleteUnit(t.Context(), f.proof, unit.ID, 1, checkedMutation)
 		} else {
-			_, err = service.ChangeUnit(t.Context(), f.proof, unit.ID, 1, units.UnitInput{Name: "Station changed"}, checkedMutation)
+			_, err = service.ChangeUnit(t.Context(), f.proof, unit.ID, 1, units.UnitInput{AgencyID: f.agency, Name: "Station changed"}, checkedMutation)
 		}
 		deleteDone <- err
 	}()
@@ -1442,7 +1460,7 @@ func TestCurrentMatcherEvaluationSerializesWithUnitDeletionNotEdits(t *testing.T
 func TestCurrentMatcherCreationReceiptsAreActorBound(t *testing.T) {
 	f := newMatcherFixture(t)
 	command := uuid.New()
-	values := units.UnitInput{Name: "Station"}
+	values := units.UnitInput{AgencyID: f.agency, Name: "Station"}
 	first, err := f.units.CreateUnit(t.Context(), f.proof, command, values, checkedMutation)
 	if err != nil {
 		t.Fatal(err)

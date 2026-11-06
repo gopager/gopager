@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/assignments"
 	"github.com/gopager/gopager/internal/persistence/ent/addressrule"
+	"github.com/gopager/gopager/internal/persistence/ent/network"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
 )
 
@@ -47,9 +48,11 @@ type AddressRule struct {
 type AddressRuleEdges struct {
 	// Unit holds the value of the unit edge.
 	Unit *Unit `json:"unit,omitempty"`
+	// Network holds the value of the network edge.
+	Network *Network `json:"network,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
+	loadedTypes [2]bool
 }
 
 // UnitOrErr returns the Unit value or an error if the edge
@@ -61,6 +64,17 @@ func (e AddressRuleEdges) UnitOrErr() (*Unit, error) {
 		return nil, &NotFoundError{label: unit.Label}
 	}
 	return nil, &NotLoadedError{edge: "unit"}
+}
+
+// NetworkOrErr returns the Network value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e AddressRuleEdges) NetworkOrErr() (*Network, error) {
+	if e.Network != nil {
+		return e.Network, nil
+	} else if e.loadedTypes[1] {
+		return nil, &NotFoundError{label: network.Label}
+	}
+	return nil, &NotLoadedError{edge: "network"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -169,6 +183,11 @@ func (_m *AddressRule) Value(name string) (ent.Value, error) {
 // QueryUnit queries the "unit" edge of the AddressRule entity.
 func (_m *AddressRule) QueryUnit() *UnitQuery {
 	return NewAddressRuleClient(_m.config).QueryUnit(_m)
+}
+
+// QueryNetwork queries the "network" edge of the AddressRule entity.
+func (_m *AddressRule) QueryNetwork() *NetworkQuery {
+	return NewAddressRuleClient(_m.config).QueryNetwork(_m)
 }
 
 // Update returns a builder for updating this AddressRule.

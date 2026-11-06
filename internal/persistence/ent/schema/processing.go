@@ -139,6 +139,7 @@ func (WorkflowScopeReference) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.From("workflow", Workflow.Type).Ref("scope_references").Field("workflow_id").Unique().Required(),
 		edge.To("unit", Unit.Type).Field("unit_id").Unique(),
+		edge.To("network", Network.Type).Field("network_id").Unique(),
 	}
 }
 

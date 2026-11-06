@@ -26,11 +26,31 @@ type WorkflowConfiguration struct {
 	Deleted         bool        `json:"-"`
 }
 
+// validWorkflowScope accepts the Workflow selection scopes all, network and unit: a technical
+// selection by Radio network or Unit, independent of the grant scope kinds of authz.
+func validWorkflowScope(scope authz.Scope) bool {
+	if !slices.Contains([]string{"all", "network", "unit"}, scope.Kind) {
+		return false
+	}
+	if scope.Kind == "all" {
+		return len(scope.References) == 0
+	}
+	if len(scope.References) == 0 || len(scope.References) > 1024 {
+		return false
+	}
+	for _, reference := range scope.References {
+		if id, err := uuid.Parse(reference); err != nil || id == uuid.Nil {
+			return false
+		}
+	}
+	return true
+}
+
 // Validate checks metadata without inventing scope/enable defaults or coercing operator names.
 func (w WorkflowConfiguration) Validate() error {
 	if w.ID == uuid.Nil || w.Revision <= 0 || !utf8.ValidString(w.Name) ||
 		strings.TrimSpace(w.Name) == "" || strings.ContainsRune(w.Name, '\x00') ||
-		!authz.ValidScope(w.Scope) || !slices.Contains([]string{"all", "network", "unit"}, w.Scope.Kind) ||
+		!validWorkflowScope(w.Scope) ||
 		(w.ActiveVersionID != nil && *w.ActiveVersionID == uuid.Nil) ||
 		(w.Deleted && (w.Enabled || w.ActiveVersionID != nil)) {
 		return invalid(errors.New("invalid Workflow configuration"))

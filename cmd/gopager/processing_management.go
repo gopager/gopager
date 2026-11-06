@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"github.com/google/uuid"
+	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/assignments"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/identity"
@@ -378,8 +379,7 @@ type processingAPIRuntime struct {
 	correctionReadmission assignments.ProcessingReadmission
 }
 
-func composeProcessingAPIRuntime(ctx context.Context, store *postgres.Store,
-	networkScopes identity.ScopeReferences, artifactRoot string,
+func composeProcessingAPIRuntime(ctx context.Context, store *postgres.Store, artifactRoot string,
 	previewNetworks ...synthetic.NetworkOwner) (_ *processingAPIRuntime, result error) {
 	if len(previewNetworks) > 1 {
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("multiple Processing preview Network owners"))
@@ -438,9 +438,6 @@ func composeProcessingAPIRuntime(ctx context.Context, store *postgres.Store,
 	if err != nil {
 		return nil, err
 	}
-	if networkScopes == nil {
-		networkScopes = intakeRepository
-	}
 	if networks == nil {
 		networks = intakeRepository
 	}
@@ -448,7 +445,7 @@ func composeProcessingAPIRuntime(ctx context.Context, store *postgres.Store,
 	if err != nil {
 		return nil, err
 	}
-	owners := applicationScopeOwners{identity: identityRepository, units: unitRepository, networks: networkScopes}
+	owners := applicationScopeOwners{identity: identityRepository, units: unitRepository}
 	resolver, err := identity.NewResolver(identityRepository, store, owners)
 	if err != nil {
 		return nil, err
@@ -464,8 +461,9 @@ func composeProcessingAPIRuntime(ctx context.Context, store *postgres.Store,
 	if err != nil {
 		return nil, err
 	}
-	workflows, err := processingmanagement.New(store, resolver, store, repository, owners,
-		assignmentRepository, preparer, receipts, facts)
+	workflows, err := processingmanagement.New(store, resolver, store, repository,
+		processingScopeContext{networks: syntheticAssignmentNetworkOwner{owner: networks}, units: unitRepository},
+		preparer, receipts, facts)
 	if err != nil {
 		return nil, err
 	}
@@ -517,23 +515,41 @@ func composeProcessingAPIRuntime(ctx context.Context, store *postgres.Store,
 	}, nil
 }
 
+// processingScopeContext resolves Workflow scope references to their Agencies through the Network
+// owner in use (production intake or a synthetic preview owner) and the master-data store.
+type processingScopeContext struct {
+	networks assignments.NetworkOwner
+	units    *unitstore.Store
+}
+
+// ReadNetwork reads the Radio network's Protocol and Agency.
+func (c processingScopeContext) ReadNetwork(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (protocols.Protocol, uuid.UUID, error) {
+	return c.networks.ReadNetwork(ctx, tx, id)
+}
+
+// ReadUnitContext reads the Unit's current Agency, collections and deletion state.
+func (c processingScopeContext) ReadUnitContext(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (units.Context, error) {
+	return c.units.ReadUnitContext(ctx, tx, id)
+}
+
 type syntheticAssignmentNetworkOwner struct {
 	owner synthetic.NetworkOwner
 }
 
-func (owner syntheticAssignmentNetworkOwner) ReadNetworkProtocol(ctx context.Context,
-	tx platform.TransactionContext, id uuid.UUID) (protocols.Protocol, error) {
+// ReadNetwork reads the synthetic Network's Protocol and Agency for matching and authorization.
+func (owner syntheticAssignmentNetworkOwner) ReadNetwork(ctx context.Context,
+	tx platform.TransactionContext, id uuid.UUID) (protocols.Protocol, uuid.UUID, error) {
 	if owner.owner == nil {
-		return "", platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Network owner is not wired"))
+		return "", uuid.Nil, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Network owner is not wired"))
 	}
 	network, err := owner.owner.ReadSyntheticNetwork(ctx, tx, id)
 	if err != nil {
-		return "", err
+		return "", uuid.Nil, err
 	}
 	if network.ID != id || network.Deleted || !network.Protocol.Valid() {
-		return "", authz.ErrNotFound
+		return "", uuid.Nil, authz.ErrNotFound
 	}
-	return network.Protocol, nil
+	return network.Protocol, network.AgencyID, nil
 }
 
 func (runtime *processingAPIRuntime) Close(ctx context.Context) error {

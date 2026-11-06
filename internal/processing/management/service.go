@@ -10,12 +10,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	units "github.com/gopager/gopager/internal/Units"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/events"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
+	"github.com/gopager/gopager/internal/protocols"
 )
 
 // DefinitionPreparer compiles against trusted source declarations/artifacts outside primary transactions.
@@ -23,9 +25,11 @@ type DefinitionPreparer interface {
 	PrepareWorkflow(context.Context, processing.Definition) (*processing.WorkflowProgram, error)
 }
 
-// UnitNetworks reads every current Network use through the existing Assignment owner.
-type UnitNetworks interface {
-	NetworksForUnit(context.Context, platform.TransactionContext, uuid.UUID) ([]uuid.UUID, error)
+// ScopeContext resolves the Agency of a Radio network or a Unit, so Workflow scope references can
+// be checked for existence and authorized by Agency.
+type ScopeContext interface {
+	ReadNetwork(context.Context, platform.TransactionContext, uuid.UUID) (protocols.Protocol, uuid.UUID, error)
+	ReadUnitContext(context.Context, platform.TransactionContext, uuid.UUID) (units.Context, error)
 }
 
 // Service manages Workflow configuration: reads, saves and versioning. Every operation
@@ -38,8 +42,7 @@ type Service struct {
 	resolver     *identity.Resolver
 	clock        platform.Clock
 	repository   processing.ConfigurationRepository
-	references   identity.ScopeReferences
-	units        UnitNetworks
+	scopes       ScopeContext
 	preparer     DefinitionPreparer
 	receipts     commands.Repository
 	facts        events.ProcessingAppender
@@ -47,14 +50,14 @@ type Service struct {
 
 // New composes existing transaction/proof/owner participants; missing dependencies fail explicitly.
 func New(transactions identity.Transactions, resolver *identity.Resolver, clock platform.Clock,
-	repository processing.ConfigurationRepository, references identity.ScopeReferences, units UnitNetworks,
+	repository processing.ConfigurationRepository, scopes ScopeContext,
 	preparer DefinitionPreparer, receipts commands.Repository, facts events.ProcessingAppender) (*Service, error) {
-	if transactions == nil || resolver == nil || clock == nil || repository == nil || references == nil ||
-		units == nil || preparer == nil || receipts == nil || facts == nil {
+	if transactions == nil || resolver == nil || clock == nil || repository == nil || scopes == nil ||
+		preparer == nil || receipts == nil || facts == nil {
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing Processing management dependency"))
 	}
 	return &Service{transactions: transactions, resolver: resolver, clock: clock, repository: repository,
-		references: references, units: units, preparer: preparer, receipts: receipts, facts: facts}, nil
+		scopes: scopes, preparer: preparer, receipts: receipts, facts: facts}, nil
 }
 
 // within keeps current proofs, primary time and protected configuration operations in one transaction.
@@ -89,48 +92,58 @@ func (s *Service) within(ctx context.Context, proof identity.Proof, mutation boo
 	})
 }
 
-// authorizeScope validates reference existence and every affected current use, not a first matching Network.
+// authorizeScope checks that every Workflow scope reference exists and that the caller holds
+// action on each reference's Agency (and Unit); an unknown reference is invalid input.
 func (s *Service) authorizeScope(ctx context.Context, tx platform.TransactionContext, authority authz.Authority,
 	action string, scope authz.Scope, now time.Time) error {
-	exists, err := s.references.ScopeExists(ctx, tx, scope)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return authz.ErrInvalidInput
-	}
-	if scope.Kind == "all" {
+	switch scope.Kind {
+	case "all":
 		return authz.Authorize(authority, action, nil, authz.Target{}, now)
+	case "network", "unit":
+	default:
+		return authz.ErrInvalidInput
 	}
 	for _, reference := range scope.References {
 		id, err := uuid.Parse(reference)
 		if err != nil {
 			return authz.ErrInvalidInput
 		}
-		if scope.Kind == "network" {
-			if err := authz.Authorize(authority, action, nil, authz.Target{NetworkID: id}, now); err != nil {
-				return err
-			}
-			continue
-		}
-		networks, err := s.units.NetworksForUnit(ctx, tx, id)
+		target, err := s.scopeTarget(ctx, tx, scope.Kind, id)
 		if err != nil {
 			return err
 		}
-		target := authz.Target{UnitID: id}
-		if len(networks) == 0 {
-			if err := authz.Authorize(authority, action, nil, target, now); err != nil {
-				return err
-			}
-		}
-		for _, network := range networks {
-			target.NetworkID = network
-			if err := authz.Authorize(authority, action, nil, target, now); err != nil {
-				return err
-			}
+		if err := authz.Authorize(authority, action, nil, target, now); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// scopeTarget resolves one Workflow scope reference to its authorization target: a Radio network
+// to its Agency, a Unit to its Agency, identity and collections. Unknown or deleted references are
+// invalid input, not a hidden-item hint.
+func (s *Service) scopeTarget(ctx context.Context, tx platform.TransactionContext, kind string, id uuid.UUID) (authz.Target, error) {
+	if kind == "network" {
+		_, agency, err := s.scopes.ReadNetwork(ctx, tx, id)
+		if errors.Is(err, authz.ErrNotFound) {
+			return authz.Target{}, authz.ErrInvalidInput
+		}
+		if err != nil {
+			return authz.Target{}, err
+		}
+		return authz.Target{AgencyID: agency}, nil
+	}
+	unit, err := s.scopes.ReadUnitContext(ctx, tx, id)
+	if errors.Is(err, authz.ErrNotFound) {
+		return authz.Target{}, authz.ErrInvalidInput
+	}
+	if err != nil {
+		return authz.Target{}, err
+	}
+	if unit.Deleted {
+		return authz.Target{}, authz.ErrInvalidInput
+	}
+	return authz.Target{AgencyID: unit.AgencyID, UnitID: id, UnitCollections: unit.CollectionIDs}, nil
 }
 
 // CheckSyntheticPreviewScope rechecks the editor's current preview authority for one captured context.
@@ -146,7 +159,10 @@ func (s *Service) CheckSyntheticPreviewScope(ctx context.Context, tx platform.Tr
 	if err := s.authorizeScope(ctx, tx, authority, "rule.preview", workflow.Scope, now); err != nil {
 		return err
 	}
-	target := authz.Target{NetworkID: networkID}
+	target, err := s.scopeTarget(ctx, tx, "network", networkID)
+	if err != nil {
+		return err
+	}
 	switch workflow.Scope.Kind {
 	case "all":
 	case "network":
@@ -157,14 +173,11 @@ func (s *Service) CheckSyntheticPreviewScope(ctx context.Context, tx platform.Tr
 		if unitID == uuid.Nil || !slices.Contains(workflow.Scope.References, unitID.String()) {
 			return authz.ErrForbidden
 		}
-		networks, err := s.units.NetworksForUnit(ctx, tx, unitID)
+		unit, err := s.scopes.ReadUnitContext(ctx, tx, unitID)
 		if err != nil {
 			return err
 		}
-		if !slices.Contains(networks, networkID) {
-			return authz.ErrForbidden
-		}
-		target.UnitID = unitID
+		target.UnitID, target.UnitCollections = unitID, unit.CollectionIDs
 	default:
 		return authz.ErrInvalidInput
 	}

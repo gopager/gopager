@@ -180,7 +180,9 @@ What callers can do depends on these concepts:
 
 - **Grants** combine an action from a fixed catalog (for example `unit.read`,
   `address-rule.update`, `gateway.update`, `rule.preview`, `plugin.configure`) with a
-  scope: `all`, or a list of `network`, `unit`, `unitCollection` or `account` IDs. A
+  scope: `all`, or a list of `agency`, `unit`, `unitCollection` or `account` IDs. An Agency is
+  the operating authority that owns Units and Networks (for example a county's fire dispatch
+  centre); a grant on it covers everything of that Agency. A
   grant can carry a maximum data age. Grants from the account and from its user groups
   add up.
 - **Field permissions** are global (unscoped) and cover the field groups `payload`,
@@ -206,13 +208,14 @@ Scope evaluation per resource:
 
 | Resource | Evaluated against |
 | --- | --- |
-| Unit | The Unit, its collections, and every Network where an address rule uses it. All must pass. |
+| Agency | The Agency itself; creating and deleting Agencies needs an `all` grant. |
+| Unit | The Unit's Agency, the Unit, and its collections. One matching grant suffices. |
 | Organization | Every member Unit. An Organization without members needs an `all` grant. |
 | Unit template | Only `all` scope. Referencing an Organization also requires `organization.read` on it. |
-| Address rule | The rule's Network and Unit. |
-| Suppression / correction | The affected transmission target's Network and Unit. |
-| Gateway administration | Every Network currently assigned to the Gateway, and for network replacement every newly proposed Network. A Gateway without Networks needs an `all` grant. |
-| Workflow | The workflow's own scope (`all`, `network` or `unit`). |
+| Address rule | The Agency of the rule's Network, and the rule's Unit with its collections. |
+| Suppression / correction | The Agency of the affected transmission target's Network, and the target's Unit. |
+| Gateway administration | The Agency of every Network currently assigned to the Gateway, and for network replacement of every newly proposed Network. A Gateway without Networks needs an `all` grant. |
+| Workflow | The workflow's own selection scope (`all`, `network` or `unit`), with each Network resolved to its Agency and each Unit to its Agency and collections. |
 | Processing instance | The global `plugin.configure` right. |
 
 ## Conventions
@@ -358,10 +361,15 @@ mutating routes reached via session also require Origin + `X-CSRF-Token`.
 | GET | `/auth/session` | valid session | 200 | Current session and CSRF token |
 | POST | `/auth/logout` | `session.manage-own` | 204 | Revoke current session |
 
-### Organizations, Unit templates, Units, collections
+### Agencies, Organizations, Unit templates, Units, collections
 
 | Method | Path | Right | Success | Purpose |
 | --- | --- | --- | --- | --- |
+| GET | `/agencies` | `agency.read` | 200 | List |
+| POST | `/agencies` | `agency.create` (`all`) | 201 | Create (`commandId`, `name`) |
+| GET | `/agencies/{id}` | `agency.read` | 200 | Read |
+| PUT | `/agencies/{id}` | `agency.update` | 200 | Rename |
+| DELETE | `/agencies/{id}` | `agency.delete` (`all`) | 200 | Delete; `409 REVISION_CONFLICT` while Units or Networks still belong to it |
 | GET | `/organizations` | `organization.read` | 200 | List |
 | POST | `/organizations` | `organization.create` | 201 | Create (`commandId`, `name`, `defaults`) |
 | GET | `/organizations/{id}` | `organization.read` | 200 | Read |
@@ -373,10 +381,10 @@ mutating routes reached via session also require Origin + `X-CSRF-Token`.
 | PUT | `/unit-templates/{id}` | `unit-template.update` | 200 | Replace; `organizationId` is required (may be `null`) |
 | DELETE | `/unit-templates/{id}` | `unit-template.delete` | 200 | Delete |
 | GET | `/units` | `unit.read` | 200 | List |
-| POST | `/units` | `unit.create` (+ `organization.create` with `newOrganization`) | 201 | Create; optionally creates an Organization in the same transaction |
+| POST | `/units` | `unit.create` (+ `organization.create` with `newOrganization`) | 201 | Create; `agencyId` required; optionally creates an Organization in the same transaction |
 | POST | `/units/from-template` | `unit.create`, `unit-template.read` | 201 | Create from a snapshot of the template's current values |
 | GET | `/units/{id}` | `unit.read` | 200 | Read |
-| PUT | `/units/{id}` | `unit.update` | 200 | Full replacement; `organizationId` required (may be `null`); `newOrganization` not allowed |
+| PUT | `/units/{id}` | `unit.update` | 200 | Full replacement; `agencyId` and `organizationId` required (the latter may be `null`); moving a Unit to another Agency needs `unit.update` on both; `newOrganization` not allowed |
 | DELETE | `/units/{id}` | `unit.delete` | **202** | Unit becomes non-selectable; `data.status` is `"pending"` while assignment correction runs |
 | POST | `/units/bulk/preview` | `unit.update` / `unit.delete` | 200 | Dry run with per-item `valid`/`code`; no `commandId` |
 | POST | `/units/bulk` | `unit.update` / `unit.delete` | 200 | 1–100 items, all or nothing; per-item `status` `updated` or `pending` |

@@ -19,6 +19,7 @@ import (
 	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/persistence/ent/account"
 	"github.com/gopager/gopager/internal/persistence/ent/addressrule"
+	"github.com/gopager/gopager/internal/persistence/ent/agency"
 	"github.com/gopager/gopager/internal/persistence/ent/assignmentcontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/auditrecord"
 	"github.com/gopager/gopager/internal/persistence/ent/commandreceipt"
@@ -70,6 +71,7 @@ const (
 	// Node types.
 	TypeAccount                     = "Account"
 	TypeAddressRule                 = "AddressRule"
+	TypeAgency                      = "Agency"
 	TypeAssignmentControl           = "AssignmentControl"
 	TypeAuditRecord                 = "AuditRecord"
 	TypeCommandReceipt              = "CommandReceipt"
@@ -990,23 +992,24 @@ func (m *AccountMutation) ResetEdge(name string) error {
 // AddressRuleMutation represents an operation that mutates the AddressRule nodes in the graph.
 type AddressRuleMutation struct {
 	config
-	op            Op
-	typ           string
-	id            *uuid.UUID
-	revision      *int64
-	addrevision   *int64
-	network_id    *uuid.UUID
-	protocol      *addressrule.Protocol
-	selector      *assignments.Selector
-	valid_from    *time.Time
-	valid_until   *time.Time
-	enabled       *bool
-	clearedFields map[string]struct{}
-	unit          *uuid.UUID
-	clearedunit   bool
-	done          bool
-	oldValue      func(context.Context) (*AddressRule, error)
-	predicates    []predicate.AddressRule
+	op             Op
+	typ            string
+	id             *uuid.UUID
+	revision       *int64
+	addrevision    *int64
+	protocol       *addressrule.Protocol
+	selector       *assignments.Selector
+	valid_from     *time.Time
+	valid_until    *time.Time
+	enabled        *bool
+	clearedFields  map[string]struct{}
+	unit           *uuid.UUID
+	clearedunit    bool
+	network        *uuid.UUID
+	clearednetwork bool
+	done           bool
+	oldValue       func(context.Context) (*AddressRule, error)
+	predicates     []predicate.AddressRule
 }
 
 var _ ent.Mutation = (*AddressRuleMutation)(nil)
@@ -1171,12 +1174,12 @@ func (m *AddressRuleMutation) ResetRevision() {
 
 // SetNetworkID sets the "network_id" field.
 func (m *AddressRuleMutation) SetNetworkID(u uuid.UUID) {
-	m.network_id = &u
+	m.network = &u
 }
 
 // NetworkID returns the value of the "network_id" field in the mutation.
 func (m *AddressRuleMutation) NetworkID() (r uuid.UUID, exists bool) {
-	v := m.network_id
+	v := m.network
 	if v == nil {
 		return
 	}
@@ -1202,7 +1205,7 @@ func (m *AddressRuleMutation) OldNetworkID(ctx context.Context) (v uuid.UUID, er
 
 // ResetNetworkID resets all changes to the "network_id" field.
 func (m *AddressRuleMutation) ResetNetworkID() {
-	m.network_id = nil
+	m.network = nil
 }
 
 // SetUnitID sets the "unit_id" field.
@@ -1474,6 +1477,33 @@ func (m *AddressRuleMutation) ResetUnit() {
 	m.clearedunit = false
 }
 
+// ClearNetwork clears the "network" edge to the Network entity.
+func (m *AddressRuleMutation) ClearNetwork() {
+	m.clearednetwork = true
+	m.clearedFields[addressrule.FieldNetworkID] = struct{}{}
+}
+
+// NetworkCleared reports if the "network" edge to the Network entity was cleared.
+func (m *AddressRuleMutation) NetworkCleared() bool {
+	return m.clearednetwork
+}
+
+// NetworkIDs returns the "network" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// NetworkID instead. It exists only for internal usage by the builders.
+func (m *AddressRuleMutation) NetworkIDs() (ids []uuid.UUID) {
+	if id := m.network; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetNetwork resets all changes to the "network" edge.
+func (m *AddressRuleMutation) ResetNetwork() {
+	m.network = nil
+	m.clearednetwork = false
+}
+
 // Where appends a list predicates to the AddressRuleMutation builder.
 func (m *AddressRuleMutation) Where(ps ...predicate.AddressRule) {
 	m.predicates = append(m.predicates, ps...)
@@ -1512,7 +1542,7 @@ func (m *AddressRuleMutation) Fields() []string {
 	if m.revision != nil {
 		fields = append(fields, addressrule.FieldRevision)
 	}
-	if m.network_id != nil {
+	if m.network != nil {
 		fields = append(fields, addressrule.FieldNetworkID)
 	}
 	if m.unit != nil {
@@ -1756,9 +1786,12 @@ func (m *AddressRuleMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *AddressRuleMutation) AddedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	if m.unit != nil {
 		edges = append(edges, addressrule.EdgeUnit)
+	}
+	if m.network != nil {
+		edges = append(edges, addressrule.EdgeNetwork)
 	}
 	return edges
 }
@@ -1771,13 +1804,17 @@ func (m *AddressRuleMutation) AddedIDs(name string) []ent.Value {
 		if id := m.unit; id != nil {
 			return []ent.Value{*id}
 		}
+	case addressrule.EdgeNetwork:
+		if id := m.network; id != nil {
+			return []ent.Value{*id}
+		}
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *AddressRuleMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	return edges
 }
 
@@ -1789,9 +1826,12 @@ func (m *AddressRuleMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *AddressRuleMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	if m.clearedunit {
 		edges = append(edges, addressrule.EdgeUnit)
+	}
+	if m.clearednetwork {
+		edges = append(edges, addressrule.EdgeNetwork)
 	}
 	return edges
 }
@@ -1802,6 +1842,8 @@ func (m *AddressRuleMutation) EdgeCleared(name string) bool {
 	switch name {
 	case addressrule.EdgeUnit:
 		return m.clearedunit
+	case addressrule.EdgeNetwork:
+		return m.clearednetwork
 	}
 	return false
 }
@@ -1812,6 +1854,9 @@ func (m *AddressRuleMutation) ClearEdge(name string) error {
 	switch name {
 	case addressrule.EdgeUnit:
 		m.ClearUnit()
+		return nil
+	case addressrule.EdgeNetwork:
+		m.ClearNetwork()
 		return nil
 	}
 	return fmt.Errorf("unknown AddressRule unique edge %s", name)
@@ -1824,8 +1869,609 @@ func (m *AddressRuleMutation) ResetEdge(name string) error {
 	case addressrule.EdgeUnit:
 		m.ResetUnit()
 		return nil
+	case addressrule.EdgeNetwork:
+		m.ResetNetwork()
+		return nil
 	}
 	return fmt.Errorf("unknown AddressRule edge %s", name)
+}
+
+// AgencyMutation represents an operation that mutates the Agency nodes in the graph.
+type AgencyMutation struct {
+	config
+	op              Op
+	typ             string
+	id              *uuid.UUID
+	revision        *int64
+	addrevision     *int64
+	name            *string
+	clearedFields   map[string]struct{}
+	units           map[uuid.UUID]struct{}
+	removedunits    map[uuid.UUID]struct{}
+	clearedunits    bool
+	networks        map[uuid.UUID]struct{}
+	removednetworks map[uuid.UUID]struct{}
+	clearednetworks bool
+	done            bool
+	oldValue        func(context.Context) (*Agency, error)
+	predicates      []predicate.Agency
+}
+
+var _ ent.Mutation = (*AgencyMutation)(nil)
+
+// agencyOption allows management of the mutation configuration using functional options.
+type agencyOption func(*AgencyMutation)
+
+// newAgencyMutation creates new mutation for the Agency entity.
+func newAgencyMutation(c config, op Op, opts ...agencyOption) *AgencyMutation {
+	m := &AgencyMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeAgency,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withAgencyID sets the ID field of the mutation.
+func withAgencyID(id uuid.UUID) agencyOption {
+	return func(m *AgencyMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *Agency
+		)
+		m.oldValue = func(ctx context.Context) (*Agency, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().Agency.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withAgency sets the old Agency of the mutation.
+func withAgency(node *Agency) agencyOption {
+	return func(m *AgencyMutation) {
+		m.oldValue = func(context.Context) (*Agency, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m AgencyMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m AgencyMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of Agency entities.
+func (m *AgencyMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *AgencyMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *AgencyMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().Agency.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetRevision sets the "revision" field.
+func (m *AgencyMutation) SetRevision(i int64) {
+	m.revision = &i
+	m.addrevision = nil
+}
+
+// Revision returns the value of the "revision" field in the mutation.
+func (m *AgencyMutation) Revision() (r int64, exists bool) {
+	v := m.revision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRevision returns the old "revision" field's value of the Agency entity.
+// If the Agency object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AgencyMutation) OldRevision(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRevision is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRevision requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRevision: %w", err)
+	}
+	return oldValue.Revision, nil
+}
+
+// AddRevision adds i to the "revision" field.
+func (m *AgencyMutation) AddRevision(i int64) {
+	if m.addrevision != nil {
+		*m.addrevision += i
+	} else {
+		m.addrevision = &i
+	}
+}
+
+// AddedRevision returns the value that was added to the "revision" field in this mutation.
+func (m *AgencyMutation) AddedRevision() (r int64, exists bool) {
+	v := m.addrevision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRevision resets all changes to the "revision" field.
+func (m *AgencyMutation) ResetRevision() {
+	m.revision = nil
+	m.addrevision = nil
+}
+
+// SetName sets the "name" field.
+func (m *AgencyMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *AgencyMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the Agency entity.
+// If the Agency object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AgencyMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *AgencyMutation) ResetName() {
+	m.name = nil
+}
+
+// AddUnitIDs adds the "units" edge to the Unit entity by ids.
+func (m *AgencyMutation) AddUnitIDs(ids ...uuid.UUID) {
+	if m.units == nil {
+		m.units = make(map[uuid.UUID]struct{})
+	}
+	for i := range ids {
+		m.units[ids[i]] = struct{}{}
+	}
+}
+
+// ClearUnits clears the "units" edge to the Unit entity.
+func (m *AgencyMutation) ClearUnits() {
+	m.clearedunits = true
+}
+
+// UnitsCleared reports if the "units" edge to the Unit entity was cleared.
+func (m *AgencyMutation) UnitsCleared() bool {
+	return m.clearedunits
+}
+
+// RemoveUnitIDs removes the "units" edge to the Unit entity by IDs.
+func (m *AgencyMutation) RemoveUnitIDs(ids ...uuid.UUID) {
+	if m.removedunits == nil {
+		m.removedunits = make(map[uuid.UUID]struct{})
+	}
+	for i := range ids {
+		delete(m.units, ids[i])
+		m.removedunits[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedUnits returns the removed IDs of the "units" edge to the Unit entity.
+func (m *AgencyMutation) RemovedUnitsIDs() (ids []uuid.UUID) {
+	for id := range m.removedunits {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// UnitsIDs returns the "units" edge IDs in the mutation.
+func (m *AgencyMutation) UnitsIDs() (ids []uuid.UUID) {
+	for id := range m.units {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetUnits resets all changes to the "units" edge.
+func (m *AgencyMutation) ResetUnits() {
+	m.units = nil
+	m.clearedunits = false
+	m.removedunits = nil
+}
+
+// AddNetworkIDs adds the "networks" edge to the Network entity by ids.
+func (m *AgencyMutation) AddNetworkIDs(ids ...uuid.UUID) {
+	if m.networks == nil {
+		m.networks = make(map[uuid.UUID]struct{})
+	}
+	for i := range ids {
+		m.networks[ids[i]] = struct{}{}
+	}
+}
+
+// ClearNetworks clears the "networks" edge to the Network entity.
+func (m *AgencyMutation) ClearNetworks() {
+	m.clearednetworks = true
+}
+
+// NetworksCleared reports if the "networks" edge to the Network entity was cleared.
+func (m *AgencyMutation) NetworksCleared() bool {
+	return m.clearednetworks
+}
+
+// RemoveNetworkIDs removes the "networks" edge to the Network entity by IDs.
+func (m *AgencyMutation) RemoveNetworkIDs(ids ...uuid.UUID) {
+	if m.removednetworks == nil {
+		m.removednetworks = make(map[uuid.UUID]struct{})
+	}
+	for i := range ids {
+		delete(m.networks, ids[i])
+		m.removednetworks[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedNetworks returns the removed IDs of the "networks" edge to the Network entity.
+func (m *AgencyMutation) RemovedNetworksIDs() (ids []uuid.UUID) {
+	for id := range m.removednetworks {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// NetworksIDs returns the "networks" edge IDs in the mutation.
+func (m *AgencyMutation) NetworksIDs() (ids []uuid.UUID) {
+	for id := range m.networks {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetNetworks resets all changes to the "networks" edge.
+func (m *AgencyMutation) ResetNetworks() {
+	m.networks = nil
+	m.clearednetworks = false
+	m.removednetworks = nil
+}
+
+// Where appends a list predicates to the AgencyMutation builder.
+func (m *AgencyMutation) Where(ps ...predicate.Agency) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the AgencyMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *AgencyMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.Agency, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *AgencyMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *AgencyMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (Agency).
+func (m *AgencyMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *AgencyMutation) Fields() []string {
+	fields := make([]string, 0, 2)
+	if m.revision != nil {
+		fields = append(fields, agency.FieldRevision)
+	}
+	if m.name != nil {
+		fields = append(fields, agency.FieldName)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *AgencyMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case agency.FieldRevision:
+		return m.Revision()
+	case agency.FieldName:
+		return m.Name()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *AgencyMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case agency.FieldRevision:
+		return m.OldRevision(ctx)
+	case agency.FieldName:
+		return m.OldName(ctx)
+	}
+	return nil, fmt.Errorf("unknown Agency field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AgencyMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case agency.FieldRevision:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRevision(v)
+		return nil
+	case agency.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	}
+	return fmt.Errorf("unknown Agency field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *AgencyMutation) AddedFields() []string {
+	var fields []string
+	if m.addrevision != nil {
+		fields = append(fields, agency.FieldRevision)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *AgencyMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case agency.FieldRevision:
+		return m.AddedRevision()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AgencyMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case agency.FieldRevision:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRevision(v)
+		return nil
+	}
+	return fmt.Errorf("unknown Agency numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *AgencyMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *AgencyMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *AgencyMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown Agency nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *AgencyMutation) ResetField(name string) error {
+	switch name {
+	case agency.FieldRevision:
+		m.ResetRevision()
+		return nil
+	case agency.FieldName:
+		m.ResetName()
+		return nil
+	}
+	return fmt.Errorf("unknown Agency field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *AgencyMutation) AddedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.units != nil {
+		edges = append(edges, agency.EdgeUnits)
+	}
+	if m.networks != nil {
+		edges = append(edges, agency.EdgeNetworks)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *AgencyMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case agency.EdgeUnits:
+		ids := make([]ent.Value, 0, len(m.units))
+		for id := range m.units {
+			ids = append(ids, id)
+		}
+		return ids
+	case agency.EdgeNetworks:
+		ids := make([]ent.Value, 0, len(m.networks))
+		for id := range m.networks {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *AgencyMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.removedunits != nil {
+		edges = append(edges, agency.EdgeUnits)
+	}
+	if m.removednetworks != nil {
+		edges = append(edges, agency.EdgeNetworks)
+	}
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *AgencyMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case agency.EdgeUnits:
+		ids := make([]ent.Value, 0, len(m.removedunits))
+		for id := range m.removedunits {
+			ids = append(ids, id)
+		}
+		return ids
+	case agency.EdgeNetworks:
+		ids := make([]ent.Value, 0, len(m.removednetworks))
+		for id := range m.removednetworks {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *AgencyMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.clearedunits {
+		edges = append(edges, agency.EdgeUnits)
+	}
+	if m.clearednetworks {
+		edges = append(edges, agency.EdgeNetworks)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *AgencyMutation) EdgeCleared(name string) bool {
+	switch name {
+	case agency.EdgeUnits:
+		return m.clearedunits
+	case agency.EdgeNetworks:
+		return m.clearednetworks
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *AgencyMutation) ClearEdge(name string) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown Agency unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *AgencyMutation) ResetEdge(name string) error {
+	switch name {
+	case agency.EdgeUnits:
+		m.ResetUnits()
+		return nil
+	case agency.EdgeNetworks:
+		m.ResetNetworks()
+		return nil
+	}
+	return fmt.Errorf("unknown Agency edge %s", name)
 }
 
 // AssignmentControlMutation represents an operation that mutates the AssignmentControl nodes in the graph.
@@ -12176,18 +12822,23 @@ func (m *MessageContributionMutation) ResetEdge(name string) error {
 // NetworkMutation represents an operation that mutates the Network nodes in the graph.
 type NetworkMutation struct {
 	config
-	op            Op
-	typ           string
-	id            *uuid.UUID
-	revision      *int64
-	addrevision   *int64
-	name          *string
-	protocol      *network.Protocol
-	deleted       *bool
-	clearedFields map[string]struct{}
-	done          bool
-	oldValue      func(context.Context) (*Network, error)
-	predicates    []predicate.Network
+	op                   Op
+	typ                  string
+	id                   *uuid.UUID
+	revision             *int64
+	addrevision          *int64
+	name                 *string
+	protocol             *network.Protocol
+	deleted              *bool
+	clearedFields        map[string]struct{}
+	agency               *uuid.UUID
+	clearedagency        bool
+	address_rules        map[uuid.UUID]struct{}
+	removedaddress_rules map[uuid.UUID]struct{}
+	clearedaddress_rules bool
+	done                 bool
+	oldValue             func(context.Context) (*Network, error)
+	predicates           []predicate.Network
 }
 
 var _ ent.Mutation = (*NetworkMutation)(nil)
@@ -12422,6 +13073,42 @@ func (m *NetworkMutation) ResetProtocol() {
 	m.protocol = nil
 }
 
+// SetAgencyID sets the "agency_id" field.
+func (m *NetworkMutation) SetAgencyID(u uuid.UUID) {
+	m.agency = &u
+}
+
+// AgencyID returns the value of the "agency_id" field in the mutation.
+func (m *NetworkMutation) AgencyID() (r uuid.UUID, exists bool) {
+	v := m.agency
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAgencyID returns the old "agency_id" field's value of the Network entity.
+// If the Network object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *NetworkMutation) OldAgencyID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAgencyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAgencyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAgencyID: %w", err)
+	}
+	return oldValue.AgencyID, nil
+}
+
+// ResetAgencyID resets all changes to the "agency_id" field.
+func (m *NetworkMutation) ResetAgencyID() {
+	m.agency = nil
+}
+
 // SetDeleted sets the "deleted" field.
 func (m *NetworkMutation) SetDeleted(b bool) {
 	m.deleted = &b
@@ -12458,6 +13145,87 @@ func (m *NetworkMutation) ResetDeleted() {
 	m.deleted = nil
 }
 
+// ClearAgency clears the "agency" edge to the Agency entity.
+func (m *NetworkMutation) ClearAgency() {
+	m.clearedagency = true
+	m.clearedFields[network.FieldAgencyID] = struct{}{}
+}
+
+// AgencyCleared reports if the "agency" edge to the Agency entity was cleared.
+func (m *NetworkMutation) AgencyCleared() bool {
+	return m.clearedagency
+}
+
+// AgencyIDs returns the "agency" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// AgencyID instead. It exists only for internal usage by the builders.
+func (m *NetworkMutation) AgencyIDs() (ids []uuid.UUID) {
+	if id := m.agency; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetAgency resets all changes to the "agency" edge.
+func (m *NetworkMutation) ResetAgency() {
+	m.agency = nil
+	m.clearedagency = false
+}
+
+// AddAddressRuleIDs adds the "address_rules" edge to the AddressRule entity by ids.
+func (m *NetworkMutation) AddAddressRuleIDs(ids ...uuid.UUID) {
+	if m.address_rules == nil {
+		m.address_rules = make(map[uuid.UUID]struct{})
+	}
+	for i := range ids {
+		m.address_rules[ids[i]] = struct{}{}
+	}
+}
+
+// ClearAddressRules clears the "address_rules" edge to the AddressRule entity.
+func (m *NetworkMutation) ClearAddressRules() {
+	m.clearedaddress_rules = true
+}
+
+// AddressRulesCleared reports if the "address_rules" edge to the AddressRule entity was cleared.
+func (m *NetworkMutation) AddressRulesCleared() bool {
+	return m.clearedaddress_rules
+}
+
+// RemoveAddressRuleIDs removes the "address_rules" edge to the AddressRule entity by IDs.
+func (m *NetworkMutation) RemoveAddressRuleIDs(ids ...uuid.UUID) {
+	if m.removedaddress_rules == nil {
+		m.removedaddress_rules = make(map[uuid.UUID]struct{})
+	}
+	for i := range ids {
+		delete(m.address_rules, ids[i])
+		m.removedaddress_rules[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedAddressRules returns the removed IDs of the "address_rules" edge to the AddressRule entity.
+func (m *NetworkMutation) RemovedAddressRulesIDs() (ids []uuid.UUID) {
+	for id := range m.removedaddress_rules {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// AddressRulesIDs returns the "address_rules" edge IDs in the mutation.
+func (m *NetworkMutation) AddressRulesIDs() (ids []uuid.UUID) {
+	for id := range m.address_rules {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetAddressRules resets all changes to the "address_rules" edge.
+func (m *NetworkMutation) ResetAddressRules() {
+	m.address_rules = nil
+	m.clearedaddress_rules = false
+	m.removedaddress_rules = nil
+}
+
 // Where appends a list predicates to the NetworkMutation builder.
 func (m *NetworkMutation) Where(ps ...predicate.Network) {
 	m.predicates = append(m.predicates, ps...)
@@ -12492,7 +13260,7 @@ func (m *NetworkMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *NetworkMutation) Fields() []string {
-	fields := make([]string, 0, 4)
+	fields := make([]string, 0, 5)
 	if m.revision != nil {
 		fields = append(fields, network.FieldRevision)
 	}
@@ -12501,6 +13269,9 @@ func (m *NetworkMutation) Fields() []string {
 	}
 	if m.protocol != nil {
 		fields = append(fields, network.FieldProtocol)
+	}
+	if m.agency != nil {
+		fields = append(fields, network.FieldAgencyID)
 	}
 	if m.deleted != nil {
 		fields = append(fields, network.FieldDeleted)
@@ -12519,6 +13290,8 @@ func (m *NetworkMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case network.FieldProtocol:
 		return m.Protocol()
+	case network.FieldAgencyID:
+		return m.AgencyID()
 	case network.FieldDeleted:
 		return m.Deleted()
 	}
@@ -12536,6 +13309,8 @@ func (m *NetworkMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldName(ctx)
 	case network.FieldProtocol:
 		return m.OldProtocol(ctx)
+	case network.FieldAgencyID:
+		return m.OldAgencyID(ctx)
 	case network.FieldDeleted:
 		return m.OldDeleted(ctx)
 	}
@@ -12567,6 +13342,13 @@ func (m *NetworkMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetProtocol(v)
+		return nil
+	case network.FieldAgencyID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAgencyID(v)
 		return nil
 	case network.FieldDeleted:
 		v, ok := value.(bool)
@@ -12648,6 +13430,9 @@ func (m *NetworkMutation) ResetField(name string) error {
 	case network.FieldProtocol:
 		m.ResetProtocol()
 		return nil
+	case network.FieldAgencyID:
+		m.ResetAgencyID()
+		return nil
 	case network.FieldDeleted:
 		m.ResetDeleted()
 		return nil
@@ -12657,49 +13442,103 @@ func (m *NetworkMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *NetworkMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 2)
+	if m.agency != nil {
+		edges = append(edges, network.EdgeAgency)
+	}
+	if m.address_rules != nil {
+		edges = append(edges, network.EdgeAddressRules)
+	}
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *NetworkMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case network.EdgeAgency:
+		if id := m.agency; id != nil {
+			return []ent.Value{*id}
+		}
+	case network.EdgeAddressRules:
+		ids := make([]ent.Value, 0, len(m.address_rules))
+		for id := range m.address_rules {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *NetworkMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 2)
+	if m.removedaddress_rules != nil {
+		edges = append(edges, network.EdgeAddressRules)
+	}
 	return edges
 }
 
 // RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
 // the given name in this mutation.
 func (m *NetworkMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case network.EdgeAddressRules:
+		ids := make([]ent.Value, 0, len(m.removedaddress_rules))
+		for id := range m.removedaddress_rules {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *NetworkMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 2)
+	if m.clearedagency {
+		edges = append(edges, network.EdgeAgency)
+	}
+	if m.clearedaddress_rules {
+		edges = append(edges, network.EdgeAddressRules)
+	}
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *NetworkMutation) EdgeCleared(name string) bool {
+	switch name {
+	case network.EdgeAgency:
+		return m.clearedagency
+	case network.EdgeAddressRules:
+		return m.clearedaddress_rules
+	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *NetworkMutation) ClearEdge(name string) error {
+	switch name {
+	case network.EdgeAgency:
+		m.ClearAgency()
+		return nil
+	}
 	return fmt.Errorf("unknown Network unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *NetworkMutation) ResetEdge(name string) error {
+	switch name {
+	case network.EdgeAgency:
+		m.ResetAgency()
+		return nil
+	case network.EdgeAddressRules:
+		m.ResetAddressRules()
+		return nil
+	}
 	return fmt.Errorf("unknown Network edge %s", name)
 }
 
@@ -21383,6 +22222,8 @@ type UnitMutation struct {
 	clearedaddress_rules bool
 	organization         *uuid.UUID
 	clearedorganization  bool
+	agency               *uuid.UUID
+	clearedagency        bool
 	done                 bool
 	oldValue             func(context.Context) (*Unit, error)
 	predicates           []predicate.Unit
@@ -21582,6 +22423,42 @@ func (m *UnitMutation) OldName(ctx context.Context) (v string, err error) {
 // ResetName resets all changes to the "name" field.
 func (m *UnitMutation) ResetName() {
 	m.name = nil
+}
+
+// SetAgencyID sets the "agency_id" field.
+func (m *UnitMutation) SetAgencyID(u uuid.UUID) {
+	m.agency = &u
+}
+
+// AgencyID returns the value of the "agency_id" field in the mutation.
+func (m *UnitMutation) AgencyID() (r uuid.UUID, exists bool) {
+	v := m.agency
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAgencyID returns the old "agency_id" field's value of the Unit entity.
+// If the Unit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UnitMutation) OldAgencyID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAgencyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAgencyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAgencyID: %w", err)
+	}
+	return oldValue.AgencyID, nil
+}
+
+// ResetAgencyID resets all changes to the "agency_id" field.
+func (m *UnitMutation) ResetAgencyID() {
+	m.agency = nil
 }
 
 // SetDeleted sets the "deleted" field.
@@ -21840,6 +22717,33 @@ func (m *UnitMutation) ResetOrganization() {
 	m.clearedorganization = false
 }
 
+// ClearAgency clears the "agency" edge to the Agency entity.
+func (m *UnitMutation) ClearAgency() {
+	m.clearedagency = true
+	m.clearedFields[unit.FieldAgencyID] = struct{}{}
+}
+
+// AgencyCleared reports if the "agency" edge to the Agency entity was cleared.
+func (m *UnitMutation) AgencyCleared() bool {
+	return m.clearedagency
+}
+
+// AgencyIDs returns the "agency" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// AgencyID instead. It exists only for internal usage by the builders.
+func (m *UnitMutation) AgencyIDs() (ids []uuid.UUID) {
+	if id := m.agency; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetAgency resets all changes to the "agency" edge.
+func (m *UnitMutation) ResetAgency() {
+	m.agency = nil
+	m.clearedagency = false
+}
+
 // Where appends a list predicates to the UnitMutation builder.
 func (m *UnitMutation) Where(ps ...predicate.Unit) {
 	m.predicates = append(m.predicates, ps...)
@@ -21874,12 +22778,15 @@ func (m *UnitMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UnitMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
 	if m.revision != nil {
 		fields = append(fields, unit.FieldRevision)
 	}
 	if m.name != nil {
 		fields = append(fields, unit.FieldName)
+	}
+	if m.agency != nil {
+		fields = append(fields, unit.FieldAgencyID)
 	}
 	if m.deleted != nil {
 		fields = append(fields, unit.FieldDeleted)
@@ -21902,6 +22809,8 @@ func (m *UnitMutation) Field(name string) (ent.Value, bool) {
 		return m.Revision()
 	case unit.FieldName:
 		return m.Name()
+	case unit.FieldAgencyID:
+		return m.AgencyID()
 	case unit.FieldDeleted:
 		return m.Deleted()
 	case unit.FieldOrganizationID:
@@ -21921,6 +22830,8 @@ func (m *UnitMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldRevision(ctx)
 	case unit.FieldName:
 		return m.OldName(ctx)
+	case unit.FieldAgencyID:
+		return m.OldAgencyID(ctx)
 	case unit.FieldDeleted:
 		return m.OldDeleted(ctx)
 	case unit.FieldOrganizationID:
@@ -21949,6 +22860,13 @@ func (m *UnitMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetName(v)
+		return nil
+	case unit.FieldAgencyID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAgencyID(v)
 		return nil
 	case unit.FieldDeleted:
 		v, ok := value.(bool)
@@ -22050,6 +22968,9 @@ func (m *UnitMutation) ResetField(name string) error {
 	case unit.FieldName:
 		m.ResetName()
 		return nil
+	case unit.FieldAgencyID:
+		m.ResetAgencyID()
+		return nil
 	case unit.FieldDeleted:
 		m.ResetDeleted()
 		return nil
@@ -22065,7 +22986,7 @@ func (m *UnitMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *UnitMutation) AddedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.collections != nil {
 		edges = append(edges, unit.EdgeCollections)
 	}
@@ -22074,6 +22995,9 @@ func (m *UnitMutation) AddedEdges() []string {
 	}
 	if m.organization != nil {
 		edges = append(edges, unit.EdgeOrganization)
+	}
+	if m.agency != nil {
+		edges = append(edges, unit.EdgeAgency)
 	}
 	return edges
 }
@@ -22098,13 +23022,17 @@ func (m *UnitMutation) AddedIDs(name string) []ent.Value {
 		if id := m.organization; id != nil {
 			return []ent.Value{*id}
 		}
+	case unit.EdgeAgency:
+		if id := m.agency; id != nil {
+			return []ent.Value{*id}
+		}
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *UnitMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.removedcollections != nil {
 		edges = append(edges, unit.EdgeCollections)
 	}
@@ -22136,7 +23064,7 @@ func (m *UnitMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *UnitMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.clearedcollections {
 		edges = append(edges, unit.EdgeCollections)
 	}
@@ -22145,6 +23073,9 @@ func (m *UnitMutation) ClearedEdges() []string {
 	}
 	if m.clearedorganization {
 		edges = append(edges, unit.EdgeOrganization)
+	}
+	if m.clearedagency {
+		edges = append(edges, unit.EdgeAgency)
 	}
 	return edges
 }
@@ -22159,6 +23090,8 @@ func (m *UnitMutation) EdgeCleared(name string) bool {
 		return m.clearedaddress_rules
 	case unit.EdgeOrganization:
 		return m.clearedorganization
+	case unit.EdgeAgency:
+		return m.clearedagency
 	}
 	return false
 }
@@ -22169,6 +23102,9 @@ func (m *UnitMutation) ClearEdge(name string) error {
 	switch name {
 	case unit.EdgeOrganization:
 		m.ClearOrganization()
+		return nil
+	case unit.EdgeAgency:
+		m.ClearAgency()
 		return nil
 	}
 	return fmt.Errorf("unknown Unit unique edge %s", name)
@@ -22186,6 +23122,9 @@ func (m *UnitMutation) ResetEdge(name string) error {
 		return nil
 	case unit.EdgeOrganization:
 		m.ResetOrganization()
+		return nil
+	case unit.EdgeAgency:
+		m.ResetAgency()
 		return nil
 	}
 	return fmt.Errorf("unknown Unit edge %s", name)
@@ -24738,12 +25677,13 @@ type WorkflowScopeReferenceMutation struct {
 	op              Op
 	typ             string
 	id              *uuid.UUID
-	network_id      *uuid.UUID
 	clearedFields   map[string]struct{}
 	workflow        *uuid.UUID
 	clearedworkflow bool
 	unit            *uuid.UUID
 	clearedunit     bool
+	network         *uuid.UUID
+	clearednetwork  bool
 	done            bool
 	oldValue        func(context.Context) (*WorkflowScopeReference, error)
 	predicates      []predicate.WorkflowScopeReference
@@ -24891,12 +25831,12 @@ func (m *WorkflowScopeReferenceMutation) ResetWorkflowID() {
 
 // SetNetworkID sets the "network_id" field.
 func (m *WorkflowScopeReferenceMutation) SetNetworkID(u uuid.UUID) {
-	m.network_id = &u
+	m.network = &u
 }
 
 // NetworkID returns the value of the "network_id" field in the mutation.
 func (m *WorkflowScopeReferenceMutation) NetworkID() (r uuid.UUID, exists bool) {
-	v := m.network_id
+	v := m.network
 	if v == nil {
 		return
 	}
@@ -24922,7 +25862,7 @@ func (m *WorkflowScopeReferenceMutation) OldNetworkID(ctx context.Context) (v *u
 
 // ClearNetworkID clears the value of the "network_id" field.
 func (m *WorkflowScopeReferenceMutation) ClearNetworkID() {
-	m.network_id = nil
+	m.network = nil
 	m.clearedFields[workflowscopereference.FieldNetworkID] = struct{}{}
 }
 
@@ -24934,7 +25874,7 @@ func (m *WorkflowScopeReferenceMutation) NetworkIDCleared() bool {
 
 // ResetNetworkID resets all changes to the "network_id" field.
 func (m *WorkflowScopeReferenceMutation) ResetNetworkID() {
-	m.network_id = nil
+	m.network = nil
 	delete(m.clearedFields, workflowscopereference.FieldNetworkID)
 }
 
@@ -25041,6 +25981,33 @@ func (m *WorkflowScopeReferenceMutation) ResetUnit() {
 	m.clearedunit = false
 }
 
+// ClearNetwork clears the "network" edge to the Network entity.
+func (m *WorkflowScopeReferenceMutation) ClearNetwork() {
+	m.clearednetwork = true
+	m.clearedFields[workflowscopereference.FieldNetworkID] = struct{}{}
+}
+
+// NetworkCleared reports if the "network" edge to the Network entity was cleared.
+func (m *WorkflowScopeReferenceMutation) NetworkCleared() bool {
+	return m.NetworkIDCleared() || m.clearednetwork
+}
+
+// NetworkIDs returns the "network" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// NetworkID instead. It exists only for internal usage by the builders.
+func (m *WorkflowScopeReferenceMutation) NetworkIDs() (ids []uuid.UUID) {
+	if id := m.network; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetNetwork resets all changes to the "network" edge.
+func (m *WorkflowScopeReferenceMutation) ResetNetwork() {
+	m.network = nil
+	m.clearednetwork = false
+}
+
 // Where appends a list predicates to the WorkflowScopeReferenceMutation builder.
 func (m *WorkflowScopeReferenceMutation) Where(ps ...predicate.WorkflowScopeReference) {
 	m.predicates = append(m.predicates, ps...)
@@ -25079,7 +26046,7 @@ func (m *WorkflowScopeReferenceMutation) Fields() []string {
 	if m.workflow != nil {
 		fields = append(fields, workflowscopereference.FieldWorkflowID)
 	}
-	if m.network_id != nil {
+	if m.network != nil {
 		fields = append(fields, workflowscopereference.FieldNetworkID)
 	}
 	if m.unit != nil {
@@ -25223,12 +26190,15 @@ func (m *WorkflowScopeReferenceMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *WorkflowScopeReferenceMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.workflow != nil {
 		edges = append(edges, workflowscopereference.EdgeWorkflow)
 	}
 	if m.unit != nil {
 		edges = append(edges, workflowscopereference.EdgeUnit)
+	}
+	if m.network != nil {
+		edges = append(edges, workflowscopereference.EdgeNetwork)
 	}
 	return edges
 }
@@ -25245,13 +26215,17 @@ func (m *WorkflowScopeReferenceMutation) AddedIDs(name string) []ent.Value {
 		if id := m.unit; id != nil {
 			return []ent.Value{*id}
 		}
+	case workflowscopereference.EdgeNetwork:
+		if id := m.network; id != nil {
+			return []ent.Value{*id}
+		}
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *WorkflowScopeReferenceMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	return edges
 }
 
@@ -25263,12 +26237,15 @@ func (m *WorkflowScopeReferenceMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *WorkflowScopeReferenceMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.clearedworkflow {
 		edges = append(edges, workflowscopereference.EdgeWorkflow)
 	}
 	if m.clearedunit {
 		edges = append(edges, workflowscopereference.EdgeUnit)
+	}
+	if m.clearednetwork {
+		edges = append(edges, workflowscopereference.EdgeNetwork)
 	}
 	return edges
 }
@@ -25281,6 +26258,8 @@ func (m *WorkflowScopeReferenceMutation) EdgeCleared(name string) bool {
 		return m.clearedworkflow
 	case workflowscopereference.EdgeUnit:
 		return m.clearedunit
+	case workflowscopereference.EdgeNetwork:
+		return m.clearednetwork
 	}
 	return false
 }
@@ -25295,6 +26274,9 @@ func (m *WorkflowScopeReferenceMutation) ClearEdge(name string) error {
 	case workflowscopereference.EdgeUnit:
 		m.ClearUnit()
 		return nil
+	case workflowscopereference.EdgeNetwork:
+		m.ClearNetwork()
+		return nil
 	}
 	return fmt.Errorf("unknown WorkflowScopeReference unique edge %s", name)
 }
@@ -25308,6 +26290,9 @@ func (m *WorkflowScopeReferenceMutation) ResetEdge(name string) error {
 		return nil
 	case workflowscopereference.EdgeUnit:
 		m.ResetUnit()
+		return nil
+	case workflowscopereference.EdgeNetwork:
+		m.ResetNetwork()
 		return nil
 	}
 	return fmt.Errorf("unknown WorkflowScopeReference edge %s", name)

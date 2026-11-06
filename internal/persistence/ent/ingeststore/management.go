@@ -85,7 +85,7 @@ func (s *Store) GatewayNetworksForAuthorization(ctx context.Context, tx platform
 		}
 		return nil, err
 	}
-	rows, err := executor.QueryContext(ctx, `SELECT gn.gateway_network_identifier,gn.network_id,n.protocol,gn.is_default
+	rows, err := executor.QueryContext(ctx, `SELECT gn.gateway_network_identifier,gn.network_id,n.protocol,n.agency_id,gn.is_default
 		FROM gateway_networks gn JOIN networks n ON n.id=gn.network_id
 		WHERE gn.gateway_id=$1 ORDER BY gn.gateway_network_identifier`, gateway)
 	if err != nil {
@@ -96,7 +96,7 @@ func (s *Store) GatewayNetworksForAuthorization(ctx context.Context, tx platform
 	for rows.Next() {
 		var network ingest.GatewayNetwork
 		var protocol string
-		if err := rows.Scan(&network.Identifier, &network.NetworkID, &protocol, &network.Default); err != nil {
+		if err := rows.Scan(&network.Identifier, &network.NetworkID, &protocol, &network.AgencyID, &network.Default); err != nil {
 			return nil, err
 		}
 		network.Protocol = protocols.Protocol(protocol)

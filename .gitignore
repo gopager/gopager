@@ -4,3 +4,4 @@
 /bin/
 # Local tooling scratch
 /.superpowers/
+.claude/worktrees/

@@ -57,8 +57,8 @@ func scopePredicate(kind string, references []uuid.UUID) (entql.P, error) {
 		values[i] = id
 	}
 	switch kind {
-	case "network":
-		return entql.FieldIn("network_id", values...), nil
+	case "agency":
+		return entql.HasEdgeWith("network", entql.FieldIn("agency_id", values...)), nil
 	case "unit":
 		return entql.FieldIn("unit_id", values...), nil
 	case "unitCollection":
@@ -410,21 +410,28 @@ func correctionHighWater(ctx context.Context, executor postgres.Executor, networ
 	return &accepted, &transmission, nil
 }
 
-// NetworksForUnit reports actual current configuration uses, including disabled rules.
-func (s *Store) NetworksForUnit(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) ([]uuid.UUID, error) {
-	client, scope, err := s.client(ctx, tx, map[string]entql.P{"AddressRule": entql.FieldEQ("unit_id", id)}, nil)
+// networksForUnit lists the Radio networks whose current rules reference the Unit; a deleted Unit's
+// correction scope covers exactly those Networks.
+func (s *Store) networksForUnit(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) ([]uuid.UUID, error) {
+	executor, err := s.primary.Resolve(tx)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := client.AddressRule.Query().Select(addressrule.FieldNetworkID).Unique(true).All(scope)
+	rows, err := executor.QueryContext(ctx, `SELECT DISTINCT network_id FROM address_rules
+		WHERE unit_id=$1 AND enabled=true ORDER BY network_id`, id)
 	if err != nil {
 		return nil, err
 	}
-	result := make([]uuid.UUID, len(rows))
-	for i, row := range rows {
-		result[i] = row.NetworkID
+	defer rows.Close()
+	var networks []uuid.UUID
+	for rows.Next() {
+		var network uuid.UUID
+		if err := rows.Scan(&network); err != nil {
+			return nil, err
+		}
+		networks = append(networks, network)
 	}
-	return result, nil
+	return networks, rows.Err()
 }
 
 // InvalidateUnit disables its current rules and records pending correction in the same transaction.
@@ -432,7 +439,7 @@ func (s *Store) InvalidateUnit(ctx context.Context, tx platform.TransactionConte
 	if _, err := s.LockRevisionForChange(ctx, tx); err != nil {
 		return err
 	}
-	networks, err := s.NetworksForUnit(ctx, tx, id)
+	networks, err := s.networksForUnit(ctx, tx, id)
 	if err != nil {
 		return err
 	}

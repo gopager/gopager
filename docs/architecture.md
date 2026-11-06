@@ -167,7 +167,7 @@ The layering rules that the code follows:
 | `internal/events` | Domain event fact types, envelope construction and validation, appender interfaces |
 | `internal/protocols` | Protocol enum, address/target model and ranges, payload forms, payload identity |
 | `internal/messages` | Grouping decision type and the pure grouping function `Decide` |
-| `internal/Units` (package `units`) | Units, Unit collections, Organizations with setting defaults, Unit templates, bulk Unit operations, setting inheritance |
+| `internal/Units` (package `units`) | Agencies, Units, Unit collections, Organizations with setting defaults, Unit templates, bulk Unit operations, setting inheritance |
 | `internal/assignments` | Address rules (selectors, validity intervals, conflict validation), target matching, suppressions, correction status/retry, `CorrectionRunner` |
 | `internal/ingest` | Submission validation, Network resolution, intake service, gateway state reports, gateway administration (network assignment, credentials) |
 | `internal/processing` | Workflow definition model and compiler, CEL predicates, Core regex, value/schema codec, candidate state machine, retry schedule, source capture, plugin host and installed-step execution, processing instances |
@@ -281,6 +281,7 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 | Unit | `units` | Logical recipient that addresses resolve to. Optional Organization, settings, collection membership. Deletion is soft (`deleted`). |
 | Organization | `organizations` | Container of Units and templates that supplies inherited setting defaults |
 | Unit collection | `unit_collections` | Named set of Units used as an authorization scope |
+| Agency | `agencies` | The operating authority of one alerting domain (for example a county's fire dispatch centre; the police of the same county is another). Owns Units and Networks (`agency_id` on both, exactly one each) and is the normal grant scope above a Unit; deletable only when nothing belongs to it. |
 | Unit template | `unit_templates` | Standalone settings preset for creating Units. Copied settings keep no link to the template. |
 | Address rule | `address_rules`, `assignments.Rule` | Mutable rule mapping a selector (address value or range, function set/mode) on a Network and protocol to a Unit, with optional `valid_from`/`valid_until` |
 | Assignment | `assignments.Resolution` | Result of resolving one target against current rules at its observation time: `assigned` or `unassigned` |
@@ -290,7 +291,7 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 | Principal / Account | `identity_accounts` | Internal identity of kind `human`, `technical` or `guest`. Grants and credentials attach to it. |
 | User group | `identity_user_groups` | Set of accounts used as a grant subject |
 | Credential | `identity_credentials` | Hashed `session`, `accessKey` or `recovery` secret of an account. Access keys carry restrictions. |
-| Grant | `identity_grants`, `authz.Grant` | Actions on a scope (`all`, `network`, `unit`, `unitCollection`, `account`) for a principal or group, with optional maximum data age and delegability |
+| Grant | `identity_grants`, `authz.Grant` | Actions on a scope (`all`, `agency`, `unit`, `unitCollection`, `account`) for a principal or group, with optional maximum data age and delegability |
 | Field permission | `identity_field_permissions` | Global permission to read field groups (`payload`, `address`, `unit`, `gateway`, `quality`, `derived`, `extension.<ns>.<name>`), independent of scope |
 | Access key restrictions | `authz.Restrictions` | Subset of actions, scopes, fields and age that limits an access key below its owner's grants |
 | Authority | `authz.Authority` | Current grants, field permissions and key restrictions of a principal, loaded once per transaction |
@@ -357,7 +358,7 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 1. The transport selects a proof (`identity.HTTPTransport.SelectProof`): an `Authorization` header (access key) takes precedence over the session cookie. Without either, the request is anonymous.
 2. `identity.Resolver.Resolve` takes the shared access lock, validates the credential (expiry; sessions also have idle and absolute limits), loads the account (anonymous requests map to the `guest` account), and builds the `authz.Authority` from direct and group grants and field permissions. Access-key scopes are checked for current existence through the owning store (`applicationScopeOwners`). Cookie-authenticated state changes additionally require CSRF and Origin checks.
 3. Decisions:
-   - Point decisions use `authz.Authorize(authority, action, fields, target, now)`. Grants must contain the action, match the target's Network/Unit/Unit collection/account scope, and satisfy the maximum age against the target's age anchor. Access-key restrictions must also allow the request. `message.detail` additionally requires `message.read`.
+   - Point decisions use `authz.Authorize(authority, action, fields, target, now)`. Grants must contain the action, match the target's Agency/Unit/Unit collection/account scope (a Radio network resolves to its Agency), and satisfy the maximum age against the target's age anchor. Access-key restrictions must also allow the request. `message.detail` additionally requires `message.read`.
    - List and read queries use `permissions.ReadScope`, which compiles the same grant semantics into EntQL predicates. The guard policy applies them before counting and paging, so hidden rows are never loaded.
    - Field reads are allowed only for fields in the union of field permissions (and key fields).
 4. Actions form a closed catalog (`authz.Actions()`), and each action allows only certain scope kinds. There are no wildcards. The initial account receives explicit actions and fields through `gopager bootstrap`.

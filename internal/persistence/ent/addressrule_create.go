@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/assignments"
 	"github.com/gopager/gopager/internal/persistence/ent/addressrule"
+	"github.com/gopager/gopager/internal/persistence/ent/network"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
 )
 
@@ -122,6 +123,11 @@ func (_c *AddressRuleCreate) SetUnit(v *Unit) *AddressRuleCreate {
 	return _c.SetUnitID(v.ID)
 }
 
+// SetNetwork sets the "network" edge to the Network entity.
+func (_c *AddressRuleCreate) SetNetwork(v *Network) *AddressRuleCreate {
+	return _c.SetNetworkID(v.ID)
+}
+
 // Mutation returns the AddressRuleMutation object of the builder.
 func (_c *AddressRuleCreate) Mutation() *AddressRuleMutation {
 	return _c.mutation
@@ -210,6 +216,9 @@ func (_c *AddressRuleCreate) check() error {
 	if len(_c.mutation.UnitIDs()) == 0 {
 		return &ValidationError{Name: "unit", err: errors.New(`ent: missing required edge "AddressRule.unit"`)}
 	}
+	if len(_c.mutation.NetworkIDs()) == 0 {
+		return &ValidationError{Name: "network", err: errors.New(`ent: missing required edge "AddressRule.network"`)}
+	}
 	return nil
 }
 
@@ -249,10 +258,6 @@ func (_c *AddressRuleCreate) createSpec() (*AddressRule, *sqlgraph.CreateSpec) {
 		_spec.SetField(addressrule.FieldRevision, field.TypeInt64, value)
 		_node.Revision = value
 	}
-	if value, ok := _c.mutation.NetworkID(); ok {
-		_spec.SetField(addressrule.FieldNetworkID, field.TypeUUID, value)
-		_node.NetworkID = value
-	}
 	if value, ok := _c.mutation.Protocol(); ok {
 		_spec.SetField(addressrule.FieldProtocol, field.TypeEnum, value)
 		_node.Protocol = value
@@ -288,6 +293,23 @@ func (_c *AddressRuleCreate) createSpec() (*AddressRule, *sqlgraph.CreateSpec) {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.UnitID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.NetworkIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   addressrule.NetworkTable,
+			Columns: []string{addressrule.NetworkColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(network.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.NetworkID = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

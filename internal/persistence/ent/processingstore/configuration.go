@@ -85,10 +85,10 @@ func scopeReference(kind string, references []uuid.UUID) (entql.P, error) {
 		values[i] = id
 	}
 	switch kind {
-	case "network":
-		return entql.Or(entql.FieldIn("network_id", values...),
+	case "agency":
+		return entql.Or(entql.HasEdgeWith("network", entql.FieldIn("agency_id", values...)),
 			entql.HasEdgeWith("unit", entql.And(entql.FieldEQ("deleted", false),
-				entql.HasEdgeWith("address_rules", entql.FieldIn("network_id", values...))))), nil
+				entql.FieldIn("agency_id", values...)))), nil
 	case "unit":
 		return entql.And(entql.FieldIn("unit_id", values...),
 			entql.HasEdgeWith("unit", entql.FieldEQ("deleted", false))), nil

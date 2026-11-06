@@ -86,7 +86,11 @@ func (s *Service) ListSuppressions(ctx context.Context, proof identity.Proof, pa
 func (s *Service) targetAuthority(ctx context.Context, tx platform.TransactionContext, authority authz.Authority,
 	action string, value TargetContext, now time.Time,
 ) error {
-	target := authz.Target{NetworkID: value.NetworkID}
+	_, agency, err := s.network(ctx, tx, value.NetworkID)
+	if err != nil {
+		return err
+	}
+	target := authz.Target{AgencyID: agency}
 	if value.Resolution.UnitID != nil {
 		unit, err := s.units.ReadUnitContext(ctx, tx, *value.Resolution.UnitID)
 		if err != nil {
@@ -355,7 +359,11 @@ func (s *Service) correctionAuthority(ctx context.Context, tx platform.Transacti
 		}
 	}
 	for _, network := range status.Networks {
-		target := authz.Target{NetworkID: network}
+		_, agency, err := s.network(ctx, tx, network)
+		if err != nil {
+			return authz.ErrNotFound
+		}
+		target := authz.Target{AgencyID: agency}
 		if status.UnitID != nil {
 			target.UnitID = *status.UnitID
 			target.UnitCollections = unitContext

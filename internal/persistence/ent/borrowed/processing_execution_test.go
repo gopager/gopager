@@ -48,7 +48,7 @@ func (s *installedSourceFixture) CheckInstalledSource(ctx context.Context, tx pl
 	if err != nil {
 		return err
 	}
-	target := authz.Target{NetworkID: s.source.NetworkID, WithoutUnit: true, AgeAnchor: now}
+	target := authz.Target{AgencyID: s.f.agency, WithoutUnit: true, AgeAnchor: now}
 	if err := authz.Authorize(authority, "message.read", nil, target, now); err != nil {
 		return err
 	}

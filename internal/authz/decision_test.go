@@ -22,12 +22,12 @@ func TestConcreteActionScopeUnionAndKeyIntersection(t *testing.T) {
 		}
 		return grant
 	}
-	read := makeGrant([]string{"message.read"}, "network", network)
+	read := makeGrant([]string{"message.read"}, "agency", network)
 	read.MaxAgeSeconds = &hour
 	authority := authz.Authority{PrincipalID: owner.String(), Active: true, Revision: 1, Grants: []authz.Grant{read},
 		FieldPermissions: []authz.FieldPermission{{ID: uuid.NewString(), Revision: 1,
 			SubjectID: owner.String(), SubjectKind: "principal", Fields: []string{"payload"}}}}
-	target := authz.Target{NetworkID: network, UnitID: unit, AgeAnchor: now.Add(-time.Hour)}
+	target := authz.Target{AgencyID: network, UnitID: unit, AgeAnchor: now.Add(-time.Hour)}
 	check := func(action string, fields []string, want error) {
 		t.Helper()
 		if err := authz.Authorize(authority, action, fields, target, now); !errors.Is(err, want) {
@@ -43,9 +43,9 @@ func TestConcreteActionScopeUnionAndKeyIntersection(t *testing.T) {
 	target.UnitID = otherUnit
 	check("message.read", []string{"payload"}, authz.ErrForbidden)
 	target.UnitID = unit
-	target.NetworkID = otherNetwork
+	target.AgencyID = otherNetwork
 	check("message.read", []string{"payload"}, nil)
-	target.NetworkID = network
+	target.AgencyID = network
 	authority.Grants = append(authority.Grants, makeGrant([]string{"message.detail"}, "unitCollection", collection))
 	check("message.detail", []string{"payload"}, authz.ErrForbidden)
 	target.UnitCollections = []uuid.UUID{collection}
@@ -77,7 +77,7 @@ func TestAccountAndWithoutUnitActionsNeedConcreteContext(t *testing.T) {
 			Actions: []string{"account.update"}, Scope: authz.Scope{Kind: "account", References: []string{account.String()}},
 		}, {
 			SubjectID: owner.String(), SubjectKind: "principal",
-			Actions: []string{"without-unit.read"}, Scope: authz.Scope{Kind: "network", References: []string{network.String()}},
+			Actions: []string{"without-unit.read"}, Scope: authz.Scope{Kind: "agency", References: []string{network.String()}},
 		}}}
 	now := time.Now().UTC()
 	for _, test := range []struct {
@@ -88,9 +88,9 @@ func TestAccountAndWithoutUnitActionsNeedConcreteContext(t *testing.T) {
 		{"account.update", authz.Target{AccountID: account}, nil},
 		{"account.update", authz.Target{AccountID: owner}, authz.ErrForbidden},
 		{"account.delete", authz.Target{AccountID: account}, authz.ErrForbidden},
-		{"without-unit.read", authz.Target{NetworkID: network}, authz.ErrForbidden},
-		{"without-unit.read", authz.Target{NetworkID: network, WithoutUnit: true}, nil},
-		{"without-unit.read", authz.Target{NetworkID: network, WithoutUnit: true, UnitID: uuid.New()}, authz.ErrInvalidInput},
+		{"without-unit.read", authz.Target{AgencyID: network}, authz.ErrForbidden},
+		{"without-unit.read", authz.Target{AgencyID: network, WithoutUnit: true}, nil},
+		{"without-unit.read", authz.Target{AgencyID: network, WithoutUnit: true, UnitID: uuid.New()}, authz.ErrInvalidInput},
 	} {
 		if err := authz.Authorize(authority, test.action, nil, test.target, now); !errors.Is(err, test.want) {
 			t.Fatalf("%s: %v, want %v", test.action, err, test.want)

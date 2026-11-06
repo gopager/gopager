@@ -13,6 +13,7 @@ package units
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"time"
@@ -29,6 +30,7 @@ type Unit struct {
 	ID                uuid.UUID         `json:"id"`
 	Revision          int64             `json:"revision,string"`
 	Name              string            `json:"name"`
+	AgencyID          uuid.UUID         `json:"agencyId"`
 	OrganizationID    *uuid.UUID        `json:"organizationId"`
 	CollectionIDs     []uuid.UUID       `json:"collectionIds"`
 	Settings          Settings          `json:"settings"`
@@ -74,9 +76,36 @@ type BulkPreview struct {
 type Context struct {
 	ID            uuid.UUID
 	Revision      int64
+	AgencyID      uuid.UUID
 	CollectionIDs []uuid.UUID
 	Deleted       bool
 }
+
+// Agency is the administrative area (for example a county or a city) that owns Units and
+// Radio networks. It is the normal grant scope above a Unit; Organizations and Unit
+// collections stay independent of it.
+type Agency struct {
+	ID       uuid.UUID `json:"id"`
+	Revision int64     `json:"revision,string"`
+	Name     string    `json:"name"`
+}
+
+// AgencyInput is the requested state of an Agency. Call Canonical to validate it.
+type AgencyInput struct {
+	Name string `json:"name"`
+}
+
+// Canonical validates the name and returns a canonical copy; it returns
+// authz.ErrInvalidInput on invalid input.
+func (input AgencyInput) Canonical() (AgencyInput, error) {
+	if err := ValidateName(input.Name); err != nil {
+		return AgencyInput{}, err
+	}
+	return input, nil
+}
+
+// ErrAgencyInUse reports an Agency deletion while Units or Radio networks still belong to it.
+var ErrAgencyInUse = errors.New("the agency still has units or radio networks; reassign them first")
 
 // Collection is a named Unit collection DTO. It carries no member list.
 type Collection struct {
@@ -91,6 +120,7 @@ type Collection struct {
 // validate it.
 type UnitInput struct {
 	Name            string             `json:"name"`
+	AgencyID        uuid.UUID          `json:"agencyId"`
 	OrganizationID  *uuid.UUID         `json:"organizationId"`
 	CollectionIDs   []uuid.UUID        `json:"collectionIds"`
 	Settings        Settings           `json:"settings"`
@@ -257,6 +287,9 @@ func (input UnitInput) Canonical() (UnitInput, error) {
 	if err := ValidateName(input.Name); err != nil {
 		return UnitInput{}, err
 	}
+	if input.AgencyID == uuid.Nil {
+		return UnitInput{}, authz.ErrInvalidInput
+	}
 	settings, err := input.Settings.Canonical()
 	if err != nil {
 		return UnitInput{}, err
@@ -300,15 +333,21 @@ type ContextReader interface {
 	ReadUnitContext(context.Context, platform.TransactionContext, uuid.UUID) (Context, error)
 }
 
-// RuleOwner coordinates current Network uses and durable invalidation, never foreign writes.
+// RuleOwner durably invalidates a deleted Unit's Address rules, never foreign writes.
 type RuleOwner interface {
-	NetworksForUnit(context.Context, platform.TransactionContext, uuid.UUID) ([]uuid.UUID, error)
 	InvalidateUnit(context.Context, platform.TransactionContext, uuid.UUID) error
 }
 
 // Repository applies native authority filters before public read/count/page or mutation.
 type Repository interface {
 	ContextReader
+	ReadAgency(context.Context, platform.TransactionContext, authz.Authority, string, uuid.UUID, time.Time) (Agency, error)
+	ListAgencies(context.Context, platform.TransactionContext, authz.Authority, PageInput, time.Time) (Page[Agency], error)
+	SaveAgency(context.Context, platform.TransactionContext, authz.Authority, Agency, int64, time.Time) error
+	// DeleteAgency fails with ErrAgencyInUse while Units or Radio networks belong to the Agency.
+	DeleteAgency(context.Context, platform.TransactionContext, authz.Authority, Agency, time.Time) error
+	// LockAgency holds the Agency against deletion for the transaction; a missing one is authz.ErrInvalidInput.
+	LockAgency(context.Context, platform.TransactionContext, uuid.UUID) error
 	ReadOrganizationContext(context.Context, platform.TransactionContext, uuid.UUID) (Organization, []Unit, []UnitTemplate, error)
 	ReadOrganization(context.Context, platform.TransactionContext, authz.Authority, string, uuid.UUID, time.Time) (Organization, error)
 	ListOrganizations(context.Context, platform.TransactionContext, authz.Authority, PageInput, time.Time) (Page[Organization], error)

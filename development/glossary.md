@@ -32,7 +32,7 @@ Fixed names of the architecture domains. Ownership and boundaries: [Domains and 
 | **Gateway adapter** | Software type receiving/decoding Emissions and submitting finalized Transmission reports. Responsibility boundary: [C-01](contracts/c-01-transmission-acceptance.md). | Gateway (a running instance) |
 | **Gateway** | A registered, authenticated running instance of a Gateway adapter, authorized for one or more Networks. Has its own state (contact, heartbeat, termination). | Receiver hardware, Subscriber |
 | **Gateway Bearer credential** | Reusable Bearer secret bound to exactly one Gateway; GoPager derives Gateway identity from the credential. HTTP exposure, authorization and lifecycle are defined by [C-06](contracts/c-06-identity-authorization.md#ap-06-gateway-bearer-credentials). | Gateway token; per-Gateway credential |
-| **Network** | A logical radio network or channel with exactly one Protocol, in whose context a Gateway submits Transmissions. | Protocol |
+| **Network** | A logical radio network or channel with exactly one Protocol, in whose context a Gateway submits Transmissions; also "Radio network". It belongs to exactly one Agency. | Protocol, Agency |
 | **Gateway Network identifier** | Gateway-local identifier with which a Submission may declare its Network; the Gateway's configuration maps it to exactly one assigned Network. | Network (the server entity) |
 | **Default Network** | Configured Gateway/Protocol fallback in [C-01 Network resolution](contracts/c-01-transmission-acceptance.md). | Network |
 | **Network resolution** | Server-side derivation of a Transmission's Network. Precedence, states and rematching boundary: [C-01](contracts/c-01-transmission-acceptance.md). | Grouping |
@@ -79,7 +79,8 @@ Fixed names of the architecture domains. Ownership and boundaries: [Domains and 
 
 | Term | Definition | Not to be confused with |
 | --- | --- | --- |
-| **Unit** | Logical recipient defined in GoPager (for example a fire brigade or a person's pager role) to which Addresses resolve. | Address, Subscriber, User |
+| **Agency** | The operating authority of one alerting domain (for example the county fire dispatch centre or the county police), owning that domain's Units and Networks; every Unit and every Network belongs to exactly one Agency. It is the normal grant scope and feed-filter dimension above a Unit and cannot be deleted while Units or Networks belong to it. Introduced under [D-135](authoritative-plan.md#foundation-redesign-after-the-2026-11-06-re-evaluation). | Organization (defaults container), Unit collection (free-form set), Gateway, EAS Area, a single brigade (a Unit) |
+| **Unit** | Logical recipient defined in GoPager (for example a fire brigade or a person's pager role) to which Addresses resolve; it belongs to exactly one Agency. | Address, Subscriber, User, Agency |
 | **Organization** | Container of Units providing inherited defaults. | User group |
 | **Organization default** | Typed Unit setting supplied by an Organization to Units or templates that inherit that setting; materialization on deletion: [C-04](contracts/c-04-master-data.md#ap-08-master-data-management). | Global default |
 | **Unit setting override** | Explicit Unit value or explicit unset replacing an inherited Organization default; clearing the override restores inheritance. | Unit template snapshot |

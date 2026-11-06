@@ -44,6 +44,7 @@ tags:
   description: Standalone templates copied into new Units.
 - name: Units
   description: Units, including bulk changes.
+- name: Agencies
 - name: Unit collections
   description: Named Unit collections.
 - name: Address rules
@@ -202,6 +203,190 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /agencies:
+    get:
+      operationId: listAgencies
+      tags:
+      - Agencies
+      summary: List Agencies
+      description: Requires `agency.read`. Offset paging; any other query parameter is 400.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      parameters:
+      - $ref: '#/components/parameters/Offset'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Caller-visible page; `total` counts only rows the caller may read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgencyPageResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    post:
+      operationId: createAgency
+      tags:
+      - Agencies
+      summary: Create an Agency
+      description: 'Requires `agency.create`. Idempotent per (caller, `commandId`): an identical replay
+        returns the original result; reusing the `commandId` with different input is 409 `IDEMPOTENCY_CONFLICT`.'
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAgencyRequest'
+      responses:
+        '201':
+          description: Agency created (or replayed).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /agencies/{id}:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    get:
+      operationId: readAgency
+      tags:
+      - Agencies
+      summary: Read an Agency
+      description: Requires `agency.read`. Absent, deleted and invisible items are all 404.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      responses:
+        '200':
+          description: The resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgencyResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    put:
+      operationId: renameAgency
+      tags:
+      - Agencies
+      summary: Rename an Agency
+      description: Requires `agency.update`. Optimistic concurrency via `expectedRevision`; a stale value
+        is 409 `REVISION_CONFLICT`.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAgencyRequest'
+      responses:
+        '200':
+          description: New revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    delete:
+      operationId: deleteAgency
+      tags:
+      - Agencies
+      summary: Delete an Agency
+      description: Requires `agency.delete` (scope `all`). Optimistic concurrency via `expectedRevision`; a stale
+        value, or an Agency that still owns Units or Networks, is 409 `REVISION_CONFLICT`.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteRequest'
+      responses:
+        '200':
+          description: Deleted; final revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
         '500':
           $ref: '#/components/responses/InternalError'
         '503':
@@ -3263,6 +3448,101 @@ components:
               - unit
               - organization
               - unset
+    Agency:
+      type: object
+      description: The operating authority of one alerting domain (for example a county fire dispatch centre). It owns Units and Networks; every Unit and every Network belongs to exactly one Agency.
+      required:
+      - id
+      - revision
+      - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        revision:
+          $ref: '#/components/schemas/Revision'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+          pattern: \S
+          description: Valid UTF-8, not blank, at most 256 characters; not trimmed.
+    AgencyResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          $ref: '#/components/schemas/Agency'
+    AgencyPageResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          type: object
+          required:
+          - items
+          - total
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Agency'
+            total:
+              type: integer
+              minimum: 0
+              description: Number of rows the caller may read, independent of paging.
+    CreateAgencyRequest:
+      type: object
+      required:
+      - schemaVersion
+      - commandId
+      - name
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        commandId:
+          type: string
+          format: uuid
+          description: Client-generated idempotency key (not the nil UUID). Receipts are stored per (caller principal,
+            commandId) and never expire.
+        expectedRevision:
+          type: string
+          enum:
+          - '0'
+          description: Optional on create; only "0" is accepted.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+          pattern: \S
+          description: Valid UTF-8, not blank, at most 256 characters; not trimmed.
+      additionalProperties: false
+    UpdateAgencyRequest:
+      type: object
+      required:
+      - schemaVersion
+      - expectedRevision
+      - name
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        expectedRevision:
+          $ref: '#/components/schemas/Revision'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+          pattern: \S
+          description: Valid UTF-8, not blank, at most 256 characters; not trimmed.
+      additionalProperties: false
     Organization:
       type: object
       required:
@@ -3325,6 +3605,7 @@ components:
       - id
       - revision
       - name
+      - agencyId
       - organizationId
       - collectionIds
       - settings
@@ -3342,6 +3623,10 @@ components:
           maxLength: 256
           pattern: \S
           description: Valid UTF-8, not blank, at most 256 characters; not trimmed.
+        agencyId:
+          type: string
+          format: uuid
+          description: The Agency that owns the Unit.
         organizationId:
           type: string
           format: uuid
@@ -3637,6 +3922,7 @@ components:
       required:
       - schemaVersion
       - commandId
+      - agencyId
       - name
       - collectionIds
       - settings
@@ -3653,6 +3939,10 @@ components:
           enum:
           - '0'
           description: Optional on create; only "0" is accepted.
+        agencyId:
+          type: string
+          format: uuid
+          description: The Agency that owns the Unit; the caller needs the Unit action on that Agency.
         name:
           type: string
           minLength: 1
@@ -3684,6 +3974,7 @@ components:
       required:
       - schemaVersion
       - expectedRevision
+      - agencyId
       - name
       - organizationId
       - collectionIds
@@ -3693,6 +3984,10 @@ components:
           $ref: '#/components/schemas/SchemaVersion'
         expectedRevision:
           $ref: '#/components/schemas/Revision'
+        agencyId:
+          type: string
+          format: uuid
+          description: The Agency that owns the Unit; the caller needs the Unit action on that Agency.
         name:
           type: string
           minLength: 1
@@ -3719,6 +4014,7 @@ components:
       - schemaVersion
       - commandId
       - templateId
+      - agencyId
       - name
       - collectionIds
       properties:
@@ -3732,6 +4028,10 @@ components:
         templateId:
           type: string
           format: uuid
+        agencyId:
+          type: string
+          format: uuid
+          description: The Agency that owns the Unit; the caller needs the Unit action on that Agency.
         name:
           type: string
           minLength: 1

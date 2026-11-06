@@ -469,7 +469,10 @@ func (s *Service) CreateUnitFromTemplate(ctx context.Context, proof identity.Pro
 			id = receipt.Result.ID
 		}
 		if err := authz.Authorize(authority, "unit.create", nil,
-			authz.Target{UnitID: id, UnitCollections: input.CollectionIDs}, now); err != nil {
+			authz.Target{AgencyID: input.AgencyID, UnitID: id, UnitCollections: input.CollectionIDs}, now); err != nil {
+			return err
+		}
+		if err := s.repository.LockAgency(tx.Context(), tx, input.AgencyID); err != nil {
 			return err
 		}
 		if err := s.checkMembership(tx.Context(), tx, authority, nil, input.CollectionIDs, now); err != nil {
@@ -482,7 +485,7 @@ func (s *Service) CreateUnitFromTemplate(ctx context.Context, proof identity.Pro
 			}
 			return nil
 		}
-		value := Unit{ID: id, Revision: 1, Name: input.Name, OrganizationID: template.OrganizationID,
+		value := Unit{ID: id, Revision: 1, Name: input.Name, AgencyID: input.AgencyID, OrganizationID: template.OrganizationID,
 			CollectionIDs: input.CollectionIDs, Settings: templateSettingsFromEffective(template.EffectiveSettings)}
 		if err := s.repository.SaveUnit(tx.Context(), tx, authority, value, 0, now); err != nil {
 			return err

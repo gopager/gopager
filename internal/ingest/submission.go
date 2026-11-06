@@ -104,7 +104,9 @@ type GatewayNetwork struct {
 	Identifier string
 	NetworkID  uuid.UUID
 	Protocol   protocols.Protocol
-	Default    bool
+	// AgencyID is the Network's Agency, filled by GatewayNetworksForAuthorization for grant checks.
+	AgencyID uuid.UUID
+	Default  bool
 }
 
 // Receipt is the acceptance result returned to the Gateway. Retrying a

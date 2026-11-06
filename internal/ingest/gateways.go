@@ -57,7 +57,7 @@ type GatewayCredentialIssueResult struct {
 type GatewayAdministrationRepository interface {
 	GatewayNetworks(context.Context, platform.TransactionContext, uuid.UUID) ([]GatewayNetwork, error)
 	GatewayNetworksForAuthorization(context.Context, platform.TransactionContext, uuid.UUID) ([]GatewayNetwork, error)
-	ReadNetworkProtocol(context.Context, platform.TransactionContext, uuid.UUID) (protocols.Protocol, error)
+	ReadNetwork(context.Context, platform.TransactionContext, uuid.UUID) (protocols.Protocol, uuid.UUID, error)
 	ReplaceGatewayNetworks(context.Context, platform.TransactionContext, uuid.UUID, int64,
 		[]GatewayNetwork) (int64, error)
 	GatewayCredentialStatus(context.Context, platform.TransactionContext, uuid.UUID) ([]GatewayCredentialView, error)
@@ -137,10 +137,10 @@ func (s *GatewayAdministration) ConfigureNetworks(ctx context.Context, proof ide
 		}
 		scope := make(map[uuid.UUID]bool)
 		for _, network := range current {
-			scope[network.NetworkID] = true
+			scope[network.AgencyID] = true
 		}
 		for index := range assignments {
-			protocol, err := s.repository.ReadNetworkProtocol(tx.Context(), tx, assignments[index].NetworkID)
+			protocol, agency, err := s.repository.ReadNetwork(tx.Context(), tx, assignments[index].NetworkID)
 			if err != nil {
 				if errors.Is(err, authz.ErrNotFound) {
 					return authz.ErrInvalidInput
@@ -151,7 +151,7 @@ func (s *GatewayAdministration) ConfigureNetworks(ctx context.Context, proof ide
 				return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("invalid current Network Protocol"))
 			}
 			assignments[index].Protocol = protocol
-			scope[assignments[index].NetworkID] = true
+			scope[agency] = true
 			if assignments[index].Default {
 				defaults[protocol]++
 			}
@@ -199,7 +199,7 @@ func (s *GatewayAdministration) ReadCredentialStatus(ctx context.Context, proof 
 		}
 		scope := make(map[uuid.UUID]bool)
 		for _, network := range networks {
-			scope[network.NetworkID] = true
+			scope[network.AgencyID] = true
 		}
 		if err := authorizeGatewayNetworks(authentication.Authority, "gateway.read", scope, now); err != nil {
 			return err
@@ -251,7 +251,7 @@ func (s *GatewayAdministration) IssueCredential(ctx context.Context, proof ident
 		}
 		scope := make(map[uuid.UUID]bool)
 		for _, network := range networks {
-			scope[network.NetworkID] = true
+			scope[network.AgencyID] = true
 		}
 		if err := authorizeGatewayNetworks(authentication.Authority, "gateway.update", scope, now); err != nil {
 			return err
@@ -355,7 +355,7 @@ func (s *GatewayAdministration) RevokeCredential(ctx context.Context, proof iden
 		}
 		scope := make(map[uuid.UUID]bool)
 		for _, network := range networks {
-			scope[network.NetworkID] = true
+			scope[network.AgencyID] = true
 		}
 		if err := authorizeGatewayNetworks(authentication.Authority, "gateway.update", scope, now); err != nil {
 			return err
@@ -412,12 +412,14 @@ func validGatewayCredentialViews(views []GatewayCredentialView) bool {
 	return true
 }
 
-func authorizeGatewayNetworks(authority authz.Authority, action string, networks map[uuid.UUID]bool, now time.Time) error {
-	if len(networks) == 0 {
+// authorizeGatewayNetworks requires action on the Agency of every Network the Gateway is or will be
+// assigned to; a Gateway without Networks needs an installation-wide grant.
+func authorizeGatewayNetworks(authority authz.Authority, action string, agencies map[uuid.UUID]bool, now time.Time) error {
+	if len(agencies) == 0 {
 		return authz.Authorize(authority, action, nil, authz.Target{}, now)
 	}
-	for network := range networks {
-		if err := authz.Authorize(authority, action, nil, authz.Target{NetworkID: network}, now); err != nil {
+	for agency := range agencies {
+		if err := authz.Authorize(authority, action, nil, authz.Target{AgencyID: agency}, now); err != nil {
 			return err
 		}
 	}

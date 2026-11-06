@@ -88,17 +88,16 @@ func TestCorrectionReadmitsProcessingForChangedTargets(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	exec(`INSERT INTO networks(id,name,protocol) VALUES($1,'Correction readmission','pocsag')`, networkID)
 	exec(`INSERT INTO gateways(id,state) VALUES($1,'active')`, gatewayID)
 	exec(`INSERT INTO gateway_networks(id,gateway_id,gateway_network_identifier,network_id,is_default)
 		VALUES($1,$2,'default',$3,true)`, uuid.New(), gatewayID, networkID)
 	unitA, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
-		units.UnitInput{Name: "Readmission A", CollectionIDs: []uuid.UUID{}}, checkedMutation)
+		units.UnitInput{AgencyID: f.agency, Name: "Readmission A", CollectionIDs: []uuid.UUID{}}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
 	unitB, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
-		units.UnitInput{Name: "Readmission B", CollectionIDs: []uuid.UUID{}}, checkedMutation)
+		units.UnitInput{AgencyID: f.agency, Name: "Readmission B", CollectionIDs: []uuid.UUID{}}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -340,7 +339,7 @@ func TestCorrectionExhaustionFailsSafelyAndRetryCreatesCurrentWork(t *testing.T)
 	// A caller covering only another Network cannot distinguish the job from an unavailable one.
 	replaceManagementGrants(t, f, []authz.Grant{{
 		Actions: []string{"assignment-correction.read", "assignment-correction.retry"},
-		Scope:   authz.Scope{Kind: "network", References: []string{f.networks[1].String()}},
+		Scope:   authz.Scope{Kind: "agency", References: []string{f.agencies[1].String()}},
 	}})
 	if _, err := f.rules.ReadCorrection(t.Context(), f.proof, jobID); !errors.Is(err, authz.ErrNotFound) {
 		t.Fatalf("hidden correction read was not NOT_FOUND: %v", err)

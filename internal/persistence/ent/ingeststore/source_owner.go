@@ -49,6 +49,7 @@ type sourceSnapshot struct {
 	identity         processing.SourceIdentity
 	transmission     uuid.UUID
 	network          uuid.UUID
+	networkAgency    uuid.UUID
 	message          uuid.UUID
 	messageRevision  int64
 	sourceRevision   int64
@@ -485,11 +486,11 @@ func (o *ProcessingSourceOwner) readSource(ctx context.Context, tx platform.Tran
 	var snapshot sourceSnapshot
 	var protocolValue, networkProtocol string
 	var payloadJSON, targetsJSON []byte
-	err = executor.QueryRowContext(ctx, `SELECT t.network_id,t.message_id,t.protocol,t.payload,t.targets,
+	err = executor.QueryRowContext(ctx, `SELECT t.network_id,n.agency_id,t.message_id,t.protocol,t.payload,t.targets,
 		t.observed_at,t.source_revision,t.processing_status,n.name,n.protocol
 		FROM transmissions t JOIN networks n ON n.id=t.network_id AND n.deleted=false
 		WHERE t.id=$1 FOR UPDATE OF t`, transmission).Scan(
-		&snapshot.network, &snapshot.message, &protocolValue, &payloadJSON, &targetsJSON,
+		&snapshot.network, &snapshot.networkAgency, &snapshot.message, &protocolValue, &payloadJSON, &targetsJSON,
 		&snapshot.observedAt, &snapshot.sourceRevision, &snapshot.processingStatus,
 		&snapshot.networkName, &networkProtocol)
 	if err != nil {
@@ -1061,8 +1062,10 @@ func processingStatus(expected map[uuid.UUID]processing.CandidateBinding, candid
 	}
 }
 
+// authorizationTarget derives the authorization target of one dependency: unassigned or targetless
+// evidence belongs to the Radio network's Agency; an assigned target to its Unit's Agency.
 func (o *ProcessingSourceOwner) authorizationTarget(snapshot sourceSnapshot, position *uint32) (authz.Target, error) {
-	target := authz.Target{NetworkID: snapshot.network, WithoutUnit: true}
+	target := authz.Target{AgencyID: snapshot.networkAgency, WithoutUnit: true}
 	if position == nil {
 		return target, nil
 	}
@@ -1079,6 +1082,7 @@ func (o *ProcessingSourceOwner) authorizationTarget(snapshot sourceSnapshot, pos
 	if !ok || unit.ID != *resolution.UnitID || unit.Deleted {
 		return authz.Target{}, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("current Unit context unavailable"))
 	}
+	target.AgencyID = unit.AgencyID
 	target.UnitID = unit.ID
 	target.UnitCollections = slices.Clone(unit.CollectionIDs)
 	return target, nil

@@ -33,6 +33,18 @@ func (f AddressRuleFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AddressRuleMutation", m)
 }
 
+// The AgencyFunc type is an adapter to allow the use of ordinary
+// function as Agency mutator.
+type AgencyFunc func(context.Context, *ent.AgencyMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AgencyFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AgencyMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AgencyMutation", m)
+}
+
 // The AssignmentControlFunc type is an adapter to allow the use of ordinary
 // function as AssignmentControl mutator.
 type AssignmentControlFunc func(context.Context, *ent.AssignmentControlMutation) (ent.Value, error)

@@ -29,26 +29,31 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 )
 
-type managementNetworkFixture struct{ id uuid.UUID }
+type managementNetworkFixture struct{ id, agency uuid.UUID }
 
-// ReadNetworkProtocol supplies only this declared fixture Network, not a production substitute.
-func (f managementNetworkFixture) ReadNetworkProtocol(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (protocols.Protocol, error) {
+// ReadNetwork supplies only this declared fixture Network, not a production substitute.
+func (f managementNetworkFixture) ReadNetwork(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (protocols.Protocol, uuid.UUID, error) {
 	if id != f.id {
-		return "", authz.ErrNotFound
+		return "", uuid.Nil, authz.ErrNotFound
 	}
-	return protocols.POCSAG, ctx.Err()
+	return protocols.POCSAG, f.agency, ctx.Err()
 }
 
-func (f managementNetworkFixture) ScopeExists(ctx context.Context, tx platform.TransactionContext, scope authz.Scope) (bool, error) {
-	if scope.Kind != "network" || !authz.ValidScope(scope) {
-		return false, authz.ErrInvalidInput
-	}
-	for _, reference := range scope.References {
-		if reference != f.id.String() {
-			return false, nil
+// seedAgency inserts an Agency row for fixtures that create Networks and Units with raw SQL.
+func seedAgency(t *testing.T, store *postgres.Store) uuid.UUID {
+	t.Helper()
+	id := uuid.New()
+	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
 		}
+		_, err = executor.ExecContext(tx.Context(), `INSERT INTO agencies(id,name) VALUES($1,'Fixture agency')`, id)
+		return err
+	}); err != nil {
+		t.Fatal(err)
 	}
-	return true, ctx.Err()
+	return id
 }
 
 // newManagementStore isolates actual PostgreSQL HTTP tests even with an externally supplied database.
@@ -203,6 +208,7 @@ func TestManagementHTTPAndTLSReverseProxyWithHTTPUpstream(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			store := newManagementStore(t)
+			agency := `"agencyId":"` + seedAgency(t, store).String() + `",`
 			backend := httptest.NewUnstartedServer(nil)
 			t.Cleanup(backend.Close)
 			origin := "http://" + backend.Listener.Addr().String()
@@ -216,8 +222,8 @@ func TestManagementHTTPAndTLSReverseProxyWithHTTPUpstream(t *testing.T) {
 				t.Cleanup(proxy.Close)
 				origin = "https://" + proxy.Listener.Addr().String()
 			}
-			network := managementNetworkFixture{id: uuid.New()}
-			handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, network, network)
+			network := managementNetworkFixture{id: uuid.New(), agency: uuid.New()}
+			handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), store, network)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -243,7 +249,7 @@ func TestManagementHTTPAndTLSReverseProxyWithHTTPUpstream(t *testing.T) {
 			collection := managementRequest(t, client, origin, "POST", "/api/v1/unit-collections",
 				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Stations"}`, login.CSRFToken, "", http.StatusCreated)
 			collectionID, _ := managementResultID(t, collection)
-			unitInput := `{"schemaVersion":1,"commandId":"` + uuid.NewString() + `","name":"Station","collectionIds":["` + collectionID.String() + `"],"organizationId":null,"settings":{}}`
+			unitInput := `{"schemaVersion":1,"commandId":"` + uuid.NewString() + `",` + agency + `"name":"Station","collectionIds":["` + collectionID.String() + `"],"organizationId":null,"settings":{}}`
 			created := managementRequest(t, client, origin, "POST", "/api/v1/units", unitInput, login.CSRFToken, "", http.StatusCreated)
 			unitID, _ := managementResultID(t, created)
 			retry := managementRequest(t, client, origin, "POST", "/api/v1/units", unitInput, login.CSRFToken, "", http.StatusCreated)
@@ -252,10 +258,10 @@ func TestManagementHTTPAndTLSReverseProxyWithHTTPUpstream(t *testing.T) {
 			}
 			for _, membership := range []string{"", `,"collectionIds":null`} {
 				managementRequest(t, client, origin, "PUT", "/api/v1/units/"+unitID.String(),
-					`{"schemaVersion":1,"expectedRevision":"1","name":"Silent clear","organizationId":null,"settings":{}`+membership+`}`, login.CSRFToken, "", http.StatusBadRequest)
+					`{"schemaVersion":1,"expectedRevision":"1",`+agency+`"name":"Silent clear","organizationId":null,"settings":{}`+membership+`}`, login.CSRFToken, "", http.StatusBadRequest)
 			}
 			managementRequest(t, client, origin, "PUT", "/api/v1/units/"+unitID.String(),
-				`{"schemaVersion":1,"expectedRevision":"1","name":"Station renamed","collectionIds":["`+collectionID.String()+`"],"organizationId":null,"settings":{}}`, login.CSRFToken, "", http.StatusOK)
+				`{"schemaVersion":1,"expectedRevision":"1",`+agency+`"name":"Station renamed","collectionIds":["`+collectionID.String()+`"],"organizationId":null,"settings":{}}`, login.CSRFToken, "", http.StatusOK)
 			defaults := `{"color":{"mode":"value","value":"#AABBCC"},"icon":{"mode":"unset"},"functionMeanings":{"mode":"unset"}}`
 			organization := managementRequest(t, client, origin, "POST", "/api/v1/organizations",
 				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Radio Operations","defaults":`+defaults+`}`,
@@ -267,7 +273,7 @@ func TestManagementHTTPAndTLSReverseProxyWithHTTPUpstream(t *testing.T) {
 					organizationID.String()+`","settings":`+templateSettings+`}`, login.CSRFToken, "", http.StatusCreated)
 			templateID, _ := managementResultID(t, template)
 			copied := managementRequest(t, client, origin, "POST", "/api/v1/units/from-template",
-				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","templateId":"`+templateID.String()+
+				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`",`+agency+`"templateId":"`+templateID.String()+
 					`","name":"Copied Radio","collectionIds":[]}`, login.CSRFToken, "", http.StatusCreated)
 			copiedID, _ := managementResultID(t, copied)
 			bulkSettings := `{"color":{"mode":"value","value":"#123456"},"icon":{"mode":"unset"},"functionMeanings":{"mode":"unset"}}`
@@ -381,7 +387,7 @@ func TestManagementHTTPAndTLSReverseProxyWithHTTPUpstream(t *testing.T) {
 				t.Fatal(err)
 			}
 			deniedTemplateCopy := managementRequest(t, client, origin, "POST", "/api/v1/units/from-template",
-				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","templateId":"`+templateID.String()+
+				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`",`+agency+`"templateId":"`+templateID.String()+
 					`","name":"Denied Copy","collectionIds":[]}`, login.CSRFToken, "", http.StatusForbidden)
 			if deniedTemplateCopy.Code != "FORBIDDEN" || strings.Contains(string(deniedTemplateCopy.Data), templateID.String()) ||
 				strings.Contains(string(deniedTemplateCopy.Data), organizationID.String()) {
@@ -414,7 +420,7 @@ func TestManagementHTTPAndTLSReverseProxyWithHTTPUpstream(t *testing.T) {
 			inlineOrganization := `{"name":"Denied Inline","defaults":{"color":{"mode":"unset"},` +
 				`"icon":{"mode":"unset"},"functionMeanings":{"mode":"unset"}}}`
 			deniedInline := managementRequest(t, client, origin, "POST", "/api/v1/units",
-				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Denied Inline Unit",`+
+				`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`",`+agency+`"name":"Denied Inline Unit",`+
 					`"collectionIds":[],"settings":{},"newOrganization":`+inlineOrganization+`}`,
 				login.CSRFToken, "", http.StatusForbidden)
 			if deniedInline.Code != "FORBIDDEN" {
@@ -461,7 +467,7 @@ func TestManagementRejectsInvalidShapes(t *testing.T) {
 
 func TestManagementProductionNetworkOwnerHidesUnknownNetwork(t *testing.T) {
 	store := newManagementStore(t)
-	handler, err := composeApplicationAPI("http://example.test", identity.DefaultLoginRateLimits(), store, nil, nil)
+	handler, err := composeApplicationAPI("http://example.test", identity.DefaultLoginRateLimits(), store, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -488,8 +494,8 @@ func TestManagementProductionNetworkOwnerHidesUnknownNetwork(t *testing.T) {
 	if len(cookies) != 1 {
 		t.Fatal("login did not set the Session cookie")
 	}
-	created := call("/api/v1/units", `{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Station","collectionIds":[],"organizationId":null,"settings":{}}`,
-		authentication.CSRFToken, cookies[0])
+	created := call("/api/v1/units", `{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","agencyId":"`+seedAgency(t, store).String()+
+		`","name":"Station","collectionIds":[],"organizationId":null,"settings":{}}`, authentication.CSRFToken, cookies[0])
 	var unit managementResponse
 	if err := json.Unmarshal(created.Body.Bytes(), &unit); err != nil || created.Code != http.StatusCreated {
 		t.Fatalf("standalone production Unit creation failed: %v", err)

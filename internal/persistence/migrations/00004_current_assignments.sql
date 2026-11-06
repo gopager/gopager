@@ -6,16 +6,25 @@ CREATE TABLE organizations (
     defaults jsonb NOT NULL,
     deleted boolean NOT NULL DEFAULT false
 );
+-- A Agency is the administrative area (county, city) that owns Units and Radio networks and
+-- is the normal grant scope above a Unit; it is deleted only once nothing references it.
+CREATE TABLE agencies (
+    id uuid PRIMARY KEY,
+    revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
+    name varchar(256) NOT NULL CHECK (name <> '')
+);
 CREATE TABLE units (
     id uuid PRIMARY KEY,
     revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
     name varchar(256) NOT NULL CHECK (name <> ''),
+    agency_id uuid NOT NULL REFERENCES agencies(id),
     deleted boolean NOT NULL DEFAULT false,
     organization_id uuid REFERENCES organizations(id),
     settings jsonb NOT NULL DEFAULT
         '{"color":{"mode":"inherit"},"icon":{"mode":"inherit"},"functionMeanings":{"mode":"inherit"}}'::jsonb
 );
 CREATE INDEX units_organization_id ON units (organization_id);
+CREATE INDEX units_agency_id ON units (agency_id);
 CREATE TABLE unit_templates (
     id uuid PRIMARY KEY,
     revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
@@ -99,3 +108,4 @@ DROP TABLE unit_collections;
 DROP TABLE unit_templates;
 DROP TABLE units;
 DROP TABLE organizations;
+DROP TABLE agencies;

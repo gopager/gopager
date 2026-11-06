@@ -4,8 +4,10 @@ CREATE TABLE networks (
     revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
     name varchar(256) NOT NULL CHECK (name <> ''),
     protocol varchar NOT NULL CHECK (protocol IN ('pocsag', 'flex', 'zvei', 'eas')),
+    agency_id uuid NOT NULL REFERENCES agencies(id),
     deleted boolean NOT NULL DEFAULT false
 );
+CREATE INDEX networks_agency_id ON networks (agency_id);
 CREATE TABLE gateways (
     id uuid PRIMARY KEY,
     revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),

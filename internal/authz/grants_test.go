@@ -25,7 +25,7 @@ func TestExplicitActionScopeCatalog(t *testing.T) {
 	if slices.Contains(authz.Actions(), "corrupted") {
 		t.Fatal("caller changed the central action catalog")
 	}
-	if authz.ActionAllowsScope("grouping.configure", "network") ||
+	if authz.ActionAllowsScope("grouping.configure", "agency") ||
 		!authz.ActionAllowsScope("grouping.configure", "all") ||
 		authz.ActionAllowsScope("without-unit.read", "unit") ||
 		authz.ActionAllowsScope("unit-template.read", "unit") ||

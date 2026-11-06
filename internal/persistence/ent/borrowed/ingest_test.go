@@ -142,8 +142,8 @@ func TestGatewayCredentialCutoverStateAndNetworkReplacement(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol)
-			VALUES($1,'ingest network','pocsag')`, network); err != nil {
+		if _, err := executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id)
+			INSERT INTO networks(id,name,protocol,agency_id) SELECT $1,'ingest network','pocsag',a.id FROM a`, network); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateways(id,state)
@@ -258,8 +258,8 @@ func TestTransmissionGroupingMergeRollbackAndOffsetPersistence(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol)
-			VALUES($1,'grouping network','pocsag')`, network); err != nil {
+		if _, err := executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id)
+			INSERT INTO networks(id,name,protocol,agency_id) SELECT $1,'grouping network','pocsag',a.id FROM a`, network); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateways(id,state)
@@ -451,8 +451,8 @@ func TestTransmissionAcceptanceRollsBackAtEachParticipant(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				if _, err := executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol)
-					VALUES($1,'atomicity network','pocsag')`, network); err != nil {
+				if _, err := executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id)
+					INSERT INTO networks(id,name,protocol,agency_id) SELECT $1,'atomicity network','pocsag',a.id FROM a`, network); err != nil {
 					return err
 				}
 				if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateways(id,state)
@@ -464,8 +464,8 @@ func TestTransmissionAcceptanceRollsBackAtEachParticipant(t *testing.T) {
 					VALUES($1,$2,'default',$3,true)`, uuid.New(), gateway, network); err != nil {
 					return err
 				}
-				if _, err := executor.ExecContext(tx.Context(), `INSERT INTO units(id,name)
-					VALUES($1,'atomicity unit')`, unit); err != nil {
+				if _, err := executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id)
+					INSERT INTO units(id,name,agency_id) SELECT $1,'atomicity unit',a.id FROM a`, unit); err != nil {
 					return err
 				}
 				if test.selectedWorkflow {
@@ -588,8 +588,8 @@ func TestConcurrentTransmissionReceiptsAreIdempotent(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol)
-			VALUES($1,'concurrent network','pocsag')`, network); err != nil {
+		if _, err := executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id)
+			INSERT INTO networks(id,name,protocol,agency_id) SELECT $1,'concurrent network','pocsag',a.id FROM a`, network); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateways(id,state)
@@ -756,8 +756,8 @@ func TestSubmissionRetryAfterKnownRollbackAndLostCommitAcknowledgment(t *testing
 		if err != nil {
 			return err
 		}
-		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol)
-			VALUES($1,'retry network','pocsag')`, network); err != nil {
+		if _, err := executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id)
+			INSERT INTO networks(id,name,protocol,agency_id) SELECT $1,'retry network','pocsag',a.id FROM a`, network); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateways(id,state)
@@ -897,8 +897,8 @@ func TestSelectedWorkflowKeepsProcessingPending(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol)
-			VALUES($1,'workflow network','pocsag')`, network); err != nil {
+		if _, err := executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id)
+			INSERT INTO networks(id,name,protocol,agency_id) SELECT $1,'workflow network','pocsag',a.id FROM a`, network); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateways(id,state)
@@ -1053,8 +1053,8 @@ func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO networks(id,name,protocol)
-			VALUES($1,'publication network','pocsag')`, network); err != nil {
+		if _, err := executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id)
+			INSERT INTO networks(id,name,protocol,agency_id) SELECT $1,'publication network','pocsag',a.id FROM a`, network); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateways(id,state)

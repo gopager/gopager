@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"math"
@@ -14,6 +15,8 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/persistence/ent/addressrule"
+	"github.com/gopager/gopager/internal/persistence/ent/agency"
 	"github.com/gopager/gopager/internal/persistence/ent/network"
 	"github.com/gopager/gopager/internal/persistence/ent/predicate"
 )
@@ -21,11 +24,13 @@ import (
 // NetworkQuery is the builder for querying Network entities.
 type NetworkQuery struct {
 	config
-	ctx        *QueryContext
-	order      []network.OrderOption
-	inters     []Interceptor
-	predicates []predicate.Network
-	modifiers  []func(*sql.Selector)
+	ctx              *QueryContext
+	order            []network.OrderOption
+	inters           []Interceptor
+	predicates       []predicate.Network
+	withAgency       *AgencyQuery
+	withAddressRules *AddressRuleQuery
+	modifiers        []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -60,6 +65,50 @@ func (_q *NetworkQuery) Unique(unique bool) *NetworkQuery {
 func (_q *NetworkQuery) Order(o ...network.OrderOption) *NetworkQuery {
 	_q.order = append(_q.order, o...)
 	return _q
+}
+
+// QueryAgency chains the current query on the "agency" edge.
+func (_q *NetworkQuery) QueryAgency() *AgencyQuery {
+	query := (&AgencyClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(network.Table, network.FieldID, selector),
+			sqlgraph.To(agency.Table, agency.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, network.AgencyTable, network.AgencyColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryAddressRules chains the current query on the "address_rules" edge.
+func (_q *NetworkQuery) QueryAddressRules() *AddressRuleQuery {
+	query := (&AddressRuleClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(network.Table, network.FieldID, selector),
+			sqlgraph.To(addressrule.Table, addressrule.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, network.AddressRulesTable, network.AddressRulesColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // First returns the first Network entity from the query.
@@ -249,16 +298,40 @@ func (_q *NetworkQuery) Clone() *NetworkQuery {
 		return nil
 	}
 	return &NetworkQuery{
-		config:     _q.config,
-		ctx:        _q.ctx.Clone(),
-		order:      append([]network.OrderOption{}, _q.order...),
-		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.Network{}, _q.predicates...),
+		config:           _q.config,
+		ctx:              _q.ctx.Clone(),
+		order:            append([]network.OrderOption{}, _q.order...),
+		inters:           append([]Interceptor{}, _q.inters...),
+		predicates:       append([]predicate.Network{}, _q.predicates...),
+		withAgency:       _q.withAgency.Clone(),
+		withAddressRules: _q.withAddressRules.Clone(),
 		// clone intermediate query.
 		sql:       _q.sql.Clone(),
 		path:      _q.path,
 		modifiers: append([]func(*sql.Selector){}, _q.modifiers...),
 	}
+}
+
+// WithAgency tells the query-builder to eager-load the nodes that are connected to
+// the "agency" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *NetworkQuery) WithAgency(opts ...func(*AgencyQuery)) *NetworkQuery {
+	query := (&AgencyClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withAgency = query
+	return _q
+}
+
+// WithAddressRules tells the query-builder to eager-load the nodes that are connected to
+// the "address_rules" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *NetworkQuery) WithAddressRules(opts ...func(*AddressRuleQuery)) *NetworkQuery {
+	query := (&AddressRuleClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withAddressRules = query
+	return _q
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -343,8 +416,12 @@ func (_q *NetworkQuery) prepareQuery(ctx context.Context) error {
 
 func (_q *NetworkQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Network, error) {
 	var (
-		nodes = []*Network{}
-		_spec = _q.querySpec()
+		nodes       = []*Network{}
+		_spec       = _q.querySpec()
+		loadedTypes = [2]bool{
+			_q.withAgency != nil,
+			_q.withAddressRules != nil,
+		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Network).scanValues(nil, columns)
@@ -352,6 +429,7 @@ func (_q *NetworkQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Netw
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &Network{config: _q.config}
 		nodes = append(nodes, node)
+		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	if len(_q.modifiers) > 0 {
@@ -366,7 +444,80 @@ func (_q *NetworkQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Netw
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := _q.withAgency; query != nil {
+		if err := _q.loadAgency(ctx, query, nodes, nil,
+			func(n *Network, e *Agency) { n.Edges.Agency = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withAddressRules; query != nil {
+		if err := _q.loadAddressRules(ctx, query, nodes,
+			func(n *Network) { n.Edges.AddressRules = []*AddressRule{} },
+			func(n *Network, e *AddressRule) { n.Edges.AddressRules = append(n.Edges.AddressRules, e) }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
+}
+
+func (_q *NetworkQuery) loadAgency(ctx context.Context, query *AgencyQuery, nodes []*Network, init func(*Network), assign func(*Network, *Agency)) error {
+	ids := make([]uuid.UUID, 0, len(nodes))
+	nodeids := make(map[uuid.UUID][]*Network)
+	for i := range nodes {
+		fk := nodes[i].AgencyID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(agency.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "agency_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
+func (_q *NetworkQuery) loadAddressRules(ctx context.Context, query *AddressRuleQuery, nodes []*Network, init func(*Network), assign func(*Network, *AddressRule)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[uuid.UUID]*Network)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(addressrule.FieldNetworkID)
+	}
+	query.Where(predicate.AddressRule(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(network.AddressRulesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.NetworkID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "network_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
 }
 
 func (_q *NetworkQuery) sqlCount(ctx context.Context) (int, error) {
@@ -396,6 +547,9 @@ func (_q *NetworkQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != network.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
+		}
+		if _q.withAgency != nil {
+			_spec.Node.AddColumnOnce(network.FieldAgencyID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

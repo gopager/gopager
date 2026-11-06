@@ -109,7 +109,7 @@ func run() (result error) {
 	var runners []platform.Runner
 	var processingRuntime *processingAPIRuntime
 	if slices.Contains(config.Roles, platform.RoleAPI) || slices.Contains(config.Roles, platform.RoleWorker) {
-		processingRuntime, err = composeProcessingAPIRuntime(ctx, store, nil, config.ProcessingArtifactRoot)
+		processingRuntime, err = composeProcessingAPIRuntime(ctx, store, config.ProcessingArtifactRoot)
 		if err != nil {
 			return errors.Join(err, store.Close())
 		}
@@ -135,7 +135,7 @@ func run() (result error) {
 	}
 	var api http.Handler
 	if slices.Contains(config.Roles, platform.RoleAPI) {
-		api, err = composeApplicationAPI(config.PublicOrigin, config.LoginLimits, store, nil, nil, processingRuntime.routes)
+		api, err = composeApplicationAPI(config.PublicOrigin, config.LoginLimits, store, nil, processingRuntime.routes)
 		if err != nil {
 			return errors.Join(err, store.Close())
 		}
@@ -176,7 +176,7 @@ func composeCorrectionRunner(store *postgres.Store, readmission assignments.Proc
 		return nil, err
 	}
 	resolver, err := identity.NewResolver(identityRepository, store, applicationScopeOwners{
-		identity: identityRepository, units: unitRepository, networks: intakeRepository,
+		identity: identityRepository, units: unitRepository,
 	})
 	if err != nil {
 		return nil, err
@@ -259,12 +259,9 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 
 // composeApplicationAPI binds domain services to the existing primary store and HTTP listener.
 func composeApplicationAPI(publicOrigin string, limits identity.LoginRateLimits, store *postgres.Store, networkOwner assignments.NetworkOwner,
-	networkScopes identity.ScopeReferences, processingRoutes ...processingAPIRoutes) (http.Handler, error) {
+	processingRoutes ...processingAPIRoutes) (http.Handler, error) {
 	if len(processingRoutes) > 1 {
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("multiple Processing API route sets"))
-	}
-	if (networkOwner == nil) != (networkScopes == nil) {
-		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("incomplete Network owner registration"))
 	}
 	transport, err := identity.NewHTTPTransport(publicOrigin)
 	if err != nil {
@@ -297,11 +294,8 @@ func composeApplicationAPI(publicOrigin string, limits identity.LoginRateLimits,
 	if networkOwner == nil {
 		networkOwner = intakeRepository
 	}
-	if networkScopes == nil {
-		networkScopes = intakeRepository
-	}
 	resolver, err := identity.NewResolver(repository, store, applicationScopeOwners{
-		identity: repository, units: unitRepository, networks: networkScopes,
+		identity: repository, units: unitRepository,
 	})
 	if err != nil {
 		return nil, err

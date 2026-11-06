@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/assignments"
 	"github.com/gopager/gopager/internal/persistence/ent/addressrule"
+	"github.com/gopager/gopager/internal/persistence/ent/network"
 	"github.com/gopager/gopager/internal/persistence/ent/predicate"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
 )
@@ -168,6 +169,11 @@ func (_u *AddressRuleUpdate) SetUnit(v *Unit) *AddressRuleUpdate {
 	return _u.SetUnitID(v.ID)
 }
 
+// SetNetwork sets the "network" edge to the Network entity.
+func (_u *AddressRuleUpdate) SetNetwork(v *Network) *AddressRuleUpdate {
+	return _u.SetNetworkID(v.ID)
+}
+
 // Mutation returns the AddressRuleMutation object of the builder.
 func (_u *AddressRuleUpdate) Mutation() *AddressRuleMutation {
 	return _u.mutation
@@ -176,6 +182,12 @@ func (_u *AddressRuleUpdate) Mutation() *AddressRuleMutation {
 // ClearUnit clears the "unit" edge to the Unit entity.
 func (_u *AddressRuleUpdate) ClearUnit() *AddressRuleUpdate {
 	_u.mutation.ClearUnit()
+	return _u
+}
+
+// ClearNetwork clears the "network" edge to the Network entity.
+func (_u *AddressRuleUpdate) ClearNetwork() *AddressRuleUpdate {
+	_u.mutation.ClearNetwork()
 	return _u
 }
 
@@ -221,6 +233,9 @@ func (_u *AddressRuleUpdate) check() error {
 	if _u.mutation.UnitCleared() && len(_u.mutation.UnitIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "AddressRule.unit"`)
 	}
+	if _u.mutation.NetworkCleared() && len(_u.mutation.NetworkIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "AddressRule.network"`)
+	}
 	return nil
 }
 
@@ -247,9 +262,6 @@ func (_u *AddressRuleUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if value, ok := _u.mutation.AddedRevision(); ok {
 		_spec.AddField(addressrule.FieldRevision, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.NetworkID(); ok {
-		_spec.SetField(addressrule.FieldNetworkID, field.TypeUUID, value)
 	}
 	if value, ok := _u.mutation.Protocol(); ok {
 		_spec.SetField(addressrule.FieldProtocol, field.TypeEnum, value)
@@ -294,6 +306,35 @@ func (_u *AddressRuleUpdate) sqlSave(ctx context.Context) (_node int, err error)
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(unit.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.NetworkCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   addressrule.NetworkTable,
+			Columns: []string{addressrule.NetworkColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(network.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.NetworkIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   addressrule.NetworkTable,
+			Columns: []string{addressrule.NetworkColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(network.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -459,6 +500,11 @@ func (_u *AddressRuleUpdateOne) SetUnit(v *Unit) *AddressRuleUpdateOne {
 	return _u.SetUnitID(v.ID)
 }
 
+// SetNetwork sets the "network" edge to the Network entity.
+func (_u *AddressRuleUpdateOne) SetNetwork(v *Network) *AddressRuleUpdateOne {
+	return _u.SetNetworkID(v.ID)
+}
+
 // Mutation returns the AddressRuleMutation object of the builder.
 func (_u *AddressRuleUpdateOne) Mutation() *AddressRuleMutation {
 	return _u.mutation
@@ -467,6 +513,12 @@ func (_u *AddressRuleUpdateOne) Mutation() *AddressRuleMutation {
 // ClearUnit clears the "unit" edge to the Unit entity.
 func (_u *AddressRuleUpdateOne) ClearUnit() *AddressRuleUpdateOne {
 	_u.mutation.ClearUnit()
+	return _u
+}
+
+// ClearNetwork clears the "network" edge to the Network entity.
+func (_u *AddressRuleUpdateOne) ClearNetwork() *AddressRuleUpdateOne {
+	_u.mutation.ClearNetwork()
 	return _u
 }
 
@@ -525,6 +577,9 @@ func (_u *AddressRuleUpdateOne) check() error {
 	if _u.mutation.UnitCleared() && len(_u.mutation.UnitIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "AddressRule.unit"`)
 	}
+	if _u.mutation.NetworkCleared() && len(_u.mutation.NetworkIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "AddressRule.network"`)
+	}
 	return nil
 }
 
@@ -569,9 +624,6 @@ func (_u *AddressRuleUpdateOne) sqlSave(ctx context.Context) (_node *AddressRule
 	if value, ok := _u.mutation.AddedRevision(); ok {
 		_spec.AddField(addressrule.FieldRevision, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.NetworkID(); ok {
-		_spec.SetField(addressrule.FieldNetworkID, field.TypeUUID, value)
-	}
 	if value, ok := _u.mutation.Protocol(); ok {
 		_spec.SetField(addressrule.FieldProtocol, field.TypeEnum, value)
 	}
@@ -615,6 +667,35 @@ func (_u *AddressRuleUpdateOne) sqlSave(ctx context.Context) (_node *AddressRule
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(unit.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.NetworkCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   addressrule.NetworkTable,
+			Columns: []string{addressrule.NetworkColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(network.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.NetworkIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   addressrule.NetworkTable,
+			Columns: []string{addressrule.NetworkColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(network.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {

@@ -18,6 +18,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/gopager/gopager/internal/persistence/ent/account"
 	"github.com/gopager/gopager/internal/persistence/ent/addressrule"
+	"github.com/gopager/gopager/internal/persistence/ent/agency"
 	"github.com/gopager/gopager/internal/persistence/ent/assignmentcontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/auditrecord"
 	"github.com/gopager/gopager/internal/persistence/ent/commandreceipt"
@@ -65,6 +66,8 @@ type Client struct {
 	Account *AccountClient
 	// AddressRule is the client for interacting with the AddressRule builders.
 	AddressRule *AddressRuleClient
+	// Agency is the client for interacting with the Agency builders.
+	Agency *AgencyClient
 	// AssignmentControl is the client for interacting with the AssignmentControl builders.
 	AssignmentControl *AssignmentControlClient
 	// AuditRecord is the client for interacting with the AuditRecord builders.
@@ -150,6 +153,7 @@ func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.Account = NewAccountClient(c.config)
 	c.AddressRule = NewAddressRuleClient(c.config)
+	c.Agency = NewAgencyClient(c.config)
 	c.AssignmentControl = NewAssignmentControlClient(c.config)
 	c.AuditRecord = NewAuditRecordClient(c.config)
 	c.CommandReceipt = NewCommandReceiptClient(c.config)
@@ -280,6 +284,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		config:                      cfg,
 		Account:                     NewAccountClient(cfg),
 		AddressRule:                 NewAddressRuleClient(cfg),
+		Agency:                      NewAgencyClient(cfg),
 		AssignmentControl:           NewAssignmentControlClient(cfg),
 		AuditRecord:                 NewAuditRecordClient(cfg),
 		CommandReceipt:              NewCommandReceiptClient(cfg),
@@ -337,6 +342,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		config:                      cfg,
 		Account:                     NewAccountClient(cfg),
 		AddressRule:                 NewAddressRuleClient(cfg),
+		Agency:                      NewAgencyClient(cfg),
 		AssignmentControl:           NewAssignmentControlClient(cfg),
 		AuditRecord:                 NewAuditRecordClient(cfg),
 		CommandReceipt:              NewCommandReceiptClient(cfg),
@@ -402,9 +408,9 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Account, c.AddressRule, c.AssignmentControl, c.AuditRecord, c.CommandReceipt,
-		c.ContributionSupport, c.CorrectionDirtyTransmission, c.Credential,
-		c.DomainEvent, c.FieldPermission, c.Gateway, c.GatewayCredential,
+		c.Account, c.AddressRule, c.Agency, c.AssignmentControl, c.AuditRecord,
+		c.CommandReceipt, c.ContributionSupport, c.CorrectionDirtyTransmission,
+		c.Credential, c.DomainEvent, c.FieldPermission, c.Gateway, c.GatewayCredential,
 		c.GatewayNetwork, c.Grant, c.GroupingControl, c.IdentityControl,
 		c.LoginAttempt, c.Membership, c.Message, c.MessageContribution, c.Network,
 		c.Organization, c.PendingAssignmentScope, c.ProcessingCandidate,
@@ -421,9 +427,9 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Account, c.AddressRule, c.AssignmentControl, c.AuditRecord, c.CommandReceipt,
-		c.ContributionSupport, c.CorrectionDirtyTransmission, c.Credential,
-		c.DomainEvent, c.FieldPermission, c.Gateway, c.GatewayCredential,
+		c.Account, c.AddressRule, c.Agency, c.AssignmentControl, c.AuditRecord,
+		c.CommandReceipt, c.ContributionSupport, c.CorrectionDirtyTransmission,
+		c.Credential, c.DomainEvent, c.FieldPermission, c.Gateway, c.GatewayCredential,
 		c.GatewayNetwork, c.Grant, c.GroupingControl, c.IdentityControl,
 		c.LoginAttempt, c.Membership, c.Message, c.MessageContribution, c.Network,
 		c.Organization, c.PendingAssignmentScope, c.ProcessingCandidate,
@@ -443,6 +449,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Account.mutate(ctx, m)
 	case *AddressRuleMutation:
 		return c.AddressRule.mutate(ctx, m)
+	case *AgencyMutation:
+		return c.Agency.mutate(ctx, m)
 	case *AssignmentControlMutation:
 		return c.AssignmentControl.mutate(ctx, m)
 	case *AuditRecordMutation:
@@ -778,6 +786,22 @@ func (c *AddressRuleClient) QueryUnit(_m *AddressRule) *UnitQuery {
 	return query
 }
 
+// QueryNetwork queries the network edge of a AddressRule.
+func (c *AddressRuleClient) QueryNetwork(_m *AddressRule) *NetworkQuery {
+	query := (&NetworkClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(addressrule.Table, addressrule.FieldID, id),
+			sqlgraph.To(network.Table, network.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, addressrule.NetworkTable, addressrule.NetworkColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *AddressRuleClient) Hooks() []Hook {
 	hooks := c.hooks.AddressRule
@@ -801,6 +825,172 @@ func (c *AddressRuleClient) mutate(ctx context.Context, m *AddressRuleMutation) 
 		return (&AddressRuleDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown AddressRule mutation op: %q", m.Op())
+	}
+}
+
+// AgencyClient is a client for the Agency schema.
+type AgencyClient struct {
+	config
+}
+
+// NewAgencyClient returns a client for the Agency from the given config.
+func NewAgencyClient(c config) *AgencyClient {
+	return &AgencyClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `agency.Hooks(f(g(h())))`.
+func (c *AgencyClient) Use(hooks ...Hook) {
+	c.hooks.Agency = append(c.hooks.Agency, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `agency.Intercept(f(g(h())))`.
+func (c *AgencyClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Agency = append(c.inters.Agency, interceptors...)
+}
+
+// Create returns a builder for creating a Agency entity.
+func (c *AgencyClient) Create() *AgencyCreate {
+	mutation := newAgencyMutation(c.config, OpCreate)
+	return &AgencyCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Agency entities.
+func (c *AgencyClient) CreateBulk(builders ...*AgencyCreate) *AgencyCreateBulk {
+	return &AgencyCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AgencyClient) MapCreateBulk(slice any, setFunc func(*AgencyCreate, int)) *AgencyCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AgencyCreateBulk{err: fmt.Errorf("calling to AgencyClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AgencyCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AgencyCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Agency.
+func (c *AgencyClient) Update() *AgencyUpdate {
+	mutation := newAgencyMutation(c.config, OpUpdate)
+	return &AgencyUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AgencyClient) UpdateOne(_m *Agency) *AgencyUpdateOne {
+	mutation := newAgencyMutation(c.config, OpUpdateOne, withAgency(_m))
+	return &AgencyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AgencyClient) UpdateOneID(id uuid.UUID) *AgencyUpdateOne {
+	mutation := newAgencyMutation(c.config, OpUpdateOne, withAgencyID(id))
+	return &AgencyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Agency.
+func (c *AgencyClient) Delete() *AgencyDelete {
+	mutation := newAgencyMutation(c.config, OpDelete)
+	return &AgencyDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AgencyClient) DeleteOne(_m *Agency) *AgencyDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AgencyClient) DeleteOneID(id uuid.UUID) *AgencyDeleteOne {
+	builder := c.Delete().Where(agency.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AgencyDeleteOne{builder}
+}
+
+// Query returns a query builder for Agency.
+func (c *AgencyClient) Query() *AgencyQuery {
+	return &AgencyQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAgency},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Agency entity by its id.
+func (c *AgencyClient) Get(ctx context.Context, id uuid.UUID) (*Agency, error) {
+	return c.Query().Where(agency.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AgencyClient) GetX(ctx context.Context, id uuid.UUID) *Agency {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUnits queries the units edge of a Agency.
+func (c *AgencyClient) QueryUnits(_m *Agency) *UnitQuery {
+	query := (&UnitClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(agency.Table, agency.FieldID, id),
+			sqlgraph.To(unit.Table, unit.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, agency.UnitsTable, agency.UnitsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryNetworks queries the networks edge of a Agency.
+func (c *AgencyClient) QueryNetworks(_m *Agency) *NetworkQuery {
+	query := (&NetworkClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(agency.Table, agency.FieldID, id),
+			sqlgraph.To(network.Table, network.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, agency.NetworksTable, agency.NetworksColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *AgencyClient) Hooks() []Hook {
+	hooks := c.hooks.Agency
+	return append(hooks[:len(hooks):len(hooks)], agency.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *AgencyClient) Interceptors() []Interceptor {
+	return c.inters.Agency
+}
+
+func (c *AgencyClient) mutate(ctx context.Context, m *AgencyMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AgencyCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AgencyUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AgencyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AgencyDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Agency mutation op: %q", m.Op())
 	}
 }
 
@@ -3324,6 +3514,38 @@ func (c *NetworkClient) GetX(ctx context.Context, id uuid.UUID) *Network {
 	return obj
 }
 
+// QueryAgency queries the agency edge of a Network.
+func (c *NetworkClient) QueryAgency(_m *Network) *AgencyQuery {
+	query := (&AgencyClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(network.Table, network.FieldID, id),
+			sqlgraph.To(agency.Table, agency.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, network.AgencyTable, network.AgencyColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAddressRules queries the address_rules edge of a Network.
+func (c *NetworkClient) QueryAddressRules(_m *Network) *AddressRuleQuery {
+	query := (&AddressRuleClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(network.Table, network.FieldID, id),
+			sqlgraph.To(addressrule.Table, addressrule.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, network.AddressRulesTable, network.AddressRulesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *NetworkClient) Hooks() []Hook {
 	hooks := c.hooks.Network
@@ -4878,6 +5100,22 @@ func (c *UnitClient) QueryOrganization(_m *Unit) *OrganizationQuery {
 	return query
 }
 
+// QueryAgency queries the agency edge of a Unit.
+func (c *UnitClient) QueryAgency(_m *Unit) *AgencyQuery {
+	query := (&AgencyClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(unit.Table, unit.FieldID, id),
+			sqlgraph.To(agency.Table, agency.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, unit.AgencyTable, unit.AgencyColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *UnitClient) Hooks() []Hook {
 	hooks := c.hooks.Unit
@@ -5644,6 +5882,22 @@ func (c *WorkflowScopeReferenceClient) QueryUnit(_m *WorkflowScopeReference) *Un
 	return query
 }
 
+// QueryNetwork queries the network edge of a WorkflowScopeReference.
+func (c *WorkflowScopeReferenceClient) QueryNetwork(_m *WorkflowScopeReference) *NetworkQuery {
+	query := (&NetworkClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(workflowscopereference.Table, workflowscopereference.FieldID, id),
+			sqlgraph.To(network.Table, network.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, workflowscopereference.NetworkTable, workflowscopereference.NetworkColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *WorkflowScopeReferenceClient) Hooks() []Hook {
 	hooks := c.hooks.WorkflowScopeReference
@@ -5823,7 +6077,7 @@ func (c *WorkflowVersionClient) mutate(ctx context.Context, m *WorkflowVersionMu
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Account, AddressRule, AssignmentControl, AuditRecord, CommandReceipt,
+		Account, AddressRule, Agency, AssignmentControl, AuditRecord, CommandReceipt,
 		ContributionSupport, CorrectionDirtyTransmission, Credential, DomainEvent,
 		FieldPermission, Gateway, GatewayCredential, GatewayNetwork, Grant,
 		GroupingControl, IdentityControl, LoginAttempt, Membership, Message,
@@ -5834,7 +6088,7 @@ type (
 		WorkflowScopeReference, WorkflowVersion []ent.Hook
 	}
 	inters struct {
-		Account, AddressRule, AssignmentControl, AuditRecord, CommandReceipt,
+		Account, AddressRule, Agency, AssignmentControl, AuditRecord, CommandReceipt,
 		ContributionSupport, CorrectionDirtyTransmission, Credential, DomainEvent,
 		FieldPermission, Gateway, GatewayCredential, GatewayNetwork, Grant,
 		GroupingControl, IdentityControl, LoginAttempt, Membership, Message,

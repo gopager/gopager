@@ -126,25 +126,11 @@ func (s *Service) ListCollections(ctx context.Context, proof identity.Proof, pag
 }
 
 // authorizeUnitUses checks each current Network use independently, without exposing those uses.
-func (s *Service) authorizeUnitUses(ctx context.Context, tx platform.TransactionContext, authority authz.Authority, action string, value Unit, now time.Time) error {
-	networks, err := s.rules.NetworksForUnit(ctx, tx, value.ID)
-	if err != nil {
-		return err
-	}
-	target := authz.Target{UnitID: value.ID, UnitCollections: value.CollectionIDs}
-	if len(networks) == 0 {
-		return authz.Authorize(authority, action, nil, target, now)
-	}
-	for _, network := range networks {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		target.NetworkID = network
-		if err := authz.Authorize(authority, action, nil, target, now); err != nil {
-			return err
-		}
-	}
-	return nil
+// authorizeUnitUses authorizes action on a Unit through its Agency, its identity and its
+// collection memberships; the Radio networks whose rules reference the Unit no longer matter.
+func (s *Service) authorizeUnitUses(_ context.Context, _ platform.TransactionContext, authority authz.Authority, action string, value Unit, now time.Time) error {
+	target := authz.Target{AgencyID: value.AgencyID, UnitID: value.ID, UnitCollections: value.CollectionIDs}
+	return authz.Authorize(authority, action, nil, target, now)
 }
 
 func (s *Service) authorizeOrganizationReference(ctx context.Context, tx platform.TransactionContext, authority authz.Authority, id uuid.UUID, now time.Time) error {
@@ -219,7 +205,11 @@ func (s *Service) CreateUnit(ctx context.Context, proof identity.Proof, command 
 		if found {
 			id = receipt.Result.ID
 		}
-		if err := authz.Authorize(authority, "unit.create", nil, authz.Target{UnitID: id, UnitCollections: input.CollectionIDs}, now); err != nil {
+		if err := authz.Authorize(authority, "unit.create", nil,
+			authz.Target{AgencyID: input.AgencyID, UnitID: id, UnitCollections: input.CollectionIDs}, now); err != nil {
+			return err
+		}
+		if err := s.repository.LockAgency(tx.Context(), tx, input.AgencyID); err != nil {
 			return err
 		}
 		if input.NewOrganization != nil {
@@ -252,7 +242,7 @@ func (s *Service) CreateUnit(ctx context.Context, proof identity.Proof, command 
 			}
 			input.OrganizationID = &organizationID
 		}
-		value := Unit{ID: id, Revision: 1, Name: input.Name, OrganizationID: input.OrganizationID,
+		value := Unit{ID: id, Revision: 1, Name: input.Name, AgencyID: input.AgencyID, OrganizationID: input.OrganizationID,
 			CollectionIDs: input.CollectionIDs, Settings: input.Settings}
 		if err := s.repository.SaveUnit(tx.Context(), tx, authority, value, 0, now); err != nil {
 			return err
@@ -291,9 +281,14 @@ func (s *Service) ChangeUnit(ctx context.Context, proof identity.Proof, id uuid.
 		}
 		proposed := current
 		proposed.Name, proposed.OrganizationID, proposed.CollectionIDs = input.Name, input.OrganizationID, input.CollectionIDs
-		proposed.Settings, proposed.Revision = input.Settings, next
+		proposed.AgencyID, proposed.Settings, proposed.Revision = input.AgencyID, input.Settings, next
 		if err := s.authorizeUnitUses(tx.Context(), tx, authority, "unit.update", proposed, now); err != nil {
 			return err
+		}
+		if proposed.AgencyID != current.AgencyID {
+			if err := s.repository.LockAgency(tx.Context(), tx, proposed.AgencyID); err != nil {
+				return err
+			}
 		}
 		if proposed.OrganizationID != nil {
 			if err := s.authorizeOrganizationReference(tx.Context(), tx, authority, *proposed.OrganizationID, now); err != nil {
@@ -303,7 +298,8 @@ func (s *Service) ChangeUnit(ctx context.Context, proof identity.Proof, id uuid.
 		if err := s.checkMembership(tx.Context(), tx, authority, current.CollectionIDs, input.CollectionIDs, now); err != nil {
 			return err
 		}
-		if current.Name == proposed.Name && equalUUIDPointer(current.OrganizationID, proposed.OrganizationID) &&
+		if current.Name == proposed.Name && current.AgencyID == proposed.AgencyID &&
+			equalUUIDPointer(current.OrganizationID, proposed.OrganizationID) &&
 			slices.Equal(current.CollectionIDs, proposed.CollectionIDs) && reflect.DeepEqual(current.Settings, proposed.Settings) {
 			result = commands.Result{ID: id, Revision: current.Revision}
 			return nil

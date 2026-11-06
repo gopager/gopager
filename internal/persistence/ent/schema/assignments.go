@@ -23,6 +23,30 @@ import (
 
 // Unit defines the units table: an alerting Unit with name, settings and optional
 // Organization; soft-deleted via the deleted flag.
+type Agency struct{ ent.Schema }
+
+// Policy returns the privacy policy that guards queries and mutations of the Agency schema.
+func (Agency) Policy() ent.Policy { return guard.Policy("Agency") }
+
+// Mixin returns the mixins shared into the Agency schema.
+func (Agency) Mixin() []ent.Mixin { return []ent.Mixin{IdentityBase{}} }
+
+// Annotations returns the table name and code-generation annotations of the Agency schema.
+func (Agency) Annotations() []schema.Annotation {
+	return []schema.Annotation{entsql.Annotation{Table: "agencies"}}
+}
+
+// Fields returns the columns of the Agency schema.
+func (Agency) Fields() []ent.Field {
+	return []ent.Field{field.String("name").NotEmpty().MaxRuneLen(256)}
+}
+
+// Edges returns the relations of the Agency schema: the Units and Radio networks it owns.
+func (Agency) Edges() []ent.Edge {
+	return []ent.Edge{edge.To("units", Unit.Type), edge.To("networks", Network.Type)}
+}
+
+// Unit defines the units table: a logical recipient that Addresses resolve to, owned by one Agency.
 type Unit struct{ ent.Schema }
 
 // Policy returns the privacy policy that guards queries and mutations of the Unit schema.
@@ -40,6 +64,7 @@ func (Unit) Annotations() []schema.Annotation {
 func (Unit) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("name").NotEmpty().MaxRuneLen(256),
+		field.UUID("agency_id", uuid.UUID{}),
 		field.Bool("deleted").Default(false),
 		field.UUID("organization_id", uuid.UUID{}).Optional().Nillable(),
 		field.JSON("settings", units.Settings{}),
@@ -52,12 +77,13 @@ func (Unit) Edges() []ent.Edge {
 		edge.To("collections", UnitCollection.Type).StorageKey(edge.Table("unit_collection_memberships"), edge.Columns("unit_id", "collection_id")),
 		edge.To("address_rules", AddressRule.Type),
 		edge.From("organization", Organization.Type).Ref("units").Field("organization_id").Unique(),
+		edge.From("agency", Agency.Type).Ref("units").Field("agency_id").Unique().Required(),
 	}
 }
 
 // Indexes returns the indexes and unique constraints of the Unit schema.
 func (Unit) Indexes() []ent.Index {
-	return []ent.Index{index.Fields("organization_id")}
+	return []ent.Index{index.Fields("organization_id"), index.Fields("agency_id")}
 }
 
 // Organization defines the organizations table: a grouping of Units and Unit templates that
@@ -179,7 +205,10 @@ func (AddressRule) Fields() []ent.Field {
 
 // Edges returns the relations of the AddressRule schema.
 func (AddressRule) Edges() []ent.Edge {
-	return []ent.Edge{edge.From("unit", Unit.Type).Ref("address_rules").Field("unit_id").Unique().Required()}
+	return []ent.Edge{
+		edge.From("unit", Unit.Type).Ref("address_rules").Field("unit_id").Unique().Required(),
+		edge.From("network", Network.Type).Ref("address_rules").Field("network_id").Unique().Required(),
+	}
 }
 
 // Indexes returns the indexes and unique constraints of the AddressRule schema.

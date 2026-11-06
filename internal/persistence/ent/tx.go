@@ -16,6 +16,8 @@ type Tx struct {
 	Account *AccountClient
 	// AddressRule is the client for interacting with the AddressRule builders.
 	AddressRule *AddressRuleClient
+	// Agency is the client for interacting with the Agency builders.
+	Agency *AgencyClient
 	// AssignmentControl is the client for interacting with the AssignmentControl builders.
 	AssignmentControl *AssignmentControlClient
 	// AuditRecord is the client for interacting with the AuditRecord builders.
@@ -221,6 +223,7 @@ func (tx *Tx) Client() *Client {
 func (tx *Tx) init() {
 	tx.Account = NewAccountClient(tx.config)
 	tx.AddressRule = NewAddressRuleClient(tx.config)
+	tx.Agency = NewAgencyClient(tx.config)
 	tx.AssignmentControl = NewAssignmentControlClient(tx.config)
 	tx.AuditRecord = NewAuditRecordClient(tx.config)
 	tx.CommandReceipt = NewCommandReceiptClient(tx.config)

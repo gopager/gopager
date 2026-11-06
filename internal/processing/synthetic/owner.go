@@ -36,6 +36,7 @@ type Network struct {
 	ID       uuid.UUID
 	Name     string
 	Protocol protocols.Protocol
+	AgencyID uuid.UUID
 	Deleted  bool
 }
 

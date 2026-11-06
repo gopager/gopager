@@ -14,6 +14,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/gopager/gopager/internal/persistence/ent/account"
 	"github.com/gopager/gopager/internal/persistence/ent/addressrule"
+	"github.com/gopager/gopager/internal/persistence/ent/agency"
 	"github.com/gopager/gopager/internal/persistence/ent/assignmentcontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/auditrecord"
 	"github.com/gopager/gopager/internal/persistence/ent/commandreceipt"
@@ -112,6 +113,7 @@ func checkColumn(t, c string) error {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
 			account.Table:                     account.ValidColumn,
 			addressrule.Table:                 addressrule.ValidColumn,
+			agency.Table:                      agency.ValidColumn,
 			assignmentcontrol.Table:           assignmentcontrol.ValidColumn,
 			auditrecord.Table:                 auditrecord.ValidColumn,
 			commandreceipt.Table:              commandreceipt.ValidColumn,

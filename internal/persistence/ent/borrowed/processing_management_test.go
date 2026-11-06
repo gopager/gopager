@@ -66,7 +66,7 @@ func newProcessingManagementFixture(t *testing.T, f matcherFixture, preparer *pr
 		t.Fatal(err)
 	}
 	capture := &processingTransactionCapture{ConfigurationRepository: store}
-	service, err := management.New(f.store, f.resolver, f.store, capture, f.owners, f.ruleStore,
+	service, err := management.New(f.store, f.resolver, f.store, capture, f.owners,
 		preparer, f.receipts, facts)
 	if err != nil {
 		t.Fatal(err)
@@ -259,11 +259,14 @@ func TestProcessingManagementPreparationRejectsChangedConfigurationSubstitutionA
 	}
 }
 
-func TestProcessingManagementSharedUnitRequiresEveryNetworkAndExplicitInput(t *testing.T) {
+// TestProcessingManagementUnitScopeFollowsTheUnitAgencyAndExplicitInput expects a Unit-scoped
+// Workflow to be authorized through the Unit's own Agency, not through the Agencies of the
+// Networks whose rules alert the Unit, and required metadata to have no implicit defaults.
+func TestProcessingManagementUnitScopeFollowsTheUnitAgencyAndExplicitInput(t *testing.T) {
 	f := newMatcherFixture(t)
 	preparer := &processingPreparationFixture{}
 	service, _ := newProcessingManagementFixture(t, f, preparer, f.facts)
-	unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{Name: "shared"}, checkedMutation)
+	unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(), units.UnitInput{AgencyID: f.agencies[1], Name: "shared"}, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,10 +276,10 @@ func TestProcessingManagementSharedUnitRequiresEveryNetworkAndExplicitInput(t *t
 		}
 	}
 	replaceManagementGrants(t, f, []authz.Grant{{Actions: []string{"rule.create"},
-		Scope: authz.Scope{Kind: "network", References: []string{f.networks[0].String()}}}})
+		Scope: authz.Scope{Kind: "agency", References: []string{f.agencies[0].String()}}}})
 	input := processingMetadataFixture("shared unit workflow", authz.Scope{Kind: "unit", References: []string{unit.ID.String()}})
 	if _, err := service.CreateWorkflow(t.Context(), f.proof, uuid.New(), input, checkedMutation); !errors.Is(err, authz.ErrForbidden) {
-		t.Fatalf("first matching Network authorized globally shared Unit scope: %v", err)
+		t.Fatalf("a rule on an own-Agency Network authorized a foreign-Agency Unit scope: %v", err)
 	}
 	input.Scope = authz.Scope{Kind: "network", References: []string{f.networks[0].String()}}
 	if _, err := service.CreateWorkflow(t.Context(), f.proof, uuid.New(), input, checkedMutation); err != nil {

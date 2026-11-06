@@ -159,6 +159,30 @@ func (f AddressRuleMutationRuleFunc) EvalMutation(ctx context.Context, m ent.Mut
 	return Denyf("ent/privacy: unexpected mutation type %T, expect *ent.AddressRuleMutation", m)
 }
 
+// The AgencyQueryRuleFunc type is an adapter to allow the use of ordinary
+// functions as a query rule.
+type AgencyQueryRuleFunc func(context.Context, *ent.AgencyQuery) error
+
+// EvalQuery return f(ctx, q).
+func (f AgencyQueryRuleFunc) EvalQuery(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.AgencyQuery); ok {
+		return f(ctx, q)
+	}
+	return Denyf("ent/privacy: unexpected query type %T, expect *ent.AgencyQuery", q)
+}
+
+// The AgencyMutationRuleFunc type is an adapter to allow the use of ordinary
+// functions as a mutation rule.
+type AgencyMutationRuleFunc func(context.Context, *ent.AgencyMutation) error
+
+// EvalMutation calls f(ctx, m).
+func (f AgencyMutationRuleFunc) EvalMutation(ctx context.Context, m ent.Mutation) error {
+	if m, ok := m.(*ent.AgencyMutation); ok {
+		return f(ctx, m)
+	}
+	return Denyf("ent/privacy: unexpected mutation type %T, expect *ent.AgencyMutation", m)
+}
+
 // The AssignmentControlQueryRuleFunc type is an adapter to allow the use of ordinary
 // functions as a query rule.
 type AssignmentControlQueryRuleFunc func(context.Context, *ent.AssignmentControlQuery) error
@@ -1062,6 +1086,8 @@ func queryFilter(q ent.Query) (Filter, error) {
 		return q.Filter(), nil
 	case *ent.AddressRuleQuery:
 		return q.Filter(), nil
+	case *ent.AgencyQuery:
+		return q.Filter(), nil
 	case *ent.AssignmentControlQuery:
 		return q.Filter(), nil
 	case *ent.AuditRecordQuery:
@@ -1144,6 +1170,8 @@ func mutationFilter(m ent.Mutation) (Filter, error) {
 	case *ent.AccountMutation:
 		return m.Filter(), nil
 	case *ent.AddressRuleMutation:
+		return m.Filter(), nil
+	case *ent.AgencyMutation:
 		return m.Filter(), nil
 	case *ent.AssignmentControlMutation:
 		return m.Filter(), nil
