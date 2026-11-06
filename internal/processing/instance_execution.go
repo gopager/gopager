@@ -177,7 +177,7 @@ func (r *InstanceExecution) prepare(ctx context.Context, id uuid.UUID, revision 
 		return preparedInstance{}, invalid(errors.New("invalid installed preparation reference"))
 	}
 	if r.manager.root == nil {
-		return preparedInstance{}, capabilityUnavailable(errors.New("Processing artifact root unavailable"))
+		return preparedInstance{}, capabilityUnavailable(errors.New("processing artifact root unavailable"))
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()

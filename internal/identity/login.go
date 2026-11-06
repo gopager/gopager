@@ -335,7 +335,7 @@ func (s *LoginService) ReadSession(ctx context.Context, proof Proof) (SessionVie
 			return err
 		}
 		if authentication.ExpiresAt == nil {
-			return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Session expiry unavailable"))
+			return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("session expiry unavailable"))
 		}
 		result = SessionView{PrincipalID: authentication.Authority.PrincipalID, SessionID: authentication.CredentialID,
 			CSRFToken: authentication.CSRFToken, ExpiresAt: *authentication.ExpiresAt}

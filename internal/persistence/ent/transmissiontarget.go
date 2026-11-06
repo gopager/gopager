@@ -4,6 +4,7 @@ package ent
 
 import (
 	"encoding/json"
+	"encoding/json/jsontext"
 	"fmt"
 	"strings"
 	"time"
@@ -24,7 +25,7 @@ type TransmissionTarget struct {
 	// Position holds the value of the "position" field.
 	Position int `json:"position,omitempty"`
 	// Original holds the value of the "original" field.
-	Original json.RawMessage `json:"-"`
+	Original jsontext.Value `json:"-"`
 	// ResolutionStatus holds the value of the "resolution_status" field.
 	ResolutionStatus transmissiontarget.ResolutionStatus `json:"resolution_status,omitempty"`
 	// UnitID holds the value of the "unit_id" field.

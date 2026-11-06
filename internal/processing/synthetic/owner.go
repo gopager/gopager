@@ -296,7 +296,7 @@ func (in Input) validate() error {
 	}
 	if in.Protocol == protocols.ZVEI || in.Protocol == protocols.EAS {
 		if len(in.Targets) == 0 {
-			return platform.NewFailure(platform.CodeInvalidInput, errors.New("Protocol form requires a target"))
+			return platform.NewFailure(platform.CodeInvalidInput, errors.New("protocol form requires a target"))
 		}
 	}
 	if in.Protocol == protocols.EAS && len(in.Targets) > 31 {

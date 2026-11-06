@@ -81,7 +81,7 @@ func canonicalInput(input RuleInput) (RuleInput, error) {
 // substitutes defaults when the owner is unavailable or the Protocol is invalid.
 func (s *Service) network(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (protocols.Protocol, uuid.UUID, error) {
 	if s.networks == nil {
-		return "", uuid.Nil, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Network owner is not wired"))
+		return "", uuid.Nil, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("network owner is not wired"))
 	}
 	protocol, agency, err := s.networks.ReadNetwork(ctx, tx, id)
 	if err != nil {

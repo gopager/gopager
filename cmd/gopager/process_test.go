@@ -64,7 +64,7 @@ func TestFullCommandProcessStartupAndSignalShutdown(t *testing.T) {
 			defer func() {
 				if !waited {
 					_ = command.Process.Kill()
-					<-exited
+					t.Logf("process exit after kill: %v", <-exited)
 				}
 			}()
 			deadline := time.Now().Add(platform.DefaultCallTimeout + time.Second)

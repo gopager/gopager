@@ -4,7 +4,7 @@ package ent
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"time"
@@ -35,7 +35,7 @@ func (_c *TransmissionTargetCreate) SetPosition(v int) *TransmissionTargetCreate
 }
 
 // SetOriginal sets the "original" field.
-func (_c *TransmissionTargetCreate) SetOriginal(v json.RawMessage) *TransmissionTargetCreate {
+func (_c *TransmissionTargetCreate) SetOriginal(v jsontext.Value) *TransmissionTargetCreate {
 	_c.mutation.SetOriginal(v)
 	return _c
 }

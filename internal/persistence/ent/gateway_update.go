@@ -4,7 +4,7 @@ package ent
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"time"
@@ -127,13 +127,13 @@ func (_u *GatewayUpdate) ClearLastTransmissionAt() *GatewayUpdate {
 }
 
 // SetLastReport sets the "last_report" field.
-func (_u *GatewayUpdate) SetLastReport(v json.RawMessage) *GatewayUpdate {
+func (_u *GatewayUpdate) SetLastReport(v jsontext.Value) *GatewayUpdate {
 	_u.mutation.SetLastReport(v)
 	return _u
 }
 
 // AppendLastReport appends value to the "last_report" field.
-func (_u *GatewayUpdate) AppendLastReport(v json.RawMessage) *GatewayUpdate {
+func (_u *GatewayUpdate) AppendLastReport(v jsontext.Value) *GatewayUpdate {
 	_u.mutation.AppendLastReport(v)
 	return _u
 }
@@ -365,13 +365,13 @@ func (_u *GatewayUpdateOne) ClearLastTransmissionAt() *GatewayUpdateOne {
 }
 
 // SetLastReport sets the "last_report" field.
-func (_u *GatewayUpdateOne) SetLastReport(v json.RawMessage) *GatewayUpdateOne {
+func (_u *GatewayUpdateOne) SetLastReport(v jsontext.Value) *GatewayUpdateOne {
 	_u.mutation.SetLastReport(v)
 	return _u
 }
 
 // AppendLastReport appends value to the "last_report" field.
-func (_u *GatewayUpdateOne) AppendLastReport(v json.RawMessage) *GatewayUpdateOne {
+func (_u *GatewayUpdateOne) AppendLastReport(v jsontext.Value) *GatewayUpdateOne {
 	_u.mutation.AppendLastReport(v)
 	return _u
 }

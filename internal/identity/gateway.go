@@ -50,7 +50,7 @@ func (a *GatewayAuthenticator) Authenticate(ctx context.Context, tx platform.Tra
 	}
 	if authentication.GatewayID == uuid.Nil || authentication.CredentialID == uuid.Nil {
 		return GatewayAuthentication{}, platform.NewFailure(platform.CodeAuthorityUnavailable,
-			errors.New("Gateway credential owner returned incomplete identity"))
+			errors.New("gateway credential owner returned incomplete identity"))
 	}
 	return authentication, nil
 }

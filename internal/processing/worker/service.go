@@ -150,17 +150,17 @@ type MissingSourceOwner struct{}
 
 // CaptureCandidate does not substitute a synthetic source for an unavailable Original.
 func (MissingSourceOwner) CaptureCandidate(context.Context, platform.TransactionContext, processing.Candidate) (Capture, error) {
-	return Capture{}, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Processing source owner unavailable"))
+	return Capture{}, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("processing source owner unavailable"))
 }
 
 // CheckCandidate rejects completion/renewal without actual current source authority.
 func (MissingSourceOwner) CheckCandidate(context.Context, platform.TransactionContext, processing.Candidate, Capture) error {
-	return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Processing source owner unavailable"))
+	return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("processing source owner unavailable"))
 }
 
 // ReconcileCandidate rejects recovery/reselection without the real source owner.
 func (MissingSourceOwner) ReconcileCandidate(context.Context, platform.TransactionContext, processing.Candidate) (processing.Candidate, error) {
-	return processing.Candidate{}, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Processing source owner unavailable"))
+	return processing.Candidate{}, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("processing source owner unavailable"))
 }
 
 // releaseCapture releases a held capture once and clears it, so a later call is a no-op.
@@ -329,7 +329,7 @@ func (s *Service) finish(ctx context.Context, current processing.Candidate, capt
 			return nil
 		}
 		if s.publisher == nil {
-			return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("Processing publication owner unavailable"))
+			return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("processing publication owner unavailable"))
 		}
 		return s.publisher.Publish(tx.Context(), tx, completed.TransmissionID)
 	})

@@ -30,7 +30,7 @@ var (
 	// ErrRuleConflict reports overlapping enabled rules whose winner cannot be
 	// decided by strict selector containment, or overlapping POCSAG rules with
 	// different modes.
-	ErrRuleConflict = errors.New("Address rule conflicts with current configuration")
+	ErrRuleConflict = errors.New("address rule conflicts with current configuration")
 )
 
 // Selector describes an Address/Function set; absent Functions covers all POCSAG bits.

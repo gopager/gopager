@@ -4,7 +4,7 @@ package ent
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"sync"
@@ -5763,8 +5763,8 @@ type DomainEventMutation struct {
 	id             *uuid.UUID
 	seq            *int64
 	addseq         *int64
-	envelope       *json.RawMessage
-	appendenvelope json.RawMessage
+	envelope       *jsontext.Value
+	appendenvelope jsontext.Value
 	_type          *string
 	occurred_at    *time.Time
 	clearedFields  map[string]struct{}
@@ -5948,13 +5948,13 @@ func (m *DomainEventMutation) ResetSeq() {
 }
 
 // SetEnvelope sets the "envelope" field.
-func (m *DomainEventMutation) SetEnvelope(jm json.RawMessage) {
-	m.envelope = &jm
+func (m *DomainEventMutation) SetEnvelope(j jsontext.Value) {
+	m.envelope = &j
 	m.appendenvelope = nil
 }
 
 // Envelope returns the value of the "envelope" field in the mutation.
-func (m *DomainEventMutation) Envelope() (r json.RawMessage, exists bool) {
+func (m *DomainEventMutation) Envelope() (r jsontext.Value, exists bool) {
 	v := m.envelope
 	if v == nil {
 		return
@@ -5965,7 +5965,7 @@ func (m *DomainEventMutation) Envelope() (r json.RawMessage, exists bool) {
 // OldEnvelope returns the old "envelope" field's value of the DomainEvent entity.
 // If the DomainEvent object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *DomainEventMutation) OldEnvelope(ctx context.Context) (v json.RawMessage, err error) {
+func (m *DomainEventMutation) OldEnvelope(ctx context.Context) (v jsontext.Value, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldEnvelope is only allowed on UpdateOne operations")
 	}
@@ -5979,13 +5979,13 @@ func (m *DomainEventMutation) OldEnvelope(ctx context.Context) (v json.RawMessag
 	return oldValue.Envelope, nil
 }
 
-// AppendEnvelope adds jm to the "envelope" field.
-func (m *DomainEventMutation) AppendEnvelope(jm json.RawMessage) {
-	m.appendenvelope = append(m.appendenvelope, jm...)
+// AppendEnvelope adds j to the "envelope" field.
+func (m *DomainEventMutation) AppendEnvelope(j jsontext.Value) {
+	m.appendenvelope = append(m.appendenvelope, j...)
 }
 
 // AppendedEnvelope returns the list of values that were appended to the "envelope" field in this mutation.
-func (m *DomainEventMutation) AppendedEnvelope() (json.RawMessage, bool) {
+func (m *DomainEventMutation) AppendedEnvelope() (jsontext.Value, bool) {
 	if len(m.appendenvelope) == 0 {
 		return nil, false
 	}
@@ -6193,7 +6193,7 @@ func (m *DomainEventMutation) SetField(name string, value ent.Value) error {
 		m.SetSeq(v)
 		return nil
 	case domainevent.FieldEnvelope:
-		v, ok := value.(json.RawMessage)
+		v, ok := value.(jsontext.Value)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -6974,8 +6974,8 @@ type GatewayMutation struct {
 	last_contact_at      *time.Time
 	last_heartbeat_at    *time.Time
 	last_transmission_at *time.Time
-	last_report          *json.RawMessage
-	appendlast_report    json.RawMessage
+	last_report          *jsontext.Value
+	appendlast_report    jsontext.Value
 	clearedFields        map[string]struct{}
 	done                 bool
 	oldValue             func(context.Context) (*Gateway, error)
@@ -7326,13 +7326,13 @@ func (m *GatewayMutation) ResetLastTransmissionAt() {
 }
 
 // SetLastReport sets the "last_report" field.
-func (m *GatewayMutation) SetLastReport(jm json.RawMessage) {
-	m.last_report = &jm
+func (m *GatewayMutation) SetLastReport(j jsontext.Value) {
+	m.last_report = &j
 	m.appendlast_report = nil
 }
 
 // LastReport returns the value of the "last_report" field in the mutation.
-func (m *GatewayMutation) LastReport() (r json.RawMessage, exists bool) {
+func (m *GatewayMutation) LastReport() (r jsontext.Value, exists bool) {
 	v := m.last_report
 	if v == nil {
 		return
@@ -7343,7 +7343,7 @@ func (m *GatewayMutation) LastReport() (r json.RawMessage, exists bool) {
 // OldLastReport returns the old "last_report" field's value of the Gateway entity.
 // If the Gateway object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *GatewayMutation) OldLastReport(ctx context.Context) (v json.RawMessage, err error) {
+func (m *GatewayMutation) OldLastReport(ctx context.Context) (v jsontext.Value, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldLastReport is only allowed on UpdateOne operations")
 	}
@@ -7357,13 +7357,13 @@ func (m *GatewayMutation) OldLastReport(ctx context.Context) (v json.RawMessage,
 	return oldValue.LastReport, nil
 }
 
-// AppendLastReport adds jm to the "last_report" field.
-func (m *GatewayMutation) AppendLastReport(jm json.RawMessage) {
-	m.appendlast_report = append(m.appendlast_report, jm...)
+// AppendLastReport adds j to the "last_report" field.
+func (m *GatewayMutation) AppendLastReport(j jsontext.Value) {
+	m.appendlast_report = append(m.appendlast_report, j...)
 }
 
 // AppendedLastReport returns the list of values that were appended to the "last_report" field in this mutation.
-func (m *GatewayMutation) AppendedLastReport() (json.RawMessage, bool) {
+func (m *GatewayMutation) AppendedLastReport() (jsontext.Value, bool) {
 	if len(m.appendlast_report) == 0 {
 		return nil, false
 	}
@@ -7529,7 +7529,7 @@ func (m *GatewayMutation) SetField(name string, value ent.Value) error {
 		m.SetLastTransmissionAt(v)
 		return nil
 	case gateway.FieldLastReport:
-		v, ok := value.(json.RawMessage)
+		v, ok := value.(jsontext.Value)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -20481,8 +20481,8 @@ type TransmissionMutation struct {
 	submission_fingerprint        *[]byte
 	network_resolution            *string
 	protocol                      *transmission.Protocol
-	payload                       *json.RawMessage
-	appendpayload                 json.RawMessage
+	payload                       *jsontext.Value
+	appendpayload                 jsontext.Value
 	observed_at                   *time.Time
 	observation_offset_seconds    *int
 	addobservation_offset_seconds *int
@@ -20490,8 +20490,8 @@ type TransmissionMutation struct {
 	source_revision               *int64
 	addsource_revision            *int64
 	incomplete                    *bool
-	quality_metrics               *json.RawMessage
-	appendquality_metrics         json.RawMessage
+	quality_metrics               *jsontext.Value
+	appendquality_metrics         jsontext.Value
 	message_id                    *uuid.UUID
 	processing_status             *transmission.ProcessingStatus
 	clearedFields                 map[string]struct{}
@@ -20821,13 +20821,13 @@ func (m *TransmissionMutation) ResetProtocol() {
 }
 
 // SetPayload sets the "payload" field.
-func (m *TransmissionMutation) SetPayload(jm json.RawMessage) {
-	m.payload = &jm
+func (m *TransmissionMutation) SetPayload(j jsontext.Value) {
+	m.payload = &j
 	m.appendpayload = nil
 }
 
 // Payload returns the value of the "payload" field in the mutation.
-func (m *TransmissionMutation) Payload() (r json.RawMessage, exists bool) {
+func (m *TransmissionMutation) Payload() (r jsontext.Value, exists bool) {
 	v := m.payload
 	if v == nil {
 		return
@@ -20838,7 +20838,7 @@ func (m *TransmissionMutation) Payload() (r json.RawMessage, exists bool) {
 // OldPayload returns the old "payload" field's value of the Transmission entity.
 // If the Transmission object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TransmissionMutation) OldPayload(ctx context.Context) (v json.RawMessage, err error) {
+func (m *TransmissionMutation) OldPayload(ctx context.Context) (v jsontext.Value, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldPayload is only allowed on UpdateOne operations")
 	}
@@ -20852,13 +20852,13 @@ func (m *TransmissionMutation) OldPayload(ctx context.Context) (v json.RawMessag
 	return oldValue.Payload, nil
 }
 
-// AppendPayload adds jm to the "payload" field.
-func (m *TransmissionMutation) AppendPayload(jm json.RawMessage) {
-	m.appendpayload = append(m.appendpayload, jm...)
+// AppendPayload adds j to the "payload" field.
+func (m *TransmissionMutation) AppendPayload(j jsontext.Value) {
+	m.appendpayload = append(m.appendpayload, j...)
 }
 
 // AppendedPayload returns the list of values that were appended to the "payload" field in this mutation.
-func (m *TransmissionMutation) AppendedPayload() (json.RawMessage, bool) {
+func (m *TransmissionMutation) AppendedPayload() (jsontext.Value, bool) {
 	if len(m.appendpayload) == 0 {
 		return nil, false
 	}
@@ -21092,13 +21092,13 @@ func (m *TransmissionMutation) ResetIncomplete() {
 }
 
 // SetQualityMetrics sets the "quality_metrics" field.
-func (m *TransmissionMutation) SetQualityMetrics(jm json.RawMessage) {
-	m.quality_metrics = &jm
+func (m *TransmissionMutation) SetQualityMetrics(j jsontext.Value) {
+	m.quality_metrics = &j
 	m.appendquality_metrics = nil
 }
 
 // QualityMetrics returns the value of the "quality_metrics" field in the mutation.
-func (m *TransmissionMutation) QualityMetrics() (r json.RawMessage, exists bool) {
+func (m *TransmissionMutation) QualityMetrics() (r jsontext.Value, exists bool) {
 	v := m.quality_metrics
 	if v == nil {
 		return
@@ -21109,7 +21109,7 @@ func (m *TransmissionMutation) QualityMetrics() (r json.RawMessage, exists bool)
 // OldQualityMetrics returns the old "quality_metrics" field's value of the Transmission entity.
 // If the Transmission object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TransmissionMutation) OldQualityMetrics(ctx context.Context) (v json.RawMessage, err error) {
+func (m *TransmissionMutation) OldQualityMetrics(ctx context.Context) (v jsontext.Value, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldQualityMetrics is only allowed on UpdateOne operations")
 	}
@@ -21123,13 +21123,13 @@ func (m *TransmissionMutation) OldQualityMetrics(ctx context.Context) (v json.Ra
 	return oldValue.QualityMetrics, nil
 }
 
-// AppendQualityMetrics adds jm to the "quality_metrics" field.
-func (m *TransmissionMutation) AppendQualityMetrics(jm json.RawMessage) {
-	m.appendquality_metrics = append(m.appendquality_metrics, jm...)
+// AppendQualityMetrics adds j to the "quality_metrics" field.
+func (m *TransmissionMutation) AppendQualityMetrics(j jsontext.Value) {
+	m.appendquality_metrics = append(m.appendquality_metrics, j...)
 }
 
 // AppendedQualityMetrics returns the list of values that were appended to the "quality_metrics" field in this mutation.
-func (m *TransmissionMutation) AppendedQualityMetrics() (json.RawMessage, bool) {
+func (m *TransmissionMutation) AppendedQualityMetrics() (jsontext.Value, bool) {
 	if len(m.appendquality_metrics) == 0 {
 		return nil, false
 	}
@@ -21437,7 +21437,7 @@ func (m *TransmissionMutation) SetField(name string, value ent.Value) error {
 		m.SetProtocol(v)
 		return nil
 	case transmission.FieldPayload:
-		v, ok := value.(json.RawMessage)
+		v, ok := value.(jsontext.Value)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -21479,7 +21479,7 @@ func (m *TransmissionMutation) SetField(name string, value ent.Value) error {
 		m.SetIncomplete(v)
 		return nil
 	case transmission.FieldQualityMetrics:
-		v, ok := value.(json.RawMessage)
+		v, ok := value.(jsontext.Value)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -21690,8 +21690,8 @@ type TransmissionTargetMutation struct {
 	transmission_id        *uuid.UUID
 	position               *int
 	addposition            *int
-	original               *json.RawMessage
-	appendoriginal         json.RawMessage
+	original               *jsontext.Value
+	appendoriginal         jsontext.Value
 	resolution_status      *transmissiontarget.ResolutionStatus
 	unit_id                *uuid.UUID
 	matched_rule_id        *uuid.UUID
@@ -21903,13 +21903,13 @@ func (m *TransmissionTargetMutation) ResetPosition() {
 }
 
 // SetOriginal sets the "original" field.
-func (m *TransmissionTargetMutation) SetOriginal(jm json.RawMessage) {
-	m.original = &jm
+func (m *TransmissionTargetMutation) SetOriginal(j jsontext.Value) {
+	m.original = &j
 	m.appendoriginal = nil
 }
 
 // Original returns the value of the "original" field in the mutation.
-func (m *TransmissionTargetMutation) Original() (r json.RawMessage, exists bool) {
+func (m *TransmissionTargetMutation) Original() (r jsontext.Value, exists bool) {
 	v := m.original
 	if v == nil {
 		return
@@ -21920,7 +21920,7 @@ func (m *TransmissionTargetMutation) Original() (r json.RawMessage, exists bool)
 // OldOriginal returns the old "original" field's value of the TransmissionTarget entity.
 // If the TransmissionTarget object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TransmissionTargetMutation) OldOriginal(ctx context.Context) (v json.RawMessage, err error) {
+func (m *TransmissionTargetMutation) OldOriginal(ctx context.Context) (v jsontext.Value, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldOriginal is only allowed on UpdateOne operations")
 	}
@@ -21934,13 +21934,13 @@ func (m *TransmissionTargetMutation) OldOriginal(ctx context.Context) (v json.Ra
 	return oldValue.Original, nil
 }
 
-// AppendOriginal adds jm to the "original" field.
-func (m *TransmissionTargetMutation) AppendOriginal(jm json.RawMessage) {
-	m.appendoriginal = append(m.appendoriginal, jm...)
+// AppendOriginal adds j to the "original" field.
+func (m *TransmissionTargetMutation) AppendOriginal(j jsontext.Value) {
+	m.appendoriginal = append(m.appendoriginal, j...)
 }
 
 // AppendedOriginal returns the list of values that were appended to the "original" field in this mutation.
-func (m *TransmissionTargetMutation) AppendedOriginal() (json.RawMessage, bool) {
+func (m *TransmissionTargetMutation) AppendedOriginal() (jsontext.Value, bool) {
 	if len(m.appendoriginal) == 0 {
 		return nil, false
 	}
@@ -22650,7 +22650,7 @@ func (m *TransmissionTargetMutation) SetField(name string, value ent.Value) erro
 		m.SetPosition(v)
 		return nil
 	case transmissiontarget.FieldOriginal:
-		v, ok := value.(json.RawMessage)
+		v, ok := value.(jsontext.Value)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
