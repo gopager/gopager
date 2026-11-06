@@ -129,6 +129,7 @@ func (s *PreviewService) Preview(ctx context.Context, proof identity.Proof, inpu
 	var definition processing.Definition
 	var versionID uuid.UUID
 	var capture PreviewCapture
+	var editorAuthority authz.Authority
 	if mode == previewSynthetic {
 		if releaser, ok := s.sourceOwner.(SyntheticPreviewReleaser); ok {
 			defer func() { releaser.ReleaseSyntheticPreview(capture.Projection.TransmissionID) }()
@@ -136,6 +137,7 @@ func (s *PreviewService) Preview(ctx context.Context, proof identity.Proof, inpu
 	}
 	err = s.management.within(ctx, proof, false, transportCheck, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
 		var readErr error
+		editorAuthority = authority
 		workflow, readErr = s.management.repository.ReadWorkflow(tx.Context(), tx, authority, "rule.preview", input.WorkflowID, now)
 		if readErr != nil {
 			return readErr
@@ -200,6 +202,14 @@ func (s *PreviewService) Preview(ctx context.Context, proof identity.Proof, inpu
 	program, err := s.compiler.CompileWorkflow(run.Context(), definition, run)
 	if err != nil {
 		return processing.Evaluation{}, err
+	}
+	// A saved version was validated when it was saved; an unsaved draft has not been, and its
+	// result is shown to the editor, so it is judged by the editor's current field permissions
+	// exactly like a save.
+	if input.Definition != nil {
+		if err = authorizeReferences(editorAuthority, program.SourceReferences()); err != nil {
+			return processing.Evaluation{}, err
+		}
 	}
 	result, err = program.EvaluateScoped(run.Context(), source, capture.Scope, run)
 	if err != nil {

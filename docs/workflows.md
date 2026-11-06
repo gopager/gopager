@@ -133,7 +133,7 @@ The server defines a fixed catalog. Only these references are accepted:
 | `target.unit.id` | string (UUID) | yes | `unit` | target is assigned to a unit |
 | `target.unit.collections` | list of string (UUID) | yes | `unit` | target is assigned to a unit |
 
-Every field value carries **dependencies**: the transmission, network, source/context revision, optional target position, and the field groups it was derived from. Dependencies propagate through every step, selector and branch condition, and are part of each output field.
+Every captured source field carries the owner's **dependency**: the transmission, network, source/context revision, optional target position, and the field group declared for it. Derived values (step outputs and final outputs) carry none. A definition is classified **once per definition version**, not per value: its outputs are `derived` plus the union of the field groups of every source field the definition reads (see [Classification](#classification)).
 
 ### Field schema
 
@@ -193,7 +193,6 @@ Rules:
 - With `conversion`, the source must be a `string`, and the target kind must be `integer`, `number`, `boolean` or `timestamp`. The only other accepted conversion is an identity conversion to an equal schema.
 - Every name in the mapping must be declared in the target schema. Every non-optional target name must be mapped.
 - An absent source value produces an absent output. If that output is required, the run fails with `INVALID_INPUT`.
-- A hidden source value fails the run with `AUTHORITY_UNAVAILABLE`.
 
 String conversions applied at run time. A value that cannot be converted fails the run with `INVALID_INPUT`:
 
@@ -236,7 +235,6 @@ Behavior at run time:
 | Situation | Result |
 | --- | --- |
 | Input absent | All outputs are absent. |
-| Input hidden | The run fails with `AUTHORITY_UNAVAILABLE`. |
 | No match, or the group did not participate | That output is absent. If the output is required, the run fails with `INVALID_INPUT`. |
 | Conversion fails | The run fails with `INVALID_INPUT`. |
 
@@ -259,11 +257,9 @@ Patterns are checked when the definition is compiled, so an inadmissible pattern
 "branch": {"condition": Predicate, "then": [Step...], "else": [Step...], "thenOutputs": {...}, "elseOutputs": {...}}
 ```
 
-- `then` runs if `condition` is definitely true. `else` runs if it is definitely false.
-- If `condition` is indeterminate (it depends on a hidden field), the run fails with `AUTHORITY_UNAVAILABLE`.
+- `then` runs if `condition` is true. `else` runs if it is false. There is no third outcome.
 - `then` and `else` are nested step lists, at most 32 levels deep. Each sees the steps before the branch plus its own earlier steps.
 - `thenOutputs` and `elseOutputs` both assign the branch step's `outputSchema`. Each is validated against its own branch scope.
-- Outputs also inherit the condition's dependencies.
 - Steps in the branch that does not run still count toward target dependence. For example, a `target` reference in an unused `else` still makes the workflow per-target.
 
 #### Installed (plugin step)
@@ -276,7 +272,7 @@ Patterns are checked when the definition is compiled, so an inadmissible pattern
 - `input` assigns the plugin manifest's `inputSchema`.
 - The step's `outputSchema` must equal the manifest's `resultSchema` exactly.
 - At save, activation and run time the pinned revision must be the instance's **current** revision, and the instance must be enabled. An instance update therefore requires saving and activating a workflow version that pins the new revision.
-- Each call is authorized again at run time. The instance's execution principal must hold field permission for every dependency group of the input and read access to the source. The input sent to the plugin must equal the evaluated input.
+- Each call is authorized again at run time. The instance's execution principal must hold field permission for every group of the definition's [classification](#classification) and read access to the source. The input sent to the plugin must equal the evaluated input.
 - Each invocation is bounded to 30 s. Exceeding it fails the run with `RESOURCE_LIMIT` and kills the plugin process. The time spent waiting for the plugin is not charged to the 1 s built-in budget.
 - Plugin failure reasons map to codes:
   - `resource-limit` → `RESOURCE_LIMIT`
@@ -308,9 +304,7 @@ Semantics:
 
 - **Absent fields.** Every comparison is guarded by presence, so a comparison on an absent field is `false`, and `not` of it is `true`.
 - **Literals.** A literal must validate against the field's schema. For example, comparing an `integer` field with a `string` literal is rejected at compile time.
-- **Hidden fields.** A hidden field (one the reading authority may not see) is unknown, and a result that depends on it is **indeterminate**:
-  - an indeterminate selector fails the run with `AUTHORITY_UNAVAILABLE`;
-  - an indeterminate branch condition fails the run with `AUTHORITY_UNAVAILABLE`.
+- **Two-valued logic.** Evaluation runs as the system, so a field is only ever `present` or `absent`. `and`, `or` and `not` are ordinary boolean operators, a selector is `true` or `false`, and a branch runs `then` or `else`. Whether a human may read a field never changes the result; it is checked when the version is saved (see [Validation](#validation)).
 - **Target contexts.** In a per-target evaluation, `target` fields refer to the current target context. A single predicate cannot mix target contexts.
 - **Evaluation limits.**
 
@@ -335,31 +329,39 @@ Evaluation runs once for the whole source unless the workflow is target-dependen
 - Each selected position yields its own field set in `targetResults`.
 
 ```json
-{"selected": true, "fields": {"level": {"state": "present", "value": {"kind": "integer", "value": "7"},
-  "dependencies": [{"transmissionId": "…", "sourceRevision": "1", "contextRevision": "1", "networkId": "…", "groups": ["payload"]}]}}}
+{"selected": true, "fields": {"level": {"state": "present", "value": {"kind": "integer", "value": "7"}}}}
 ```
 
 ```json
-{"selected": true, "targetResults": [{"targetPosition": 1, "fields": {"address": {"state": "present", "value": {"kind": "string", "value": "222"}, "dependencies": […]}}}]}
+{"selected": true, "targetResults": [{"targetPosition": 1, "fields": {"address": {"state": "present", "value": {"kind": "string", "value": "222"}}}}]}
 ```
 
 - Not selected: `{"selected": false}`.
 - Selected with no outputs: `{"selected": true, "fields": {}}`.
-- Field `state` is `present` or `absent`. A published result never contains `hidden`.
+- Field `state` is `present` or `absent`. There is no `hidden` state.
+- Output fields carry no per-value `dependencies`; the result is classified once per definition (see [Classification](#classification)).
 - If any selected context fails, the whole evaluation fails. Partial results are never returned.
 - The encoded result must not exceed 256 KiB, and decoded bytes inside it must not exceed 256 KiB. Otherwise the run fails with `RESOURCE_LIMIT`.
+
+### Classification
+
+A definition version's outputs are classified once, as `derived` plus the union of the field groups the definition reads. The groups come from the source declarations (the catalog above) for every source and target field the definition references in its selector, steps (installed-step inputs included, and both branch arms whether or not they run) and outputs. They depend only on the definition, never on source values, on which branch runs or on a reader's rights, and they are computed from the definition and the declarations whenever it is loaded rather than stored.
+
+At run time `Evaluation.Dependencies()` returns the owner dependency (transmission, network, revisions, optional target position, groups) of each referenced source field. Publication and preview rechecks authorize exactly that set, and an installed plugin's execution principal must be able to read the whole set before a call.
 
 ## Validation
 
 A definition is compiled when a version is **saved**, when it is **activated**, when it is **previewed**, and again at the start of every **run**. Compilation is checked against the server's field catalog and the current processing instances. If saving the version would change the definition in any way, the request is rejected.
 
+**Field validation.** Saving a version, and previewing an unsaved draft, additionally check every source or target field the selector, steps (installed-step inputs included) and outputs reference against the author's current field permissions and the field group declared for it. If the author may not read one of those groups the request fails with `INVALID_INPUT`; the offending reference is recorded in the private cause. Nothing at evaluation time depends on a human reader's rights, so this check is the only place an author's readable groups constrain a definition. Previewing a saved version is not re-validated here: its result is instead authorized against the previewer's field permissions when it is rechecked after evaluation.
+
 All failures use the platform error codes. Messages are internal and never part of the API response.
 
 | Code | Raised for |
 | --- | --- |
-| `INVALID_INPUT` | `schemaVersion` ≠ 1; unknown or duplicate JSON properties; unknown step `kind` or mismatched step configuration; duplicate or empty step `id`; invalid output name; unknown field reference or field outside lexical scope; malformed predicate operands (for example `not` with ≠ 1 arg, `in` without `values`, `contains` on a non-string, ordered comparison on a non-numeric field); literal not matching the schema; incompatible assignment or undeclared conversion; required output unmapped; mapping to an undeclared output; extraction input not a string; capture group missing or ambiguous; invalid capture conversion; unparseable regex; installed step without `instanceId` or with revision ≤ 0; installed `outputSchema` differing from the manifest's `resultSchema`; runtime: required value absent, conversion failure, plugin failure. |
+| `INVALID_INPUT` | `schemaVersion` ≠ 1; unknown or duplicate JSON properties; unknown step `kind` or mismatched step configuration; duplicate or empty step `id`; invalid output name; unknown field reference or field outside lexical scope; malformed predicate operands (for example `not` with ≠ 1 arg, `in` without `values`, `contains` on a non-string, ordered comparison on a non-numeric field); literal not matching the schema; incompatible assignment or undeclared conversion; required output unmapped; mapping to an undeclared output; extraction input not a string; capture group missing or ambiguous; invalid capture conversion; unparseable regex; installed step without `instanceId` or with revision ≤ 0; installed `outputSchema` differing from the manifest's `resultSchema`; a selector, step or output referencing a source field whose field group the author may not read (save and draft preview); runtime: required value absent, conversion failure, plugin failure. |
 | `RESOURCE_LIMIT` | More than 128 steps; branch depth > 32; JSON/schema/value/predicate nesting > 32; collection > 1000; predicate args/values > 1024; encoded input > 1 MiB; regex bounds; CEL cost or memory; aggregate run input/intermediate > 1 MiB; result > 256 KiB; accumulated built-in compute > 1 s; installed call > 30 s; plugin reports `resource-limit`. |
-| `AUTHORITY_UNAVAILABLE` | Hidden selector, branch or extraction input; instance disabled, missing artifact root, or preview artifact unavailable; plugin uses secret or user-scoped configuration; plugin reports `capability-unavailable`; execution principal no longer resolvable or authorized. |
+| `AUTHORITY_UNAVAILABLE` | Instance disabled, missing artifact root, or preview artifact unavailable; plugin uses secret or user-scoped configuration; plugin reports `capability-unavailable`; execution principal no longer resolvable or authorized. |
 | `INCOMPATIBLE_VERSION` | Plugin manifest schema or SDK version not supported (see [Plugins](plugins.md)). |
 | `REVISION_CONFLICT` | `expectedRevision` does not match; pinned instance revision is no longer current; authority or workflow changed between preparation and commit. |
 
@@ -466,7 +468,7 @@ Rules:
 - The network must exist and use the same protocol.
 - Targets are matched against current assignments.
 - The workflow scope is applied for the given network or unit.
-- Fields the editor may not read are **hidden**, so a definition that depends on them fails with `AUTHORITY_UNAVAILABLE`.
+- An unsaved draft that references a field the editor may not read is rejected with `INVALID_INPUT`, exactly as on save. A saved version is evaluated in full, and its result is released only if the editor may read every group of its [classification](#classification).
 - Installed steps run only the instance's preview artifact. Each call checks both the execution principal and the editor.
 - After evaluation, the workflow revision and source authority are checked again. If the workflow changed, the request fails with `REVISION_CONFLICT`.
 - The response is the [result shape](#result-shape).

@@ -5724,17 +5724,15 @@ components:
           description: Field groups the value depends on.
     FieldValue:
       type: object
-      description: '`value` is present only when `state` is `present`.'
+      description: '`value` is present only when `state` is `present`. `dependencies` is the owner classification of a captured source field and is omitted on derived values: a definition is classified once, not per value (see docs/workflows.md).'
       required:
       - state
-      - dependencies
       properties:
         state:
           type: string
           enum:
           - present
           - absent
-          - hidden
         value:
           $ref: '#/components/schemas/TypedValue'
         dependencies:

@@ -60,9 +60,9 @@ func selectedDefinition() Definition {
 		OutputSchema: map[string]FieldSchema{}, Outputs: map[string]Assignment{}}
 }
 
-func TestWorkflowScopedEvaluationSkipsExcludedHiddenContextsWithoutRenumbering(t *testing.T) {
+func TestWorkflowScopedEvaluationSkipsExcludedContextsWithoutRenumbering(t *testing.T) {
 	projection, source := sourceFixture(t, "111", "222")
-	projection.Targets[0].Fields[0].Field.State = FieldHidden
+	projection.Targets[0].Fields[0].Field.State = FieldAbsent
 	projection.Targets[0].Fields[0].Field.Value = nil
 	source, err := CaptureSource(t.Context(), projection)
 	if err != nil {
@@ -87,8 +87,12 @@ func TestWorkflowScopedEvaluationSkipsExcludedHiddenContextsWithoutRenumbering(t
 		result.TargetResults[0].TargetPosition != 1 || string(result.TargetResults[0].Fields["address"].Value.Value) != `"222"` {
 		t.Fatalf("excluded context was evaluated or original position renumbered: %+v %v", result, err)
 	}
-	for _, dependency := range result.TargetResults[0].Fields["address"].Dependencies {
-		if dependency.TargetPosition != nil && *dependency.TargetPosition != 1 {
+	dependencies, err := result.Dependencies()
+	if err != nil || len(dependencies) == 0 {
+		t.Fatalf("scoped evaluation lost its classification: %+v, %v", dependencies, err)
+	}
+	for _, dependency := range dependencies {
+		if dependency.TargetPosition == nil || *dependency.TargetPosition != 1 {
 			t.Fatalf("excluded context supplied field/selection data: %+v", dependency)
 		}
 	}
@@ -180,21 +184,20 @@ func TestTargetSelectionDependencyUnionAndNoPartialSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := program.Evaluate(context.Background(), source)
-	if err != nil || len(result.TargetResults) != 1 || result.TargetResults[0].TargetPosition != 0 ||
-		len(result.TargetResults[0].Fields["constant"].Dependencies) != 2 {
-		t.Fatalf("selection context dependencies were lost: %+v, %v", result, err)
+	dependencies, dependencyErr := result.Dependencies()
+	if err != nil || dependencyErr != nil || len(result.TargetResults) != 1 || result.TargetResults[0].TargetPosition != 0 ||
+		len(result.TargetResults[0].Fields["constant"].Dependencies) != 0 || len(dependencies) != 2 {
+		t.Fatalf("selection context dependencies were lost: %+v, %v, %v", result, err, dependencyErr)
 	}
-	for _, field := range projection.Targets[1].Fields {
-		field.Field.State, field.Field.Value = FieldHidden, nil
-		projection.Targets[1].Fields[0] = field
-	}
-	hiddenSource, err := CaptureSource(context.Background(), projection)
+	projection.Targets[1].Fields[0].Field.State = FieldAbsent
+	projection.Targets[1].Fields[0].Field.Value = nil
+	absentSource, err := CaptureSource(context.Background(), projection)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result, err := program.Evaluate(context.Background(), hiddenSource); platform.FailureCode(err) != platform.CodeAuthorityUnavailable ||
-		result.Selected || result.TargetResults != nil {
-		t.Fatalf("hidden second context yielded partial success: %+v, %v", result, err)
+	if result, err := program.Evaluate(context.Background(), absentSource); err != nil ||
+		!result.Selected || len(result.TargetResults) != 1 || result.TargetResults[0].TargetPosition != 0 {
+		t.Fatalf("absent second context changed the selection: %+v, %v", result, err)
 	}
 	definition = selectedDefinition()
 	definition.OutputSchema["number"] = FieldSchema{Kind: IntegerValue}
@@ -280,7 +283,7 @@ func TestWorkflowExtractionBranchMappingAndParallelReuse(t *testing.T) {
 		workers.Go(func() {
 			result, err := program.Evaluate(ctx, source)
 			if err != nil || result.Fields["level"].Value == nil || string(result.Fields["level"].Value.Value) != `"7"` ||
-				len(result.Fields["level"].Dependencies) == 0 {
+				len(result.Fields["level"].Dependencies) != 0 {
 				t.Errorf("extract/branch result: %+v, %v", result, err)
 			}
 		})

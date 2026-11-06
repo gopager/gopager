@@ -22,11 +22,21 @@ import (
 
 type processingDeclarationsFixture struct{}
 
+// FieldSchema declares the boolean source fields "flag" and "secret".
 func (processingDeclarationsFixture) FieldSchema(ref processing.FieldRef) (processing.FieldSchema, error) {
-	if ref.Namespace != "source" || len(ref.Path) != 1 || ref.Path[0] != "flag" {
+	if ref.Namespace != "source" || len(ref.Path) != 1 || (ref.Path[0] != "flag" && ref.Path[0] != "secret") {
 		return processing.FieldSchema{}, authz.ErrInvalidInput
 	}
 	return processing.FieldSchema{Kind: processing.BooleanValue}, nil
+}
+
+// FieldGroups declares "flag" in a group the bootstrap author may read and "secret" in the
+// gateway group, which the bootstrap author lacks, so field validation can be exercised both ways.
+func (processingDeclarationsFixture) FieldGroups(ref processing.FieldRef) ([]string, error) {
+	if ref.Path[0] == "secret" {
+		return []string{"gateway"}, nil
+	}
+	return []string{"unit"}, nil
 }
 
 func preparedProcessingDefinition(t *testing.T) processing.Definition {

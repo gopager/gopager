@@ -150,7 +150,8 @@ func TestProcessingWorkflowHTTPRequiresCurrentCSRFAndUsesSyntheticDeclarations(t
 			name = "https-reverse-proxy"
 		}
 		t.Run(name, func(t *testing.T) {
-			store := newManagementStore(t)
+			// The saved definitions select on a payload field, which the author must be able to read.
+			store := newManagementStoreWithFields(t, []string{"unit", "address", "payload"})
 			backend := httptest.NewUnstartedServer(nil)
 			t.Cleanup(backend.Close)
 			origin := "http://" + backend.Listener.Addr().String()
@@ -1586,7 +1587,8 @@ func rawProcessingRequest(t *testing.T, client *http.Client, origin, path, body,
 }
 
 func TestProcessingCandidateRetryHTTPUsesCurrentSourceOwner(t *testing.T) {
-	store := newManagementStore(t)
+	// The saved definitions select on a payload field, which the author must be able to read.
+	store := newManagementStoreWithFields(t, []string{"unit", "address", "payload"})
 	network, gateway := uuid.New(), uuid.New()
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		executor, err := store.Resolve(tx)

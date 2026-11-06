@@ -55,7 +55,7 @@ func ValidateEvaluation(result Evaluation, outputSchema map[string]FieldSchema, 
 		for name, field := range fields {
 			schema, declared := outputSchema[name]
 			if name == "" || !utf8.ValidString(name) || strings.ContainsRune(name, '\x00') ||
-				!declared || field.State == FieldHidden {
+				!declared {
 				return invalid(errors.New("invalid evaluation field state"))
 			}
 			if err := schema.Validate(); err != nil {
