@@ -35,8 +35,9 @@ var (
 	workPackageIDs = newIDKind("AP", "unknown-work-package")
 	contractIDs    = newIDKind("C", "unknown-contract")
 
-	// evidenceRe matches "AP-03 E-05" and "AP-06 E-06..E-14".
-	evidenceRe = regexp.MustCompile(refStart + `AP-(\d+) E-(\d+)(?:\.\.(?:E-)?(\d+))?`)
+	// evidenceRe matches "AP-03 E-05", "AP-06 E-06..E-14" and, for entries of the archived
+	// source records in the old numbering, "source AP-12 E-38".
+	evidenceRe = regexp.MustCompile(`(?:(source) |` + refStart[3:len(refStart)-1] + `)AP-(\d+) E-(\d+)(?:\.\.(?:E-)?(\d+))?`)
 )
 
 // maxRange bounds range expansion so a typo such as D-1..D-99999 cannot flood output.
@@ -72,19 +73,25 @@ func expand(prefix, first, last string) []idRef {
 	return out
 }
 
-// evidenceRef is one "AP-nn E-m" reference.
+// evidenceRef is one "AP-nn E-m" reference; source marks a reference into the archived
+// development/execution/source-ap-nn.md instead of the current record.
 type evidenceRef struct {
-	ap, e int
-	label string
+	ap, e  int
+	label  string
+	source bool
 }
 
 // evidenceReferences extracts "AP-nn E-m" references, expanding E ranges.
 func evidenceReferences(line string) []evidenceRef {
 	var out []evidenceRef
 	for _, m := range evidenceRe.FindAllStringSubmatch(line, -1) {
-		ap, _ := strconv.Atoi(m[1])
-		for _, e := range expand("E", m[2], m[3]) {
-			out = append(out, evidenceRef{ap: ap, e: e.n, label: "AP-" + m[1] + " " + e.label})
+		ap, _ := strconv.Atoi(m[2])
+		prefix := ""
+		if m[1] != "" {
+			prefix = "source "
+		}
+		for _, e := range expand("E", m[3], m[4]) {
+			out = append(out, evidenceRef{ap: ap, e: e.n, label: prefix + "AP-" + m[2] + " " + e.label, source: m[1] != ""})
 		}
 	}
 	return out

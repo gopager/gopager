@@ -65,12 +65,16 @@ func checkIDs(d *document, reg *registry) []finding {
 
 // missingEvidence returns the problem with an "AP-nn E-m" reference, or "".
 func missingEvidence(reg *registry, ref evidenceRef) string {
-	set, ok := reg.evidence[ref.ap]
+	records, file := reg.evidence, "ap"
+	if ref.source {
+		records, file = reg.sourceEvidence, "source-ap"
+	}
+	set, ok := records[ref.ap]
 	if !ok {
-		return fmt.Sprintf("%s: no development/execution/ap-%02d.md", ref.label, ref.ap)
+		return fmt.Sprintf("%s: no development/execution/%s-%02d.md", ref.label, file, ref.ap)
 	}
 	if !set[ref.e] {
-		return fmt.Sprintf("%s: no E-%02d heading in development/execution/ap-%02d.md", ref.label, ref.e, ref.ap)
+		return fmt.Sprintf("%s: no E-%02d heading in development/execution/%s-%02d.md", ref.label, ref.e, file, ref.ap)
 	}
 	return ""
 }

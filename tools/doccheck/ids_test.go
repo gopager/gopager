@@ -53,6 +53,31 @@ func TestEvidenceReferences(t *testing.T) {
 	}
 }
 
+// TestSourceEvidenceResolvesAgainstSourceRecord pins that "source AP-nn E-m" names an entry of
+// the archived development/execution/source-ap-nn.md, while plain "AP-nn E-m" keeps naming the
+// current record, so references in the old numbering stay checked.
+func TestSourceEvidenceResolvesAgainstSourceRecord(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"development/authoritative-plan.md":     "| D-01 | one |\n",
+		"development/requirements-catalog.md":   "| REQ-001 | a |\n",
+		"development/work-packages/ap-12-x.md":  "# AP-12\n",
+		"development/execution/source-ap-12.md": "# Old record\n\n### E-38 Old entry\n",
+		"notes.md":                              "[source AP-12 E-38](development/execution/source-ap-12.md#e-38-old-entry) and source AP-12 E-39\n",
+	})
+	docs, err := loadDocuments(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, f := range checkAll(root, docs) {
+		got = append(got, f.String())
+	}
+	want := []string{"notes.md:1: unknown-evidence: source AP-12 E-39: no E-39 heading in development/execution/source-ap-12.md"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
 func TestCheckIDsEndToEnd(t *testing.T) {
 	root := writeTree(t, map[string]string{
 		"development/authoritative-plan.md":    "| D-01 | one |\n| D-02 | two |\n| D-02 | again |\n",

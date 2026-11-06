@@ -21,6 +21,7 @@ var (
 	workPackageFile  = regexp.MustCompile(`^` + workPackageDirPrefix + `ap-(\d+)-[^/]+\.md$`)
 	contractFile     = regexp.MustCompile(`^` + contractDirPrefix + `c-(\d+)-[^/]+\.md$`)
 	executionFile    = regexp.MustCompile(`^` + executionDirPrefix + `ap-(\d+)\.md$`)
+	sourceFile       = regexp.MustCompile(`^` + executionDirPrefix + `source-ap-(\d+)\.md$`)
 	evidenceHeading  = regexp.MustCompile(`^E-(\d+)\b`)
 )
 
@@ -33,6 +34,9 @@ type registry struct {
 	// evidence maps an AP number to the E-numbers of its execution record; an AP
 	// without an execution record has no entry.
 	evidence map[int]map[int]bool
+	// sourceEvidence maps an AP number of the old numbering to the E-numbers of its archived
+	// source record.
+	sourceEvidence map[int]map[int]bool
 }
 
 // buildRegistry derives the identifier sets from the parsed documents and
@@ -41,7 +45,7 @@ func buildRegistry(docs []*document) (*registry, []finding) {
 	r := &registry{
 		decisions: map[int]bool{}, requirements: map[int]bool{},
 		workPackages: map[int]bool{}, contracts: map[int]bool{},
-		evidence: map[int]map[int]bool{},
+		evidence: map[int]map[int]bool{}, sourceEvidence: map[int]map[int]bool{},
 	}
 	var dups []finding
 	for _, d := range docs {
@@ -53,6 +57,9 @@ func buildRegistry(docs []*document) (*registry, []finding) {
 		}
 		if m := executionFile.FindStringSubmatch(d.path); m != nil {
 			r.evidence[atoi(m[1])] = evidenceNumbers(d)
+		}
+		if m := sourceFile.FindStringSubmatch(d.path); m != nil {
+			r.sourceEvidence[atoi(m[1])] = evidenceNumbers(d)
 		}
 		switch d.path {
 		case decisionRegisterPath:
