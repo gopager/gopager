@@ -29,6 +29,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/gateway"
 	"github.com/gopager/gopager/internal/persistence/ent/gatewaycredential"
 	"github.com/gopager/gopager/internal/persistence/ent/gatewaynetwork"
+	"github.com/gopager/gopager/internal/persistence/ent/gatewaystatehistory"
 	"github.com/gopager/gopager/internal/persistence/ent/grant"
 	"github.com/gopager/gopager/internal/persistence/ent/groupingcontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/identitycontrol"
@@ -81,6 +82,7 @@ const (
 	TypeGateway                   = "Gateway"
 	TypeGatewayCredential         = "GatewayCredential"
 	TypeGatewayNetwork            = "GatewayNetwork"
+	TypeGatewayStateHistory       = "GatewayStateHistory"
 	TypeGrant                     = "Grant"
 	TypeGroupingControl           = "GroupingControl"
 	TypeIdentityControl           = "IdentityControl"
@@ -6965,21 +6967,25 @@ func (m *FieldPermissionMutation) ResetEdge(name string) error {
 // GatewayMutation represents an operation that mutates the Gateway nodes in the graph.
 type GatewayMutation struct {
 	config
-	op                   Op
-	typ                  string
-	id                   *uuid.UUID
-	revision             *int64
-	addrevision          *int64
-	state                *gateway.State
-	last_contact_at      *time.Time
-	last_heartbeat_at    *time.Time
-	last_transmission_at *time.Time
-	last_report          *jsontext.Value
-	appendlast_report    jsontext.Value
-	clearedFields        map[string]struct{}
-	done                 bool
-	oldValue             func(context.Context) (*Gateway, error)
-	predicates           []predicate.Gateway
+	op                     Op
+	typ                    string
+	id                     *uuid.UUID
+	revision               *int64
+	addrevision            *int64
+	name                   *string
+	enabled                *bool
+	deleted                *bool
+	state                  *gateway.State
+	last_contact_at        *time.Time
+	last_heartbeat_at      *time.Time
+	last_transmission_at   *time.Time
+	last_report            *jsontext.Value
+	appendlast_report      jsontext.Value
+	history_removed_before *time.Time
+	clearedFields          map[string]struct{}
+	done                   bool
+	oldValue               func(context.Context) (*Gateway, error)
+	predicates             []predicate.Gateway
 }
 
 var _ ent.Mutation = (*GatewayMutation)(nil)
@@ -7140,6 +7146,114 @@ func (m *GatewayMutation) AddedRevision() (r int64, exists bool) {
 func (m *GatewayMutation) ResetRevision() {
 	m.revision = nil
 	m.addrevision = nil
+}
+
+// SetName sets the "name" field.
+func (m *GatewayMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *GatewayMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the Gateway entity.
+// If the Gateway object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *GatewayMutation) ResetName() {
+	m.name = nil
+}
+
+// SetEnabled sets the "enabled" field.
+func (m *GatewayMutation) SetEnabled(b bool) {
+	m.enabled = &b
+}
+
+// Enabled returns the value of the "enabled" field in the mutation.
+func (m *GatewayMutation) Enabled() (r bool, exists bool) {
+	v := m.enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnabled returns the old "enabled" field's value of the Gateway entity.
+// If the Gateway object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayMutation) OldEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnabled: %w", err)
+	}
+	return oldValue.Enabled, nil
+}
+
+// ResetEnabled resets all changes to the "enabled" field.
+func (m *GatewayMutation) ResetEnabled() {
+	m.enabled = nil
+}
+
+// SetDeleted sets the "deleted" field.
+func (m *GatewayMutation) SetDeleted(b bool) {
+	m.deleted = &b
+}
+
+// Deleted returns the value of the "deleted" field in the mutation.
+func (m *GatewayMutation) Deleted() (r bool, exists bool) {
+	v := m.deleted
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeleted returns the old "deleted" field's value of the Gateway entity.
+// If the Gateway object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayMutation) OldDeleted(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeleted is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeleted requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeleted: %w", err)
+	}
+	return oldValue.Deleted, nil
+}
+
+// ResetDeleted resets all changes to the "deleted" field.
+func (m *GatewayMutation) ResetDeleted() {
+	m.deleted = nil
 }
 
 // SetState sets the "state" field.
@@ -7390,6 +7504,55 @@ func (m *GatewayMutation) ResetLastReport() {
 	delete(m.clearedFields, gateway.FieldLastReport)
 }
 
+// SetHistoryRemovedBefore sets the "history_removed_before" field.
+func (m *GatewayMutation) SetHistoryRemovedBefore(t time.Time) {
+	m.history_removed_before = &t
+}
+
+// HistoryRemovedBefore returns the value of the "history_removed_before" field in the mutation.
+func (m *GatewayMutation) HistoryRemovedBefore() (r time.Time, exists bool) {
+	v := m.history_removed_before
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHistoryRemovedBefore returns the old "history_removed_before" field's value of the Gateway entity.
+// If the Gateway object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayMutation) OldHistoryRemovedBefore(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHistoryRemovedBefore is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHistoryRemovedBefore requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHistoryRemovedBefore: %w", err)
+	}
+	return oldValue.HistoryRemovedBefore, nil
+}
+
+// ClearHistoryRemovedBefore clears the value of the "history_removed_before" field.
+func (m *GatewayMutation) ClearHistoryRemovedBefore() {
+	m.history_removed_before = nil
+	m.clearedFields[gateway.FieldHistoryRemovedBefore] = struct{}{}
+}
+
+// HistoryRemovedBeforeCleared returns if the "history_removed_before" field was cleared in this mutation.
+func (m *GatewayMutation) HistoryRemovedBeforeCleared() bool {
+	_, ok := m.clearedFields[gateway.FieldHistoryRemovedBefore]
+	return ok
+}
+
+// ResetHistoryRemovedBefore resets all changes to the "history_removed_before" field.
+func (m *GatewayMutation) ResetHistoryRemovedBefore() {
+	m.history_removed_before = nil
+	delete(m.clearedFields, gateway.FieldHistoryRemovedBefore)
+}
+
 // Where appends a list predicates to the GatewayMutation builder.
 func (m *GatewayMutation) Where(ps ...predicate.Gateway) {
 	m.predicates = append(m.predicates, ps...)
@@ -7424,9 +7587,18 @@ func (m *GatewayMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GatewayMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 10)
 	if m.revision != nil {
 		fields = append(fields, gateway.FieldRevision)
+	}
+	if m.name != nil {
+		fields = append(fields, gateway.FieldName)
+	}
+	if m.enabled != nil {
+		fields = append(fields, gateway.FieldEnabled)
+	}
+	if m.deleted != nil {
+		fields = append(fields, gateway.FieldDeleted)
 	}
 	if m.state != nil {
 		fields = append(fields, gateway.FieldState)
@@ -7443,6 +7615,9 @@ func (m *GatewayMutation) Fields() []string {
 	if m.last_report != nil {
 		fields = append(fields, gateway.FieldLastReport)
 	}
+	if m.history_removed_before != nil {
+		fields = append(fields, gateway.FieldHistoryRemovedBefore)
+	}
 	return fields
 }
 
@@ -7453,6 +7628,12 @@ func (m *GatewayMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case gateway.FieldRevision:
 		return m.Revision()
+	case gateway.FieldName:
+		return m.Name()
+	case gateway.FieldEnabled:
+		return m.Enabled()
+	case gateway.FieldDeleted:
+		return m.Deleted()
 	case gateway.FieldState:
 		return m.State()
 	case gateway.FieldLastContactAt:
@@ -7463,6 +7644,8 @@ func (m *GatewayMutation) Field(name string) (ent.Value, bool) {
 		return m.LastTransmissionAt()
 	case gateway.FieldLastReport:
 		return m.LastReport()
+	case gateway.FieldHistoryRemovedBefore:
+		return m.HistoryRemovedBefore()
 	}
 	return nil, false
 }
@@ -7474,6 +7657,12 @@ func (m *GatewayMutation) OldField(ctx context.Context, name string) (ent.Value,
 	switch name {
 	case gateway.FieldRevision:
 		return m.OldRevision(ctx)
+	case gateway.FieldName:
+		return m.OldName(ctx)
+	case gateway.FieldEnabled:
+		return m.OldEnabled(ctx)
+	case gateway.FieldDeleted:
+		return m.OldDeleted(ctx)
 	case gateway.FieldState:
 		return m.OldState(ctx)
 	case gateway.FieldLastContactAt:
@@ -7484,6 +7673,8 @@ func (m *GatewayMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldLastTransmissionAt(ctx)
 	case gateway.FieldLastReport:
 		return m.OldLastReport(ctx)
+	case gateway.FieldHistoryRemovedBefore:
+		return m.OldHistoryRemovedBefore(ctx)
 	}
 	return nil, fmt.Errorf("unknown Gateway field %s", name)
 }
@@ -7499,6 +7690,27 @@ func (m *GatewayMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRevision(v)
+		return nil
+	case gateway.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case gateway.FieldEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnabled(v)
+		return nil
+	case gateway.FieldDeleted:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeleted(v)
 		return nil
 	case gateway.FieldState:
 		v, ok := value.(gateway.State)
@@ -7534,6 +7746,13 @@ func (m *GatewayMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetLastReport(v)
+		return nil
+	case gateway.FieldHistoryRemovedBefore:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHistoryRemovedBefore(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Gateway field %s", name)
@@ -7592,6 +7811,9 @@ func (m *GatewayMutation) ClearedFields() []string {
 	if m.FieldCleared(gateway.FieldLastReport) {
 		fields = append(fields, gateway.FieldLastReport)
 	}
+	if m.FieldCleared(gateway.FieldHistoryRemovedBefore) {
+		fields = append(fields, gateway.FieldHistoryRemovedBefore)
+	}
 	return fields
 }
 
@@ -7618,6 +7840,9 @@ func (m *GatewayMutation) ClearField(name string) error {
 	case gateway.FieldLastReport:
 		m.ClearLastReport()
 		return nil
+	case gateway.FieldHistoryRemovedBefore:
+		m.ClearHistoryRemovedBefore()
+		return nil
 	}
 	return fmt.Errorf("unknown Gateway nullable field %s", name)
 }
@@ -7628,6 +7853,15 @@ func (m *GatewayMutation) ResetField(name string) error {
 	switch name {
 	case gateway.FieldRevision:
 		m.ResetRevision()
+		return nil
+	case gateway.FieldName:
+		m.ResetName()
+		return nil
+	case gateway.FieldEnabled:
+		m.ResetEnabled()
+		return nil
+	case gateway.FieldDeleted:
+		m.ResetDeleted()
 		return nil
 	case gateway.FieldState:
 		m.ResetState()
@@ -7643,6 +7877,9 @@ func (m *GatewayMutation) ResetField(name string) error {
 		return nil
 	case gateway.FieldLastReport:
 		m.ResetLastReport()
+		return nil
+	case gateway.FieldHistoryRemovedBefore:
+		m.ResetHistoryRemovedBefore()
 		return nil
 	}
 	return fmt.Errorf("unknown Gateway field %s", name)
@@ -8867,6 +9104,847 @@ func (m *GatewayNetworkMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *GatewayNetworkMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown GatewayNetwork edge %s", name)
+}
+
+// GatewayStateHistoryMutation represents an operation that mutates the GatewayStateHistory nodes in the graph.
+type GatewayStateHistoryMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *uuid.UUID
+	gateway_id    *uuid.UUID
+	revision      *int64
+	addrevision   *int64
+	old_state     *gatewaystatehistory.OldState
+	new_state     *gatewaystatehistory.NewState
+	cause         *gatewaystatehistory.Cause
+	occurred_at   *time.Time
+	contact_at    *time.Time
+	reason_code   *string
+	detail        *string
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*GatewayStateHistory, error)
+	predicates    []predicate.GatewayStateHistory
+}
+
+var _ ent.Mutation = (*GatewayStateHistoryMutation)(nil)
+
+// gatewaystatehistoryOption allows management of the mutation configuration using functional options.
+type gatewaystatehistoryOption func(*GatewayStateHistoryMutation)
+
+// newGatewayStateHistoryMutation creates new mutation for the GatewayStateHistory entity.
+func newGatewayStateHistoryMutation(c config, op Op, opts ...gatewaystatehistoryOption) *GatewayStateHistoryMutation {
+	m := &GatewayStateHistoryMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeGatewayStateHistory,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withGatewayStateHistoryID sets the ID field of the mutation.
+func withGatewayStateHistoryID(id uuid.UUID) gatewaystatehistoryOption {
+	return func(m *GatewayStateHistoryMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *GatewayStateHistory
+		)
+		m.oldValue = func(ctx context.Context) (*GatewayStateHistory, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().GatewayStateHistory.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withGatewayStateHistory sets the old GatewayStateHistory of the mutation.
+func withGatewayStateHistory(node *GatewayStateHistory) gatewaystatehistoryOption {
+	return func(m *GatewayStateHistoryMutation) {
+		m.oldValue = func(context.Context) (*GatewayStateHistory, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m GatewayStateHistoryMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m GatewayStateHistoryMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of GatewayStateHistory entities.
+func (m *GatewayStateHistoryMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *GatewayStateHistoryMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *GatewayStateHistoryMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().GatewayStateHistory.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetGatewayID sets the "gateway_id" field.
+func (m *GatewayStateHistoryMutation) SetGatewayID(u uuid.UUID) {
+	m.gateway_id = &u
+}
+
+// GatewayID returns the value of the "gateway_id" field in the mutation.
+func (m *GatewayStateHistoryMutation) GatewayID() (r uuid.UUID, exists bool) {
+	v := m.gateway_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGatewayID returns the old "gateway_id" field's value of the GatewayStateHistory entity.
+// If the GatewayStateHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayStateHistoryMutation) OldGatewayID(ctx context.Context) (v uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGatewayID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGatewayID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGatewayID: %w", err)
+	}
+	return oldValue.GatewayID, nil
+}
+
+// ResetGatewayID resets all changes to the "gateway_id" field.
+func (m *GatewayStateHistoryMutation) ResetGatewayID() {
+	m.gateway_id = nil
+}
+
+// SetRevision sets the "revision" field.
+func (m *GatewayStateHistoryMutation) SetRevision(i int64) {
+	m.revision = &i
+	m.addrevision = nil
+}
+
+// Revision returns the value of the "revision" field in the mutation.
+func (m *GatewayStateHistoryMutation) Revision() (r int64, exists bool) {
+	v := m.revision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRevision returns the old "revision" field's value of the GatewayStateHistory entity.
+// If the GatewayStateHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayStateHistoryMutation) OldRevision(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRevision is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRevision requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRevision: %w", err)
+	}
+	return oldValue.Revision, nil
+}
+
+// AddRevision adds i to the "revision" field.
+func (m *GatewayStateHistoryMutation) AddRevision(i int64) {
+	if m.addrevision != nil {
+		*m.addrevision += i
+	} else {
+		m.addrevision = &i
+	}
+}
+
+// AddedRevision returns the value that was added to the "revision" field in this mutation.
+func (m *GatewayStateHistoryMutation) AddedRevision() (r int64, exists bool) {
+	v := m.addrevision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRevision resets all changes to the "revision" field.
+func (m *GatewayStateHistoryMutation) ResetRevision() {
+	m.revision = nil
+	m.addrevision = nil
+}
+
+// SetOldState sets the "old_state" field.
+func (m *GatewayStateHistoryMutation) SetOldState(gs gatewaystatehistory.OldState) {
+	m.old_state = &gs
+}
+
+// OldState returns the value of the "old_state" field in the mutation.
+func (m *GatewayStateHistoryMutation) OldState() (r gatewaystatehistory.OldState, exists bool) {
+	v := m.old_state
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOldState returns the old "old_state" field's value of the GatewayStateHistory entity.
+// If the GatewayStateHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayStateHistoryMutation) OldOldState(ctx context.Context) (v gatewaystatehistory.OldState, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOldState is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOldState requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOldState: %w", err)
+	}
+	return oldValue.OldState, nil
+}
+
+// ResetOldState resets all changes to the "old_state" field.
+func (m *GatewayStateHistoryMutation) ResetOldState() {
+	m.old_state = nil
+}
+
+// SetNewState sets the "new_state" field.
+func (m *GatewayStateHistoryMutation) SetNewState(gs gatewaystatehistory.NewState) {
+	m.new_state = &gs
+}
+
+// NewState returns the value of the "new_state" field in the mutation.
+func (m *GatewayStateHistoryMutation) NewState() (r gatewaystatehistory.NewState, exists bool) {
+	v := m.new_state
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNewState returns the old "new_state" field's value of the GatewayStateHistory entity.
+// If the GatewayStateHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayStateHistoryMutation) OldNewState(ctx context.Context) (v gatewaystatehistory.NewState, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNewState is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNewState requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNewState: %w", err)
+	}
+	return oldValue.NewState, nil
+}
+
+// ResetNewState resets all changes to the "new_state" field.
+func (m *GatewayStateHistoryMutation) ResetNewState() {
+	m.new_state = nil
+}
+
+// SetCause sets the "cause" field.
+func (m *GatewayStateHistoryMutation) SetCause(ga gatewaystatehistory.Cause) {
+	m.cause = &ga
+}
+
+// Cause returns the value of the "cause" field in the mutation.
+func (m *GatewayStateHistoryMutation) Cause() (r gatewaystatehistory.Cause, exists bool) {
+	v := m.cause
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCause returns the old "cause" field's value of the GatewayStateHistory entity.
+// If the GatewayStateHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayStateHistoryMutation) OldCause(ctx context.Context) (v gatewaystatehistory.Cause, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCause is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCause requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCause: %w", err)
+	}
+	return oldValue.Cause, nil
+}
+
+// ResetCause resets all changes to the "cause" field.
+func (m *GatewayStateHistoryMutation) ResetCause() {
+	m.cause = nil
+}
+
+// SetOccurredAt sets the "occurred_at" field.
+func (m *GatewayStateHistoryMutation) SetOccurredAt(t time.Time) {
+	m.occurred_at = &t
+}
+
+// OccurredAt returns the value of the "occurred_at" field in the mutation.
+func (m *GatewayStateHistoryMutation) OccurredAt() (r time.Time, exists bool) {
+	v := m.occurred_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOccurredAt returns the old "occurred_at" field's value of the GatewayStateHistory entity.
+// If the GatewayStateHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayStateHistoryMutation) OldOccurredAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOccurredAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOccurredAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOccurredAt: %w", err)
+	}
+	return oldValue.OccurredAt, nil
+}
+
+// ResetOccurredAt resets all changes to the "occurred_at" field.
+func (m *GatewayStateHistoryMutation) ResetOccurredAt() {
+	m.occurred_at = nil
+}
+
+// SetContactAt sets the "contact_at" field.
+func (m *GatewayStateHistoryMutation) SetContactAt(t time.Time) {
+	m.contact_at = &t
+}
+
+// ContactAt returns the value of the "contact_at" field in the mutation.
+func (m *GatewayStateHistoryMutation) ContactAt() (r time.Time, exists bool) {
+	v := m.contact_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContactAt returns the old "contact_at" field's value of the GatewayStateHistory entity.
+// If the GatewayStateHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayStateHistoryMutation) OldContactAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContactAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContactAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContactAt: %w", err)
+	}
+	return oldValue.ContactAt, nil
+}
+
+// ResetContactAt resets all changes to the "contact_at" field.
+func (m *GatewayStateHistoryMutation) ResetContactAt() {
+	m.contact_at = nil
+}
+
+// SetReasonCode sets the "reason_code" field.
+func (m *GatewayStateHistoryMutation) SetReasonCode(s string) {
+	m.reason_code = &s
+}
+
+// ReasonCode returns the value of the "reason_code" field in the mutation.
+func (m *GatewayStateHistoryMutation) ReasonCode() (r string, exists bool) {
+	v := m.reason_code
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReasonCode returns the old "reason_code" field's value of the GatewayStateHistory entity.
+// If the GatewayStateHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayStateHistoryMutation) OldReasonCode(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReasonCode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReasonCode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReasonCode: %w", err)
+	}
+	return oldValue.ReasonCode, nil
+}
+
+// ClearReasonCode clears the value of the "reason_code" field.
+func (m *GatewayStateHistoryMutation) ClearReasonCode() {
+	m.reason_code = nil
+	m.clearedFields[gatewaystatehistory.FieldReasonCode] = struct{}{}
+}
+
+// ReasonCodeCleared returns if the "reason_code" field was cleared in this mutation.
+func (m *GatewayStateHistoryMutation) ReasonCodeCleared() bool {
+	_, ok := m.clearedFields[gatewaystatehistory.FieldReasonCode]
+	return ok
+}
+
+// ResetReasonCode resets all changes to the "reason_code" field.
+func (m *GatewayStateHistoryMutation) ResetReasonCode() {
+	m.reason_code = nil
+	delete(m.clearedFields, gatewaystatehistory.FieldReasonCode)
+}
+
+// SetDetail sets the "detail" field.
+func (m *GatewayStateHistoryMutation) SetDetail(s string) {
+	m.detail = &s
+}
+
+// Detail returns the value of the "detail" field in the mutation.
+func (m *GatewayStateHistoryMutation) Detail() (r string, exists bool) {
+	v := m.detail
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDetail returns the old "detail" field's value of the GatewayStateHistory entity.
+// If the GatewayStateHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GatewayStateHistoryMutation) OldDetail(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDetail is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDetail requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDetail: %w", err)
+	}
+	return oldValue.Detail, nil
+}
+
+// ClearDetail clears the value of the "detail" field.
+func (m *GatewayStateHistoryMutation) ClearDetail() {
+	m.detail = nil
+	m.clearedFields[gatewaystatehistory.FieldDetail] = struct{}{}
+}
+
+// DetailCleared returns if the "detail" field was cleared in this mutation.
+func (m *GatewayStateHistoryMutation) DetailCleared() bool {
+	_, ok := m.clearedFields[gatewaystatehistory.FieldDetail]
+	return ok
+}
+
+// ResetDetail resets all changes to the "detail" field.
+func (m *GatewayStateHistoryMutation) ResetDetail() {
+	m.detail = nil
+	delete(m.clearedFields, gatewaystatehistory.FieldDetail)
+}
+
+// Where appends a list predicates to the GatewayStateHistoryMutation builder.
+func (m *GatewayStateHistoryMutation) Where(ps ...predicate.GatewayStateHistory) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the GatewayStateHistoryMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *GatewayStateHistoryMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.GatewayStateHistory, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *GatewayStateHistoryMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *GatewayStateHistoryMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (GatewayStateHistory).
+func (m *GatewayStateHistoryMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *GatewayStateHistoryMutation) Fields() []string {
+	fields := make([]string, 0, 9)
+	if m.gateway_id != nil {
+		fields = append(fields, gatewaystatehistory.FieldGatewayID)
+	}
+	if m.revision != nil {
+		fields = append(fields, gatewaystatehistory.FieldRevision)
+	}
+	if m.old_state != nil {
+		fields = append(fields, gatewaystatehistory.FieldOldState)
+	}
+	if m.new_state != nil {
+		fields = append(fields, gatewaystatehistory.FieldNewState)
+	}
+	if m.cause != nil {
+		fields = append(fields, gatewaystatehistory.FieldCause)
+	}
+	if m.occurred_at != nil {
+		fields = append(fields, gatewaystatehistory.FieldOccurredAt)
+	}
+	if m.contact_at != nil {
+		fields = append(fields, gatewaystatehistory.FieldContactAt)
+	}
+	if m.reason_code != nil {
+		fields = append(fields, gatewaystatehistory.FieldReasonCode)
+	}
+	if m.detail != nil {
+		fields = append(fields, gatewaystatehistory.FieldDetail)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *GatewayStateHistoryMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case gatewaystatehistory.FieldGatewayID:
+		return m.GatewayID()
+	case gatewaystatehistory.FieldRevision:
+		return m.Revision()
+	case gatewaystatehistory.FieldOldState:
+		return m.OldState()
+	case gatewaystatehistory.FieldNewState:
+		return m.NewState()
+	case gatewaystatehistory.FieldCause:
+		return m.Cause()
+	case gatewaystatehistory.FieldOccurredAt:
+		return m.OccurredAt()
+	case gatewaystatehistory.FieldContactAt:
+		return m.ContactAt()
+	case gatewaystatehistory.FieldReasonCode:
+		return m.ReasonCode()
+	case gatewaystatehistory.FieldDetail:
+		return m.Detail()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *GatewayStateHistoryMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case gatewaystatehistory.FieldGatewayID:
+		return m.OldGatewayID(ctx)
+	case gatewaystatehistory.FieldRevision:
+		return m.OldRevision(ctx)
+	case gatewaystatehistory.FieldOldState:
+		return m.OldOldState(ctx)
+	case gatewaystatehistory.FieldNewState:
+		return m.OldNewState(ctx)
+	case gatewaystatehistory.FieldCause:
+		return m.OldCause(ctx)
+	case gatewaystatehistory.FieldOccurredAt:
+		return m.OldOccurredAt(ctx)
+	case gatewaystatehistory.FieldContactAt:
+		return m.OldContactAt(ctx)
+	case gatewaystatehistory.FieldReasonCode:
+		return m.OldReasonCode(ctx)
+	case gatewaystatehistory.FieldDetail:
+		return m.OldDetail(ctx)
+	}
+	return nil, fmt.Errorf("unknown GatewayStateHistory field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *GatewayStateHistoryMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case gatewaystatehistory.FieldGatewayID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGatewayID(v)
+		return nil
+	case gatewaystatehistory.FieldRevision:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRevision(v)
+		return nil
+	case gatewaystatehistory.FieldOldState:
+		v, ok := value.(gatewaystatehistory.OldState)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOldState(v)
+		return nil
+	case gatewaystatehistory.FieldNewState:
+		v, ok := value.(gatewaystatehistory.NewState)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNewState(v)
+		return nil
+	case gatewaystatehistory.FieldCause:
+		v, ok := value.(gatewaystatehistory.Cause)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCause(v)
+		return nil
+	case gatewaystatehistory.FieldOccurredAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOccurredAt(v)
+		return nil
+	case gatewaystatehistory.FieldContactAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContactAt(v)
+		return nil
+	case gatewaystatehistory.FieldReasonCode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReasonCode(v)
+		return nil
+	case gatewaystatehistory.FieldDetail:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDetail(v)
+		return nil
+	}
+	return fmt.Errorf("unknown GatewayStateHistory field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *GatewayStateHistoryMutation) AddedFields() []string {
+	var fields []string
+	if m.addrevision != nil {
+		fields = append(fields, gatewaystatehistory.FieldRevision)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *GatewayStateHistoryMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case gatewaystatehistory.FieldRevision:
+		return m.AddedRevision()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *GatewayStateHistoryMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case gatewaystatehistory.FieldRevision:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRevision(v)
+		return nil
+	}
+	return fmt.Errorf("unknown GatewayStateHistory numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *GatewayStateHistoryMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(gatewaystatehistory.FieldReasonCode) {
+		fields = append(fields, gatewaystatehistory.FieldReasonCode)
+	}
+	if m.FieldCleared(gatewaystatehistory.FieldDetail) {
+		fields = append(fields, gatewaystatehistory.FieldDetail)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *GatewayStateHistoryMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *GatewayStateHistoryMutation) ClearField(name string) error {
+	switch name {
+	case gatewaystatehistory.FieldReasonCode:
+		m.ClearReasonCode()
+		return nil
+	case gatewaystatehistory.FieldDetail:
+		m.ClearDetail()
+		return nil
+	}
+	return fmt.Errorf("unknown GatewayStateHistory nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *GatewayStateHistoryMutation) ResetField(name string) error {
+	switch name {
+	case gatewaystatehistory.FieldGatewayID:
+		m.ResetGatewayID()
+		return nil
+	case gatewaystatehistory.FieldRevision:
+		m.ResetRevision()
+		return nil
+	case gatewaystatehistory.FieldOldState:
+		m.ResetOldState()
+		return nil
+	case gatewaystatehistory.FieldNewState:
+		m.ResetNewState()
+		return nil
+	case gatewaystatehistory.FieldCause:
+		m.ResetCause()
+		return nil
+	case gatewaystatehistory.FieldOccurredAt:
+		m.ResetOccurredAt()
+		return nil
+	case gatewaystatehistory.FieldContactAt:
+		m.ResetContactAt()
+		return nil
+	case gatewaystatehistory.FieldReasonCode:
+		m.ResetReasonCode()
+		return nil
+	case gatewaystatehistory.FieldDetail:
+		m.ResetDetail()
+		return nil
+	}
+	return fmt.Errorf("unknown GatewayStateHistory field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *GatewayStateHistoryMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *GatewayStateHistoryMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *GatewayStateHistoryMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *GatewayStateHistoryMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *GatewayStateHistoryMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *GatewayStateHistoryMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *GatewayStateHistoryMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown GatewayStateHistory unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *GatewayStateHistoryMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown GatewayStateHistory edge %s", name)
 }
 
 // GrantMutation represents an operation that mutates the Grant nodes in the graph.

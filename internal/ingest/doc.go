@@ -1,5 +1,5 @@
-// Package ingest accepts Transmissions from authenticated Gateways and
-// administers Gateway Network assignments and credentials.
+// Package ingest accepts Transmissions from authenticated Gateways, derives
+// Gateway state, and administers Networks and Gateways.
 //
 // Service.Submit authenticates the Gateway bearer credential, validates the
 // Submission, resolves the target Network (declared identifier, single
@@ -12,8 +12,16 @@
 // conflict) by an authenticated Gateway are recorded durably in a separate
 // transaction. Service.ReportState records Gateway state reports.
 //
-// GatewayAdministration provides the authorized administrative operations
-// (ConfigureNetworks, ReadCredentialStatus, IssueCredential, RevokeCredential);
-// mutations are revision-guarded and the credential commands are idempotent
-// through command receipts.
+// NextGatewayState defines the state a contact leads to; every effective state
+// change is recorded as one GatewayTransition with one gateway.state-changed fact.
+// ContactMonitor is the worker-role runner that sets silent Gateways
+// contact-lost against the database clock.
+//
+// NetworkAdministration provides the Network lifecycle and GatewayAdministration
+// the Gateway lifecycle, diagnostics, history, Network assignments and
+// credentials. Mutations are revision-guarded, creating commands are idempotent
+// through command receipts. An object on which the caller holds no right is not
+// found; one on which it holds another right but not the requested one is
+// forbidden. Credential and diagnostics operations also accept the single-Gateway
+// delegation actions gateway.credential.rotate and gateway.diagnostics.read.
 package ingest

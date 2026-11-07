@@ -51,8 +51,8 @@ func (Network) Indexes() []ent.Index {
 	return []ent.Index{index.Fields("agency_id")}
 }
 
-// Gateway defines the gateways table: an ingest gateway with its health state and last
-// contact/report.
+// Gateway defines the gateways table: an ingest gateway with its name, enablement, soft-delete
+// flag, health state, last contact/report and history retention marker.
 type Gateway struct{ ent.Schema }
 
 // Policy returns the privacy policy that guards queries and mutations of the Gateway schema.
@@ -68,12 +68,49 @@ func (Gateway) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.UUID{}),
 		field.Int64("revision").Default(1).Positive(),
-		field.Enum("state").Values("active", "degraded", "stopped", "contact-lost").Default("active"),
+		field.String("name").Default("").MaxRuneLen(256),
+		field.Bool("enabled").Default(true),
+		field.Bool("deleted").Default(false),
+		field.Enum("state").Values("never-seen", "active", "degraded", "stopped", "contact-lost").Default("never-seen"),
 		field.Time("last_contact_at").Optional().Nillable(),
 		field.Time("last_heartbeat_at").Optional().Nillable(),
 		field.Time("last_transmission_at").Optional().Nillable(),
 		field.JSON("last_report", json.RawMessage{}).Optional().Sensitive(),
+		field.Time("history_removed_before").Optional().Nillable(),
 	}
+}
+
+// GatewayStateHistory defines the gateway_state_history table: one Gateway state transition
+// per Gateway revision; (gateway_id, revision) is unique.
+type GatewayStateHistory struct{ ent.Schema }
+
+// Policy returns the privacy policy that guards queries and mutations of the GatewayStateHistory schema.
+func (GatewayStateHistory) Policy() ent.Policy { return guard.Policy("GatewayStateHistory") }
+
+// Annotations returns the table name of the GatewayStateHistory schema.
+func (GatewayStateHistory) Annotations() []schema.Annotation {
+	return []schema.Annotation{entsql.Annotation{Table: "gateway_state_history"}}
+}
+
+// Fields returns the columns of the GatewayStateHistory schema.
+func (GatewayStateHistory) Fields() []ent.Field {
+	return []ent.Field{
+		field.UUID("id", uuid.UUID{}),
+		field.UUID("gateway_id", uuid.UUID{}),
+		field.Int64("revision").Positive(),
+		field.Enum("old_state").Values("never-seen", "active", "degraded", "stopped", "contact-lost"),
+		field.Enum("new_state").Values("active", "degraded", "stopped", "contact-lost"),
+		field.Enum("cause").Values("report", "submission", "timeout"),
+		field.Time("occurred_at"),
+		field.Time("contact_at"),
+		field.String("reason_code").Optional().Nillable().MaxLen(64),
+		field.String("detail").Optional().Nillable().MaxLen(512),
+	}
+}
+
+// Indexes returns the unique (gateway_id, revision) constraint of the GatewayStateHistory schema.
+func (GatewayStateHistory) Indexes() []ent.Index {
+	return []ent.Index{index.Fields("gateway_id", "revision").Unique()}
 }
 
 // GatewayNetwork defines the gateway_networks table: the mapping from a gateway's own network

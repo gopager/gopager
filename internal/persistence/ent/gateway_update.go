@@ -52,6 +52,48 @@ func (_u *GatewayUpdate) AddRevision(v int64) *GatewayUpdate {
 	return _u
 }
 
+// SetName sets the "name" field.
+func (_u *GatewayUpdate) SetName(v string) *GatewayUpdate {
+	_u.mutation.SetName(v)
+	return _u
+}
+
+// SetNillableName sets the "name" field if the given value is not nil.
+func (_u *GatewayUpdate) SetNillableName(v *string) *GatewayUpdate {
+	if v != nil {
+		_u.SetName(*v)
+	}
+	return _u
+}
+
+// SetEnabled sets the "enabled" field.
+func (_u *GatewayUpdate) SetEnabled(v bool) *GatewayUpdate {
+	_u.mutation.SetEnabled(v)
+	return _u
+}
+
+// SetNillableEnabled sets the "enabled" field if the given value is not nil.
+func (_u *GatewayUpdate) SetNillableEnabled(v *bool) *GatewayUpdate {
+	if v != nil {
+		_u.SetEnabled(*v)
+	}
+	return _u
+}
+
+// SetDeleted sets the "deleted" field.
+func (_u *GatewayUpdate) SetDeleted(v bool) *GatewayUpdate {
+	_u.mutation.SetDeleted(v)
+	return _u
+}
+
+// SetNillableDeleted sets the "deleted" field if the given value is not nil.
+func (_u *GatewayUpdate) SetNillableDeleted(v *bool) *GatewayUpdate {
+	if v != nil {
+		_u.SetDeleted(*v)
+	}
+	return _u
+}
+
 // SetState sets the "state" field.
 func (_u *GatewayUpdate) SetState(v gateway.State) *GatewayUpdate {
 	_u.mutation.SetState(v)
@@ -144,6 +186,26 @@ func (_u *GatewayUpdate) ClearLastReport() *GatewayUpdate {
 	return _u
 }
 
+// SetHistoryRemovedBefore sets the "history_removed_before" field.
+func (_u *GatewayUpdate) SetHistoryRemovedBefore(v time.Time) *GatewayUpdate {
+	_u.mutation.SetHistoryRemovedBefore(v)
+	return _u
+}
+
+// SetNillableHistoryRemovedBefore sets the "history_removed_before" field if the given value is not nil.
+func (_u *GatewayUpdate) SetNillableHistoryRemovedBefore(v *time.Time) *GatewayUpdate {
+	if v != nil {
+		_u.SetHistoryRemovedBefore(*v)
+	}
+	return _u
+}
+
+// ClearHistoryRemovedBefore clears the value of the "history_removed_before" field.
+func (_u *GatewayUpdate) ClearHistoryRemovedBefore() *GatewayUpdate {
+	_u.mutation.ClearHistoryRemovedBefore()
+	return _u
+}
+
 // Mutation returns the GatewayMutation object of the builder.
 func (_u *GatewayUpdate) Mutation() *GatewayMutation {
 	return _u.mutation
@@ -183,6 +245,11 @@ func (_u *GatewayUpdate) check() error {
 			return &ValidationError{Name: "revision", err: fmt.Errorf(`ent: validator failed for field "Gateway.revision": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Name(); ok {
+		if err := gateway.NameValidator(v); err != nil {
+			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Gateway.name": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.State(); ok {
 		if err := gateway.StateValidator(v); err != nil {
 			return &ValidationError{Name: "state", err: fmt.Errorf(`ent: validator failed for field "Gateway.state": %w`, err)}
@@ -215,6 +282,15 @@ func (_u *GatewayUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedRevision(); ok {
 		_spec.AddField(gateway.FieldRevision, field.TypeInt64, value)
 	}
+	if value, ok := _u.mutation.Name(); ok {
+		_spec.SetField(gateway.FieldName, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Enabled(); ok {
+		_spec.SetField(gateway.FieldEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Deleted(); ok {
+		_spec.SetField(gateway.FieldDeleted, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.State(); ok {
 		_spec.SetField(gateway.FieldState, field.TypeEnum, value)
 	}
@@ -246,6 +322,12 @@ func (_u *GatewayUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.LastReportCleared() {
 		_spec.ClearField(gateway.FieldLastReport, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.HistoryRemovedBefore(); ok {
+		_spec.SetField(gateway.FieldHistoryRemovedBefore, field.TypeTime, value)
+	}
+	if _u.mutation.HistoryRemovedBeforeCleared() {
+		_spec.ClearField(gateway.FieldHistoryRemovedBefore, field.TypeTime)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
@@ -287,6 +369,48 @@ func (_u *GatewayUpdateOne) SetNillableRevision(v *int64) *GatewayUpdateOne {
 // AddRevision adds value to the "revision" field.
 func (_u *GatewayUpdateOne) AddRevision(v int64) *GatewayUpdateOne {
 	_u.mutation.AddRevision(v)
+	return _u
+}
+
+// SetName sets the "name" field.
+func (_u *GatewayUpdateOne) SetName(v string) *GatewayUpdateOne {
+	_u.mutation.SetName(v)
+	return _u
+}
+
+// SetNillableName sets the "name" field if the given value is not nil.
+func (_u *GatewayUpdateOne) SetNillableName(v *string) *GatewayUpdateOne {
+	if v != nil {
+		_u.SetName(*v)
+	}
+	return _u
+}
+
+// SetEnabled sets the "enabled" field.
+func (_u *GatewayUpdateOne) SetEnabled(v bool) *GatewayUpdateOne {
+	_u.mutation.SetEnabled(v)
+	return _u
+}
+
+// SetNillableEnabled sets the "enabled" field if the given value is not nil.
+func (_u *GatewayUpdateOne) SetNillableEnabled(v *bool) *GatewayUpdateOne {
+	if v != nil {
+		_u.SetEnabled(*v)
+	}
+	return _u
+}
+
+// SetDeleted sets the "deleted" field.
+func (_u *GatewayUpdateOne) SetDeleted(v bool) *GatewayUpdateOne {
+	_u.mutation.SetDeleted(v)
+	return _u
+}
+
+// SetNillableDeleted sets the "deleted" field if the given value is not nil.
+func (_u *GatewayUpdateOne) SetNillableDeleted(v *bool) *GatewayUpdateOne {
+	if v != nil {
+		_u.SetDeleted(*v)
+	}
 	return _u
 }
 
@@ -382,6 +506,26 @@ func (_u *GatewayUpdateOne) ClearLastReport() *GatewayUpdateOne {
 	return _u
 }
 
+// SetHistoryRemovedBefore sets the "history_removed_before" field.
+func (_u *GatewayUpdateOne) SetHistoryRemovedBefore(v time.Time) *GatewayUpdateOne {
+	_u.mutation.SetHistoryRemovedBefore(v)
+	return _u
+}
+
+// SetNillableHistoryRemovedBefore sets the "history_removed_before" field if the given value is not nil.
+func (_u *GatewayUpdateOne) SetNillableHistoryRemovedBefore(v *time.Time) *GatewayUpdateOne {
+	if v != nil {
+		_u.SetHistoryRemovedBefore(*v)
+	}
+	return _u
+}
+
+// ClearHistoryRemovedBefore clears the value of the "history_removed_before" field.
+func (_u *GatewayUpdateOne) ClearHistoryRemovedBefore() *GatewayUpdateOne {
+	_u.mutation.ClearHistoryRemovedBefore()
+	return _u
+}
+
 // Mutation returns the GatewayMutation object of the builder.
 func (_u *GatewayUpdateOne) Mutation() *GatewayMutation {
 	return _u.mutation
@@ -434,6 +578,11 @@ func (_u *GatewayUpdateOne) check() error {
 			return &ValidationError{Name: "revision", err: fmt.Errorf(`ent: validator failed for field "Gateway.revision": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Name(); ok {
+		if err := gateway.NameValidator(v); err != nil {
+			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Gateway.name": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.State(); ok {
 		if err := gateway.StateValidator(v); err != nil {
 			return &ValidationError{Name: "state", err: fmt.Errorf(`ent: validator failed for field "Gateway.state": %w`, err)}
@@ -483,6 +632,15 @@ func (_u *GatewayUpdateOne) sqlSave(ctx context.Context) (_node *Gateway, err er
 	if value, ok := _u.mutation.AddedRevision(); ok {
 		_spec.AddField(gateway.FieldRevision, field.TypeInt64, value)
 	}
+	if value, ok := _u.mutation.Name(); ok {
+		_spec.SetField(gateway.FieldName, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Enabled(); ok {
+		_spec.SetField(gateway.FieldEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Deleted(); ok {
+		_spec.SetField(gateway.FieldDeleted, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.State(); ok {
 		_spec.SetField(gateway.FieldState, field.TypeEnum, value)
 	}
@@ -514,6 +672,12 @@ func (_u *GatewayUpdateOne) sqlSave(ctx context.Context) (_node *Gateway, err er
 	}
 	if _u.mutation.LastReportCleared() {
 		_spec.ClearField(gateway.FieldLastReport, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.HistoryRemovedBefore(); ok {
+		_spec.SetField(gateway.FieldHistoryRemovedBefore, field.TypeTime, value)
+	}
+	if _u.mutation.HistoryRemovedBeforeCleared() {
+		_spec.ClearField(gateway.FieldHistoryRemovedBefore, field.TypeTime)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	_node = &Gateway{config: _u.config}

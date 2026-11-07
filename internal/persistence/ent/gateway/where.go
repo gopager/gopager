@@ -60,6 +60,21 @@ func Revision(v int64) predicate.Gateway {
 	return predicate.Gateway(sql.FieldEQ(FieldRevision, v))
 }
 
+// Name applies equality check predicate on the "name" field. It's identical to NameEQ.
+func Name(v string) predicate.Gateway {
+	return predicate.Gateway(sql.FieldEQ(FieldName, v))
+}
+
+// Enabled applies equality check predicate on the "enabled" field. It's identical to EnabledEQ.
+func Enabled(v bool) predicate.Gateway {
+	return predicate.Gateway(sql.FieldEQ(FieldEnabled, v))
+}
+
+// Deleted applies equality check predicate on the "deleted" field. It's identical to DeletedEQ.
+func Deleted(v bool) predicate.Gateway {
+	return predicate.Gateway(sql.FieldEQ(FieldDeleted, v))
+}
+
 // LastContactAt applies equality check predicate on the "last_contact_at" field. It's identical to LastContactAtEQ.
 func LastContactAt(v time.Time) predicate.Gateway {
 	return predicate.Gateway(sql.FieldEQ(FieldLastContactAt, v))
@@ -73,6 +88,11 @@ func LastHeartbeatAt(v time.Time) predicate.Gateway {
 // LastTransmissionAt applies equality check predicate on the "last_transmission_at" field. It's identical to LastTransmissionAtEQ.
 func LastTransmissionAt(v time.Time) predicate.Gateway {
 	return predicate.Gateway(sql.FieldEQ(FieldLastTransmissionAt, v))
+}
+
+// HistoryRemovedBefore applies equality check predicate on the "history_removed_before" field. It's identical to HistoryRemovedBeforeEQ.
+func HistoryRemovedBefore(v time.Time) predicate.Gateway {
+	return predicate.Gateway(sql.FieldEQ(FieldHistoryRemovedBefore, v))
 }
 
 // RevisionEQ applies the EQ predicate on the "revision" field.
@@ -113,6 +133,91 @@ func RevisionLT(v int64) predicate.Gateway {
 // RevisionLTE applies the LTE predicate on the "revision" field.
 func RevisionLTE(v int64) predicate.Gateway {
 	return predicate.Gateway(sql.FieldLTE(FieldRevision, v))
+}
+
+// NameEQ applies the EQ predicate on the "name" field.
+func NameEQ(v string) predicate.Gateway {
+	return predicate.Gateway(sql.FieldEQ(FieldName, v))
+}
+
+// NameNEQ applies the NEQ predicate on the "name" field.
+func NameNEQ(v string) predicate.Gateway {
+	return predicate.Gateway(sql.FieldNEQ(FieldName, v))
+}
+
+// NameIn applies the In predicate on the "name" field.
+func NameIn(vs ...string) predicate.Gateway {
+	return predicate.Gateway(sql.FieldIn(FieldName, vs...))
+}
+
+// NameNotIn applies the NotIn predicate on the "name" field.
+func NameNotIn(vs ...string) predicate.Gateway {
+	return predicate.Gateway(sql.FieldNotIn(FieldName, vs...))
+}
+
+// NameGT applies the GT predicate on the "name" field.
+func NameGT(v string) predicate.Gateway {
+	return predicate.Gateway(sql.FieldGT(FieldName, v))
+}
+
+// NameGTE applies the GTE predicate on the "name" field.
+func NameGTE(v string) predicate.Gateway {
+	return predicate.Gateway(sql.FieldGTE(FieldName, v))
+}
+
+// NameLT applies the LT predicate on the "name" field.
+func NameLT(v string) predicate.Gateway {
+	return predicate.Gateway(sql.FieldLT(FieldName, v))
+}
+
+// NameLTE applies the LTE predicate on the "name" field.
+func NameLTE(v string) predicate.Gateway {
+	return predicate.Gateway(sql.FieldLTE(FieldName, v))
+}
+
+// NameContains applies the Contains predicate on the "name" field.
+func NameContains(v string) predicate.Gateway {
+	return predicate.Gateway(sql.FieldContains(FieldName, v))
+}
+
+// NameHasPrefix applies the HasPrefix predicate on the "name" field.
+func NameHasPrefix(v string) predicate.Gateway {
+	return predicate.Gateway(sql.FieldHasPrefix(FieldName, v))
+}
+
+// NameHasSuffix applies the HasSuffix predicate on the "name" field.
+func NameHasSuffix(v string) predicate.Gateway {
+	return predicate.Gateway(sql.FieldHasSuffix(FieldName, v))
+}
+
+// NameEqualFold applies the EqualFold predicate on the "name" field.
+func NameEqualFold(v string) predicate.Gateway {
+	return predicate.Gateway(sql.FieldEqualFold(FieldName, v))
+}
+
+// NameContainsFold applies the ContainsFold predicate on the "name" field.
+func NameContainsFold(v string) predicate.Gateway {
+	return predicate.Gateway(sql.FieldContainsFold(FieldName, v))
+}
+
+// EnabledEQ applies the EQ predicate on the "enabled" field.
+func EnabledEQ(v bool) predicate.Gateway {
+	return predicate.Gateway(sql.FieldEQ(FieldEnabled, v))
+}
+
+// EnabledNEQ applies the NEQ predicate on the "enabled" field.
+func EnabledNEQ(v bool) predicate.Gateway {
+	return predicate.Gateway(sql.FieldNEQ(FieldEnabled, v))
+}
+
+// DeletedEQ applies the EQ predicate on the "deleted" field.
+func DeletedEQ(v bool) predicate.Gateway {
+	return predicate.Gateway(sql.FieldEQ(FieldDeleted, v))
+}
+
+// DeletedNEQ applies the NEQ predicate on the "deleted" field.
+func DeletedNEQ(v bool) predicate.Gateway {
+	return predicate.Gateway(sql.FieldNEQ(FieldDeleted, v))
 }
 
 // StateEQ applies the EQ predicate on the "state" field.
@@ -293,6 +398,56 @@ func LastReportIsNil() predicate.Gateway {
 // LastReportNotNil applies the NotNil predicate on the "last_report" field.
 func LastReportNotNil() predicate.Gateway {
 	return predicate.Gateway(sql.FieldNotNull(FieldLastReport))
+}
+
+// HistoryRemovedBeforeEQ applies the EQ predicate on the "history_removed_before" field.
+func HistoryRemovedBeforeEQ(v time.Time) predicate.Gateway {
+	return predicate.Gateway(sql.FieldEQ(FieldHistoryRemovedBefore, v))
+}
+
+// HistoryRemovedBeforeNEQ applies the NEQ predicate on the "history_removed_before" field.
+func HistoryRemovedBeforeNEQ(v time.Time) predicate.Gateway {
+	return predicate.Gateway(sql.FieldNEQ(FieldHistoryRemovedBefore, v))
+}
+
+// HistoryRemovedBeforeIn applies the In predicate on the "history_removed_before" field.
+func HistoryRemovedBeforeIn(vs ...time.Time) predicate.Gateway {
+	return predicate.Gateway(sql.FieldIn(FieldHistoryRemovedBefore, vs...))
+}
+
+// HistoryRemovedBeforeNotIn applies the NotIn predicate on the "history_removed_before" field.
+func HistoryRemovedBeforeNotIn(vs ...time.Time) predicate.Gateway {
+	return predicate.Gateway(sql.FieldNotIn(FieldHistoryRemovedBefore, vs...))
+}
+
+// HistoryRemovedBeforeGT applies the GT predicate on the "history_removed_before" field.
+func HistoryRemovedBeforeGT(v time.Time) predicate.Gateway {
+	return predicate.Gateway(sql.FieldGT(FieldHistoryRemovedBefore, v))
+}
+
+// HistoryRemovedBeforeGTE applies the GTE predicate on the "history_removed_before" field.
+func HistoryRemovedBeforeGTE(v time.Time) predicate.Gateway {
+	return predicate.Gateway(sql.FieldGTE(FieldHistoryRemovedBefore, v))
+}
+
+// HistoryRemovedBeforeLT applies the LT predicate on the "history_removed_before" field.
+func HistoryRemovedBeforeLT(v time.Time) predicate.Gateway {
+	return predicate.Gateway(sql.FieldLT(FieldHistoryRemovedBefore, v))
+}
+
+// HistoryRemovedBeforeLTE applies the LTE predicate on the "history_removed_before" field.
+func HistoryRemovedBeforeLTE(v time.Time) predicate.Gateway {
+	return predicate.Gateway(sql.FieldLTE(FieldHistoryRemovedBefore, v))
+}
+
+// HistoryRemovedBeforeIsNil applies the IsNil predicate on the "history_removed_before" field.
+func HistoryRemovedBeforeIsNil() predicate.Gateway {
+	return predicate.Gateway(sql.FieldIsNull(FieldHistoryRemovedBefore))
+}
+
+// HistoryRemovedBeforeNotNil applies the NotNil predicate on the "history_removed_before" field.
+func HistoryRemovedBeforeNotNil() predicate.Gateway {
+	return predicate.Gateway(sql.FieldNotNull(FieldHistoryRemovedBefore))
 }
 
 // And groups predicates with the AND operator between them.

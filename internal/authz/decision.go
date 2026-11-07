@@ -10,9 +10,11 @@ import (
 // Target is one server-derived authorization context, never a union of unrelated rows.
 // AgencyID is the Agency of the target's Unit, or the home Agency of the Radio
 // network for unassigned or targetless evidence and for Gateway and Network administration.
-// WithoutUnit is true only for proven unassigned or targetless evidence.
+// WithoutUnit is true only for proven unassigned or targetless evidence. GatewayID
+// names the administered Gateway and is matched only by "gateway" scopes.
 type Target struct {
 	AgencyID        uuid.UUID
+	GatewayID       uuid.UUID
 	UnitID          uuid.UUID
 	UnitCollections []uuid.UUID
 	AccountID       uuid.UUID
@@ -128,6 +130,10 @@ func matchesTarget(scope Scope, target Target) bool {
 			}
 		case "account":
 			if target.AccountID == id {
+				return true
+			}
+		case "gateway":
+			if target.GatewayID == id {
 				return true
 			}
 		}

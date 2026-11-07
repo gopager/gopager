@@ -63,7 +63,7 @@ func composeCore(store *postgres.Store) (*core, error) {
 		return nil, err
 	}
 	if c.resolver, err = identity.NewResolver(c.identity, store, applicationScopeOwners{
-		identity: c.identity, units: c.units,
+		identity: c.identity, units: c.units, gateways: c.intake,
 	}); err != nil {
 		return nil, err
 	}

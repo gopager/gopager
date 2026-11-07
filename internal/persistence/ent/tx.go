@@ -38,6 +38,8 @@ type Tx struct {
 	GatewayCredential *GatewayCredentialClient
 	// GatewayNetwork is the client for interacting with the GatewayNetwork builders.
 	GatewayNetwork *GatewayNetworkClient
+	// GatewayStateHistory is the client for interacting with the GatewayStateHistory builders.
+	GatewayStateHistory *GatewayStateHistoryClient
 	// Grant is the client for interacting with the Grant builders.
 	Grant *GrantClient
 	// GroupingControl is the client for interacting with the GroupingControl builders.
@@ -232,6 +234,7 @@ func (tx *Tx) init() {
 	tx.Gateway = NewGatewayClient(tx.config)
 	tx.GatewayCredential = NewGatewayCredentialClient(tx.config)
 	tx.GatewayNetwork = NewGatewayNetworkClient(tx.config)
+	tx.GatewayStateHistory = NewGatewayStateHistoryClient(tx.config)
 	tx.Grant = NewGrantClient(tx.config)
 	tx.GroupingControl = NewGroupingControlClient(tx.config)
 	tx.IdentityControl = NewIdentityControlClient(tx.config)

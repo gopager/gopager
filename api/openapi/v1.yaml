@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: GoPager API
-  version: 1.1.0
+  version: 1.2.0
   description: |
     GoPager application API. Human guide: docs/http-api.md.
 
@@ -11,8 +11,8 @@ info:
       media type is 400 `INVALID_INPUT`. Every JSON request body carries `"schemaVersion": 1`.
       Unknown fields and trailing data are rejected with 400.
     - Responses are `application/json` with `Cache-Control: no-store`. Most successful responses
-      are wrapped as `{"schemaVersion": 1, "data": ...}`. Exceptions: `/auth/*` and
-      `/gateways/*` return unwrapped bodies that carry `schemaVersion` directly. 204 responses
+      are wrapped as `{"schemaVersion": 1, "data": ...}`. Exceptions: `/auth/*`,
+      `/gateways/{id}/networks` and `/gateways/{id}/credentials*` return unwrapped bodies that carry `schemaVersion` directly. 204 responses
       have no body.
     - Body size limits per route group are listed in docs/http-api.md (Request size limits).
       Overflow is 413 `RESOURCE_LIMIT`.
@@ -54,8 +54,13 @@ tags:
   description: Asynchronous historical re-evaluation.
 - name: Ingest
   description: Gateway submissions and state reports (Gateway credential).
+- name: Networks
+  description: Radio networks of one Protocol, owned by an Agency. A caller without any `network.*` right on an
+    existing Network gets 404; one with another right but not the requested one gets 403.
 - name: Gateways
-  description: Gateway Network assignments and credentials. Responses are unwrapped.
+  description: Gateway lifecycle, diagnostics and state history (wrapped), Network assignments and credentials
+    (unwrapped). A caller without any `gateway.*` right covering an existing Gateway gets 404; one with another
+    right but not the requested one gets 403.
 - name: Workflows
   description: Processing Workflows, versions, preview and candidates.
 - name: Processing instances
@@ -1797,6 +1802,435 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '413':
           $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /networks:
+    get:
+      operationId: listNetworks
+      tags:
+      - Networks
+      summary: List Networks
+      description: Requires `network.read`; lists the undeleted Networks of the Agencies the caller may read. Offset paging.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      parameters:
+      - $ref: '#/components/parameters/Offset'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Caller-visible page; `total` counts only rows the caller may read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetworkPageResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    post:
+      operationId: createNetwork
+      tags:
+      - Networks
+      summary: Create a Network
+      description: 'Requires `network.create` on the Agency. Protocol and Agency cannot change later. An unknown Agency is 400. Idempotent per (caller, `commandId`).'
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNetworkRequest'
+      responses:
+        '201':
+          description: Network created (or replayed).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /networks/{id}:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    get:
+      operationId: readNetwork
+      tags:
+      - Networks
+      summary: Read a Network
+      description: Requires `network.read` on the Network's Agency. Absent, deleted and invisible Networks are all 404.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      responses:
+        '200':
+          description: The resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetworkResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    put:
+      operationId: renameNetwork
+      tags:
+      - Networks
+      summary: Rename a Network
+      description: Requires `network.update` on the Network's Agency. Only the name changes. Optimistic concurrency via `expectedRevision`.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNetworkRequest'
+      responses:
+        '200':
+          description: New revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    delete:
+      operationId: deleteNetwork
+      tags:
+      - Networks
+      summary: Delete a Network
+      description: Requires `network.delete` on the Network's Agency. Soft delete; accepted Transmissions keep their reference. A stale revision, or a Network still assigned to a Gateway or referenced by an Address rule or an undeleted Workflow, is 409 `REVISION_CONFLICT` without naming the reference.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteRequest'
+      responses:
+        '200':
+          description: Deleted; final revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /gateways:
+    get:
+      operationId: listGateways
+      tags:
+      - Gateways
+      summary: List Gateways
+      description: Requires `gateway.read`; lists the Gateways whose every assigned Network belongs to an Agency the caller may read (Gateways without Networks need an `all` grant). Offset paging.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      parameters:
+      - $ref: '#/components/parameters/Offset'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Caller-visible page; `total` counts only rows the caller may read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GatewayPageResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    post:
+      operationId: createGateway
+      tags:
+      - Gateways
+      summary: Create a Gateway
+      description: 'Requires `gateway.create` on the Agency of every proposed Network, or an `all` grant without Networks. The Gateway starts enabled, `never-seen` and without credentials. The initial assignments follow the replacement rules (0..1024 entries, priorities exactly 0..n-1). Idempotent per (caller, `commandId`).'
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGatewayRequest'
+      responses:
+        '201':
+          description: Gateway created (or replayed).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /gateways/{id}:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    get:
+      operationId: readGateway
+      tags:
+      - Gateways
+      summary: Read a Gateway
+      description: Requires `gateway.read` on the Agency of every assigned Network. Absent, deleted and invisible Gateways are all 404. Never contains credentials.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      responses:
+        '200':
+          description: The resource.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GatewayResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    put:
+      operationId: updateGateway
+      tags:
+      - Gateways
+      summary: Rename, enable or disable a Gateway
+      description: Requires `gateway.update` on the Agency of every assigned Network. A disabled Gateway's credentials authenticate nothing (401) and it is not evaluated for contact loss. Optimistic concurrency via `expectedRevision`; the revision also advances on state transitions and credential cutover.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateGatewayRequest'
+      responses:
+        '200':
+          description: New revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    delete:
+      operationId: deleteGateway
+      tags:
+      - Gateways
+      summary: Delete a Gateway
+      description: Requires `gateway.delete` on the Agency of every assigned Network. Soft delete in one transaction - revokes every unrevoked credential, removes the Network assignments and hides the Gateway. Accepted Transmissions and the state history are unchanged.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteRequest'
+      responses:
+        '200':
+          description: Deleted; final revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /gateways/{id}/diagnostics:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    get:
+      operationId: readGatewayDiagnostics
+      tags:
+      - Gateways
+      summary: Read a Gateway's diagnostics
+      description: Requires `gateway.read` on the Agency of every assigned Network, or `gateway.diagnostics.read` on the Gateway (scope `gateway`, `agency` or `all`). Otherwise 404. Contains no Network, credential or Payload data.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      responses:
+        '200':
+          description: Diagnostic view.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GatewayDiagnosticsResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /gateways/{id}/history:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    get:
+      operationId: listGatewayHistory
+      tags:
+      - Gateways
+      summary: List a Gateway's state transitions
+      description: Authorized as the diagnostics read. Newest revision first; offset paging.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      parameters:
+      - $ref: '#/components/parameters/Offset'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Retained transitions; `total` counts all of them.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GatewayTransitionPageResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
         '503':
@@ -5102,6 +5536,375 @@ components:
           description: Position in the Gateway's resolution order, 0 is the highest priority. Across the set the
             values are exactly 0..n-1 without duplicates.
       additionalProperties: false
+    Network:
+      type: object
+      description: A Radio network of one Protocol, owned by one Agency.
+      required:
+      - id
+      - revision
+      - name
+      - protocol
+      - agencyId
+      properties:
+        id:
+          type: string
+          format: uuid
+        revision:
+          $ref: '#/components/schemas/Revision'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+          pattern: \S
+          description: Valid UTF-8, not blank, at most 256 characters; not trimmed.
+        protocol:
+          type: string
+          enum:
+          - pocsag
+          - flex
+          - zvei
+          - eas
+        agencyId:
+          type: string
+          format: uuid
+    NetworkResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          $ref: '#/components/schemas/Network'
+    NetworkPageResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          type: object
+          required:
+          - items
+          - total
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Network'
+            total:
+              type: integer
+              minimum: 0
+    CreateNetworkRequest:
+      type: object
+      required:
+      - schemaVersion
+      - commandId
+      - name
+      - protocol
+      - agencyId
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        commandId:
+          type: string
+          format: uuid
+        expectedRevision:
+          type: string
+          enum:
+          - '0'
+          description: Optional on create; only "0" is accepted.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+          pattern: \S
+        protocol:
+          type: string
+          enum:
+          - pocsag
+          - flex
+          - zvei
+          - eas
+        agencyId:
+          type: string
+          format: uuid
+      additionalProperties: false
+    UpdateNetworkRequest:
+      type: object
+      required:
+      - schemaVersion
+      - expectedRevision
+      - name
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        expectedRevision:
+          $ref: '#/components/schemas/Revision'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+          pattern: \S
+      additionalProperties: false
+    GatewayState:
+      type: string
+      description: '`never-seen` until the first authenticated contact; `active` and `contact-lost` are server-derived;
+        `degraded` and `stopped` follow the Gateway''s reports.'
+      enum:
+      - never-seen
+      - active
+      - degraded
+      - stopped
+      - contact-lost
+    Gateway:
+      type: object
+      required:
+      - id
+      - revision
+      - name
+      - enabled
+      - state
+      - lastContactAt
+      - lastHeartbeatAt
+      - lastTransmissionAt
+      - networks
+      properties:
+        id:
+          type: string
+          format: uuid
+        revision:
+          $ref: '#/components/schemas/Revision'
+        name:
+          type: string
+          maxLength: 256
+        enabled:
+          type: boolean
+        state:
+          $ref: '#/components/schemas/GatewayState'
+        lastContactAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last authenticated Submission or state report; null means never seen.
+        lastHeartbeatAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastTransmissionAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Kept after retention removes the Transmission.
+        networks:
+          type: array
+          description: Assignments in priority order.
+          items:
+            $ref: '#/components/schemas/GatewayNetworkAssignment'
+    GatewayResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          $ref: '#/components/schemas/Gateway'
+    GatewayPageResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          type: object
+          required:
+          - items
+          - total
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Gateway'
+            total:
+              type: integer
+              minimum: 0
+    CreateGatewayRequest:
+      type: object
+      required:
+      - schemaVersion
+      - commandId
+      - name
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        commandId:
+          type: string
+          format: uuid
+        expectedRevision:
+          type: string
+          enum:
+          - '0'
+          description: Optional on create; only "0" is accepted.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+          pattern: \S
+        networks:
+          type: array
+          maxItems: 1024
+          items:
+            $ref: '#/components/schemas/GatewayNetworkAssignment'
+      additionalProperties: false
+    UpdateGatewayRequest:
+      type: object
+      required:
+      - schemaVersion
+      - expectedRevision
+      - name
+      - enabled
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        expectedRevision:
+          $ref: '#/components/schemas/Revision'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+          pattern: \S
+        enabled:
+          type: boolean
+      additionalProperties: false
+    GatewayDiagnostics:
+      type: object
+      description: Delegable diagnostic view without Network, credential or Payload data.
+      required:
+      - id
+      - name
+      - enabled
+      - state
+      - lastContactAt
+      - lastHeartbeatAt
+      - lastTransmissionAt
+      - lastReport
+      - historyRemovedBefore
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        enabled:
+          type: boolean
+        state:
+          $ref: '#/components/schemas/GatewayState'
+        lastContactAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastHeartbeatAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastTransmissionAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastReport:
+          type: object
+          nullable: true
+          required:
+          - operation
+          properties:
+            operation:
+              type: string
+              enum:
+              - heartbeat
+              - degraded
+              - recovered
+              - terminated
+            reasonCode:
+              type: string
+            detail:
+              type: string
+        historyRemovedBefore:
+          type: string
+          format: date-time
+          nullable: true
+          description: Set when retention removed the transitions before this time; the history then no longer
+            shows them.
+    GatewayDiagnosticsResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          $ref: '#/components/schemas/GatewayDiagnostics'
+    GatewayTransition:
+      type: object
+      required:
+      - revision
+      - oldState
+      - newState
+      - cause
+      - occurredAt
+      - contactAt
+      properties:
+        revision:
+          $ref: '#/components/schemas/Revision'
+        oldState:
+          $ref: '#/components/schemas/GatewayState'
+        newState:
+          $ref: '#/components/schemas/GatewayState'
+        cause:
+          type: string
+          enum:
+          - report
+          - submission
+          - timeout
+        occurredAt:
+          type: string
+          format: date-time
+        contactAt:
+          type: string
+          format: date-time
+          description: The triggering contact; for `timeout` the last contact before the loss.
+        reasonCode:
+          type: string
+        detail:
+          type: string
+    GatewayTransitionPageResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          type: object
+          required:
+          - items
+          - total
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/GatewayTransition'
+            total:
+              type: integer
+              minimum: 0
     ReplaceGatewayNetworksRequest:
       type: object
       required:

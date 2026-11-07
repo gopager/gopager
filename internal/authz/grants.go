@@ -25,7 +25,7 @@ var (
 )
 
 // Scope restricts a grant or key to a data area. Kind is one of "all",
-// "agency", "unit", "unitCollection" or "account"; "all" must carry no
+// "agency", "unit", "unitCollection", "account" or "gateway"; "all" must carry no
 // References, every other kind needs 1..1024 non-nil UUID references (see
 // ValidScope). A reference matches a Target by UUID value.
 type Scope struct {
@@ -95,6 +95,8 @@ func buildActionScopes() map[string][]string {
 			add(resource+"."+action, "all", "agency")
 		}
 	}
+	// Single-Gateway delegation: diagnostics and credential rotation are separate rights.
+	add("gateway.diagnostics.read gateway.credential.rotate", "all", "agency", "gateway")
 	add("agency.read agency.update", "all", "agency")
 	add("agency.create agency.delete", "all")
 	add("grouping.configure", "all")
@@ -161,7 +163,7 @@ func ValidateGrant(grant Grant) error {
 
 // ValidScope rejects empty restrictions and invalid server references.
 func ValidScope(scope Scope) bool {
-	if !slices.Contains([]string{"all", "agency", "unit", "unitCollection", "account"}, scope.Kind) {
+	if !slices.Contains([]string{"all", "agency", "unit", "unitCollection", "account", "gateway"}, scope.Kind) {
 		return false
 	}
 	if scope.Kind == "all" {

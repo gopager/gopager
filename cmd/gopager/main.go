@@ -10,8 +10,8 @@
 //   - api serves the HTTP listener: /health/live, /health/ready and the
 //     /api/v1 application routes (authentication, management, Gateway intake
 //     and administration, Processing).
-//   - worker runs the background Processing dispatcher and the assignment
-//     correction runner.
+//   - worker runs the background Processing dispatcher, the assignment
+//     correction runner and the Gateway contact-loss monitor.
 //
 // Server flags: -roles (comma-separated, required),
 // -listen-address (required with the api role), -migration-mode (check, the
@@ -23,8 +23,12 @@
 // -processing-artifact-root (directory of operator-provisioned plugin
 // executables; falls back to $GOPAGER_PROCESSING_ARTIFACT_ROOT),
 // -login-attempts-per-account and -login-attempts-per-instance (per-minute
-// login limits, positive) and -allow-insecure-db (accept a remote database
-// without certificate-verified TLS). Positional arguments are rejected.
+// login limits, positive), -gateway-heartbeat-interval (default 60s),
+// -gateway-contact-timeout (default 180s, at least the heartbeat interval) and
+// -gateway-contact-scan-interval (default 15s, at most the contact timeout) for
+// the worker's Gateway contact-loss monitor, and -allow-insecure-db (accept a
+// remote database without certificate-verified TLS). Positional arguments are
+// rejected.
 //
 // The database connection string is read only from $GOPAGER_DATABASE_URL so
 // that it never appears in process listings. The process runs until SIGINT or
@@ -72,6 +76,7 @@ type startupConfig struct {
 	ProcessingArtifactRoot string
 	LoginLimits            identity.LoginRateLimits
 	ProcessingDispatch     worker.DispatchConfig
+	GatewayContact         ingestdomain.ContactConfig
 }
 
 func main() {
@@ -133,6 +138,11 @@ func run() (result error) {
 			return errors.Join(err, store.Close())
 		}
 		runners = append(runners, correctionRunner)
+		contactMonitor, err := ingestdomain.NewContactMonitor(shared.store, shared.store, shared.intake, config.GatewayContact)
+		if err != nil {
+			return errors.Join(err, store.Close())
+		}
+		runners = append(runners, contactMonitor)
 	}
 	var api http.Handler
 	if slices.Contains(config.Roles, platform.RoleAPI) {
@@ -171,6 +181,9 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 	loginInstance := flags.Int("login-attempts-per-instance", defaultLimits.InstanceAttempts, "Per-minute instance login attempt limit")
 	processingConcurrency := flags.Int("processing-concurrency", worker.DefaultDispatchConcurrency, "Maximum Processing candidates evaluated in parallel")
 	processingPoll := flags.Duration("processing-poll-interval", worker.DefaultDispatchPollInterval, "Fallback interval for discovering due Processing work (wake-ups arrive through notifications)")
+	heartbeatInterval := flags.Duration("gateway-heartbeat-interval", ingestdomain.DefaultHeartbeatInterval, "Interval in which Gateways are expected to send a heartbeat")
+	contactTimeout := flags.Duration("gateway-contact-timeout", ingestdomain.DefaultContactTimeout, "Silence after which an active or degraded Gateway is contact-lost (at least the heartbeat interval)")
+	contactScan := flags.Duration("gateway-contact-scan-interval", ingestdomain.DefaultContactScan, "Interval of the worker's Gateway contact-loss scan (at most the contact timeout)")
 	allowInsecure := flags.Bool("allow-insecure-db", false, "Operator approval for unverified remote database TLS")
 	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
 		return startupConfig{}, platform.NewFailure(platform.CodeInvalidInput, err)
@@ -225,10 +238,15 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 	if err := dispatch.Validate(); err != nil {
 		return startupConfig{}, err
 	}
+	contact := ingestdomain.ContactConfig{HeartbeatInterval: *heartbeatInterval, Timeout: *contactTimeout,
+		ScanInterval: *contactScan}
+	if err := contact.Validate(); err != nil {
+		return startupConfig{}, err
+	}
 	return startupConfig{Config: config, PublicOrigin: *publicOrigin,
 		ProcessingArtifactRoot: *processingArtifactRoot,
 		LoginLimits:            identity.LoginRateLimits{AccountAttempts: *loginAccount, SourceAttempts: *loginSource, InstanceAttempts: *loginInstance},
-		ProcessingDispatch:     dispatch}, nil
+		ProcessingDispatch:     dispatch, GatewayContact: contact}, nil
 }
 
 // composeApplicationAPI binds the shared services to the HTTP listener. A non-nil networkOwner
@@ -262,7 +280,11 @@ func composeApplicationAPI(publicOrigin string, limits identity.LoginRateLimits,
 		return nil, err
 	}
 	gatewayAdministration, err := ingestdomain.NewGatewayAdministration(c.store, c.resolver, c.store,
-		c.intake, c.receipts, c.facts)
+		c.intake, c.intake, c.receipts, c.facts)
+	if err != nil {
+		return nil, err
+	}
+	networkAdministration, err := ingestdomain.NewNetworkAdministration(c.store, c.resolver, c.store, c.intake, c.receipts)
 	if err != nil {
 		return nil, err
 	}
@@ -275,6 +297,7 @@ func composeApplicationAPI(publicOrigin string, limits identity.LoginRateLimits,
 	httpapi.RegisterManagementRoutes(mux, transport, preauthenticator, c.unitService, ruleService)
 	httpapi.RegisterIngestRoutes(mux, intakeService)
 	httpapi.RegisterGatewayManagementRoutes(mux, transport, preauthenticator, gatewayAdministration)
+	httpapi.RegisterNetworkManagementRoutes(mux, transport, preauthenticator, networkAdministration)
 	if len(processingRoutes) == 1 {
 		httpapi.RegisterProcessingRoutes(mux, transport, preauthenticator, processingRoutes[0])
 	}

@@ -79,6 +79,7 @@ type GatewayAdministration struct {
 	resolver     *identity.Resolver
 	clock        platform.Clock
 	repository   GatewayAdministrationRepository
+	lifecycle    GatewayLifecycleRepository
 	receipts     commands.Repository
 	facts        events.Appender
 }
@@ -86,12 +87,14 @@ type GatewayAdministration struct {
 // NewGatewayAdministration returns a GatewayAdministration, failing with
 // CodeInvalidInput if any dependency is nil.
 func NewGatewayAdministration(transactions identity.Transactions, resolver *identity.Resolver, clock platform.Clock,
-	repository GatewayAdministrationRepository, receipts commands.Repository, facts events.Appender) (*GatewayAdministration, error) {
-	if transactions == nil || resolver == nil || clock == nil || repository == nil || receipts == nil || facts == nil {
+	repository GatewayAdministrationRepository, lifecycle GatewayLifecycleRepository, receipts commands.Repository,
+	facts events.Appender) (*GatewayAdministration, error) {
+	if transactions == nil || resolver == nil || clock == nil || repository == nil || lifecycle == nil ||
+		receipts == nil || facts == nil {
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing Gateway administration dependency"))
 	}
 	return &GatewayAdministration{transactions: transactions, resolver: resolver, clock: clock,
-		repository: repository, receipts: receipts, facts: facts}, nil
+		repository: repository, lifecycle: lifecycle, receipts: receipts, facts: facts}, nil
 }
 
 // ConfigureNetworks atomically replaces the Gateway's Network assignments,
@@ -100,28 +103,20 @@ func NewGatewayAdministration(transactions identity.Transactions, resolver *iden
 // priorities that are exactly 0..n-1 (see validPriorities); a referenced Network that
 // does not exist is reported as authz.ErrInvalidInput. check is called with
 // the resolved authentication before any change (e.g. to require a fresh
-// session); its error aborts the call. The caller needs "gateway.update" on
-// every currently and newly assigned Network.
+// session); its error aborts the call. The caller needs "gateway.update" on the
+// Agency of every currently and newly assigned Network; a caller without any right on the
+// Gateway at all gets authz.ErrNotFound.
 func (s *GatewayAdministration) ConfigureNetworks(ctx context.Context, proof identity.Proof, gateway uuid.UUID,
 	expected int64, input []GatewayNetworkInput, check func(identity.Authentication) error) (int64, error) {
-	if gateway == uuid.Nil || expected <= 0 || len(input) == 0 || len(input) > 1024 || check == nil ||
-		!validPriorities(input) {
+	if gateway == uuid.Nil || expected <= 0 || check == nil {
 		return 0, authz.ErrInvalidInput
 	}
-	seenIdentifiers, seenNetworks := make(map[string]bool), make(map[uuid.UUID]bool)
-	assignments := make([]GatewayNetwork, 0, len(input))
-	for _, item := range input {
-		if item.Identifier == "" || !utf8.ValidString(item.Identifier) || len([]byte(item.Identifier)) > 128 ||
-			strings.TrimSpace(item.Identifier) == "" || item.NetworkID == uuid.Nil ||
-			seenIdentifiers[item.Identifier] || seenNetworks[item.NetworkID] {
-			return 0, authz.ErrInvalidInput
-		}
-		seenIdentifiers[item.Identifier], seenNetworks[item.NetworkID] = true, true
-		assignments = append(assignments, GatewayNetwork{Identifier: item.Identifier, NetworkID: item.NetworkID,
-			Priority: item.Priority})
+	assignments, err := validateAssignments(input, false)
+	if err != nil {
+		return 0, err
 	}
 	var revision int64
-	err := identity.WithAuthority(ctx, s.transactions, s.clock, s.resolver, proof, true, check,
+	err = identity.WithAuthority(ctx, s.transactions, s.clock, s.resolver, proof, true, check,
 		func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
 			current, err := s.repository.GatewayNetworksForAuthorization(tx.Context(), tx, gateway)
 			if err != nil {
@@ -131,21 +126,13 @@ func (s *GatewayAdministration) ConfigureNetworks(ctx context.Context, proof ide
 			for _, network := range current {
 				scope[network.AgencyID] = true
 			}
-			for index := range assignments {
-				protocol, agency, err := s.repository.ReadNetwork(tx.Context(), tx, assignments[index].NetworkID)
-				if err != nil {
-					if errors.Is(err, authz.ErrNotFound) {
-						return authz.ErrInvalidInput
-					}
-					return err
-				}
-				if !protocol.Valid() {
-					return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("invalid current Network Protocol"))
-				}
-				assignments[index].Protocol = protocol
-				scope[agency] = true
+			if err := authorizeGateway(authority, gateway, scope, now, "gateway.update"); err != nil {
+				return denyByVisibility(err, authority, gateway, scope, now)
 			}
-			if err := authorizeGatewayNetworks(authority, "gateway.update", scope, now); err != nil {
+			if scope, err = s.resolveAssignments(tx, assignments, scope); err != nil {
+				return err
+			}
+			if err := authorizeGateway(authority, gateway, scope, now, "gateway.update"); err != nil {
 				return err
 			}
 			revision, err = s.repository.ReplaceGatewayNetworks(tx.Context(), tx, gateway, expected, assignments)
@@ -155,8 +142,9 @@ func (s *GatewayAdministration) ConfigureNetworks(ctx context.Context, proof ide
 }
 
 // ReadCredentialStatus lists the Gateway's credentials without secrets. The
-// caller needs "gateway.read" on every Network the Gateway is assigned to, or
-// an installation-wide ("all" scope) grant when it has none. A repository row with an unknown status
+// caller needs "gateway.read" on the Agency of every Network the Gateway is
+// assigned to (an installation-wide grant when it has none), or
+// "gateway.credential.rotate" on the Gateway. A repository row with an unknown status
 // fails with CodeAuthorityUnavailable.
 func (s *GatewayAdministration) ReadCredentialStatus(ctx context.Context, proof identity.Proof,
 	gateway uuid.UUID) ([]GatewayCredentialView, error) {
@@ -166,17 +154,10 @@ func (s *GatewayAdministration) ReadCredentialStatus(ctx context.Context, proof 
 	var result []GatewayCredentialView
 	err := identity.WithAuthority(ctx, s.transactions, s.clock, s.resolver, proof, false, nil,
 		func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-			networks, err := s.repository.GatewayNetworksForAuthorization(tx.Context(), tx, gateway)
-			if err != nil {
+			if err := s.authorizeExisting(tx, authority, gateway, now, "gateway.read", "gateway.credential.rotate"); err != nil {
 				return err
 			}
-			scope := make(map[uuid.UUID]bool)
-			for _, network := range networks {
-				scope[network.AgencyID] = true
-			}
-			if err := authorizeGatewayNetworks(authority, "gateway.read", scope, now); err != nil {
-				return err
-			}
+			var err error
 			result, err = s.repository.GatewayCredentialStatus(tx.Context(), tx, gateway)
 			if err == nil && !validGatewayCredentialViews(result) {
 				return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("invalid Gateway credential status"))
@@ -191,8 +172,9 @@ func (s *GatewayAdministration) ReadCredentialStatus(ctx context.Context, proof 
 // same Gateway and expected revision replays the recorded result without the
 // secret (Replayed=true), while reusing it with different input fails with
 // commands.ErrIdempotencyConflict. The credential, an identity fact and the command
-// receipt are written in one transaction. check and authorization behave as
-// in ConfigureNetworks.
+// receipt are written in one transaction. check behaves as in
+// ConfigureNetworks; the caller needs "gateway.update" on the Agency of every
+// assigned Network or "gateway.credential.rotate" on the Gateway.
 func (s *GatewayAdministration) IssueCredential(ctx context.Context, proof identity.Proof, gateway, command uuid.UUID,
 	expected int64, check func(identity.Authentication) error) (GatewayCredentialIssueResult, error) {
 	if gateway == uuid.Nil || command == uuid.Nil || expected <= 0 || check == nil {
@@ -208,15 +190,7 @@ func (s *GatewayAdministration) IssueCredential(ctx context.Context, proof ident
 	var result GatewayCredentialIssueResult
 	err = identity.WithAuthority(ctx, s.transactions, s.clock, s.resolver, proof, true, check,
 		func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-			networks, err := s.repository.GatewayNetworksForAuthorization(tx.Context(), tx, gateway)
-			if err != nil {
-				return err
-			}
-			scope := make(map[uuid.UUID]bool)
-			for _, network := range networks {
-				scope[network.AgencyID] = true
-			}
-			if err := authorizeGatewayNetworks(authority, "gateway.update", scope, now); err != nil {
+			if err := s.authorizeExisting(tx, authority, gateway, now, "gateway.update", "gateway.credential.rotate"); err != nil {
 				return err
 			}
 			actor, err := uuid.Parse(authority.PrincipalID)
@@ -285,7 +259,7 @@ func (s *GatewayAdministration) IssueCredential(ctx context.Context, proof ident
 // RevokeCredential revokes one credential of the Gateway, guarded by the
 // expected revision, and returns the resulting revision. command is an
 // idempotency key with the same replay/conflict semantics as in
-// IssueCredential. check and authorization behave as in ConfigureNetworks.
+// IssueCredential. check and authorization behave as in IssueCredential.
 func (s *GatewayAdministration) RevokeCredential(ctx context.Context, proof identity.Proof, gateway, credential,
 	command uuid.UUID, expected int64, check func(identity.Authentication) error) (int64, error) {
 	if gateway == uuid.Nil || credential == uuid.Nil || command == uuid.Nil || expected <= 0 || check == nil {
@@ -302,15 +276,7 @@ func (s *GatewayAdministration) RevokeCredential(ctx context.Context, proof iden
 	var revision int64
 	err = identity.WithAuthority(ctx, s.transactions, s.clock, s.resolver, proof, true, check,
 		func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-			networks, err := s.repository.GatewayNetworksForAuthorization(tx.Context(), tx, gateway)
-			if err != nil {
-				return err
-			}
-			scope := make(map[uuid.UUID]bool)
-			for _, network := range networks {
-				scope[network.AgencyID] = true
-			}
-			if err := authorizeGatewayNetworks(authority, "gateway.update", scope, now); err != nil {
+			if err := s.authorizeExisting(tx, authority, gateway, now, "gateway.update", "gateway.credential.rotate"); err != nil {
 				return err
 			}
 			actor, err := uuid.Parse(authority.PrincipalID)
@@ -365,16 +331,25 @@ func validGatewayCredentialViews(views []GatewayCredentialView) bool {
 	return true
 }
 
-// authorizeGatewayNetworks requires action on the Agency of every Network the Gateway is or will be
-// assigned to; a Gateway without Networks needs an installation-wide grant.
-func authorizeGatewayNetworks(authority authz.Authority, action string, agencies map[uuid.UUID]bool, now time.Time) error {
-	if len(agencies) == 0 {
-		return authz.Authorize(authority, action, nil, authz.Target{}, now)
+// validateAssignments checks requested Network assignments: at most 1024 entries
+// (at least one unless allowEmpty), each with a non-blank identifier of 1..128 bytes
+// of valid UTF-8 and a Network ID, identifiers and Networks unique, and priorities
+// exactly 0..n-1 (see validPriorities). It returns them without Protocol and Agency.
+func validateAssignments(input []GatewayNetworkInput, allowEmpty bool) ([]GatewayNetwork, error) {
+	if (len(input) == 0 && !allowEmpty) || len(input) > 1024 || !validPriorities(input) {
+		return nil, authz.ErrInvalidInput
 	}
-	for agency := range agencies {
-		if err := authz.Authorize(authority, action, nil, authz.Target{AgencyID: agency}, now); err != nil {
-			return err
+	seenIdentifiers, seenNetworks := make(map[string]bool), make(map[uuid.UUID]bool)
+	assignments := make([]GatewayNetwork, 0, len(input))
+	for _, item := range input {
+		if item.Identifier == "" || !utf8.ValidString(item.Identifier) || len([]byte(item.Identifier)) > 128 ||
+			strings.TrimSpace(item.Identifier) == "" || item.NetworkID == uuid.Nil ||
+			seenIdentifiers[item.Identifier] || seenNetworks[item.NetworkID] {
+			return nil, authz.ErrInvalidInput
 		}
+		seenIdentifiers[item.Identifier], seenNetworks[item.NetworkID] = true, true
+		assignments = append(assignments, GatewayNetwork{Identifier: item.Identifier, NetworkID: item.NetworkID,
+			Priority: item.Priority})
 	}
-	return nil
+	return assignments, nil
 }

@@ -22,6 +22,12 @@ type Gateway struct {
 	ID uuid.UUID `json:"id,omitempty"`
 	// Revision holds the value of the "revision" field.
 	Revision int64 `json:"revision,omitempty"`
+	// Name holds the value of the "name" field.
+	Name string `json:"name,omitempty"`
+	// Enabled holds the value of the "enabled" field.
+	Enabled bool `json:"enabled,omitempty"`
+	// Deleted holds the value of the "deleted" field.
+	Deleted bool `json:"deleted,omitempty"`
 	// State holds the value of the "state" field.
 	State gateway.State `json:"state,omitempty"`
 	// LastContactAt holds the value of the "last_contact_at" field.
@@ -31,8 +37,10 @@ type Gateway struct {
 	// LastTransmissionAt holds the value of the "last_transmission_at" field.
 	LastTransmissionAt *time.Time `json:"last_transmission_at,omitempty"`
 	// LastReport holds the value of the "last_report" field.
-	LastReport   jsontext.Value `json:"-"`
-	selectValues sql.SelectValues
+	LastReport jsontext.Value `json:"-"`
+	// HistoryRemovedBefore holds the value of the "history_removed_before" field.
+	HistoryRemovedBefore *time.Time `json:"history_removed_before,omitempty"`
+	selectValues         sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -42,11 +50,13 @@ func (*Gateway) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case gateway.FieldLastReport:
 			values[i] = new([]byte)
+		case gateway.FieldEnabled, gateway.FieldDeleted:
+			values[i] = new(sql.NullBool)
 		case gateway.FieldRevision:
 			values[i] = new(sql.NullInt64)
-		case gateway.FieldState:
+		case gateway.FieldName, gateway.FieldState:
 			values[i] = new(sql.NullString)
-		case gateway.FieldLastContactAt, gateway.FieldLastHeartbeatAt, gateway.FieldLastTransmissionAt:
+		case gateway.FieldLastContactAt, gateway.FieldLastHeartbeatAt, gateway.FieldLastTransmissionAt, gateway.FieldHistoryRemovedBefore:
 			values[i] = new(sql.NullTime)
 		case gateway.FieldID:
 			values[i] = new(uuid.UUID)
@@ -76,6 +86,24 @@ func (_m *Gateway) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field revision", values[i])
 			} else if value.Valid {
 				_m.Revision = value.Int64
+			}
+		case gateway.FieldName:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field name", values[i])
+			} else if value.Valid {
+				_m.Name = value.String
+			}
+		case gateway.FieldEnabled:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field enabled", values[i])
+			} else if value.Valid {
+				_m.Enabled = value.Bool
+			}
+		case gateway.FieldDeleted:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field deleted", values[i])
+			} else if value.Valid {
+				_m.Deleted = value.Bool
 			}
 		case gateway.FieldState:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -111,6 +139,13 @@ func (_m *Gateway) assignValues(columns []string, values []any) error {
 				if err := json.Unmarshal(*value, &_m.LastReport); err != nil {
 					return fmt.Errorf("unmarshal field last_report: %w", err)
 				}
+			}
+		case gateway.FieldHistoryRemovedBefore:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field history_removed_before", values[i])
+			} else if value.Valid {
+				_m.HistoryRemovedBefore = new(time.Time)
+				*_m.HistoryRemovedBefore = value.Time
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -151,6 +186,15 @@ func (_m *Gateway) String() string {
 	builder.WriteString("revision=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Revision))
 	builder.WriteString(", ")
+	builder.WriteString("name=")
+	builder.WriteString(_m.Name)
+	builder.WriteString(", ")
+	builder.WriteString("enabled=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Enabled))
+	builder.WriteString(", ")
+	builder.WriteString("deleted=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Deleted))
+	builder.WriteString(", ")
 	builder.WriteString("state=")
 	builder.WriteString(fmt.Sprintf("%v", _m.State))
 	builder.WriteString(", ")
@@ -170,6 +214,11 @@ func (_m *Gateway) String() string {
 	}
 	builder.WriteString(", ")
 	builder.WriteString("last_report=<sensitive>")
+	builder.WriteString(", ")
+	if v := _m.HistoryRemovedBefore; v != nil {
+		builder.WriteString("history_removed_before=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

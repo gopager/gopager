@@ -68,7 +68,7 @@ func newGatewayHTTPFixture(t *testing.T) gatewayHTTPFixture {
 				return err
 			}
 		}
-		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateways(id) VALUES($1)`, fixture.gateway); err != nil {
+		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateways(id,state) VALUES($1,'active')`, fixture.gateway); err != nil {
 			return err
 		}
 		for _, assignment := range []struct {
@@ -213,12 +213,17 @@ func TestGatewayNetworkReplacementHTTPAuthorizationAndValidation(t *testing.T) {
 	replace("1", `[{"gatewayNetworkIdentifier":"same","networkId":"`+fixture.proposed.String()+`","priority":0},{"gatewayNetworkIdentifier":"same","networkId":"`+fixture.current.String()+`","priority":1}]`,
 		http.StatusBadRequest)
 
+	// D-140: a grant covering every current Network but not the proposed one is 403; a grant
+	// that does not cover the Gateway's current Networks gives no right on it, so it is 404.
+	fixture.setGrant(t, []uuid.UUID{fixture.current, fixture.sibling}, "gateway.update")
+	replace("1", `[{"gatewayNetworkIdentifier":"proposed","networkId":"`+fixture.proposed.String()+`","priority":0}]`,
+		http.StatusForbidden)
 	fixture.setGrant(t, []uuid.UUID{fixture.current}, "gateway.update")
 	replace("1", `[{"gatewayNetworkIdentifier":"proposed","networkId":"`+fixture.proposed.String()+`","priority":0}]`,
-		http.StatusForbidden)
+		http.StatusNotFound)
 	fixture.setGrant(t, []uuid.UUID{fixture.proposed}, "gateway.update")
 	replace("1", `[{"gatewayNetworkIdentifier":"proposed","networkId":"`+fixture.proposed.String()+`","priority":0}]`,
-		http.StatusForbidden)
+		http.StatusNotFound)
 
 	fixture.setGrant(t, []uuid.UUID{fixture.current, fixture.sibling, fixture.proposed}, "gateway.update")
 	var success struct {
@@ -260,8 +265,11 @@ func TestGatewayCredentialManagementHTTPSecretLifecycleAndAuthorization(t *testi
 	path := "/api/v1/gateways/" + fixture.gateway.String() + "/credentials"
 	fixture.setGrant(t, []uuid.UUID{fixture.current}, "gateway.update", "gateway.read")
 
+	// D-140: rights on only one of the Gateway's two Agencies give no right on it (404).
 	firstCommand := uuid.New()
 	firstBody := `{"schemaVersion":1,"commandId":"` + firstCommand.String() + `","expectedRevision":"1"}`
+	fixture.request(t, http.MethodPost, path, firstBody, fixture.csrf, "", http.StatusNotFound)
+	fixture.setGrant(t, []uuid.UUID{fixture.current, fixture.sibling}, "gateway.read")
 	fixture.request(t, http.MethodPost, path, firstBody, fixture.csrf, "", http.StatusForbidden)
 	fixture.setGrant(t, []uuid.UUID{fixture.current, fixture.sibling}, "gateway.update")
 	firstResponse := fixture.request(t, http.MethodPost, path, firstBody, fixture.csrf, "", http.StatusCreated)
@@ -312,6 +320,9 @@ func TestGatewayCredentialManagementHTTPSecretLifecycleAndAuthorization(t *testi
 	}
 	fixture.setGrant(t, []uuid.UUID{fixture.current}, "gateway.update")
 	partialRevoke := `{"schemaVersion":1,"commandId":"` + uuid.NewString() + `","expectedRevision":"3"}`
+	fixture.request(t, http.MethodDelete, path+"/"+replacement.CredentialID, partialRevoke,
+		fixture.csrf, "", http.StatusNotFound)
+	fixture.setGrant(t, []uuid.UUID{fixture.current, fixture.sibling}, "gateway.read")
 	fixture.request(t, http.MethodDelete, path+"/"+replacement.CredentialID, partialRevoke,
 		fixture.csrf, "", http.StatusForbidden)
 	fixture.setGrant(t, []uuid.UUID{fixture.current, fixture.sibling}, "gateway.update", "gateway.read")

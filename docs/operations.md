@@ -74,6 +74,9 @@ Flags use Go `flag` syntax (`--name=value` or `-name value`). Positional argumen
 | `--login-attempts-per-account` | `10` | — | Login attempts per minute per normalized username. Must be > 0. |
 | `--login-attempts-per-source` | `30` | — | Login attempts per minute per client source, across all usernames. The source is the host part of the connection's remote address. Must be > 0. See [Security](#security). |
 | `--login-attempts-per-instance` | `300` | — | Login attempts per minute across the whole instance. Must be > 0. |
+| `--gateway-heartbeat-interval` | `60s` | — | Interval in which Gateways are expected to send a heartbeat. Must be > 0. Used to validate the contact timeout. |
+| `--gateway-contact-timeout` | `180s` | — | Silence after which the worker sets an enabled `active` or `degraded` Gateway to `contact-lost`, compared on the database clock. Must be at least `--gateway-heartbeat-interval`. |
+| `--gateway-contact-scan-interval` | `15s` | — | Pause between the worker's contact-loss scans. Must be > 0 and at most `--gateway-contact-timeout`. Detection may lag the timeout by up to this interval. |
 | `--allow-insecure-db` | `false` | — | Permit a non-local database connection without certificate-verified TLS. See [Database TLS](#database-tls). |
 
 Fixed values (not configurable):
@@ -108,7 +111,7 @@ Fixed values (not configurable):
 | Role | Runs |
 | --- | --- |
 | `api` | HTTP listener with health endpoints and all `/api/v1` routes (authentication, management, gateway intake and administration, processing). See [HTTP API](http-api.md). |
-| `worker` | Processing dispatcher (executes due workflow work) and the assignment correction runner. No listener. |
+| `worker` | Processing dispatcher (executes due workflow work), the assignment correction runner and the Gateway contact-loss monitor. No listener. |
 
 Both roles load the plugin directory, if configured, because workflow management and preview on the API also execute plugins.
 
@@ -231,7 +234,7 @@ The responses contain no other details. Roles, migration state (`current` / `inc
 | Situation | Behavior |
 | --- | --- |
 | Database unreachable or demoted at runtime | Readiness becomes false; log `platform readiness check failed code=…`; recovers automatically. |
-| Worker runner hits a transient database failure (`STORAGE_UNAVAILABLE`, `AUTHORITY_UNAVAILABLE`, `COMMIT_UNCERTAIN`, `REVISION_CONFLICT`) | The runner keeps running. It logs a warning with the code, the number of consecutive failures and the delay, and retries after a backoff that doubles up to 30 s: the processing dispatcher starts at its 5 s poll interval (`Processing dispatch selection failed; retrying`), the correction runner at 500 ms (`correction runner storage failure; retrying`). The first successful attempt logs `Processing dispatch selection recovered` or `correction runner recovered`. No restart is needed. |
+| Worker runner hits a transient database failure (`STORAGE_UNAVAILABLE`, `AUTHORITY_UNAVAILABLE`, `COMMIT_UNCERTAIN`, `REVISION_CONFLICT`) | The runner keeps running. It logs a warning with the code, the number of consecutive failures and the delay, and retries after a backoff that doubles up to 30 s: the processing dispatcher starts at its 5 s poll interval (`Processing dispatch selection failed; retrying`), the correction runner at 500 ms (`correction runner storage failure; retrying`), the Gateway contact-loss monitor at its scan interval (`Gateway contact monitor storage failure; retrying`). The first successful attempt logs `Processing dispatch selection recovered`, `correction runner recovered` or `Gateway contact monitor recovered`. No restart is needed. |
 | A worker runner exits with any other error | Log `platform role stopped code=…`; the process stays not ready permanently, keeps running, and exits 1 at shutdown. Restart the process. |
 | HTTP listener fails | Same as a failed worker runner. |
 
@@ -259,7 +262,7 @@ Logs are written to stderr by Go's default `log/slog` handler (`2026/11/05 23:54
 | `COMMIT_UNCERTAIN` | Connection lost during commit; outcome unknown |
 | `INTERNAL_ERROR` | Any other failure, including listener bind errors |
 
-Log lines in use: `platform started`, `API error response`, `platform readiness check failed`, `platform role stopped`, `GoPager exited`, the worker retry warnings `Processing dispatch selection failed; retrying` and `correction runner storage failure; retrying` with their recovery lines `Processing dispatch selection recovered` and `correction runner recovered`, and the warning `operator approved a remote database connection without certificate-verified TLS`.
+Log lines in use: `platform started`, `API error response`, `platform readiness check failed`, `platform role stopped`, `GoPager exited`, the worker retry warnings `Processing dispatch selection failed; retrying` and `correction runner storage failure; retrying` and `Gateway contact monitor storage failure; retrying` with their recovery lines `Processing dispatch selection recovered`, `correction runner recovered` and `Gateway contact monitor recovered`, and the warning `operator approved a remote database connection without certificate-verified TLS`.
 
 ## Database TLS
 

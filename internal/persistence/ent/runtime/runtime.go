@@ -20,6 +20,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/gateway"
 	"github.com/gopager/gopager/internal/persistence/ent/gatewaycredential"
 	"github.com/gopager/gopager/internal/persistence/ent/gatewaynetwork"
+	"github.com/gopager/gopager/internal/persistence/ent/gatewaystatehistory"
 	"github.com/gopager/gopager/internal/persistence/ent/grant"
 	"github.com/gopager/gopager/internal/persistence/ent/groupingcontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/identitycontrol"
@@ -322,6 +323,20 @@ func init() {
 	gateway.DefaultRevision = gatewayDescRevision.Default.(int64)
 	// gateway.RevisionValidator is a validator for the "revision" field. It is called by the builders before save.
 	gateway.RevisionValidator = gatewayDescRevision.Validators[0].(func(int64) error)
+	// gatewayDescName is the schema descriptor for name field.
+	gatewayDescName := gatewayFields[2].Descriptor()
+	// gateway.DefaultName holds the default value on creation for the name field.
+	gateway.DefaultName = gatewayDescName.Default.(string)
+	// gateway.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	gateway.NameValidator = gatewayDescName.Validators[0].(func(string) error)
+	// gatewayDescEnabled is the schema descriptor for enabled field.
+	gatewayDescEnabled := gatewayFields[3].Descriptor()
+	// gateway.DefaultEnabled holds the default value on creation for the enabled field.
+	gateway.DefaultEnabled = gatewayDescEnabled.Default.(bool)
+	// gatewayDescDeleted is the schema descriptor for deleted field.
+	gatewayDescDeleted := gatewayFields[4].Descriptor()
+	// gateway.DefaultDeleted holds the default value on creation for the deleted field.
+	gateway.DefaultDeleted = gatewayDescDeleted.Default.(bool)
 	gatewaycredential.Policy = privacy.NewPolicies(schema.GatewayCredential{})
 	gatewaycredential.Hooks[0] = func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
@@ -374,6 +389,29 @@ func init() {
 	gatewaynetworkDescID := gatewaynetworkFields[0].Descriptor()
 	// gatewaynetwork.DefaultID holds the default value on creation for the id field.
 	gatewaynetwork.DefaultID = gatewaynetworkDescID.Default.(func() uuid.UUID)
+	gatewaystatehistory.Policy = privacy.NewPolicies(schema.GatewayStateHistory{})
+	gatewaystatehistory.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := gatewaystatehistory.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
+	gatewaystatehistoryFields := schema.GatewayStateHistory{}.Fields()
+	_ = gatewaystatehistoryFields
+	// gatewaystatehistoryDescRevision is the schema descriptor for revision field.
+	gatewaystatehistoryDescRevision := gatewaystatehistoryFields[2].Descriptor()
+	// gatewaystatehistory.RevisionValidator is a validator for the "revision" field. It is called by the builders before save.
+	gatewaystatehistory.RevisionValidator = gatewaystatehistoryDescRevision.Validators[0].(func(int64) error)
+	// gatewaystatehistoryDescReasonCode is the schema descriptor for reason_code field.
+	gatewaystatehistoryDescReasonCode := gatewaystatehistoryFields[8].Descriptor()
+	// gatewaystatehistory.ReasonCodeValidator is a validator for the "reason_code" field. It is called by the builders before save.
+	gatewaystatehistory.ReasonCodeValidator = gatewaystatehistoryDescReasonCode.Validators[0].(func(string) error)
+	// gatewaystatehistoryDescDetail is the schema descriptor for detail field.
+	gatewaystatehistoryDescDetail := gatewaystatehistoryFields[9].Descriptor()
+	// gatewaystatehistory.DetailValidator is a validator for the "detail" field. It is called by the builders before save.
+	gatewaystatehistory.DetailValidator = gatewaystatehistoryDescDetail.Validators[0].(func(string) error)
 	grantMixin := schema.Grant{}.Mixin()
 	grant.Policy = privacy.NewPolicies(schema.Grant{})
 	grant.Hooks[0] = func(next ent.Mutator) ent.Mutator {

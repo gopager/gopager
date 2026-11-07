@@ -275,3 +275,15 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Date:** 2026-11-03
 - **Decision:** Approved additive AP-07 Gateway credential-management HTTP contract; implementation approval remains separate. Keep provisioning blocked pending an identified provisioner; add an operator-side non-HTTP mechanism; or add explicit protected HTTP operations. The user approved the exact additive HTTP contract proposal below. The existing three C-01 routes and all existing C-01/C-06 1.0 text remain unchanged. The new AP-07 credential-management slice is an additive 1.1 amendment in each canonical contract owner file.
 - **Owner detail:** This record is the only current definition
+
+<a id="d-139"></a>
+## D-139 AP-09 open C-01 points
+
+- **Status:** accepted
+- **Date:** 2026-11-07
+- **Decision:** User decisions on the three C-01 items that were listed for AP-09 but were not in its tasks or write scope:
+  1. **Re-resolution after a Gateway Network-mapping change.** Accepted Transmissions are re-resolved against the current mapping, like Address-rule changes, including the resulting visibility change. Because it needs the correction mechanics in `internal/assignments` and a stored declaration, it is a separate package, [AP-20](../work-packages/ap-20-gateway-mapping-rematch.md), with its own start approval. A Transmission that the current mapping cannot resolve keeps its accepted Network and is reported as unresolved to authorized managers; nothing is fabricated and the receipt does not change.
+  2. **Rejection invariant.** The behavior is in `ingest.Service.Submit`; its missing test is added as an AP-07 follow-up under this decision (AP-09 executes it; path `internal/ingest/`).
+  3. **Failure visibility.** It is a binding cross-cutting rule, not an open feature: it moves to C-01's binding decisions; storage-shortage and fault evidence stays with AP-16 T082 and the traceability with AP-17 T084.
+- **Consequences:** C-01 "Still planned" section removed; F-10e assigned to AP-20; new AP-20 (T090..T091) in the package directory and requirement mapping; [AP-07 record](../execution/ap-07.md) gets a follow-up; AP-09 record notes the decision.
+- **Owner detail:** [C-01](../contracts/c-01-transmission-acceptance.md), [AP-20](../work-packages/ap-20-gateway-mapping-rematch.md)

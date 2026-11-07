@@ -27,6 +27,7 @@ func TestRunProcessHelper(t *testing.T) { //nolint:paralleltest // child-process
 	if strings.Contains(roles, "api") {
 		os.Args = append(os.Args, "--public-origin=http://"+os.Getenv("GOPAGER_TEST_LISTEN"))
 	}
+	os.Args = append(os.Args, strings.Fields(os.Getenv("GOPAGER_TEST_EXTRA_ARGS"))...)
 	main()
 	os.Exit(0)
 }

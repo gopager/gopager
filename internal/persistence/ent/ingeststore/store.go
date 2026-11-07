@@ -43,7 +43,8 @@ func New(primary *postgres.Store, facts events.IntakeAppender, identityFacts eve
 	return &Store{primary: primary, facts: facts, identityFacts: identityFacts}, nil
 }
 
-// AuthenticateGatewayCredential verifies current credential state and atomically cuts over a pending replacement.
+// AuthenticateGatewayCredential verifies current credential state of an enabled, undeleted Gateway and
+// atomically cuts over a pending replacement.
 func (s *Store) AuthenticateGatewayCredential(ctx context.Context, tx platform.TransactionContext, hash [32]byte) (identity.GatewayAuthentication, error) {
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {
@@ -53,7 +54,7 @@ func (s *Store) AuthenticateGatewayCredential(ctx context.Context, tx platform.T
 	var pending bool
 	err = executor.QueryRowContext(ctx, `SELECT c.gateway_id, c.id, c.pending
 		FROM gateway_credentials c JOIN gateways g ON g.id=c.gateway_id
-		WHERE c.secret_hash=$1 AND c.revoked_at IS NULL
+		WHERE c.secret_hash=$1 AND c.revoked_at IS NULL AND g.enabled AND NOT g.deleted
 		FOR UPDATE OF c,g`, hash[:]).Scan(&result.GatewayID, &result.CredentialID, &pending)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -147,7 +148,8 @@ func (s *Store) GatewayNetworks(ctx context.Context, tx platform.TransactionCont
 
 // ReadNetwork implements current Radio network ownership for matching and authorization: it
 // returns the Network's Protocol and home Agency, or authz.ErrNotFound for an unknown or
-// deleted Network.
+// deleted Network. The share lock keeps a concurrent Network deletion from passing its
+// in-use check while the caller starts referencing the Network.
 func (s *Store) ReadNetwork(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (protocols.Protocol, uuid.UUID, error) {
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {
@@ -155,7 +157,7 @@ func (s *Store) ReadNetwork(ctx context.Context, tx platform.TransactionContext,
 	}
 	var protocol string
 	var agency uuid.UUID
-	if err := executor.QueryRowContext(ctx, `SELECT protocol,agency_id FROM networks WHERE id=$1 AND deleted=false`, id).
+	if err := executor.QueryRowContext(ctx, `SELECT protocol,agency_id FROM networks WHERE id=$1 AND deleted=false FOR SHARE`, id).
 		Scan(&protocol, &agency); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", uuid.Nil, authz.ErrNotFound
@@ -165,7 +167,8 @@ func (s *Store) ReadNetwork(ctx context.Context, tx platform.TransactionContext,
 	return protocols.Protocol(protocol), agency, nil
 }
 
-// ReportGatewayState retains authenticated contact/report data and emits only effective state changes.
+// ReportGatewayState retains authenticated contact/report data and records only effective state changes
+// (history row and fact).
 func (s *Store) ReportGatewayState(ctx context.Context, tx platform.TransactionContext, gateway uuid.UUID,
 	report ingest.GatewayStateReport, now time.Time) error {
 	executor, err := s.primary.Resolve(tx)
@@ -184,19 +187,7 @@ func (s *Store) ReportGatewayState(ctx context.Context, tx platform.TransactionC
 		}
 		return err
 	}
-	newState := oldState
-	switch report.Operation {
-	case "heartbeat":
-		if oldState == "stopped" || oldState == "contact-lost" {
-			newState = "active"
-		}
-	case "degraded":
-		newState = "degraded"
-	case "recovered":
-		newState = "active"
-	case "terminated":
-		newState = "stopped"
-	}
+	newState := ingest.NextGatewayState(oldState, report.Operation)
 	encoded, err := json.Marshal(report)
 	if err != nil {
 		return err
@@ -210,9 +201,9 @@ func (s *Store) ReportGatewayState(ctx context.Context, tx platform.TransactionC
 	if oldState == newState {
 		return nil
 	}
-	return s.appendFact(ctx, tx, events.IntakeFact{ID: uuid.New(), Type: events.GatewayStateChanged,
-		GatewayID: gateway, Revision: revision + 1, OccurredAt: now, ContactTime: &now,
-		OldState: oldState, NewState: newState, ReasonCode: report.ReasonCode, Detail: report.Detail})
+	return s.recordTransition(ctx, tx, executor, gateway, ingest.GatewayTransition{Revision: revision + 1,
+		OldState: oldState, NewState: newState, Cause: ingest.CauseReport, OccurredAt: now, ContactAt: now,
+		ReasonCode: report.ReasonCode, Detail: report.Detail})
 }
 
 // SubmissionReceipt serializes all retries for a Gateway while the operation's fingerprint is checked.
@@ -280,19 +271,16 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 		gateway).Scan(&oldState, &gatewayRevision); err != nil {
 		return ingest.Receipt{}, notFoundIfNoRows(err)
 	}
-	newState := oldState
-	if oldState == "stopped" || oldState == "contact-lost" {
-		newState = "active"
-	}
+	newState := ingest.NextGatewayState(oldState, "submission")
 	if _, err := executor.ExecContext(ctx, `UPDATE gateways SET state=$2, revision=revision+$3,
 		last_contact_at=$4, last_transmission_at=$4 WHERE id=$1`,
 		gateway, newState, boolInt64(oldState != newState), now); err != nil {
 		return ingest.Receipt{}, err
 	}
 	if oldState != newState {
-		if err := s.appendFact(ctx, tx, events.IntakeFact{ID: uuid.New(), Type: events.GatewayStateChanged,
-			GatewayID: gateway, Revision: gatewayRevision + 1, OccurredAt: now, ContactTime: &now,
-			OldState: oldState, NewState: newState}); err != nil {
+		if err := s.recordTransition(ctx, tx, executor, gateway, ingest.GatewayTransition{Revision: gatewayRevision + 1,
+			OldState: oldState, NewState: newState, Cause: ingest.CauseSubmission, OccurredAt: now,
+			ContactAt: now}); err != nil {
 			return ingest.Receipt{}, err
 		}
 	}

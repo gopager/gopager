@@ -29,6 +29,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/gateway"
 	"github.com/gopager/gopager/internal/persistence/ent/gatewaycredential"
 	"github.com/gopager/gopager/internal/persistence/ent/gatewaynetwork"
+	"github.com/gopager/gopager/internal/persistence/ent/gatewaystatehistory"
 	"github.com/gopager/gopager/internal/persistence/ent/grant"
 	"github.com/gopager/gopager/internal/persistence/ent/groupingcontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/identitycontrol"
@@ -87,6 +88,8 @@ type Client struct {
 	GatewayCredential *GatewayCredentialClient
 	// GatewayNetwork is the client for interacting with the GatewayNetwork builders.
 	GatewayNetwork *GatewayNetworkClient
+	// GatewayStateHistory is the client for interacting with the GatewayStateHistory builders.
+	GatewayStateHistory *GatewayStateHistoryClient
 	// Grant is the client for interacting with the Grant builders.
 	Grant *GrantClient
 	// GroupingControl is the client for interacting with the GroupingControl builders.
@@ -161,6 +164,7 @@ func (c *Client) init() {
 	c.Gateway = NewGatewayClient(c.config)
 	c.GatewayCredential = NewGatewayCredentialClient(c.config)
 	c.GatewayNetwork = NewGatewayNetworkClient(c.config)
+	c.GatewayStateHistory = NewGatewayStateHistoryClient(c.config)
 	c.Grant = NewGrantClient(c.config)
 	c.GroupingControl = NewGroupingControlClient(c.config)
 	c.IdentityControl = NewIdentityControlClient(c.config)
@@ -291,6 +295,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Gateway:                   NewGatewayClient(cfg),
 		GatewayCredential:         NewGatewayCredentialClient(cfg),
 		GatewayNetwork:            NewGatewayNetworkClient(cfg),
+		GatewayStateHistory:       NewGatewayStateHistoryClient(cfg),
 		Grant:                     NewGrantClient(cfg),
 		GroupingControl:           NewGroupingControlClient(cfg),
 		IdentityControl:           NewIdentityControlClient(cfg),
@@ -348,6 +353,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Gateway:                   NewGatewayClient(cfg),
 		GatewayCredential:         NewGatewayCredentialClient(cfg),
 		GatewayNetwork:            NewGatewayNetworkClient(cfg),
+		GatewayStateHistory:       NewGatewayStateHistoryClient(cfg),
 		Grant:                     NewGrantClient(cfg),
 		GroupingControl:           NewGroupingControlClient(cfg),
 		IdentityControl:           NewIdentityControlClient(cfg),
@@ -404,13 +410,14 @@ func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.Account, c.AddressRule, c.Agency, c.AssignmentControl, c.AuditRecord,
 		c.CommandReceipt, c.ConsumerOffset, c.Credential, c.DomainEvent,
-		c.FieldPermission, c.Gateway, c.GatewayCredential, c.GatewayNetwork, c.Grant,
-		c.GroupingControl, c.IdentityControl, c.LoginAttempt, c.Membership, c.Message,
-		c.MessageUnit, c.Network, c.Organization, c.PendingAssignmentScope,
-		c.ProcessingCandidate, c.ProcessingControl, c.ProcessingInstance,
-		c.ProcessingInstanceVersion, c.ProcessingResult, c.TargetSuppression,
-		c.Transmission, c.TransmissionTarget, c.Unit, c.UnitCollection, c.UnitTemplate,
-		c.UserGroup, c.Workflow, c.WorkflowScopeReference, c.WorkflowVersion,
+		c.FieldPermission, c.Gateway, c.GatewayCredential, c.GatewayNetwork,
+		c.GatewayStateHistory, c.Grant, c.GroupingControl, c.IdentityControl,
+		c.LoginAttempt, c.Membership, c.Message, c.MessageUnit, c.Network,
+		c.Organization, c.PendingAssignmentScope, c.ProcessingCandidate,
+		c.ProcessingControl, c.ProcessingInstance, c.ProcessingInstanceVersion,
+		c.ProcessingResult, c.TargetSuppression, c.Transmission, c.TransmissionTarget,
+		c.Unit, c.UnitCollection, c.UnitTemplate, c.UserGroup, c.Workflow,
+		c.WorkflowScopeReference, c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
 	}
@@ -422,13 +429,14 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.Account, c.AddressRule, c.Agency, c.AssignmentControl, c.AuditRecord,
 		c.CommandReceipt, c.ConsumerOffset, c.Credential, c.DomainEvent,
-		c.FieldPermission, c.Gateway, c.GatewayCredential, c.GatewayNetwork, c.Grant,
-		c.GroupingControl, c.IdentityControl, c.LoginAttempt, c.Membership, c.Message,
-		c.MessageUnit, c.Network, c.Organization, c.PendingAssignmentScope,
-		c.ProcessingCandidate, c.ProcessingControl, c.ProcessingInstance,
-		c.ProcessingInstanceVersion, c.ProcessingResult, c.TargetSuppression,
-		c.Transmission, c.TransmissionTarget, c.Unit, c.UnitCollection, c.UnitTemplate,
-		c.UserGroup, c.Workflow, c.WorkflowScopeReference, c.WorkflowVersion,
+		c.FieldPermission, c.Gateway, c.GatewayCredential, c.GatewayNetwork,
+		c.GatewayStateHistory, c.Grant, c.GroupingControl, c.IdentityControl,
+		c.LoginAttempt, c.Membership, c.Message, c.MessageUnit, c.Network,
+		c.Organization, c.PendingAssignmentScope, c.ProcessingCandidate,
+		c.ProcessingControl, c.ProcessingInstance, c.ProcessingInstanceVersion,
+		c.ProcessingResult, c.TargetSuppression, c.Transmission, c.TransmissionTarget,
+		c.Unit, c.UnitCollection, c.UnitTemplate, c.UserGroup, c.Workflow,
+		c.WorkflowScopeReference, c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -463,6 +471,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.GatewayCredential.mutate(ctx, m)
 	case *GatewayNetworkMutation:
 		return c.GatewayNetwork.mutate(ctx, m)
+	case *GatewayStateHistoryMutation:
+		return c.GatewayStateHistory.mutate(ctx, m)
 	case *GrantMutation:
 		return c.Grant.mutate(ctx, m)
 	case *GroupingControlMutation:
@@ -2321,6 +2331,140 @@ func (c *GatewayNetworkClient) mutate(ctx context.Context, m *GatewayNetworkMuta
 		return (&GatewayNetworkDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown GatewayNetwork mutation op: %q", m.Op())
+	}
+}
+
+// GatewayStateHistoryClient is a client for the GatewayStateHistory schema.
+type GatewayStateHistoryClient struct {
+	config
+}
+
+// NewGatewayStateHistoryClient returns a client for the GatewayStateHistory from the given config.
+func NewGatewayStateHistoryClient(c config) *GatewayStateHistoryClient {
+	return &GatewayStateHistoryClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `gatewaystatehistory.Hooks(f(g(h())))`.
+func (c *GatewayStateHistoryClient) Use(hooks ...Hook) {
+	c.hooks.GatewayStateHistory = append(c.hooks.GatewayStateHistory, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `gatewaystatehistory.Intercept(f(g(h())))`.
+func (c *GatewayStateHistoryClient) Intercept(interceptors ...Interceptor) {
+	c.inters.GatewayStateHistory = append(c.inters.GatewayStateHistory, interceptors...)
+}
+
+// Create returns a builder for creating a GatewayStateHistory entity.
+func (c *GatewayStateHistoryClient) Create() *GatewayStateHistoryCreate {
+	mutation := newGatewayStateHistoryMutation(c.config, OpCreate)
+	return &GatewayStateHistoryCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of GatewayStateHistory entities.
+func (c *GatewayStateHistoryClient) CreateBulk(builders ...*GatewayStateHistoryCreate) *GatewayStateHistoryCreateBulk {
+	return &GatewayStateHistoryCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *GatewayStateHistoryClient) MapCreateBulk(slice any, setFunc func(*GatewayStateHistoryCreate, int)) *GatewayStateHistoryCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &GatewayStateHistoryCreateBulk{err: fmt.Errorf("calling to GatewayStateHistoryClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*GatewayStateHistoryCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &GatewayStateHistoryCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for GatewayStateHistory.
+func (c *GatewayStateHistoryClient) Update() *GatewayStateHistoryUpdate {
+	mutation := newGatewayStateHistoryMutation(c.config, OpUpdate)
+	return &GatewayStateHistoryUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *GatewayStateHistoryClient) UpdateOne(_m *GatewayStateHistory) *GatewayStateHistoryUpdateOne {
+	mutation := newGatewayStateHistoryMutation(c.config, OpUpdateOne, withGatewayStateHistory(_m))
+	return &GatewayStateHistoryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *GatewayStateHistoryClient) UpdateOneID(id uuid.UUID) *GatewayStateHistoryUpdateOne {
+	mutation := newGatewayStateHistoryMutation(c.config, OpUpdateOne, withGatewayStateHistoryID(id))
+	return &GatewayStateHistoryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for GatewayStateHistory.
+func (c *GatewayStateHistoryClient) Delete() *GatewayStateHistoryDelete {
+	mutation := newGatewayStateHistoryMutation(c.config, OpDelete)
+	return &GatewayStateHistoryDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *GatewayStateHistoryClient) DeleteOne(_m *GatewayStateHistory) *GatewayStateHistoryDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *GatewayStateHistoryClient) DeleteOneID(id uuid.UUID) *GatewayStateHistoryDeleteOne {
+	builder := c.Delete().Where(gatewaystatehistory.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &GatewayStateHistoryDeleteOne{builder}
+}
+
+// Query returns a query builder for GatewayStateHistory.
+func (c *GatewayStateHistoryClient) Query() *GatewayStateHistoryQuery {
+	return &GatewayStateHistoryQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeGatewayStateHistory},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a GatewayStateHistory entity by its id.
+func (c *GatewayStateHistoryClient) Get(ctx context.Context, id uuid.UUID) (*GatewayStateHistory, error) {
+	return c.Query().Where(gatewaystatehistory.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *GatewayStateHistoryClient) GetX(ctx context.Context, id uuid.UUID) *GatewayStateHistory {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *GatewayStateHistoryClient) Hooks() []Hook {
+	hooks := c.hooks.GatewayStateHistory
+	return append(hooks[:len(hooks):len(hooks)], gatewaystatehistory.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *GatewayStateHistoryClient) Interceptors() []Interceptor {
+	return c.inters.GatewayStateHistory
+}
+
+func (c *GatewayStateHistoryClient) mutate(ctx context.Context, m *GatewayStateHistoryMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&GatewayStateHistoryCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&GatewayStateHistoryUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&GatewayStateHistoryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&GatewayStateHistoryDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown GatewayStateHistory mutation op: %q", m.Op())
 	}
 }
 
@@ -5935,9 +6079,9 @@ type (
 	hooks struct {
 		Account, AddressRule, Agency, AssignmentControl, AuditRecord, CommandReceipt,
 		ConsumerOffset, Credential, DomainEvent, FieldPermission, Gateway,
-		GatewayCredential, GatewayNetwork, Grant, GroupingControl, IdentityControl,
-		LoginAttempt, Membership, Message, MessageUnit, Network, Organization,
-		PendingAssignmentScope, ProcessingCandidate, ProcessingControl,
+		GatewayCredential, GatewayNetwork, GatewayStateHistory, Grant, GroupingControl,
+		IdentityControl, LoginAttempt, Membership, Message, MessageUnit, Network,
+		Organization, PendingAssignmentScope, ProcessingCandidate, ProcessingControl,
 		ProcessingInstance, ProcessingInstanceVersion, ProcessingResult,
 		TargetSuppression, Transmission, TransmissionTarget, Unit, UnitCollection,
 		UnitTemplate, UserGroup, Workflow, WorkflowScopeReference,
@@ -5946,9 +6090,9 @@ type (
 	inters struct {
 		Account, AddressRule, Agency, AssignmentControl, AuditRecord, CommandReceipt,
 		ConsumerOffset, Credential, DomainEvent, FieldPermission, Gateway,
-		GatewayCredential, GatewayNetwork, Grant, GroupingControl, IdentityControl,
-		LoginAttempt, Membership, Message, MessageUnit, Network, Organization,
-		PendingAssignmentScope, ProcessingCandidate, ProcessingControl,
+		GatewayCredential, GatewayNetwork, GatewayStateHistory, Grant, GroupingControl,
+		IdentityControl, LoginAttempt, Membership, Message, MessageUnit, Network,
+		Organization, PendingAssignmentScope, ProcessingCandidate, ProcessingControl,
 		ProcessingInstance, ProcessingInstanceVersion, ProcessingResult,
 		TargetSuppression, Transmission, TransmissionTarget, Unit, UnitCollection,
 		UnitTemplate, UserGroup, Workflow, WorkflowScopeReference,

@@ -49,12 +49,14 @@ func (r gatewayCredentialIssueResponse) responseStatus(fallback int) int {
 	return fallback
 }
 
-// RegisterGatewayManagementRoutes adds the Gateway Network assignment and credential routes. Their
-// success bodies are not wrapped in the management data envelope.
+// RegisterGatewayManagementRoutes adds the Gateway lifecycle, diagnostics and history routes in the
+// management data envelope, and the Network assignment and credential routes, whose success bodies
+// are not wrapped in the envelope.
 func RegisterGatewayManagementRoutes(mux *http.ServeMux, transport *identity.HTTPTransport,
 	authenticator Authenticator, service *ingest.GatewayAdministration) {
 	api := gatewayManagementAPI{routeGuard: routeGuard{transport: transport, authenticator: authenticator},
 		service: service}
+	api.registerGatewayLifecycle(mux)
 	mux.HandleFunc("PUT /api/v1/gateways/{id}/networks", api.route(func(r *http.Request, proof identity.Proof,
 		check func(identity.Authentication) error) (any, error) {
 		gateway, err := managementID(r)
