@@ -15217,6 +15217,7 @@ type PendingAssignmentScopeMutation struct {
 	transmission_id        *uuid.UUID
 	target_position        *int
 	addtarget_position     *int
+	gateway_id             *uuid.UUID
 	recorded_at            *time.Time
 	state                  *pendingassignmentscope.State
 	cursor_accepted_at     *time.Time
@@ -15982,6 +15983,55 @@ func (m *PendingAssignmentScopeMutation) ResetTargetPosition() {
 	delete(m.clearedFields, pendingassignmentscope.FieldTargetPosition)
 }
 
+// SetGatewayID sets the "gateway_id" field.
+func (m *PendingAssignmentScopeMutation) SetGatewayID(u uuid.UUID) {
+	m.gateway_id = &u
+}
+
+// GatewayID returns the value of the "gateway_id" field in the mutation.
+func (m *PendingAssignmentScopeMutation) GatewayID() (r uuid.UUID, exists bool) {
+	v := m.gateway_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGatewayID returns the old "gateway_id" field's value of the PendingAssignmentScope entity.
+// If the PendingAssignmentScope object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PendingAssignmentScopeMutation) OldGatewayID(ctx context.Context) (v *uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGatewayID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGatewayID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGatewayID: %w", err)
+	}
+	return oldValue.GatewayID, nil
+}
+
+// ClearGatewayID clears the value of the "gateway_id" field.
+func (m *PendingAssignmentScopeMutation) ClearGatewayID() {
+	m.gateway_id = nil
+	m.clearedFields[pendingassignmentscope.FieldGatewayID] = struct{}{}
+}
+
+// GatewayIDCleared returns if the "gateway_id" field was cleared in this mutation.
+func (m *PendingAssignmentScopeMutation) GatewayIDCleared() bool {
+	_, ok := m.clearedFields[pendingassignmentscope.FieldGatewayID]
+	return ok
+}
+
+// ResetGatewayID resets all changes to the "gateway_id" field.
+func (m *PendingAssignmentScopeMutation) ResetGatewayID() {
+	m.gateway_id = nil
+	delete(m.clearedFields, pendingassignmentscope.FieldGatewayID)
+}
+
 // SetRecordedAt sets the "recorded_at" field.
 func (m *PendingAssignmentScopeMutation) SetRecordedAt(t time.Time) {
 	m.recorded_at = &t
@@ -16396,7 +16446,7 @@ func (m *PendingAssignmentScopeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PendingAssignmentScopeMutation) Fields() []string {
-	fields := make([]string, 0, 20)
+	fields := make([]string, 0, 21)
 	if m.assignment_revision != nil {
 		fields = append(fields, pendingassignmentscope.FieldAssignmentRevision)
 	}
@@ -16432,6 +16482,9 @@ func (m *PendingAssignmentScopeMutation) Fields() []string {
 	}
 	if m.target_position != nil {
 		fields = append(fields, pendingassignmentscope.FieldTargetPosition)
+	}
+	if m.gateway_id != nil {
+		fields = append(fields, pendingassignmentscope.FieldGatewayID)
 	}
 	if m.recorded_at != nil {
 		fields = append(fields, pendingassignmentscope.FieldRecordedAt)
@@ -16489,6 +16542,8 @@ func (m *PendingAssignmentScopeMutation) Field(name string) (ent.Value, bool) {
 		return m.TransmissionID()
 	case pendingassignmentscope.FieldTargetPosition:
 		return m.TargetPosition()
+	case pendingassignmentscope.FieldGatewayID:
+		return m.GatewayID()
 	case pendingassignmentscope.FieldRecordedAt:
 		return m.RecordedAt()
 	case pendingassignmentscope.FieldState:
@@ -16538,6 +16593,8 @@ func (m *PendingAssignmentScopeMutation) OldField(ctx context.Context, name stri
 		return m.OldTransmissionID(ctx)
 	case pendingassignmentscope.FieldTargetPosition:
 		return m.OldTargetPosition(ctx)
+	case pendingassignmentscope.FieldGatewayID:
+		return m.OldGatewayID(ctx)
 	case pendingassignmentscope.FieldRecordedAt:
 		return m.OldRecordedAt(ctx)
 	case pendingassignmentscope.FieldState:
@@ -16646,6 +16703,13 @@ func (m *PendingAssignmentScopeMutation) SetField(name string, value ent.Value) 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetTargetPosition(v)
+		return nil
+	case pendingassignmentscope.FieldGatewayID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGatewayID(v)
 		return nil
 	case pendingassignmentscope.FieldRecordedAt:
 		v, ok := value.(time.Time)
@@ -16838,6 +16902,9 @@ func (m *PendingAssignmentScopeMutation) ClearedFields() []string {
 	if m.FieldCleared(pendingassignmentscope.FieldTargetPosition) {
 		fields = append(fields, pendingassignmentscope.FieldTargetPosition)
 	}
+	if m.FieldCleared(pendingassignmentscope.FieldGatewayID) {
+		fields = append(fields, pendingassignmentscope.FieldGatewayID)
+	}
 	if m.FieldCleared(pendingassignmentscope.FieldCursorAcceptedAt) {
 		fields = append(fields, pendingassignmentscope.FieldCursorAcceptedAt)
 	}
@@ -16894,6 +16961,9 @@ func (m *PendingAssignmentScopeMutation) ClearField(name string) error {
 	case pendingassignmentscope.FieldTargetPosition:
 		m.ClearTargetPosition()
 		return nil
+	case pendingassignmentscope.FieldGatewayID:
+		m.ClearGatewayID()
+		return nil
 	case pendingassignmentscope.FieldCursorAcceptedAt:
 		m.ClearCursorAcceptedAt()
 		return nil
@@ -16949,6 +17019,9 @@ func (m *PendingAssignmentScopeMutation) ResetField(name string) error {
 		return nil
 	case pendingassignmentscope.FieldTargetPosition:
 		m.ResetTargetPosition()
+		return nil
+	case pendingassignmentscope.FieldGatewayID:
+		m.ResetGatewayID()
 		return nil
 	case pendingassignmentscope.FieldRecordedAt:
 		m.ResetRecordedAt()
@@ -21572,6 +21645,10 @@ type TransmissionMutation struct {
 	appendquality_metrics         jsontext.Value
 	message_id                    *uuid.UUID
 	processing_status             *transmission.ProcessingStatus
+	gateway_network_identifier    *string
+	network_revision              *int64
+	addnetwork_revision           *int64
+	network_unresolved            *bool
 	clearedFields                 map[string]struct{}
 	done                          bool
 	oldValue                      func(context.Context) (*Transmission, error)
@@ -22306,6 +22383,147 @@ func (m *TransmissionMutation) ResetProcessingStatus() {
 	m.processing_status = nil
 }
 
+// SetGatewayNetworkIdentifier sets the "gateway_network_identifier" field.
+func (m *TransmissionMutation) SetGatewayNetworkIdentifier(s string) {
+	m.gateway_network_identifier = &s
+}
+
+// GatewayNetworkIdentifier returns the value of the "gateway_network_identifier" field in the mutation.
+func (m *TransmissionMutation) GatewayNetworkIdentifier() (r string, exists bool) {
+	v := m.gateway_network_identifier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGatewayNetworkIdentifier returns the old "gateway_network_identifier" field's value of the Transmission entity.
+// If the Transmission object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TransmissionMutation) OldGatewayNetworkIdentifier(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGatewayNetworkIdentifier is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGatewayNetworkIdentifier requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGatewayNetworkIdentifier: %w", err)
+	}
+	return oldValue.GatewayNetworkIdentifier, nil
+}
+
+// ClearGatewayNetworkIdentifier clears the value of the "gateway_network_identifier" field.
+func (m *TransmissionMutation) ClearGatewayNetworkIdentifier() {
+	m.gateway_network_identifier = nil
+	m.clearedFields[transmission.FieldGatewayNetworkIdentifier] = struct{}{}
+}
+
+// GatewayNetworkIdentifierCleared returns if the "gateway_network_identifier" field was cleared in this mutation.
+func (m *TransmissionMutation) GatewayNetworkIdentifierCleared() bool {
+	_, ok := m.clearedFields[transmission.FieldGatewayNetworkIdentifier]
+	return ok
+}
+
+// ResetGatewayNetworkIdentifier resets all changes to the "gateway_network_identifier" field.
+func (m *TransmissionMutation) ResetGatewayNetworkIdentifier() {
+	m.gateway_network_identifier = nil
+	delete(m.clearedFields, transmission.FieldGatewayNetworkIdentifier)
+}
+
+// SetNetworkRevision sets the "network_revision" field.
+func (m *TransmissionMutation) SetNetworkRevision(i int64) {
+	m.network_revision = &i
+	m.addnetwork_revision = nil
+}
+
+// NetworkRevision returns the value of the "network_revision" field in the mutation.
+func (m *TransmissionMutation) NetworkRevision() (r int64, exists bool) {
+	v := m.network_revision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNetworkRevision returns the old "network_revision" field's value of the Transmission entity.
+// If the Transmission object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TransmissionMutation) OldNetworkRevision(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNetworkRevision is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNetworkRevision requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNetworkRevision: %w", err)
+	}
+	return oldValue.NetworkRevision, nil
+}
+
+// AddNetworkRevision adds i to the "network_revision" field.
+func (m *TransmissionMutation) AddNetworkRevision(i int64) {
+	if m.addnetwork_revision != nil {
+		*m.addnetwork_revision += i
+	} else {
+		m.addnetwork_revision = &i
+	}
+}
+
+// AddedNetworkRevision returns the value that was added to the "network_revision" field in this mutation.
+func (m *TransmissionMutation) AddedNetworkRevision() (r int64, exists bool) {
+	v := m.addnetwork_revision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetNetworkRevision resets all changes to the "network_revision" field.
+func (m *TransmissionMutation) ResetNetworkRevision() {
+	m.network_revision = nil
+	m.addnetwork_revision = nil
+}
+
+// SetNetworkUnresolved sets the "network_unresolved" field.
+func (m *TransmissionMutation) SetNetworkUnresolved(b bool) {
+	m.network_unresolved = &b
+}
+
+// NetworkUnresolved returns the value of the "network_unresolved" field in the mutation.
+func (m *TransmissionMutation) NetworkUnresolved() (r bool, exists bool) {
+	v := m.network_unresolved
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNetworkUnresolved returns the old "network_unresolved" field's value of the Transmission entity.
+// If the Transmission object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TransmissionMutation) OldNetworkUnresolved(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNetworkUnresolved is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNetworkUnresolved requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNetworkUnresolved: %w", err)
+	}
+	return oldValue.NetworkUnresolved, nil
+}
+
+// ResetNetworkUnresolved resets all changes to the "network_unresolved" field.
+func (m *TransmissionMutation) ResetNetworkUnresolved() {
+	m.network_unresolved = nil
+}
+
 // Where appends a list predicates to the TransmissionMutation builder.
 func (m *TransmissionMutation) Where(ps ...predicate.Transmission) {
 	m.predicates = append(m.predicates, ps...)
@@ -22340,7 +22558,7 @@ func (m *TransmissionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TransmissionMutation) Fields() []string {
-	fields := make([]string, 0, 15)
+	fields := make([]string, 0, 18)
 	if m.gateway_id != nil {
 		fields = append(fields, transmission.FieldGatewayID)
 	}
@@ -22386,6 +22604,15 @@ func (m *TransmissionMutation) Fields() []string {
 	if m.processing_status != nil {
 		fields = append(fields, transmission.FieldProcessingStatus)
 	}
+	if m.gateway_network_identifier != nil {
+		fields = append(fields, transmission.FieldGatewayNetworkIdentifier)
+	}
+	if m.network_revision != nil {
+		fields = append(fields, transmission.FieldNetworkRevision)
+	}
+	if m.network_unresolved != nil {
+		fields = append(fields, transmission.FieldNetworkUnresolved)
+	}
 	return fields
 }
 
@@ -22424,6 +22651,12 @@ func (m *TransmissionMutation) Field(name string) (ent.Value, bool) {
 		return m.MessageID()
 	case transmission.FieldProcessingStatus:
 		return m.ProcessingStatus()
+	case transmission.FieldGatewayNetworkIdentifier:
+		return m.GatewayNetworkIdentifier()
+	case transmission.FieldNetworkRevision:
+		return m.NetworkRevision()
+	case transmission.FieldNetworkUnresolved:
+		return m.NetworkUnresolved()
 	}
 	return nil, false
 }
@@ -22463,6 +22696,12 @@ func (m *TransmissionMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldMessageID(ctx)
 	case transmission.FieldProcessingStatus:
 		return m.OldProcessingStatus(ctx)
+	case transmission.FieldGatewayNetworkIdentifier:
+		return m.OldGatewayNetworkIdentifier(ctx)
+	case transmission.FieldNetworkRevision:
+		return m.OldNetworkRevision(ctx)
+	case transmission.FieldNetworkUnresolved:
+		return m.OldNetworkUnresolved(ctx)
 	}
 	return nil, fmt.Errorf("unknown Transmission field %s", name)
 }
@@ -22577,6 +22816,27 @@ func (m *TransmissionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetProcessingStatus(v)
 		return nil
+	case transmission.FieldGatewayNetworkIdentifier:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGatewayNetworkIdentifier(v)
+		return nil
+	case transmission.FieldNetworkRevision:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNetworkRevision(v)
+		return nil
+	case transmission.FieldNetworkUnresolved:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNetworkUnresolved(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Transmission field %s", name)
 }
@@ -22591,6 +22851,9 @@ func (m *TransmissionMutation) AddedFields() []string {
 	if m.addsource_revision != nil {
 		fields = append(fields, transmission.FieldSourceRevision)
 	}
+	if m.addnetwork_revision != nil {
+		fields = append(fields, transmission.FieldNetworkRevision)
+	}
 	return fields
 }
 
@@ -22603,6 +22866,8 @@ func (m *TransmissionMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedObservationOffsetSeconds()
 	case transmission.FieldSourceRevision:
 		return m.AddedSourceRevision()
+	case transmission.FieldNetworkRevision:
+		return m.AddedNetworkRevision()
 	}
 	return nil, false
 }
@@ -22626,6 +22891,13 @@ func (m *TransmissionMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddSourceRevision(v)
 		return nil
+	case transmission.FieldNetworkRevision:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddNetworkRevision(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Transmission numeric field %s", name)
 }
@@ -22636,6 +22908,9 @@ func (m *TransmissionMutation) ClearedFields() []string {
 	var fields []string
 	if m.FieldCleared(transmission.FieldQualityMetrics) {
 		fields = append(fields, transmission.FieldQualityMetrics)
+	}
+	if m.FieldCleared(transmission.FieldGatewayNetworkIdentifier) {
+		fields = append(fields, transmission.FieldGatewayNetworkIdentifier)
 	}
 	return fields
 }
@@ -22653,6 +22928,9 @@ func (m *TransmissionMutation) ClearField(name string) error {
 	switch name {
 	case transmission.FieldQualityMetrics:
 		m.ClearQualityMetrics()
+		return nil
+	case transmission.FieldGatewayNetworkIdentifier:
+		m.ClearGatewayNetworkIdentifier()
 		return nil
 	}
 	return fmt.Errorf("unknown Transmission nullable field %s", name)
@@ -22706,6 +22984,15 @@ func (m *TransmissionMutation) ResetField(name string) error {
 		return nil
 	case transmission.FieldProcessingStatus:
 		m.ResetProcessingStatus()
+		return nil
+	case transmission.FieldGatewayNetworkIdentifier:
+		m.ResetGatewayNetworkIdentifier()
+		return nil
+	case transmission.FieldNetworkRevision:
+		m.ResetNetworkRevision()
+		return nil
+	case transmission.FieldNetworkUnresolved:
+		m.ResetNetworkUnresolved()
 		return nil
 	}
 	return fmt.Errorf("unknown Transmission field %s", name)

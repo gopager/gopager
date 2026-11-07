@@ -50,7 +50,13 @@ type Transmission struct {
 	MessageID uuid.UUID `json:"message_id,omitempty"`
 	// ProcessingStatus holds the value of the "processing_status" field.
 	ProcessingStatus transmission.ProcessingStatus `json:"processing_status,omitempty"`
-	selectValues     sql.SelectValues
+	// GatewayNetworkIdentifier holds the value of the "gateway_network_identifier" field.
+	GatewayNetworkIdentifier *string `json:"gateway_network_identifier,omitempty"`
+	// NetworkRevision holds the value of the "network_revision" field.
+	NetworkRevision int64 `json:"network_revision,omitempty"`
+	// NetworkUnresolved holds the value of the "network_unresolved" field.
+	NetworkUnresolved bool `json:"network_unresolved,omitempty"`
+	selectValues      sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -60,11 +66,11 @@ func (*Transmission) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case transmission.FieldSubmissionFingerprint, transmission.FieldPayload, transmission.FieldQualityMetrics:
 			values[i] = new([]byte)
-		case transmission.FieldIncomplete:
+		case transmission.FieldIncomplete, transmission.FieldNetworkUnresolved:
 			values[i] = new(sql.NullBool)
-		case transmission.FieldObservationOffsetSeconds, transmission.FieldSourceRevision:
+		case transmission.FieldObservationOffsetSeconds, transmission.FieldSourceRevision, transmission.FieldNetworkRevision:
 			values[i] = new(sql.NullInt64)
-		case transmission.FieldSubmissionID, transmission.FieldNetworkResolution, transmission.FieldProtocol, transmission.FieldProcessingStatus:
+		case transmission.FieldSubmissionID, transmission.FieldNetworkResolution, transmission.FieldProtocol, transmission.FieldProcessingStatus, transmission.FieldGatewayNetworkIdentifier:
 			values[i] = new(sql.NullString)
 		case transmission.FieldObservedAt, transmission.FieldAcceptedAt:
 			values[i] = new(sql.NullTime)
@@ -185,6 +191,25 @@ func (_m *Transmission) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ProcessingStatus = transmission.ProcessingStatus(value.String)
 			}
+		case transmission.FieldGatewayNetworkIdentifier:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field gateway_network_identifier", values[i])
+			} else if value.Valid {
+				_m.GatewayNetworkIdentifier = new(string)
+				*_m.GatewayNetworkIdentifier = value.String
+			}
+		case transmission.FieldNetworkRevision:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field network_revision", values[i])
+			} else if value.Valid {
+				_m.NetworkRevision = value.Int64
+			}
+		case transmission.FieldNetworkUnresolved:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field network_unresolved", values[i])
+			} else if value.Valid {
+				_m.NetworkUnresolved = value.Bool
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -262,6 +287,17 @@ func (_m *Transmission) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("processing_status=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ProcessingStatus))
+	builder.WriteString(", ")
+	if v := _m.GatewayNetworkIdentifier; v != nil {
+		builder.WriteString("gateway_network_identifier=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("network_revision=")
+	builder.WriteString(fmt.Sprintf("%v", _m.NetworkRevision))
+	builder.WriteString(", ")
+	builder.WriteString("network_unresolved=")
+	builder.WriteString(fmt.Sprintf("%v", _m.NetworkUnresolved))
 	builder.WriteByte(')')
 	return builder.String()
 }

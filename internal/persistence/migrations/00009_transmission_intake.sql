@@ -91,9 +91,16 @@ CREATE TABLE transmissions (
     message_id uuid NOT NULL REFERENCES messages(id),
     processing_status varchar NOT NULL DEFAULT 'pending'
         CHECK (processing_status IN ('none', 'pending', 'completed', 'failed')),
+    -- The declared Gateway Network identifier (NULL when none was declared), the assignment
+    -- revision at which the Network was last resolved and whether the current Gateway mapping
+    -- could not resolve it: the inputs and state of a Gateway mapping re-resolution.
+    gateway_network_identifier varchar(128) CHECK (gateway_network_identifier <> ''),
+    network_revision bigint NOT NULL DEFAULT 1 CHECK (network_revision > 0),
+    network_unresolved boolean NOT NULL DEFAULT false,
     UNIQUE (gateway_id, submission_id)
 );
 CREATE INDEX transmissions_protocol_observed ON transmissions (protocol, observed_at, id);
+CREATE INDEX transmissions_gateway_accepted ON transmissions (gateway_id, protocol, accepted_at, id);
 CREATE INDEX transmissions_message_observed ON transmissions (message_id, observed_at, id);
 -- Each target carries its Network, Protocol, observation time and typed address so that a
 -- selector-scoped correction and the Unit history are index lookups; original stays the evidence.

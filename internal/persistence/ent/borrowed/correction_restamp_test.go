@@ -26,6 +26,7 @@ type restampFixture struct {
 	worker     *worker.Service
 	processing *processingstore.Store
 	intake     *ingeststore.Store
+	owner      *ingeststore.ProcessingSourceOwner
 	network    uuid.UUID
 	gateway    uuid.UUID
 	unit       uuid.UUID
@@ -62,7 +63,12 @@ func newRestampFixture(t *testing.T) *restampFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if f.runner, err = assignments.NewCorrectionRunner(f.store, f.store, f.rules, f.ruleStore, f.facts, owner); err != nil {
+	f.owner = owner
+	networks, err := ingest.NewNetworkReResolver(f.intake, f.rules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.runner, err = assignments.NewCorrectionRunner(f.store, f.store, f.rules, networks, f.ruleStore, f.facts, owner); err != nil {
 		t.Fatal(err)
 	}
 	if f.worker, err = worker.NewWithPublisher(f.store, f.processing, owner, processing.CoreRegex{}, uuid.New(), owner); err != nil {

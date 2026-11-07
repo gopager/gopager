@@ -140,7 +140,7 @@ func (s *Service) Submit(ctx context.Context, bearer string, request Submission,
 		if err != nil {
 			return err
 		}
-		addressMatches, err := s.addressMatches(tx, submission, assigned)
+		addressMatches, err := addressMatches(tx, s.matcher, submission, assigned)
 		if err != nil {
 			return err
 		}

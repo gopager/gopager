@@ -10,7 +10,7 @@ Add a decision to the ADR file of its topic with status, date, supersession, the
 | --- | --- | --- |
 | [01-platform-and-storage.md](01-platform-and-storage.md) | Platform and storage | 19 (D-01..D-128) |
 | [02-intake-and-grouping.md](02-intake-and-grouping.md) | Intake and Grouping | 34 (D-17..D-139) |
-| [03-assignment-and-correction.md](03-assignment-and-correction.md) | Assignment and correction | 7 (D-08..D-127) |
+| [03-assignment-and-correction.md](03-assignment-and-correction.md) | Assignment and correction | 9 (D-08..D-141, D-143) |
 | [04-processing-and-plugins.md](04-processing-and-plugins.md) | Processing and plugins | 32 (D-05..D-131) |
 | [05-events-and-delivery.md](05-events-and-delivery.md) | Events and Delivery | 11 (D-06..D-124) |
 | [06-identity-and-authorization.md](06-identity-and-authorization.md) | Identity and authorization | 16 (D-07..D-140) |
@@ -163,3 +163,5 @@ Add a decision to the ADR file of its topic with status, date, supersession, the
 | D-138 | Open-AP boundary repair and server exchange of Units | accepted | 2026-11-07 | [09-process-and-documentation](09-process-and-documentation.md#d-138) |
 | D-139 | AP-09 open C-01 points | accepted | 2026-11-07 | [02-intake-and-grouping](02-intake-and-grouping.md#d-139) |
 | D-140 | Not-found versus forbidden for Gateways and Networks | accepted | 2026-11-07 | [06-identity-and-authorization](06-identity-and-authorization.md#d-140) |
+| D-141 | AP-20 boundary crossing for Gateway mapping re-resolution | accepted | 2026-11-07 | [03-assignment-and-correction](03-assignment-and-correction.md#d-141) |
+| D-143 | Network re-inference after Address-rule changes | accepted | 2026-11-07 | [03-assignment-and-correction](03-assignment-and-correction.md#d-143) |

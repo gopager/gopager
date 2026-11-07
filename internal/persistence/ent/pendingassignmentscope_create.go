@@ -173,6 +173,20 @@ func (_c *PendingAssignmentScopeCreate) SetNillableTargetPosition(v *int) *Pendi
 	return _c
 }
 
+// SetGatewayID sets the "gateway_id" field.
+func (_c *PendingAssignmentScopeCreate) SetGatewayID(v uuid.UUID) *PendingAssignmentScopeCreate {
+	_c.mutation.SetGatewayID(v)
+	return _c
+}
+
+// SetNillableGatewayID sets the "gateway_id" field if the given value is not nil.
+func (_c *PendingAssignmentScopeCreate) SetNillableGatewayID(v *uuid.UUID) *PendingAssignmentScopeCreate {
+	if v != nil {
+		_c.SetGatewayID(*v)
+	}
+	return _c
+}
+
 // SetRecordedAt sets the "recorded_at" field.
 func (_c *PendingAssignmentScopeCreate) SetRecordedAt(v time.Time) *PendingAssignmentScopeCreate {
 	_c.mutation.SetRecordedAt(v)
@@ -492,6 +506,10 @@ func (_c *PendingAssignmentScopeCreate) createSpec() (*PendingAssignmentScope, *
 	if value, ok := _c.mutation.TargetPosition(); ok {
 		_spec.SetField(pendingassignmentscope.FieldTargetPosition, field.TypeInt, value)
 		_node.TargetPosition = &value
+	}
+	if value, ok := _c.mutation.GatewayID(); ok {
+		_spec.SetField(pendingassignmentscope.FieldGatewayID, field.TypeUUID, value)
+		_node.GatewayID = &value
 	}
 	if value, ok := _c.mutation.RecordedAt(); ok {
 		_spec.SetField(pendingassignmentscope.FieldRecordedAt, field.TypeTime, value)

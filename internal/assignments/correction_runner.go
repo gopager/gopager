@@ -37,21 +37,24 @@ type CorrectionRunner struct {
 	transactions identity.Transactions
 	clock        platform.Clock
 	matcher      CorrectionMatcher
+	networks     NetworkResolver
 	repository   CorrectionWorkRepository
 	facts        events.CorrectionAppender
 	readmission  ProcessingReadmission
 }
 
-// NewCorrectionRunner returns a runner using the given ports. It returns
-// authz.ErrInvalidInput if any dependency is nil.
+// NewCorrectionRunner returns a runner using the given ports; networks re-resolves the Network
+// of the Transmissions of a gateway scope. It returns authz.ErrInvalidInput if any dependency
+// is nil.
 func NewCorrectionRunner(transactions identity.Transactions, clock platform.Clock, matcher CorrectionMatcher,
-	repository CorrectionWorkRepository, facts events.CorrectionAppender, readmission ProcessingReadmission,
+	networks NetworkResolver, repository CorrectionWorkRepository, facts events.CorrectionAppender,
+	readmission ProcessingReadmission,
 ) (*CorrectionRunner, error) {
-	if transactions == nil || clock == nil || matcher == nil || repository == nil || facts == nil ||
-		readmission == nil {
+	if transactions == nil || clock == nil || matcher == nil || networks == nil || repository == nil ||
+		facts == nil || readmission == nil {
 		return nil, authz.ErrInvalidInput
 	}
-	return &CorrectionRunner{transactions: transactions, clock: clock, matcher: matcher,
+	return &CorrectionRunner{transactions: transactions, clock: clock, matcher: matcher, networks: networks,
 		repository: repository, facts: facts, readmission: readmission}, nil
 }
 
@@ -109,10 +112,11 @@ func correctionRetryDelay(failures int) time.Duration {
 }
 
 // RunOnce claims one due correction scope and processes it in batches of up to
-// 100 transmissions, each batch in its own transaction that re-matches the
-// targets, applies changed resolutions, appends one assignment.changed
-// correction fact per changed transmission and re-admits Processing once for every
-// transmission whose targets were restamped, changed resolution or not. A batch or completion failure is recorded on the scope
+// 100 transmissions, each batch in its own transaction that, for a gateway scope,
+// re-resolves each transmission's Network first, re-matches the targets, applies
+// changed resolutions and Network moves, appends one assignment.changed correction
+// fact per changed or moved transmission and re-admits Processing once for every
+// transmission whose targets were restamped, changed resolution or not, or that moved. A batch or completion failure is recorded on the scope
 // with exponential backoff and is not returned; RunOnce returns an error only
 // when it cannot claim or reschedule. A reschedule failure is joined ahead of
 // the batch failure, so FailureCode reports why the scope could not be
@@ -155,25 +159,25 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 			hasItems = true
 			updates := make([]CorrectionUpdate, len(items))
 			for i, item := range items {
-				matched, err := r.matcher.MatchTargets(tx.Context(), tx, item.NetworkID, item.Protocol,
-					item.ObservedAt, item.Targets)
+				update, err := r.reresolve(tx, lease, item)
 				if err != nil {
 					return err
 				}
-				if matched.Revision < lease.AssignmentRev || len(matched.Resolutions) != len(item.Targets) {
-					return platform.NewFailure(platform.CodeRevisionConflict, errors.New("correction source revision changed"))
-				}
-				updates[i] = CorrectionUpdate{Item: item, Match: matched}
+				updates[i] = update
 			}
 			applied, err := r.repository.ApplyCorrectionBatch(tx.Context(), tx, lease, updates)
 			if err != nil {
 				return err
 			}
+			if applied.Unresolved > 0 {
+				slog.Warn("Current Gateway mapping and rules no longer resolve accepted Transmissions; they keep their Network",
+					"correctionId", lease.ID, "unresolved", applied.Unresolved)
+			}
 			now, err := r.clock.Now(tx.Context(), tx)
 			if err != nil {
 				return err
 			}
-			for _, fact := range correctionFacts(applied.Changes, now) {
+			for _, fact := range correctionFacts(applied.Changes, applied.Moves, now) {
 				if _, err := r.facts.AppendCorrectionFact(tx.Context(), tx, fact); err != nil {
 					return err
 				}
@@ -214,6 +218,35 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 			return true, nil
 		}
 	}
+}
+
+// reresolve builds the update of one batch item: for a gateway scope it re-resolves the Network
+// first and keeps the stored one when the mapping no longer resolves it, then it matches the
+// targets against the rules of that Network.
+func (r *CorrectionRunner) reresolve(tx platform.TransactionContext, lease CorrectionLease,
+	item CorrectionBatchItem) (CorrectionUpdate, error) {
+	update := CorrectionUpdate{Item: item}
+	network := item.NetworkID
+	if lease.Scope.Kind() == "gateway" {
+		resolved, err := r.networks.ResolveNetwork(tx.Context(), tx, item)
+		if err != nil {
+			return CorrectionUpdate{}, err
+		}
+		if resolved.Resolved {
+			network = resolved.NetworkID
+		}
+		update.Network = &resolved
+	}
+	matched, err := r.matcher.MatchTargets(tx.Context(), tx, network, item.Protocol, item.ObservedAt, item.Targets)
+	if err != nil {
+		return CorrectionUpdate{}, err
+	}
+	if matched.Revision < lease.AssignmentRev || len(matched.Resolutions) != len(item.Targets) {
+		return CorrectionUpdate{}, platform.NewFailure(platform.CodeRevisionConflict,
+			errors.New("correction source revision changed"))
+	}
+	update.Match = matched
+	return update, nil
 }
 
 // fail reschedules the leased scope with backoff and, once the scope has used up its attempts,

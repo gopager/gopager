@@ -19,6 +19,13 @@ type gatewayRevisionResult struct {
 	Revision      int64 `json:"revision,string"`
 }
 
+// gatewayNetworksResult is the Network replacement response: the new revision and the IDs of the
+// queued re-resolution corrections.
+type gatewayNetworksResult struct {
+	SchemaVersion int `json:"schemaVersion"`
+	ingest.GatewayNetworksResult
+}
+
 type gatewayNetworksMutation struct {
 	SchemaVersion    int                          `json:"schemaVersion"`
 	ExpectedRevision int64                        `json:"expectedRevision,string"`
@@ -70,12 +77,12 @@ func RegisterGatewayManagementRoutes(mux *http.ServeMux, transport *identity.HTT
 		if input.SchemaVersion != 1 {
 			return nil, authz.ErrInvalidInput
 		}
-		revision, err := api.service.ConfigureNetworks(r.Context(), proof, gateway, input.ExpectedRevision,
+		result, err := api.service.ConfigureNetworks(r.Context(), proof, gateway, input.ExpectedRevision,
 			input.Networks, check)
 		if err != nil {
 			return nil, err
 		}
-		return gatewayRevisionResult{SchemaVersion: 1, Revision: revision}, nil
+		return gatewayNetworksResult{SchemaVersion: 1, GatewayNetworksResult: result}, nil
 	}, http.StatusOK, withoutEnvelope()))
 	mux.HandleFunc("GET /api/v1/gateways/{id}/credentials", api.route(func(r *http.Request, proof identity.Proof,
 		_ func(identity.Authentication) error) (any, error) {

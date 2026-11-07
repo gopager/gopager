@@ -19,6 +19,7 @@
   - [AP-07 handover](../execution/ap-07.md#handover): intake.
   - [AP-08 handover](../execution/ap-08.md#handover): correction, suppression, Agencies, default facts/lookups.
   - [AP-09](ap-09-gateway-network.md): Gateway state facts; verify `development/execution/ap-09.md#handover` exists at start.
+  - [AP-20 handover](../execution/ap-20.md#handover): `assignment.changed.previousNetworkId` with an empty target list and `correction.failed` with the reason `gateway-mapping-change` ([D-141](../decisions/03-assignment-and-correction.md#d-141)).
   - [AP-10](ap-10-query-live.md): authorized projection/filter and its event-consumer framework (the sequenced `domain_events` log consumers); verify `development/execution/ap-10.md#handover` exists at start.
   - Verify actual handovers. No generic lease adapter or later host/renderer is assumed.
 - **Owned contract slices:** [C-08](../contracts/c-08-events-jobs.md) and [C-09](../contracts/c-09-delivery.md), plus the required [C-06](../contracts/c-06-identity-authorization.md), [C-07](../contracts/c-07-query-live.md), [C-10](../contracts/c-10-plugin-host.md) input/attempt slices and [C-11 shared rendering](../contracts/c-11-processing-presentation.md#presentation-and-configuration-planned), with canonical cases. The shared Core materialization/rendering code under `internal/processing/` is part of this AP. This AP owns Delivery production claims/leases; AP-05 supplies only fixed transactions/primary clock and synthetic fencing evidence.

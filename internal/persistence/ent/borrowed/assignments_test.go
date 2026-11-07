@@ -765,7 +765,7 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 	if err != nil {
 		t.Fatal(err)
 	}
-	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, f.ruleStore, f.facts, noProcessingReadmission{})
+	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, noNetworkResolution{}, f.ruleStore, f.facts, noProcessingReadmission{})
 	if err != nil {
 		t.Fatal(err)
 	}

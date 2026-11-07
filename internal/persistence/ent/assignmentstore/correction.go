@@ -272,25 +272,26 @@ func (s *Store) RetryCorrection(ctx context.Context, tx platform.TransactionCont
 }
 
 // scopeSelect lists the selector columns of assignment_pending_scopes in the order scopeColumns scans them.
-const scopeSelect = `network_id,protocol,address_from,address_to,address_text,valid_from,valid_until,unit_id,transmission_id,target_position`
+const scopeSelect = `network_id,protocol,address_from,address_to,address_text,valid_from,valid_until,unit_id,transmission_id,target_position,gateway_id`
 
 // scopeColumns scans the selector columns of a scope row.
 type scopeColumns struct {
-	network, unit, transmission *uuid.UUID
-	protocol, addressText       *string
-	addressFrom, addressTo      *int64
-	validFrom, validUntil       *time.Time
-	targetPosition              *int
+	network, unit, transmission, gateway *uuid.UUID
+	protocol, addressText                *string
+	addressFrom, addressTo               *int64
+	validFrom, validUntil                *time.Time
+	targetPosition                       *int
 }
 
 func (c *scopeColumns) targets() []any {
 	return []any{&c.network, &c.protocol, &c.addressFrom, &c.addressTo, &c.addressText, &c.validFrom, &c.validUntil,
-		&c.unit, &c.transmission, &c.targetPosition}
+		&c.unit, &c.transmission, &c.targetPosition, &c.gateway}
 }
 
 func (c scopeColumns) scope() assignments.CorrectionScope {
 	scope := assignments.CorrectionScope{NetworkID: c.network, AddressText: c.addressText, ValidFrom: c.validFrom,
-		ValidUntil: c.validUntil, UnitID: c.unit, TransmissionID: c.transmission, TargetPosition: c.targetPosition}
+		ValidUntil: c.validUntil, UnitID: c.unit, TransmissionID: c.transmission, TargetPosition: c.targetPosition,
+		GatewayID: c.gateway}
 	if c.protocol != nil {
 		scope.Protocol = protocols.Protocol(*c.protocol)
 	}
@@ -332,21 +333,28 @@ func readCorrection(ctx context.Context, executor interface {
 	if value.Processed, value.Remaining, err = correctionCounts(ctx, executor, value); err != nil {
 		return assignments.CorrectionStatus{}, err
 	}
+	if value.Scope.Kind() == "gateway" {
+		if err := executor.QueryRowContext(ctx, `SELECT count(*) FROM transmissions
+			WHERE gateway_id=$1 AND protocol=$2 AND network_unresolved`,
+			*value.Scope.GatewayID, string(value.Scope.Protocol)).Scan(&value.Unresolved); err != nil {
+			return assignments.CorrectionStatus{}, err
+		}
+	}
 	return value, nil
 }
 
-// correctionCounts counts the Transmissions with targets inside the scope: remaining are those
-// with a target still below the scope's assignment revision, processed the rest.
+// correctionCounts counts the Transmissions inside the scope: remaining are those with a target or,
+// for a gateway scope, a Network resolution still below the scope's assignment revision, processed
+// the rest.
 func correctionCounts(ctx context.Context, executor interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, value assignments.CorrectionStatus) (int, int, error) {
-	const query = `SELECT count(*) FROM transmissions t WHERE EXISTS (
-		SELECT 1 FROM transmission_targets target WHERE target.transmission_id=t.id AND ` + inScopeSQL + `)`
+	const query = `SELECT count(*) FROM transmissions t WHERE ` + inScopeAnySQL
 	var total, remaining int
-	if err := executor.QueryRowContext(ctx, query, scopeArgs(value.Scope, math.MaxInt64)...).Scan(&total); err != nil {
+	if err := executor.QueryRowContext(ctx, query, scopeArgs(value.Scope, value.Reason, math.MaxInt64)...).Scan(&total); err != nil {
 		return 0, 0, err
 	}
-	if err := executor.QueryRowContext(ctx, query, scopeArgs(value.Scope, value.AssignmentRev)...).Scan(&remaining); err != nil {
+	if err := executor.QueryRowContext(ctx, query, scopeArgs(value.Scope, value.Reason, value.AssignmentRev)...).Scan(&remaining); err != nil {
 		return 0, 0, err
 	}
 	return total - remaining, remaining, nil

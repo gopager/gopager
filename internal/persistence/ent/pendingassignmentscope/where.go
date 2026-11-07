@@ -105,6 +105,11 @@ func TargetPosition(v int) predicate.PendingAssignmentScope {
 	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldTargetPosition, v))
 }
 
+// GatewayID applies equality check predicate on the "gateway_id" field. It's identical to GatewayIDEQ.
+func GatewayID(v uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldGatewayID, v))
+}
+
 // RecordedAt applies equality check predicate on the "recorded_at" field. It's identical to RecordedAtEQ.
 func RecordedAt(v time.Time) predicate.PendingAssignmentScope {
 	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldRecordedAt, v))
@@ -703,6 +708,56 @@ func TargetPositionIsNil() predicate.PendingAssignmentScope {
 // TargetPositionNotNil applies the NotNil predicate on the "target_position" field.
 func TargetPositionNotNil() predicate.PendingAssignmentScope {
 	return predicate.PendingAssignmentScope(sql.FieldNotNull(FieldTargetPosition))
+}
+
+// GatewayIDEQ applies the EQ predicate on the "gateway_id" field.
+func GatewayIDEQ(v uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldEQ(FieldGatewayID, v))
+}
+
+// GatewayIDNEQ applies the NEQ predicate on the "gateway_id" field.
+func GatewayIDNEQ(v uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNEQ(FieldGatewayID, v))
+}
+
+// GatewayIDIn applies the In predicate on the "gateway_id" field.
+func GatewayIDIn(vs ...uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldIn(FieldGatewayID, vs...))
+}
+
+// GatewayIDNotIn applies the NotIn predicate on the "gateway_id" field.
+func GatewayIDNotIn(vs ...uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNotIn(FieldGatewayID, vs...))
+}
+
+// GatewayIDGT applies the GT predicate on the "gateway_id" field.
+func GatewayIDGT(v uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldGT(FieldGatewayID, v))
+}
+
+// GatewayIDGTE applies the GTE predicate on the "gateway_id" field.
+func GatewayIDGTE(v uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldGTE(FieldGatewayID, v))
+}
+
+// GatewayIDLT applies the LT predicate on the "gateway_id" field.
+func GatewayIDLT(v uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldLT(FieldGatewayID, v))
+}
+
+// GatewayIDLTE applies the LTE predicate on the "gateway_id" field.
+func GatewayIDLTE(v uuid.UUID) predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldLTE(FieldGatewayID, v))
+}
+
+// GatewayIDIsNil applies the IsNil predicate on the "gateway_id" field.
+func GatewayIDIsNil() predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldIsNull(FieldGatewayID))
+}
+
+// GatewayIDNotNil applies the NotNil predicate on the "gateway_id" field.
+func GatewayIDNotNil() predicate.PendingAssignmentScope {
+	return predicate.PendingAssignmentScope(sql.FieldNotNull(FieldGatewayID))
 }
 
 // RecordedAtEQ applies the EQ predicate on the "recorded_at" field.

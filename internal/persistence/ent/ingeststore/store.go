@@ -307,14 +307,21 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 		quality = string(submission.QualityMetrics)
 	}
 	_, observationOffset := submission.ObservedAt.Zone()
+	// The declaration and the revision the Network was resolved at are the inputs of a later
+	// re-resolution after a Gateway mapping change.
+	var declared any
+	if submission.GatewayNetworkIdentifier != "" {
+		declared = submission.GatewayNetworkIdentifier
+	}
 	if _, err := executor.ExecContext(ctx, `INSERT INTO transmissions
 		(id,gateway_id,network_id,submission_id,submission_fingerprint,network_resolution,protocol,payload,
 		 observed_at,observation_offset_seconds,accepted_at,source_revision,incomplete,quality_metrics,message_id,
-		 processing_status)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,1,$12,$13,$14,'pending')`,
+		 processing_status,gateway_network_identifier,network_revision)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,1,$12,$13,$14,'pending',$15,$16)`,
 		transmissionID, gateway, submission.ResolvedNetwork, submission.SubmissionID, submission.Fingerprint[:],
 		submission.Resolution, string(submission.Protocol), string(payload),
-		submission.ObservedAt, observationOffset, accepted, incomplete, quality, messageID); err != nil {
+		submission.ObservedAt, observationOffset, accepted, incomplete, quality, messageID,
+		declared, match.Revision); err != nil {
 		return ingest.Receipt{}, err
 	}
 	if submission.Resolution == "address-priority" {

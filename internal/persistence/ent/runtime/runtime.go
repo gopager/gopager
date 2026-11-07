@@ -670,19 +670,19 @@ func init() {
 	// pendingassignmentscope.TargetPositionValidator is a validator for the "target_position" field. It is called by the builders before save.
 	pendingassignmentscope.TargetPositionValidator = pendingassignmentscopeDescTargetPosition.Validators[0].(func(int) error)
 	// pendingassignmentscopeDescAttempts is the schema descriptor for attempts field.
-	pendingassignmentscopeDescAttempts := pendingassignmentscopeFields[17].Descriptor()
+	pendingassignmentscopeDescAttempts := pendingassignmentscopeFields[18].Descriptor()
 	// pendingassignmentscope.DefaultAttempts holds the default value on creation for the attempts field.
 	pendingassignmentscope.DefaultAttempts = pendingassignmentscopeDescAttempts.Default.(int)
 	// pendingassignmentscope.AttemptsValidator is a validator for the "attempts" field. It is called by the builders before save.
 	pendingassignmentscope.AttemptsValidator = pendingassignmentscopeDescAttempts.Validators[0].(func(int) error)
 	// pendingassignmentscopeDescFencingToken is the schema descriptor for fencing_token field.
-	pendingassignmentscopeDescFencingToken := pendingassignmentscopeFields[19].Descriptor()
+	pendingassignmentscopeDescFencingToken := pendingassignmentscopeFields[20].Descriptor()
 	// pendingassignmentscope.DefaultFencingToken holds the default value on creation for the fencing_token field.
 	pendingassignmentscope.DefaultFencingToken = pendingassignmentscopeDescFencingToken.Default.(int64)
 	// pendingassignmentscope.FencingTokenValidator is a validator for the "fencing_token" field. It is called by the builders before save.
 	pendingassignmentscope.FencingTokenValidator = pendingassignmentscopeDescFencingToken.Validators[0].(func(int64) error)
 	// pendingassignmentscopeDescFailureCode is the schema descriptor for failure_code field.
-	pendingassignmentscopeDescFailureCode := pendingassignmentscopeFields[20].Descriptor()
+	pendingassignmentscopeDescFailureCode := pendingassignmentscopeFields[21].Descriptor()
 	// pendingassignmentscope.FailureCodeValidator is a validator for the "failure_code" field. It is called by the builders before save.
 	pendingassignmentscope.FailureCodeValidator = pendingassignmentscopeDescFailureCode.Validators[0].(func(string) error)
 	// pendingassignmentscopeDescID is the schema descriptor for id field.
@@ -872,6 +872,20 @@ func init() {
 	transmissionDescIncomplete := transmissionFields[12].Descriptor()
 	// transmission.DefaultIncomplete holds the default value on creation for the incomplete field.
 	transmission.DefaultIncomplete = transmissionDescIncomplete.Default.(bool)
+	// transmissionDescGatewayNetworkIdentifier is the schema descriptor for gateway_network_identifier field.
+	transmissionDescGatewayNetworkIdentifier := transmissionFields[16].Descriptor()
+	// transmission.GatewayNetworkIdentifierValidator is a validator for the "gateway_network_identifier" field. It is called by the builders before save.
+	transmission.GatewayNetworkIdentifierValidator = transmissionDescGatewayNetworkIdentifier.Validators[0].(func(string) error)
+	// transmissionDescNetworkRevision is the schema descriptor for network_revision field.
+	transmissionDescNetworkRevision := transmissionFields[17].Descriptor()
+	// transmission.DefaultNetworkRevision holds the default value on creation for the network_revision field.
+	transmission.DefaultNetworkRevision = transmissionDescNetworkRevision.Default.(int64)
+	// transmission.NetworkRevisionValidator is a validator for the "network_revision" field. It is called by the builders before save.
+	transmission.NetworkRevisionValidator = transmissionDescNetworkRevision.Validators[0].(func(int64) error)
+	// transmissionDescNetworkUnresolved is the schema descriptor for network_unresolved field.
+	transmissionDescNetworkUnresolved := transmissionFields[18].Descriptor()
+	// transmission.DefaultNetworkUnresolved holds the default value on creation for the network_unresolved field.
+	transmission.DefaultNetworkUnresolved = transmissionDescNetworkUnresolved.Default.(bool)
 	transmissiontarget.Policy = privacy.NewPolicies(schema.TransmissionTarget{})
 	transmissiontarget.Hooks[0] = func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {

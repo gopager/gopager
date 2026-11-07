@@ -539,7 +539,7 @@ var (
 	AssignmentPendingScopesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "assignment_revision", Type: field.TypeInt64},
-		{Name: "reason", Type: field.TypeEnum, Enums: []string{"rule-change", "unit-deleted", "suppression-change"}},
+		{Name: "reason", Type: field.TypeEnum, Enums: []string{"rule-change", "unit-deleted", "suppression-change", "gateway-mapping-change"}},
 		{Name: "network_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "protocol", Type: field.TypeEnum, Nullable: true, Enums: []string{"pocsag", "flex", "zvei", "eas"}},
 		{Name: "address_from", Type: field.TypeInt64, Nullable: true},
@@ -550,6 +550,7 @@ var (
 		{Name: "unit_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "transmission_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "target_position", Type: field.TypeInt, Nullable: true},
+		{Name: "gateway_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "recorded_at", Type: field.TypeTime},
 		{Name: "state", Type: field.TypeEnum, Enums: []string{"queued", "running", "completed", "failed", "superseded"}, Default: "queued"},
 		{Name: "cursor_accepted_at", Type: field.TypeTime, Nullable: true},
@@ -719,6 +720,9 @@ var (
 		{Name: "quality_metrics", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "json"}},
 		{Name: "message_id", Type: field.TypeUUID},
 		{Name: "processing_status", Type: field.TypeEnum, Enums: []string{"none", "pending", "completed", "failed"}, Default: "pending"},
+		{Name: "gateway_network_identifier", Type: field.TypeString, Nullable: true},
+		{Name: "network_revision", Type: field.TypeInt64, Default: 1},
+		{Name: "network_unresolved", Type: field.TypeBool, Default: false},
 	}
 	// TransmissionsTable holds the schema information for the "transmissions" table.
 	TransmissionsTable = &schema.Table{
@@ -735,6 +739,11 @@ var (
 				Name:    "transmission_protocol_observed_at_id",
 				Unique:  false,
 				Columns: []*schema.Column{TransmissionsColumns[6], TransmissionsColumns[8], TransmissionsColumns[0]},
+			},
+			{
+				Name:    "transmission_gateway_id_protocol_accepted_at_id",
+				Unique:  false,
+				Columns: []*schema.Column{TransmissionsColumns[1], TransmissionsColumns[6], TransmissionsColumns[10], TransmissionsColumns[0]},
 			},
 			{
 				Name:    "transmission_message_id_observed_at_id",

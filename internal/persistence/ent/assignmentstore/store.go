@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"slices"
 	"time"
 
 	"entgo.io/ent/entql"
@@ -272,17 +273,24 @@ func (s *Store) DeleteRule(ctx context.Context, tx platform.TransactionContext, 
 }
 
 // MarkPending bumps the Assignment revision under the exclusive Assignment lock and records one
-// queued correction scope per distinct selector. The cache rows of Messages with affected targets
+// queued correction scope per distinct selector. For reason rule-change it also queues the gateway
+// scopes whose Network inference the changed rules can alter (see ruleInferenceScopes); a gateway
+// scope is valid only for reason gateway-mapping-change or rule-change. The cache rows of Messages with affected targets
 // are marked correcting until a correction batch rebuilds them. Scopes run independently: a
 // target re-resolved by a newer scope carries a newer assignment revision and is skipped by older
 // scopes, so nothing is superseded or reset.
 func (s *Store) MarkPending(ctx context.Context, tx platform.TransactionContext, scopes []assignments.CorrectionScope, reason string) (int64, error) {
-	if (reason != "rule-change" && reason != "unit-deleted" && reason != "suppression-change") || len(scopes) == 0 {
+	if !slices.Contains([]string{"rule-change", "unit-deleted", "suppression-change", "gateway-mapping-change"}, reason) ||
+		len(scopes) == 0 {
 		return 0, authz.ErrInvalidInput
 	}
 	for _, scope := range scopes {
 		if err := scope.Validate(); err != nil {
 			return 0, err
+		}
+		if reason == "gateway-mapping-change" && scope.Kind() != "gateway" ||
+			scope.Kind() == "gateway" && reason != "gateway-mapping-change" && reason != "rule-change" {
+			return 0, authz.ErrInvalidInput
 		}
 	}
 	revision, err := s.LockRevisionForChange(ctx, tx)
@@ -315,6 +323,13 @@ func (s *Store) MarkPending(ctx context.Context, tx platform.TransactionContext,
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
+	if reason == "rule-change" {
+		inference, err := ruleInferenceScopes(ctx, executor, scopes)
+		if err != nil {
+			return 0, err
+		}
+		scopes = append(slices.Clone(scopes), inference...)
+	}
 	seen := make(map[string]bool, len(scopes))
 	for _, scope := range scopes {
 		key, err := json.Marshal(scope)
@@ -333,25 +348,26 @@ func (s *Store) MarkPending(ctx context.Context, tx platform.TransactionContext,
 }
 
 // insertCorrectionScope records one queued scope and marks the cache rows of the Messages whose
-// targets it will re-resolve as correcting.
+// targets or Transmissions it will re-resolve as correcting.
 func insertCorrectionScope(ctx context.Context, executor postgres.Executor, id uuid.UUID, revision int64,
 	scope assignments.CorrectionScope, reason string, now time.Time) error {
-	args := scopeArgs(scope, revision)
+	args := scopeArgs(scope, reason, revision)
 	if _, err := executor.ExecContext(ctx, `INSERT INTO assignment_pending_scopes
 		(network_id,protocol,address_from,address_to,address_text,valid_from,valid_until,unit_id,transmission_id,target_position,
-		 assignment_revision,id,reason,recorded_at,state)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'queued')`,
-		append(args, id, reason, now)...); err != nil {
+		 assignment_revision,gateway_id,reason,id,recorded_at,state)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'queued')`,
+		append(args, id, now)...); err != nil {
 		return err
 	}
 	_, err := executor.ExecContext(ctx, `UPDATE message_units SET correction_status='correcting'
 		WHERE message_id IN (SELECT t.message_id FROM transmission_targets target
-			JOIN transmissions t ON t.id=target.transmission_id WHERE `+inScopeSQL+`)`, args...)
+			JOIN transmissions t ON t.id=target.transmission_id WHERE `+inScopeSQL+`)
+		OR message_id IN (SELECT t.message_id FROM transmissions t WHERE `+inScopeTransmissionSQL+`)`, args...)
 	return err
 }
 
-// inScopeSQL selects the targets of a correction scope that still carry an older assignment
-// revision; it reads the alias target and the positional parameters of scopeArgs.
+// inScopeSQL selects the targets of a target-selecting correction scope that still carry an older
+// assignment revision; it reads the alias target and the positional parameters of scopeArgs.
 const inScopeSQL = `target.assignment_revision < $11 AND (
 	($1::uuid IS NOT NULL AND target.network_id=$1 AND target.protocol=$2
 		AND (($5::varchar IS NOT NULL AND target.address_text=$5)
@@ -361,12 +377,28 @@ const inScopeSQL = `target.assignment_revision < $11 AND (
 	OR ($8::uuid IS NOT NULL AND target.unit_id=$8)
 	OR ($9::uuid IS NOT NULL AND target.transmission_id=$9 AND target.position=$10))`
 
-// scopeArgs returns the eleven positional parameters of inScopeSQL: the scope's selector columns
-// in table order and the assignment revision below which a target counts as stale.
-func scopeArgs(scope assignments.CorrectionScope, revision int64) []any {
-	args := make([]any, 11)
+// inScopeTransmissionSQL selects, for a gateway scope, the Transmissions of its Gateway and
+// Protocol whose Network was last resolved below the scope revision; a scope with reason
+// rule-change selects only inferred Transmissions with targets, because rules cannot change the
+// Network of a declared or targetless one. It reads the alias t and the positional parameters of
+// scopeArgs. Every statement that passes scopeArgs combines it with inScopeSQL, so a scope of any
+// kind binds all thirteen parameters.
+const inScopeTransmissionSQL = `($12::uuid IS NOT NULL AND t.gateway_id=$12 AND t.protocol=$2::varchar
+	AND t.network_revision < $11 AND ($13::varchar <> 'rule-change' OR (t.gateway_network_identifier IS NULL
+		AND EXISTS (SELECT 1 FROM transmission_targets inferred WHERE inferred.transmission_id=t.id))))`
+
+// inScopeAnySQL selects the Transmissions (alias t) with a stale target or a stale Network
+// resolution inside the scope.
+const inScopeAnySQL = `(EXISTS (SELECT 1 FROM transmission_targets target WHERE target.transmission_id=t.id AND ` +
+	inScopeSQL + `) OR ` + inScopeTransmissionSQL + `)`
+
+// scopeArgs returns the thirteen positional parameters of inScopeSQL and inScopeTransmissionSQL:
+// the scope's selector columns in table order, the assignment revision below which a target or
+// Network resolution counts as stale, the scope's Gateway and its reason.
+func scopeArgs(scope assignments.CorrectionScope, reason string, revision int64) []any {
+	args := make([]any, 13)
 	args[0], args[1], args[2], args[3], args[4] = scope.NetworkID, nil, nil, nil, scope.AddressText
-	if scope.NetworkID != nil {
+	if scope.NetworkID != nil || scope.GatewayID != nil {
 		args[1] = string(scope.Protocol)
 	}
 	if scope.AddressFrom != nil && scope.AddressTo != nil {
@@ -374,6 +406,7 @@ func scopeArgs(scope assignments.CorrectionScope, revision int64) []any {
 	}
 	args[5], args[6], args[7], args[8], args[9], args[10] = scope.ValidFrom, scope.ValidUntil, scope.UnitID,
 		scope.TransmissionID, scope.TargetPosition, revision
+	args[11], args[12] = scope.GatewayID, reason
 	return args
 }
 

@@ -12,9 +12,11 @@ import (
 
 // CorrectionFact is the producer input for a historical-correction fact. Type
 // selects the vocabulary: "assignment.changed" records that a correction run
-// changed stored target resolutions of one Transmission (Aggregate is the
-// message; Targets lists the changed positions in ascending order, each with
-// differing Before and After; Reason must be "corrected"),
+// changed stored target resolutions or the Network of one Transmission (Aggregate
+// is the message; NetworkID is the current Network and PreviousNetworkID, when set,
+// the different Network it moved from; Targets lists the changed positions in
+// ascending order, each with differing Before and After, and may be empty only for
+// a move; Reason must be "corrected"),
 // "correction.failed" records a correction scope that used up its attempts, and
 // "suppression.changed" records that an operator created or lifted a
 // suppression (Aggregate is the suppression; ChangeKind is created or lifted).
@@ -29,11 +31,14 @@ type CorrectionFact struct {
 	TransmissionID uuid.UUID
 	MessageID      uuid.UUID
 	NetworkID      uuid.UUID
-	UnitID         *uuid.UUID
-	Targets        []CorrectionTarget
-	ChangeKind     string
-	Reason         string
-	FailureCode    string
+	// PreviousNetworkID is the Network a Gateway mapping re-resolution moved the
+	// Transmission from; nil when the Network did not change.
+	PreviousNetworkID *uuid.UUID
+	UnitID            *uuid.UUID
+	Targets           []CorrectionTarget
+	ChangeKind        string
+	Reason            string
+	FailureCode       string
 }
 
 // CorrectionTarget is one target position whose resolution a correction changed.
@@ -46,15 +51,17 @@ type CorrectionTarget struct {
 // CorrectionData is the data payload of a correction envelope; only the fields
 // relevant to the envelope type are set.
 type CorrectionData struct {
-	TargetPosition *int               `json:"targetPosition,omitempty"`
-	TransmissionID uuid.UUID          `json:"transmissionId,omitempty"`
-	MessageID      uuid.UUID          `json:"messageId,omitempty"`
-	NetworkID      uuid.UUID          `json:"networkId,omitempty"`
-	UnitID         *uuid.UUID         `json:"unitId,omitempty"`
-	Targets        []CorrectionTarget `json:"targets,omitempty"`
-	ChangeKind     string             `json:"changeKind,omitempty"`
-	Reason         string             `json:"reason,omitempty"`
-	FailureCode    string             `json:"failureCode,omitempty"`
+	TargetPosition *int      `json:"targetPosition,omitempty"`
+	TransmissionID uuid.UUID `json:"transmissionId,omitempty"`
+	MessageID      uuid.UUID `json:"messageId,omitempty"`
+	NetworkID      uuid.UUID `json:"networkId,omitempty"`
+	// PreviousNetworkID is set on an assignment.changed fact whose Transmission moved.
+	PreviousNetworkID *uuid.UUID         `json:"previousNetworkId,omitempty"`
+	UnitID            *uuid.UUID         `json:"unitId,omitempty"`
+	Targets           []CorrectionTarget `json:"targets,omitempty"`
+	ChangeKind        string             `json:"changeKind,omitempty"`
+	Reason            string             `json:"reason,omitempty"`
+	FailureCode       string             `json:"failureCode,omitempty"`
 }
 
 // CorrectionEnvelope is the persisted serialization of a CorrectionFact,
@@ -101,11 +108,13 @@ func (fact CorrectionFact) Envelope(recordedAt time.Time) (CorrectionEnvelope, e
 	case "assignment.changed":
 		if fact.Aggregate.Type != "message" || fact.MessageID != fact.Aggregate.ID ||
 			fact.TransmissionID == uuid.Nil || fact.NetworkID == uuid.Nil || fact.Reason != "corrected" ||
-			!validCorrectionTargets(fact.Targets) {
+			!validMove(fact.PreviousNetworkID, fact.NetworkID) ||
+			!validCorrectionTargets(fact.Targets, fact.PreviousNetworkID != nil) {
 			return CorrectionEnvelope{}, ErrInvalidFact
 		}
 		envelope.Data = CorrectionData{TransmissionID: fact.TransmissionID, MessageID: fact.MessageID,
-			NetworkID: fact.NetworkID, Targets: slices.Clone(fact.Targets), Reason: fact.Reason}
+			NetworkID: fact.NetworkID, PreviousNetworkID: fact.PreviousNetworkID,
+			Targets: slices.Clone(fact.Targets), Reason: fact.Reason}
 	case "suppression.changed":
 		if fact.Aggregate.Type != "suppression" || fact.TransmissionID == uuid.Nil || fact.NetworkID == uuid.Nil ||
 			fact.TargetPosition == nil || *fact.TargetPosition < 0 ||
@@ -116,7 +125,8 @@ func (fact CorrectionFact) Envelope(recordedAt time.Time) (CorrectionEnvelope, e
 			NetworkID: fact.NetworkID, UnitID: fact.UnitID, ChangeKind: fact.ChangeKind}
 	case "correction.failed":
 		if fact.Aggregate.Type != "correction" || fact.Aggregate.ID == uuid.Nil || fact.FailureCode == "" ||
-			!slices.Contains([]string{"rule-change", "unit-deleted", "suppression-change"}, fact.Reason) {
+			!slices.Contains([]string{"rule-change", "unit-deleted", "suppression-change", "gateway-mapping-change"},
+				fact.Reason) {
 			return CorrectionEnvelope{}, ErrInvalidFact
 		}
 		envelope.Data = CorrectionData{Reason: fact.Reason, FailureCode: fact.FailureCode}
@@ -126,11 +136,17 @@ func (fact CorrectionFact) Envelope(recordedAt time.Time) (CorrectionEnvelope, e
 	return envelope, nil
 }
 
-// validCorrectionTargets reports whether targets is non-empty, strictly ascending from a
-// non-negative position and every entry is a valid, actual change.
-func validCorrectionTargets(targets []CorrectionTarget) bool {
+// validMove reports whether an optional previous Network is a real move: set, non-nil and
+// different from the current Network.
+func validMove(previous *uuid.UUID, current uuid.UUID) bool {
+	return previous == nil || *previous != uuid.Nil && *previous != current
+}
+
+// validCorrectionTargets reports whether targets is strictly ascending from a non-negative
+// position and every entry is a valid, actual change; it may be empty only when moved.
+func validCorrectionTargets(targets []CorrectionTarget, moved bool) bool {
 	if len(targets) == 0 {
-		return false
+		return moved
 	}
 	for i, target := range targets {
 		if target.Position < 0 || i > 0 && target.Position <= targets[i-1].Position ||

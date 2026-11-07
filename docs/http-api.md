@@ -250,7 +250,7 @@ Scope evaluation per resource:
 | Organization | Every member Unit. An Organization without members needs an `all` grant. |
 | Unit template | Only `all` scope. Referencing an Organization also requires `organization.read` on it. |
 | Address rule | Writes need authority over the Agency of the rule's Network and, additionally, over the rule's Unit or its collections (for an update, also over the existing rule's Network Agency); a Unit or collection grant alone never reaches another Agency's Network. Reads keep their existing predicate. |
-| Suppression / correction | The Agency of the affected transmission target's Network, and the target's Unit. |
+| Suppression / correction | The Agency of the affected transmission target's Network, and the target's Unit. A `gateway` correction needs every Agency of the Gateway's current Networks of its Protocol and of the Networks its Transmissions reference (none: an `all` grant). |
 | Network | The Network's Agency. Protocol and Agency are fixed at creation. |
 | Gateway administration | The Agency of every Network currently assigned to the Gateway, and for creation and network replacement of every proposed Network. A Gateway without Networks needs an `all` grant. Lists show only Gateways whose every Agency is readable. |
 | Gateway delegation | `gateway.diagnostics.read` and `gateway.credential.rotate` with a `gateway` scope reach exactly the listed Gateways; with `agency` scope they need every Agency of the Gateway. Diagnostics grant only the diagnostics and history routes; rotation grants only credential status, issue and revoke. Neither implies the other, any Message or Payload access, or Gateway administration. A grant on a deleted Gateway stops applying. |
@@ -471,12 +471,16 @@ or `unset`). Create and update commands return `{"id","revision"}`.
 | POST | `/suppressions` | `suppression.create` | **202** | Suppress one transmission target (`transmissionId`, `targetPosition`) |
 | GET | `/suppressions/{id}` | `suppression.read` | 200 | Read |
 | DELETE | `/suppressions/{id}` | `suppression.delete` | **202** | Lift a suppression |
-| GET | `/assignment-corrections/{id}` | `assignment-correction.read` | 200 | Progress: `state` (`pending`, `running`, `completed`, `failed`, `superseded`), `scope` (kind `address-rules`, `unit` or `target`) and the processed/remaining Transmission counts |
+| GET | `/assignment-corrections/{id}` | `assignment-correction.read` | 200 | Progress: `state` (`pending`, `running`, `completed`, `failed`, `superseded`), `scope` (kind `address-rules`, `unit`, `target` or `gateway`), the processed/remaining Transmission counts and, for `gateway`, `unresolved` |
 | POST | `/assignment-corrections/{id}/retry` | `assignment-correction.retry` | **202** | Reschedule a failed correction (`commandId`) |
 
 On create and update, `selector`, `enabled` and `protocol` are required, and `id` must
 not be sent. Overlapping rules return `409 REVISION_CONFLICT`. Rule, Unit and suppression
-changes re-evaluate stored transmissions asynchronously. The `202` responses return the
+changes re-evaluate stored transmissions asynchronously. A rule change on a Network that shares a
+Gateway with other Networks of its Protocol also re-runs the Network inference of that Gateway's
+undeclared Transmissions with targets, like a mapping replacement (see
+[Gateway administration](#gateway-administration)): such a Transmission can move to another
+Network and, with it, to another Agency's visibility. The `202` responses return the
 `correctionId` (suppressions) or `status: "pending"`. Follow progress with
 `GET /assignment-corrections/{id}`.
 
@@ -688,8 +692,20 @@ Network replacement body:
   a gap or a negative value is `400 INVALID_INPUT`. Priority decides between Networks of one
   protocol at intake (see the submission resolution order above); two districts that share
   one alarm channel are two Networks of the Gateway, one per Agency.
-- The responses are `{"schemaVersion":1,"revision":"N"}` and, for issuing a credential,
-  `{"schemaVersion":1,"credentialId","secret","status","revision"}`.
+- The replacement response is `{"schemaVersion":1,"revision":"N","correctionIds":[…]}`; issuing a
+  credential returns `{"schemaVersion":1,"credentialId","secret","status","revision"}` and revoking
+  `{"schemaVersion":1,"revision":"N"}`.
+- Effect on accepted Transmissions: for every Protocol whose candidates (identifiers and Networks in
+  priority order) changed, the replacement queues one `gateway` correction, listed in
+  `correctionIds`; an unchanged Protocol queues none. The correction re-resolves every Transmission
+  of that Gateway and Protocol like intake does (a rule change queues the same correction for the
+  Gateways that share its Network, limited to undeclared Transmissions with targets), with its original declaration, the current
+  mapping and the current Address rules at its Observation time. A Transmission whose Network
+  changes moves with its targets: Unit resolution, query visibility (the cache's Agency) and
+  Processing follow the new Network. One the current mapping cannot resolve (declared identifier
+  no longer mapped, no Network of its Protocol left) keeps its Network and is counted as
+  `unresolved` on the correction. Receipts, originals, Payload and Message membership never change.
+  Follow progress with `GET /assignment-corrections/{id}`.
 
 
 ### Processing: workflows, versions, candidates

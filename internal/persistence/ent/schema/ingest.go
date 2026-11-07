@@ -211,6 +211,9 @@ func (Transmission) Fields() []ent.Field {
 		field.JSON("quality_metrics", json.RawMessage{}).SchemaType(map[string]string{dialect.Postgres: "json"}).Optional().Sensitive(),
 		field.UUID("message_id", uuid.UUID{}),
 		field.Enum("processing_status").Values("none", "pending", "completed", "failed").Default("pending"),
+		field.String("gateway_network_identifier").Optional().Nillable().NotEmpty(),
+		field.Int64("network_revision").Positive().Default(1),
+		field.Bool("network_unresolved").Default(false),
 	}
 }
 
@@ -219,6 +222,7 @@ func (Transmission) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("gateway_id", "submission_id").Unique(),
 		index.Fields("protocol", "observed_at", "id"),
+		index.Fields("gateway_id", "protocol", "accepted_at", "id"),
 		index.Fields("message_id", "observed_at", "id"),
 	}
 }

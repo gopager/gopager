@@ -16,6 +16,7 @@
   - `internal/assignments/` — correction reason and Network re-resolution in the correction batch.
   - `internal/persistence/ent/schema/`, `internal/persistence/ent/ingeststore/`, `internal/persistence/ent/assignmentstore/`, generated Ent code and `internal/persistence/migrations/` (per [package layout](shared-rules.md#package-layout)).
   - `internal/httpapi/` — correction status fields for unresolved Transmissions, if needed.
+  - Added by [D-141](../decisions/03-assignment-and-correction.md#d-141): `internal/events/` (correction fact vocabulary), `cmd/gopager/` (composition only), `internal/persistence/ent/borrowed/` (PostgreSQL test fixtures).
 - **Compatibility context:** AP-10 (query visibility follows the corrected Network), AP-11 (no recall of handed-off Deliveries).
 
 ## Open User Decisions

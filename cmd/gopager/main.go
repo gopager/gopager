@@ -160,10 +160,15 @@ func run() (result error) {
 	return handle.Shutdown(context.Background())
 }
 
-// composeCorrectionRunner binds the historical correction runner to the shared matcher.
+// composeCorrectionRunner binds the historical correction runner to the shared matcher and to the
+// intake store's Gateway mappings for Network re-resolution.
 func composeCorrectionRunner(c *core, readmission assignments.ProcessingReadmission,
 ) (*assignments.CorrectionRunner, error) {
-	return assignments.NewCorrectionRunner(c.store, c.store, c.rules, c.assignments, c.facts, readmission)
+	networks, err := ingestdomain.NewNetworkReResolver(c.intake, c.rules)
+	if err != nil {
+		return nil, err
+	}
+	return assignments.NewCorrectionRunner(c.store, c.store, c.rules, networks, c.assignments, c.facts, readmission)
 }
 
 // parseConfig binds only the platform's explicit flags and secret environment input.
@@ -280,7 +285,7 @@ func composeApplicationAPI(publicOrigin string, limits identity.LoginRateLimits,
 		return nil, err
 	}
 	gatewayAdministration, err := ingestdomain.NewGatewayAdministration(c.store, c.resolver, c.store,
-		c.intake, c.intake, c.receipts, c.facts)
+		c.intake, c.intake, c.receipts, c.facts, c.assignments)
 	if err != nil {
 		return nil, err
 	}

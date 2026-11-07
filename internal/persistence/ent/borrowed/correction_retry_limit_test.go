@@ -37,7 +37,7 @@ func TestCorrectionLeaseExpiredOnFifthAttemptEmitsOneFailedFact(t *testing.T) {
 	}
 	query(`UPDATE assignment_pending_scopes SET state='running',attempts=5,fencing_token=5,
 		lease_until=clock_timestamp()-interval '1 second'`)
-	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, f.ruleStore, f.facts, noProcessingReadmission{})
+	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, noNetworkResolution{}, f.ruleStore, f.facts, noProcessingReadmission{})
 	if err != nil {
 		t.Fatal(err)
 	}

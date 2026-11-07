@@ -95,7 +95,7 @@ func TestCorrectionScopesBySelectorAndLeavesUnrelatedTargetsAlone(t *testing.T) 
 	if _, err := f.rules.CreateRule(t.Context(), f.proof, uuid.New(), ruleInput(f.networks[1], unitC.ID, 10, 20, 1), checkedMutation); err != nil {
 		t.Fatal(err)
 	}
-	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, f.ruleStore, f.facts, noProcessingReadmission{})
+	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, noNetworkResolution{}, f.ruleStore, f.facts, noProcessingReadmission{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestCorrectionScopesBySelectorAndLeavesUnrelatedTargetsAlone(t *testing.T) 
 		var from, to int64
 		if err := executor.QueryRowContext(tx.Context(), `SELECT count(*) OVER (),id,assignment_revision,network_id,protocol,
 			address_from,address_to,unit_id FROM assignment_pending_scopes WHERE state IN ('queued','running')
-			ORDER BY recorded_at DESC LIMIT 1`).Scan(&scopes, &scopeID, &scopeRevision, &network, &protocol, &from, &to, &unit); err != nil {
+			AND gateway_id IS NULL ORDER BY recorded_at DESC LIMIT 1`).Scan(&scopes, &scopeID, &scopeRevision, &network, &protocol, &from, &to, &unit); err != nil {
 			return err
 		}
 		if scopes != 1 || network.UUID != f.networks[0] || protocol != "pocsag" || from != 10 || to != 20 || unit.Valid {

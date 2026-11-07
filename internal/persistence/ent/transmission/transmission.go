@@ -44,6 +44,12 @@ const (
 	FieldMessageID = "message_id"
 	// FieldProcessingStatus holds the string denoting the processing_status field in the database.
 	FieldProcessingStatus = "processing_status"
+	// FieldGatewayNetworkIdentifier holds the string denoting the gateway_network_identifier field in the database.
+	FieldGatewayNetworkIdentifier = "gateway_network_identifier"
+	// FieldNetworkRevision holds the string denoting the network_revision field in the database.
+	FieldNetworkRevision = "network_revision"
+	// FieldNetworkUnresolved holds the string denoting the network_unresolved field in the database.
+	FieldNetworkUnresolved = "network_unresolved"
 	// Table holds the table name of the transmission in the database.
 	Table = "transmissions"
 )
@@ -66,6 +72,9 @@ var Columns = []string{
 	FieldQualityMetrics,
 	FieldMessageID,
 	FieldProcessingStatus,
+	FieldGatewayNetworkIdentifier,
+	FieldNetworkRevision,
+	FieldNetworkUnresolved,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -94,6 +103,14 @@ var (
 	SourceRevisionValidator func(int64) error
 	// DefaultIncomplete holds the default value on creation for the "incomplete" field.
 	DefaultIncomplete bool
+	// GatewayNetworkIdentifierValidator is a validator for the "gateway_network_identifier" field. It is called by the builders before save.
+	GatewayNetworkIdentifierValidator func(string) error
+	// DefaultNetworkRevision holds the default value on creation for the "network_revision" field.
+	DefaultNetworkRevision int64
+	// NetworkRevisionValidator is a validator for the "network_revision" field. It is called by the builders before save.
+	NetworkRevisionValidator func(int64) error
+	// DefaultNetworkUnresolved holds the default value on creation for the "network_unresolved" field.
+	DefaultNetworkUnresolved bool
 )
 
 // Protocol defines the type for the "protocol" enum field.
@@ -215,4 +232,19 @@ func ByMessageID(opts ...sql.OrderTermOption) OrderOption {
 // ByProcessingStatus orders the results by the processing_status field.
 func ByProcessingStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldProcessingStatus, opts...).ToFunc()
+}
+
+// ByGatewayNetworkIdentifier orders the results by the gateway_network_identifier field.
+func ByGatewayNetworkIdentifier(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGatewayNetworkIdentifier, opts...).ToFunc()
+}
+
+// ByNetworkRevision orders the results by the network_revision field.
+func ByNetworkRevision(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldNetworkRevision, opts...).ToFunc()
+}
+
+// ByNetworkUnresolved orders the results by the network_unresolved field.
+func ByNetworkUnresolved(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldNetworkUnresolved, opts...).ToFunc()
 }

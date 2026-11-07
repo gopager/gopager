@@ -39,6 +39,8 @@ const (
 	FieldTransmissionID = "transmission_id"
 	// FieldTargetPosition holds the string denoting the target_position field in the database.
 	FieldTargetPosition = "target_position"
+	// FieldGatewayID holds the string denoting the gateway_id field in the database.
+	FieldGatewayID = "gateway_id"
 	// FieldRecordedAt holds the string denoting the recorded_at field in the database.
 	FieldRecordedAt = "recorded_at"
 	// FieldState holds the string denoting the state field in the database.
@@ -74,6 +76,7 @@ var Columns = []string{
 	FieldUnitID,
 	FieldTransmissionID,
 	FieldTargetPosition,
+	FieldGatewayID,
 	FieldRecordedAt,
 	FieldState,
 	FieldCursorAcceptedAt,
@@ -125,9 +128,10 @@ type Reason string
 
 // Reason values.
 const (
-	ReasonRuleChange        Reason = "rule-change"
-	ReasonUnitDeleted       Reason = "unit-deleted"
-	ReasonSuppressionChange Reason = "suppression-change"
+	ReasonRuleChange           Reason = "rule-change"
+	ReasonUnitDeleted          Reason = "unit-deleted"
+	ReasonSuppressionChange    Reason = "suppression-change"
+	ReasonGatewayMappingChange Reason = "gateway-mapping-change"
 )
 
 func (r Reason) String() string {
@@ -137,7 +141,7 @@ func (r Reason) String() string {
 // ReasonValidator is a validator for the "reason" field enum values. It is called by the builders before save.
 func ReasonValidator(r Reason) error {
 	switch r {
-	case ReasonRuleChange, ReasonUnitDeleted, ReasonSuppressionChange:
+	case ReasonRuleChange, ReasonUnitDeleted, ReasonSuppressionChange, ReasonGatewayMappingChange:
 		return nil
 	default:
 		return fmt.Errorf("pendingassignmentscope: invalid enum value for reason field: %q", r)
@@ -264,6 +268,11 @@ func ByTransmissionID(opts ...sql.OrderTermOption) OrderOption {
 // ByTargetPosition orders the results by the target_position field.
 func ByTargetPosition(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTargetPosition, opts...).ToFunc()
+}
+
+// ByGatewayID orders the results by the gateway_id field.
+func ByGatewayID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGatewayID, opts...).ToFunc()
 }
 
 // ByRecordedAt orders the results by the recorded_at field.

@@ -21,7 +21,7 @@ Complete each producer and verify its handover before starting a dependent AP. S
 | AP-15 | [Frontend](work-packages/ap-15-frontend.md) | T078..T080, T089 | open |
 | AP-16 | [Operations and Profile Evidence](work-packages/ap-16-operations.md) | T081..T083 | open |
 | AP-17 | [Integration and Delivery Evidence](work-packages/ap-17-integration-evidence.md) | T084..T085 | open |
-| AP-20 | [Re-resolution after Gateway Network-Mapping Changes](work-packages/ap-20-gateway-mapping-rematch.md) ([D-139](decisions/02-intake-and-grouping.md#d-139)) | T090..T091 | open |
+| AP-20 | [Re-resolution after Gateway Network-Mapping Changes](work-packages/ap-20-gateway-mapping-rematch.md) ([D-139](decisions/02-intake-and-grouping.md#d-139)) | T090..T091 | done ([handover](execution/ap-20.md#handover)) |
 
 ## Required Foundation Evidence
 

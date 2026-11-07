@@ -110,6 +110,21 @@ func MessageID(v uuid.UUID) predicate.Transmission {
 	return predicate.Transmission(sql.FieldEQ(FieldMessageID, v))
 }
 
+// GatewayNetworkIdentifier applies equality check predicate on the "gateway_network_identifier" field. It's identical to GatewayNetworkIdentifierEQ.
+func GatewayNetworkIdentifier(v string) predicate.Transmission {
+	return predicate.Transmission(sql.FieldEQ(FieldGatewayNetworkIdentifier, v))
+}
+
+// NetworkRevision applies equality check predicate on the "network_revision" field. It's identical to NetworkRevisionEQ.
+func NetworkRevision(v int64) predicate.Transmission {
+	return predicate.Transmission(sql.FieldEQ(FieldNetworkRevision, v))
+}
+
+// NetworkUnresolved applies equality check predicate on the "network_unresolved" field. It's identical to NetworkUnresolvedEQ.
+func NetworkUnresolved(v bool) predicate.Transmission {
+	return predicate.Transmission(sql.FieldEQ(FieldNetworkUnresolved, v))
+}
+
 // GatewayIDEQ applies the EQ predicate on the "gateway_id" field.
 func GatewayIDEQ(v uuid.UUID) predicate.Transmission {
 	return predicate.Transmission(sql.FieldEQ(FieldGatewayID, v))
@@ -618,6 +633,131 @@ func ProcessingStatusIn(vs ...ProcessingStatus) predicate.Transmission {
 // ProcessingStatusNotIn applies the NotIn predicate on the "processing_status" field.
 func ProcessingStatusNotIn(vs ...ProcessingStatus) predicate.Transmission {
 	return predicate.Transmission(sql.FieldNotIn(FieldProcessingStatus, vs...))
+}
+
+// GatewayNetworkIdentifierEQ applies the EQ predicate on the "gateway_network_identifier" field.
+func GatewayNetworkIdentifierEQ(v string) predicate.Transmission {
+	return predicate.Transmission(sql.FieldEQ(FieldGatewayNetworkIdentifier, v))
+}
+
+// GatewayNetworkIdentifierNEQ applies the NEQ predicate on the "gateway_network_identifier" field.
+func GatewayNetworkIdentifierNEQ(v string) predicate.Transmission {
+	return predicate.Transmission(sql.FieldNEQ(FieldGatewayNetworkIdentifier, v))
+}
+
+// GatewayNetworkIdentifierIn applies the In predicate on the "gateway_network_identifier" field.
+func GatewayNetworkIdentifierIn(vs ...string) predicate.Transmission {
+	return predicate.Transmission(sql.FieldIn(FieldGatewayNetworkIdentifier, vs...))
+}
+
+// GatewayNetworkIdentifierNotIn applies the NotIn predicate on the "gateway_network_identifier" field.
+func GatewayNetworkIdentifierNotIn(vs ...string) predicate.Transmission {
+	return predicate.Transmission(sql.FieldNotIn(FieldGatewayNetworkIdentifier, vs...))
+}
+
+// GatewayNetworkIdentifierGT applies the GT predicate on the "gateway_network_identifier" field.
+func GatewayNetworkIdentifierGT(v string) predicate.Transmission {
+	return predicate.Transmission(sql.FieldGT(FieldGatewayNetworkIdentifier, v))
+}
+
+// GatewayNetworkIdentifierGTE applies the GTE predicate on the "gateway_network_identifier" field.
+func GatewayNetworkIdentifierGTE(v string) predicate.Transmission {
+	return predicate.Transmission(sql.FieldGTE(FieldGatewayNetworkIdentifier, v))
+}
+
+// GatewayNetworkIdentifierLT applies the LT predicate on the "gateway_network_identifier" field.
+func GatewayNetworkIdentifierLT(v string) predicate.Transmission {
+	return predicate.Transmission(sql.FieldLT(FieldGatewayNetworkIdentifier, v))
+}
+
+// GatewayNetworkIdentifierLTE applies the LTE predicate on the "gateway_network_identifier" field.
+func GatewayNetworkIdentifierLTE(v string) predicate.Transmission {
+	return predicate.Transmission(sql.FieldLTE(FieldGatewayNetworkIdentifier, v))
+}
+
+// GatewayNetworkIdentifierContains applies the Contains predicate on the "gateway_network_identifier" field.
+func GatewayNetworkIdentifierContains(v string) predicate.Transmission {
+	return predicate.Transmission(sql.FieldContains(FieldGatewayNetworkIdentifier, v))
+}
+
+// GatewayNetworkIdentifierHasPrefix applies the HasPrefix predicate on the "gateway_network_identifier" field.
+func GatewayNetworkIdentifierHasPrefix(v string) predicate.Transmission {
+	return predicate.Transmission(sql.FieldHasPrefix(FieldGatewayNetworkIdentifier, v))
+}
+
+// GatewayNetworkIdentifierHasSuffix applies the HasSuffix predicate on the "gateway_network_identifier" field.
+func GatewayNetworkIdentifierHasSuffix(v string) predicate.Transmission {
+	return predicate.Transmission(sql.FieldHasSuffix(FieldGatewayNetworkIdentifier, v))
+}
+
+// GatewayNetworkIdentifierIsNil applies the IsNil predicate on the "gateway_network_identifier" field.
+func GatewayNetworkIdentifierIsNil() predicate.Transmission {
+	return predicate.Transmission(sql.FieldIsNull(FieldGatewayNetworkIdentifier))
+}
+
+// GatewayNetworkIdentifierNotNil applies the NotNil predicate on the "gateway_network_identifier" field.
+func GatewayNetworkIdentifierNotNil() predicate.Transmission {
+	return predicate.Transmission(sql.FieldNotNull(FieldGatewayNetworkIdentifier))
+}
+
+// GatewayNetworkIdentifierEqualFold applies the EqualFold predicate on the "gateway_network_identifier" field.
+func GatewayNetworkIdentifierEqualFold(v string) predicate.Transmission {
+	return predicate.Transmission(sql.FieldEqualFold(FieldGatewayNetworkIdentifier, v))
+}
+
+// GatewayNetworkIdentifierContainsFold applies the ContainsFold predicate on the "gateway_network_identifier" field.
+func GatewayNetworkIdentifierContainsFold(v string) predicate.Transmission {
+	return predicate.Transmission(sql.FieldContainsFold(FieldGatewayNetworkIdentifier, v))
+}
+
+// NetworkRevisionEQ applies the EQ predicate on the "network_revision" field.
+func NetworkRevisionEQ(v int64) predicate.Transmission {
+	return predicate.Transmission(sql.FieldEQ(FieldNetworkRevision, v))
+}
+
+// NetworkRevisionNEQ applies the NEQ predicate on the "network_revision" field.
+func NetworkRevisionNEQ(v int64) predicate.Transmission {
+	return predicate.Transmission(sql.FieldNEQ(FieldNetworkRevision, v))
+}
+
+// NetworkRevisionIn applies the In predicate on the "network_revision" field.
+func NetworkRevisionIn(vs ...int64) predicate.Transmission {
+	return predicate.Transmission(sql.FieldIn(FieldNetworkRevision, vs...))
+}
+
+// NetworkRevisionNotIn applies the NotIn predicate on the "network_revision" field.
+func NetworkRevisionNotIn(vs ...int64) predicate.Transmission {
+	return predicate.Transmission(sql.FieldNotIn(FieldNetworkRevision, vs...))
+}
+
+// NetworkRevisionGT applies the GT predicate on the "network_revision" field.
+func NetworkRevisionGT(v int64) predicate.Transmission {
+	return predicate.Transmission(sql.FieldGT(FieldNetworkRevision, v))
+}
+
+// NetworkRevisionGTE applies the GTE predicate on the "network_revision" field.
+func NetworkRevisionGTE(v int64) predicate.Transmission {
+	return predicate.Transmission(sql.FieldGTE(FieldNetworkRevision, v))
+}
+
+// NetworkRevisionLT applies the LT predicate on the "network_revision" field.
+func NetworkRevisionLT(v int64) predicate.Transmission {
+	return predicate.Transmission(sql.FieldLT(FieldNetworkRevision, v))
+}
+
+// NetworkRevisionLTE applies the LTE predicate on the "network_revision" field.
+func NetworkRevisionLTE(v int64) predicate.Transmission {
+	return predicate.Transmission(sql.FieldLTE(FieldNetworkRevision, v))
+}
+
+// NetworkUnresolvedEQ applies the EQ predicate on the "network_unresolved" field.
+func NetworkUnresolvedEQ(v bool) predicate.Transmission {
+	return predicate.Transmission(sql.FieldEQ(FieldNetworkUnresolved, v))
+}
+
+// NetworkUnresolvedNEQ applies the NEQ predicate on the "network_unresolved" field.
+func NetworkUnresolvedNEQ(v bool) predicate.Transmission {
+	return predicate.Transmission(sql.FieldNEQ(FieldNetworkUnresolved, v))
 }
 
 // And groups predicates with the AND operator between them.
