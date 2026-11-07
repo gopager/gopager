@@ -10,11 +10,16 @@ import (
 )
 
 // GatewayCorrectionQueue records the re-resolution of a Gateway's accepted Transmissions after a
-// mapping change: one correction scope per Protocol, in the caller's transaction, returning the
-// scope IDs in the order of the Protocols. The assignment correction store implements it.
+// mapping change: QueueGatewayCorrections queues one correction scope per Protocol, in the
+// caller's transaction, returning the scope IDs in the order of the Protocols;
+// GatewayCorrectionAgencies returns the Agencies such a scope can move Transmissions from or to
+// (those of the current mapping and of the Networks the Gateway's Transmissions of the Protocol
+// reference). The assignment correction store implements it.
 type GatewayCorrectionQueue interface {
 	QueueGatewayCorrections(context.Context, platform.TransactionContext, uuid.UUID,
 		[]protocols.Protocol) ([]uuid.UUID, error)
+	GatewayCorrectionAgencies(context.Context, platform.TransactionContext, uuid.UUID,
+		protocols.Protocol) ([]uuid.UUID, error)
 }
 
 // GatewayNetworksResult is the outcome of ConfigureNetworks: the Gateway's new revision and the
