@@ -2243,7 +2243,7 @@ paths:
       tags:
       - Gateways
       summary: Replace the Gateway's Network assignments
-      description: Requires `gateway.update` on every current and every proposed Network. 1–1024 entries with unique
+      description: Requires `gateway.update` on every current and every proposed Network, and on the Agency of every Network the Gateway's accepted Transmissions of a changed Protocol reference. 1–1024 entries with unique
         identifiers and Network IDs. Each entry carries an explicit `priority`; the priorities of the set must be
         exactly 0..n-1 (unique, contiguous, 0 is the highest), otherwise 400 `INVALID_INPUT`. The priority breaks ties
         between Networks of one protocol at intake. An unknown Network is 400. Optimistic concurrency via `expectedRevision`; a stale value is 409 `REVISION_CONFLICT`. Authorized

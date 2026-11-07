@@ -108,7 +108,8 @@ func NewGatewayAdministration(transactions identity.Transactions, resolver *iden
 // does not exist is reported as authz.ErrInvalidInput. check is called with
 // the resolved authentication before any change (e.g. to require a fresh
 // session); its error aborts the call. The caller needs "gateway.update" on the
-// Agency of every currently and newly assigned Network; a caller without any right on the
+// Agency of every currently and newly assigned Network and of every Network that the
+// Gateway's accepted Transmissions of a changed Protocol reference; a caller without any right on the
 // Gateway at all gets authz.ErrNotFound.
 func (s *GatewayAdministration) ConfigureNetworks(ctx context.Context, proof identity.Proof, gateway uuid.UUID,
 	expected int64, input []GatewayNetworkInput, check func(identity.Authentication) error) (GatewayNetworksResult, error) {
@@ -136,6 +137,18 @@ func (s *GatewayAdministration) ConfigureNetworks(ctx context.Context, proof ide
 			if scope, err = s.resolveAssignments(tx, assignments, scope); err != nil {
 				return err
 			}
+			// A correction can move accepted Transmissions away from Networks no longer mapped (those
+			// an earlier mapping left unresolved), so their Agencies must authorize the change too.
+			changed := changedProtocols(current, assignments)
+			for _, protocol := range changed {
+				affected, err := s.corrections.GatewayCorrectionAgencies(tx.Context(), tx, gateway, protocol)
+				if err != nil {
+					return err
+				}
+				for _, agency := range affected {
+					scope[agency] = true
+				}
+			}
 			if err := authorizeGateway(authority, gateway, scope, now, "gateway.update"); err != nil {
 				return err
 			}
@@ -143,8 +156,7 @@ func (s *GatewayAdministration) ConfigureNetworks(ctx context.Context, proof ide
 				assignments); err != nil {
 				return err
 			}
-			result.Corrections, err = s.corrections.QueueGatewayCorrections(tx.Context(), tx, gateway,
-				changedProtocols(current, assignments))
+			result.Corrections, err = s.corrections.QueueGatewayCorrections(tx.Context(), tx, gateway, changed)
 			return err
 		})
 	if err != nil {
