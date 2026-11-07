@@ -10,13 +10,13 @@ Add a decision to the ADR file of its topic with status, date, supersession, the
 | --- | --- | --- |
 | [01-platform-and-storage.md](01-platform-and-storage.md) | Platform and storage | 19 (D-01..D-128) |
 | [02-intake-and-grouping.md](02-intake-and-grouping.md) | Intake and Grouping | 34 (D-17..D-139) |
-| [03-assignment-and-correction.md](03-assignment-and-correction.md) | Assignment and correction | 9 (D-08..D-141, D-143) |
+| [03-assignment-and-correction.md](03-assignment-and-correction.md) | Assignment and correction | 9 (D-08..D-143) |
 | [04-processing-and-plugins.md](04-processing-and-plugins.md) | Processing and plugins | 32 (D-05..D-131) |
 | [05-events-and-delivery.md](05-events-and-delivery.md) | Events and Delivery | 11 (D-06..D-124) |
 | [06-identity-and-authorization.md](06-identity-and-authorization.md) | Identity and authorization | 16 (D-07..D-140) |
 | [07-query-and-live.md](07-query-and-live.md) | Query and live | 3 (D-16..D-28) |
 | [08-operations-and-http.md](08-operations-and-http.md) | Operations and HTTP | 3 (D-52..D-133) |
-| [09-process-and-documentation.md](09-process-and-documentation.md) | Process and documentation | 13 (D-19..D-138) |
+| [09-process-and-documentation.md](09-process-and-documentation.md) | Process and documentation | 14 (D-19..D-142) |
 | [10-foundation-redesign.md](10-foundation-redesign.md) | Foundation redesign | 2 (D-135..D-137) |
 
 ## Index
@@ -164,4 +164,5 @@ Add a decision to the ADR file of its topic with status, date, supersession, the
 | D-139 | AP-09 open C-01 points | accepted | 2026-11-07 | [02-intake-and-grouping](02-intake-and-grouping.md#d-139) |
 | D-140 | Not-found versus forbidden for Gateways and Networks | accepted | 2026-11-07 | [06-identity-and-authorization](06-identity-and-authorization.md#d-140) |
 | D-141 | AP-20 boundary crossing for Gateway mapping re-resolution | accepted | 2026-11-07 | [03-assignment-and-correction](03-assignment-and-correction.md#d-141) |
+| D-142 | Second open-AP boundary repair and start decisions for AP-10..AP-17 | accepted | 2026-11-07 | [09-process-and-documentation](09-process-and-documentation.md#d-142) |
 | D-143 | Network re-inference after Address-rule changes | accepted | 2026-11-07 | [03-assignment-and-correction](03-assignment-and-correction.md#d-143) |

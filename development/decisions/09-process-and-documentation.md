@@ -116,3 +116,20 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
   - Executing agents read the story rows of their REQ IDs at session start.
 - **Consequences:** Changed: requirements catalog (REQ-128, REQ-140), delivery scope, requirement mapping, package directory, C-04, AP-09..AP-17, execution rules and AP template.
 - **Owner detail:** [Execution rules](../work-packages/shared-rules.md#session-start), [AP-15](../work-packages/ap-15-frontend.md), [requirement mapping](../work-packages/requirement-mapping.md)
+
+<a id="d-142"></a>
+## D-142 Second open-AP boundary repair and start decisions for AP-10..AP-17
+
+- **Status:** accepted
+- **Date:** 2026-11-07
+- **Amends:** [D-138](#d-138), [D-135](10-foundation-redesign.md#d-135) item 15 (REQ-096/097)
+- **Decision:** User-ordered audit of AP-10..AP-17 so that no open AP contains an undecided question, a conditional scope or a planned boundary crossing. The user decided:
+  - REQ-133/138: personal and global saved views are delivered in Phase 1; a global view is visible to every Principal that may read Messages, and opening any view yields only the intersection with the viewer's current rights (AP-10 server, AP-15 screens).
+  - REQ-062: account deletion removes all Core-held personal data, including personal plugin configuration, Secrets and Delivery targets, in one transaction and emits `principal.deleted`; the result states that copies outside the Core are not purged. No plugin cleanup method is built (REQ-139 stays later).
+  - REQ-097: account preferences are locale, time zone and a time-gap threshold in minutes (0 = off, 0..1440); Delivery preferences are the AP-11 Subscriptions, AP-13 stores no Delivery defaults.
+  - REQ-111: `domain_events`/`consumer_offsets`, terminal receipts and `login_attempts` are pruned automatically by their documented rules; Messages and `audit_records` only under an operator limit (unlimited by default). Limits are a revisioned installation setting managed with `operations.manage`; a worker-role runner applies them (AP-16).
+  - Plugin Secrets: the in-app encrypted store (authenticated encryption, master key from `GOPAGER_SECRET_KEY_FILE` or `GOPAGER_SECRET_KEY`) is mandatory; a Secret field may instead hold an optional external reference `file:` (mounted Kubernetes or Docker Secret) or `env:`; a changed file digest is a new Secret version. Provider API adapters are not built (AP-12).
+  - First-party plugins are separate Go modules under `plugins/<name>/` with their own tests against local fakes; AP-12 provides a server-side test harness (`pluginsdk/plugintest`) that simulates how the Core calls a plugin. No real external Delivery check is part of any AP.
+- **Ownership repairs:** AP-11 owns layout definitions (block schema, validator, renderer, store, `presentation.manage` CRUD), the Subscription layout reference and the C-08 `replayMode` vocabulary; AP-13 adds the installation default and Organization/Unit layout assignments in its own table, the static installation title/banner and the GUI card model. AP-10 projects derived Processing result fields; AP-13 builds only the card model on top. Plugin hosting stays in `internal/processing/` (no `internal/pluginhost/`); plugin configuration authority is the global `plugin.configure` right ([D-100](04-processing-and-plugins.md#d-100)). AP-17 builds no new tooling and repairs no other AP's defect. Further repairs (inputs, write scopes, F-case ownership, stale references) are recorded inline in the affected APs.
+- **Consequences:** Changed: delivery scope, requirement mapping, AP-10..AP-17, C-06..C-13, reference cases, AP template.
+- **Owner detail:** [AP template](../work-packages/ap-template.md), [delivery scope](../authoritative-plan.md#delivery-scope)
