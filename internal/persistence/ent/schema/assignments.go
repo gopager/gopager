@@ -235,8 +235,9 @@ func (AssignmentControl) Fields() []ent.Field {
 
 // PendingAssignmentScope defines the assignment_pending_scopes table: a durable, leased
 // correction run that re-resolves the stored targets of one selector (an address selector on a
-// Network and Protocol with an optional validity window, one Unit, or one target) with a fenced
-// cursor; see the migration for the exclusive-form check.
+// Network and Protocol with an optional validity window, one Unit, one target, or the Network of
+// every Transmission of one Gateway and Protocol) with a fenced cursor; see the migration for the
+// exclusive-form check.
 type PendingAssignmentScope struct{ ent.Schema }
 
 // Policy returns the privacy policy that guards queries and mutations of the PendingAssignmentScope schema.
@@ -252,7 +253,7 @@ func (PendingAssignmentScope) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.UUID{}).Default(uuid.New),
 		field.Int64("assignment_revision").Positive(),
-		field.Enum("reason").Values("rule-change", "unit-deleted", "suppression-change"),
+		field.Enum("reason").Values("rule-change", "unit-deleted", "suppression-change", "gateway-mapping-change"),
 		field.UUID("network_id", uuid.UUID{}).Optional().Nillable(),
 		field.Enum("protocol").Values("pocsag", "flex", "zvei", "eas").Optional().Nillable(),
 		field.Int64("address_from").Optional().Nillable(),
@@ -263,6 +264,7 @@ func (PendingAssignmentScope) Fields() []ent.Field {
 		field.UUID("unit_id", uuid.UUID{}).Optional().Nillable(),
 		field.UUID("transmission_id", uuid.UUID{}).Optional().Nillable(),
 		field.Int("target_position").Optional().Nillable().NonNegative(),
+		field.UUID("gateway_id", uuid.UUID{}).Optional().Nillable(),
 		field.Time("recorded_at"),
 		field.Enum("state").Values("queued", "running", "completed", "failed", "superseded").Default("queued"),
 		field.Time("cursor_accepted_at").Optional().Nillable(),

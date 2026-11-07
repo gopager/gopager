@@ -111,9 +111,11 @@ func readCorrectionLease(ctx context.Context, executor postgres.Executor, id uui
 
 // ReadCorrectionBatch returns up to limit (1..100) Transmissions to re-resolve under a
 // held lease: the next Transmissions after the cursor, in acceptance order, that still carry
-// a target inside the scope's selector at an older Assignment revision. An empty result
-// means the scan is exhausted. A stale fencing token, expired lease or changed revision
-// yields authz.ErrRevisionConflict.
+// a target inside the scope's selector at an older Assignment revision or, for a gateway
+// scope, a Network resolution below it. For a gateway scope it first locks the Gateway row,
+// the lock intake and mapping replacement take, so batches of concurrent scopes of one Gateway
+// serialize instead of conflicting. An empty result means the scan is exhausted. A stale
+// fencing token, expired lease or changed revision yields authz.ErrRevisionConflict.
 func (s *Store) ReadCorrectionBatch(ctx context.Context, tx platform.TransactionContext,
 	lease assignments.CorrectionLease, limit int,
 ) ([]assignments.CorrectionBatchItem, error) {
@@ -136,14 +138,21 @@ func (s *Store) ReadCorrectionBatch(ctx context.Context, tx platform.Transaction
 		current.AssignmentRev != lease.AssignmentRev {
 		return nil, authz.ErrRevisionConflict
 	}
-	rows, err := executor.QueryContext(ctx, `SELECT t.id,t.message_id,t.network_id,t.protocol,
+	if lease.Scope.GatewayID != nil {
+		if _, err := executor.ExecContext(ctx, `SELECT 1 FROM gateways WHERE id=$1 FOR UPDATE`,
+			*lease.Scope.GatewayID); err != nil {
+			return nil, err
+		}
+	}
+	rows, err := executor.QueryContext(ctx, `SELECT t.id,t.message_id,t.network_id,t.gateway_id,
+		COALESCE(t.gateway_network_identifier,''),t.protocol,
 		(SELECT COALESCE(json_agg(tt.original ORDER BY tt.position),'[]'::json) FROM transmission_targets tt WHERE tt.transmission_id=t.id),
 		t.observed_at,t.accepted_at,t.source_revision
 		FROM transmissions t
-		WHERE EXISTS (SELECT 1 FROM transmission_targets target WHERE target.transmission_id=t.id AND `+inScopeSQL+`)
-		AND ($12::timestamptz IS NULL OR (t.accepted_at,t.id)>($12,$13))
-		ORDER BY t.accepted_at,t.id LIMIT $14`,
-		append(scopeArgs(lease.Scope, lease.AssignmentRev), lease.CursorAt, lease.CursorID, limit)...)
+		WHERE `+inScopeAnySQL+`
+		AND ($14::timestamptz IS NULL OR (t.accepted_at,t.id)>($14,$15))
+		ORDER BY t.accepted_at,t.id LIMIT $16`,
+		append(scopeArgs(lease.Scope, lease.Reason, lease.AssignmentRev), lease.CursorAt, lease.CursorID, limit)...)
 	if err != nil {
 		return nil, err
 	}
@@ -157,8 +166,9 @@ func scanCorrectionItems(rows *sql.Rows) ([]assignments.CorrectionBatchItem, err
 		var item assignments.CorrectionBatchItem
 		var protocol string
 		var encoded []byte
-		if err := rows.Scan(&item.TransmissionID, &item.MessageID, &item.NetworkID, &protocol,
-			&encoded, &item.ObservedAt, &item.AcceptedAt, &item.SourceRevision); err != nil {
+		if err := rows.Scan(&item.TransmissionID, &item.MessageID, &item.NetworkID, &item.GatewayID,
+			&item.DeclaredNetwork, &protocol, &encoded, &item.ObservedAt, &item.AcceptedAt,
+			&item.SourceRevision); err != nil {
 			return nil, err
 		}
 		item.Protocol = protocols.Protocol(protocol)
@@ -175,12 +185,16 @@ func scanCorrectionItems(rows *sql.Rows) ([]assignments.CorrectionBatchItem, err
 
 // ApplyCorrectionBatch writes re-resolved targets (1..100 updates) under a held lease and
 // returns the target resolutions that actually changed, each with the Message revision
-// after the change, and every Transmission whose stamped revision moved. It takes the shared
+// after the change, the Network moves, the number of unresolved Transmissions and every
+// Transmission whose stamped revision moved or that moved. It takes the shared
 // Assignment lock and fails with authz.ErrRevisionConflict when the fence or a Transmission's
 // source identity changed; a newer Assignment or access revision is expected, the targets are
-// stamped with the revision the fresh match was made at. Side effects: the scan cursor advances, every
-// touched Message has its message_units rows rebuilt, Messages with changed targets get a
-// new revision, and the lease is extended by 30 seconds.
+// stamped with the revision the fresh match was made at. An update with a Network resolution
+// (gateway scope) also stamps the Transmission's Network resolution; a resolved different
+// Network moves the Transmission and its targets there and increments its source revision, an
+// unresolved one only flags the Transmission. Side effects: the scan cursor advances, every
+// touched Message has its message_units rows rebuilt, Messages with changed targets or moved
+// Transmissions get a new revision, and the lease is extended by 30 seconds.
 func (s *Store) ApplyCorrectionBatch(ctx context.Context, tx platform.TransactionContext,
 	lease assignments.CorrectionLease, updates []assignments.CorrectionUpdate,
 ) (assignments.CorrectionApplied, error) {
@@ -228,6 +242,29 @@ func (s *Store) ApplyCorrectionBatch(ctx context.Context, tx platform.Transactio
 			messageSet[update.Item.MessageID] = true
 			messages = append(messages, update.Item.MessageID)
 		}
+		network := update.Item.NetworkID
+		if update.Network != nil {
+			moved, err := applyNetworkResolution(ctx, executor, update)
+			if err != nil {
+				return assignments.CorrectionApplied{}, err
+			}
+			if !update.Network.Resolved {
+				applied.Unresolved++
+			}
+			if moved {
+				network = update.Network.NetworkID
+				applied.Moves = append(applied.Moves, assignments.NetworkMove{TransmissionID: update.Item.TransmissionID,
+					MessageID: update.Item.MessageID, From: update.Item.NetworkID, To: network})
+				if !changedMessageSet[update.Item.MessageID] {
+					changedMessageSet[update.Item.MessageID] = true
+					changedMessages = append(changedMessages, update.Item.MessageID)
+				}
+				if !restamped[update.Item.TransmissionID] {
+					restamped[update.Item.TransmissionID] = true
+					applied.Restamped = append(applied.Restamped, update.Item.TransmissionID)
+				}
+			}
+		}
 		for position, resolution := range update.Match.Resolutions {
 			if resolution.TargetPosition != position ||
 				(resolution.Status != "assigned" && resolution.Status != "unassigned") ||
@@ -274,7 +311,7 @@ func (s *Store) ApplyCorrectionBatch(ctx context.Context, tx platform.Transactio
 			beforeFact := events.IntakeResolution{Status: before.Status, UnitID: before.UnitID, AddressRuleID: before.AddressRuleID}
 			afterFact := events.IntakeResolution{Status: resolution.Status, UnitID: resolution.UnitID, AddressRuleID: resolution.AddressRuleID}
 			applied.Changes = append(applied.Changes, assignments.CorrectionChange{TransmissionID: update.Item.TransmissionID,
-				MessageID: update.Item.MessageID, NetworkID: update.Item.NetworkID, TargetPosition: position,
+				MessageID: update.Item.MessageID, NetworkID: network, TargetPosition: position,
 				Before: beforeFact, After: afterFact})
 		}
 		if err := updateCorrectionCursor(ctx, executor, lease.ID, update.Item.AcceptedAt, update.Item.TransmissionID); err != nil {
@@ -298,9 +335,50 @@ func (s *Store) ApplyCorrectionBatch(ctx context.Context, tx platform.Transactio
 	for i := range applied.Changes {
 		applied.Changes[i].MessageRev = revisionByMessage[applied.Changes[i].MessageID]
 	}
+	for i := range applied.Moves {
+		applied.Moves[i].MessageRev = revisionByMessage[applied.Moves[i].MessageID]
+	}
 	_, err = executor.ExecContext(ctx, `UPDATE assignment_pending_scopes SET lease_until=$3
 		WHERE id=$1 AND state='running' AND fencing_token=$2`, lease.ID, lease.FencingToken, now.Add(30*time.Second))
 	return applied, err
+}
+
+// applyNetworkResolution stamps a gateway scope's Network resolution on the Transmission at the
+// match revision and reports whether it moved: a resolved different Network replaces the
+// Transmission's and its targets' Network and resolution method and increments its source
+// revision, so Processing candidates bound to the old source are superseded on readmission.
+// Without a resolution the Transmission keeps its Network and is flagged unresolved.
+func applyNetworkResolution(ctx context.Context, executor postgres.Executor, update assignments.CorrectionUpdate,
+) (bool, error) {
+	resolution := *update.Network
+	if resolution.Resolved && (resolution.NetworkID == uuid.Nil || resolution.Method == "") {
+		return false, authz.ErrInvalidInput
+	}
+	moved := resolution.Resolved && resolution.NetworkID != update.Item.NetworkID
+	if !resolution.Resolved {
+		_, err := executor.ExecContext(ctx, `UPDATE transmissions SET network_unresolved=true,network_revision=$2
+			WHERE id=$1`, update.Item.TransmissionID, update.Match.Revision)
+		return false, err
+	}
+	if _, err := executor.ExecContext(ctx, `UPDATE transmissions SET network_id=$2,network_resolution=$3,
+		network_unresolved=false,network_revision=$4,source_revision=source_revision+$5 WHERE id=$1`,
+		update.Item.TransmissionID, resolution.NetworkID, resolution.Method, update.Match.Revision,
+		boolInt64(moved)); err != nil {
+		return false, err
+	}
+	if !moved {
+		return false, nil
+	}
+	_, err := executor.ExecContext(ctx, `UPDATE transmission_targets SET network_id=$2 WHERE transmission_id=$1`,
+		update.Item.TransmissionID, resolution.NetworkID)
+	return true, err
+}
+
+func boolInt64(value bool) int64 {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 func checkCorrectionFence(ctx context.Context, executor postgres.Executor, lease assignments.CorrectionLease,
@@ -342,8 +420,9 @@ func resolutionEqual(left, right assignments.Resolution) bool {
 			left.AddressRuleID != nil && right.AddressRuleID != nil && *left.AddressRuleID == *right.AddressRuleID)
 }
 
-// CompleteCorrection marks the leased scope completed if no target inside its selector still
-// carries an older Assignment revision. It returns false, without error, while work remains.
+// CompleteCorrection marks the leased scope completed if no target inside its selector, and for a
+// gateway scope no Network resolution of its Transmissions, still carries an older Assignment
+// revision. It returns false, without error, while work remains.
 // A stale fence yields authz.ErrRevisionConflict.
 func (s *Store) CompleteCorrection(ctx context.Context, tx platform.TransactionContext,
 	lease assignments.CorrectionLease,
@@ -363,8 +442,9 @@ func (s *Store) CompleteCorrection(ctx context.Context, tx platform.TransactionC
 		return false, err
 	}
 	var stale bool
-	if err := executor.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM transmission_targets target WHERE `+inScopeSQL+`)`,
-		scopeArgs(lease.Scope, lease.AssignmentRev)...).Scan(&stale); err != nil {
+	if err := executor.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM transmission_targets target WHERE `+inScopeSQL+`)
+		OR EXISTS(SELECT 1 FROM transmissions t WHERE `+inScopeTransmissionSQL+`)`,
+		scopeArgs(lease.Scope, lease.Reason, lease.AssignmentRev)...).Scan(&stale); err != nil {
 		return false, err
 	}
 	if stale {

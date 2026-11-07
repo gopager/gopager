@@ -499,6 +499,7 @@ var schemaGraph = func() *sqlgraph.Schema {
 			pendingassignmentscope.FieldUnitID:               {Type: field.TypeUUID, Column: pendingassignmentscope.FieldUnitID},
 			pendingassignmentscope.FieldTransmissionID:       {Type: field.TypeUUID, Column: pendingassignmentscope.FieldTransmissionID},
 			pendingassignmentscope.FieldTargetPosition:       {Type: field.TypeInt, Column: pendingassignmentscope.FieldTargetPosition},
+			pendingassignmentscope.FieldGatewayID:            {Type: field.TypeUUID, Column: pendingassignmentscope.FieldGatewayID},
 			pendingassignmentscope.FieldRecordedAt:           {Type: field.TypeTime, Column: pendingassignmentscope.FieldRecordedAt},
 			pendingassignmentscope.FieldState:                {Type: field.TypeEnum, Column: pendingassignmentscope.FieldState},
 			pendingassignmentscope.FieldCursorAcceptedAt:     {Type: field.TypeTime, Column: pendingassignmentscope.FieldCursorAcceptedAt},
@@ -653,6 +654,9 @@ var schemaGraph = func() *sqlgraph.Schema {
 			transmission.FieldQualityMetrics:           {Type: field.TypeJSON, Column: transmission.FieldQualityMetrics},
 			transmission.FieldMessageID:                {Type: field.TypeUUID, Column: transmission.FieldMessageID},
 			transmission.FieldProcessingStatus:         {Type: field.TypeEnum, Column: transmission.FieldProcessingStatus},
+			transmission.FieldGatewayNetworkIdentifier: {Type: field.TypeString, Column: transmission.FieldGatewayNetworkIdentifier},
+			transmission.FieldNetworkRevision:          {Type: field.TypeInt64, Column: transmission.FieldNetworkRevision},
+			transmission.FieldNetworkUnresolved:        {Type: field.TypeBool, Column: transmission.FieldNetworkUnresolved},
 		},
 	}
 	graph.Nodes[31] = &sqlgraph.Node{
@@ -2804,6 +2808,11 @@ func (f *PendingAssignmentScopeFilter) WhereTargetPosition(p entql.IntP) {
 	f.Where(p.Field(pendingassignmentscope.FieldTargetPosition))
 }
 
+// WhereGatewayID applies the entql [16]byte predicate on the gateway_id field.
+func (f *PendingAssignmentScopeFilter) WhereGatewayID(p entql.ValueP) {
+	f.Where(p.Field(pendingassignmentscope.FieldGatewayID))
+}
+
 // WhereRecordedAt applies the entql time.Time predicate on the recorded_at field.
 func (f *PendingAssignmentScopeFilter) WhereRecordedAt(p entql.TimeP) {
 	f.Where(p.Field(pendingassignmentscope.FieldRecordedAt))
@@ -3397,6 +3406,21 @@ func (f *TransmissionFilter) WhereMessageID(p entql.ValueP) {
 // WhereProcessingStatus applies the entql string predicate on the processing_status field.
 func (f *TransmissionFilter) WhereProcessingStatus(p entql.StringP) {
 	f.Where(p.Field(transmission.FieldProcessingStatus))
+}
+
+// WhereGatewayNetworkIdentifier applies the entql string predicate on the gateway_network_identifier field.
+func (f *TransmissionFilter) WhereGatewayNetworkIdentifier(p entql.StringP) {
+	f.Where(p.Field(transmission.FieldGatewayNetworkIdentifier))
+}
+
+// WhereNetworkRevision applies the entql int64 predicate on the network_revision field.
+func (f *TransmissionFilter) WhereNetworkRevision(p entql.Int64P) {
+	f.Where(p.Field(transmission.FieldNetworkRevision))
+}
+
+// WhereNetworkUnresolved applies the entql bool predicate on the network_unresolved field.
+func (f *TransmissionFilter) WhereNetworkUnresolved(p entql.BoolP) {
+	f.Where(p.Field(transmission.FieldNetworkUnresolved))
 }
 
 // addPredicate implements the predicateAdder interface.

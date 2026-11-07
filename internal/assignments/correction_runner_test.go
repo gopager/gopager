@@ -59,6 +59,10 @@ func (f *runnerFixture) MatchTargets(context.Context, platform.TransactionContex
 	return MatchResult{}, errors.New("unexpected match")
 }
 
+func (f *runnerFixture) ResolveNetwork(context.Context, platform.TransactionContext, CorrectionBatchItem) (NetworkResolution, error) {
+	return NetworkResolution{}, errors.New("unexpected resolution")
+}
+
 func (f *runnerFixture) ClaimCorrection(context.Context, platform.TransactionContext, time.Time, time.Duration) (CorrectionLease, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -95,7 +99,7 @@ func (f *runnerFixture) ReadmitProcessing(context.Context, platform.TransactionC
 
 func newFixtureRunner(t *testing.T, f *runnerFixture) *CorrectionRunner {
 	t.Helper()
-	runner, err := NewCorrectionRunner(f, f, f, f, f, f)
+	runner, err := NewCorrectionRunner(f, f, f, f, f, f, f)
 	if err != nil {
 		t.Fatal(err)
 	}

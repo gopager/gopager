@@ -286,6 +286,26 @@ func (_u *PendingAssignmentScopeUpdate) ClearTargetPosition() *PendingAssignment
 	return _u
 }
 
+// SetGatewayID sets the "gateway_id" field.
+func (_u *PendingAssignmentScopeUpdate) SetGatewayID(v uuid.UUID) *PendingAssignmentScopeUpdate {
+	_u.mutation.SetGatewayID(v)
+	return _u
+}
+
+// SetNillableGatewayID sets the "gateway_id" field if the given value is not nil.
+func (_u *PendingAssignmentScopeUpdate) SetNillableGatewayID(v *uuid.UUID) *PendingAssignmentScopeUpdate {
+	if v != nil {
+		_u.SetGatewayID(*v)
+	}
+	return _u
+}
+
+// ClearGatewayID clears the value of the "gateway_id" field.
+func (_u *PendingAssignmentScopeUpdate) ClearGatewayID() *PendingAssignmentScopeUpdate {
+	_u.mutation.ClearGatewayID()
+	return _u
+}
+
 // SetRecordedAt sets the "recorded_at" field.
 func (_u *PendingAssignmentScopeUpdate) SetRecordedAt(v time.Time) *PendingAssignmentScopeUpdate {
 	_u.mutation.SetRecordedAt(v)
@@ -609,6 +629,12 @@ func (_u *PendingAssignmentScopeUpdate) sqlSave(ctx context.Context) (_node int,
 	if _u.mutation.TargetPositionCleared() {
 		_spec.ClearField(pendingassignmentscope.FieldTargetPosition, field.TypeInt)
 	}
+	if value, ok := _u.mutation.GatewayID(); ok {
+		_spec.SetField(pendingassignmentscope.FieldGatewayID, field.TypeUUID, value)
+	}
+	if _u.mutation.GatewayIDCleared() {
+		_spec.ClearField(pendingassignmentscope.FieldGatewayID, field.TypeUUID)
+	}
 	if value, ok := _u.mutation.RecordedAt(); ok {
 		_spec.SetField(pendingassignmentscope.FieldRecordedAt, field.TypeTime, value)
 	}
@@ -926,6 +952,26 @@ func (_u *PendingAssignmentScopeUpdateOne) AddTargetPosition(v int) *PendingAssi
 // ClearTargetPosition clears the value of the "target_position" field.
 func (_u *PendingAssignmentScopeUpdateOne) ClearTargetPosition() *PendingAssignmentScopeUpdateOne {
 	_u.mutation.ClearTargetPosition()
+	return _u
+}
+
+// SetGatewayID sets the "gateway_id" field.
+func (_u *PendingAssignmentScopeUpdateOne) SetGatewayID(v uuid.UUID) *PendingAssignmentScopeUpdateOne {
+	_u.mutation.SetGatewayID(v)
+	return _u
+}
+
+// SetNillableGatewayID sets the "gateway_id" field if the given value is not nil.
+func (_u *PendingAssignmentScopeUpdateOne) SetNillableGatewayID(v *uuid.UUID) *PendingAssignmentScopeUpdateOne {
+	if v != nil {
+		_u.SetGatewayID(*v)
+	}
+	return _u
+}
+
+// ClearGatewayID clears the value of the "gateway_id" field.
+func (_u *PendingAssignmentScopeUpdateOne) ClearGatewayID() *PendingAssignmentScopeUpdateOne {
+	_u.mutation.ClearGatewayID()
 	return _u
 }
 
@@ -1281,6 +1327,12 @@ func (_u *PendingAssignmentScopeUpdateOne) sqlSave(ctx context.Context) (_node *
 	}
 	if _u.mutation.TargetPositionCleared() {
 		_spec.ClearField(pendingassignmentscope.FieldTargetPosition, field.TypeInt)
+	}
+	if value, ok := _u.mutation.GatewayID(); ok {
+		_spec.SetField(pendingassignmentscope.FieldGatewayID, field.TypeUUID, value)
+	}
+	if _u.mutation.GatewayIDCleared() {
+		_spec.ClearField(pendingassignmentscope.FieldGatewayID, field.TypeUUID)
 	}
 	if value, ok := _u.mutation.RecordedAt(); ok {
 		_spec.SetField(pendingassignmentscope.FieldRecordedAt, field.TypeTime, value)

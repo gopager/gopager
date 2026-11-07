@@ -250,6 +250,61 @@ func (_u *TransmissionUpdate) SetNillableProcessingStatus(v *transmission.Proces
 	return _u
 }
 
+// SetGatewayNetworkIdentifier sets the "gateway_network_identifier" field.
+func (_u *TransmissionUpdate) SetGatewayNetworkIdentifier(v string) *TransmissionUpdate {
+	_u.mutation.SetGatewayNetworkIdentifier(v)
+	return _u
+}
+
+// SetNillableGatewayNetworkIdentifier sets the "gateway_network_identifier" field if the given value is not nil.
+func (_u *TransmissionUpdate) SetNillableGatewayNetworkIdentifier(v *string) *TransmissionUpdate {
+	if v != nil {
+		_u.SetGatewayNetworkIdentifier(*v)
+	}
+	return _u
+}
+
+// ClearGatewayNetworkIdentifier clears the value of the "gateway_network_identifier" field.
+func (_u *TransmissionUpdate) ClearGatewayNetworkIdentifier() *TransmissionUpdate {
+	_u.mutation.ClearGatewayNetworkIdentifier()
+	return _u
+}
+
+// SetNetworkRevision sets the "network_revision" field.
+func (_u *TransmissionUpdate) SetNetworkRevision(v int64) *TransmissionUpdate {
+	_u.mutation.ResetNetworkRevision()
+	_u.mutation.SetNetworkRevision(v)
+	return _u
+}
+
+// SetNillableNetworkRevision sets the "network_revision" field if the given value is not nil.
+func (_u *TransmissionUpdate) SetNillableNetworkRevision(v *int64) *TransmissionUpdate {
+	if v != nil {
+		_u.SetNetworkRevision(*v)
+	}
+	return _u
+}
+
+// AddNetworkRevision adds value to the "network_revision" field.
+func (_u *TransmissionUpdate) AddNetworkRevision(v int64) *TransmissionUpdate {
+	_u.mutation.AddNetworkRevision(v)
+	return _u
+}
+
+// SetNetworkUnresolved sets the "network_unresolved" field.
+func (_u *TransmissionUpdate) SetNetworkUnresolved(v bool) *TransmissionUpdate {
+	_u.mutation.SetNetworkUnresolved(v)
+	return _u
+}
+
+// SetNillableNetworkUnresolved sets the "network_unresolved" field if the given value is not nil.
+func (_u *TransmissionUpdate) SetNillableNetworkUnresolved(v *bool) *TransmissionUpdate {
+	if v != nil {
+		_u.SetNetworkUnresolved(*v)
+	}
+	return _u
+}
+
 // Mutation returns the TransmissionMutation object of the builder.
 func (_u *TransmissionUpdate) Mutation() *TransmissionMutation {
 	return _u.mutation
@@ -307,6 +362,16 @@ func (_u *TransmissionUpdate) check() error {
 	if v, ok := _u.mutation.ProcessingStatus(); ok {
 		if err := transmission.ProcessingStatusValidator(v); err != nil {
 			return &ValidationError{Name: "processing_status", err: fmt.Errorf(`ent: validator failed for field "Transmission.processing_status": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.GatewayNetworkIdentifier(); ok {
+		if err := transmission.GatewayNetworkIdentifierValidator(v); err != nil {
+			return &ValidationError{Name: "gateway_network_identifier", err: fmt.Errorf(`ent: validator failed for field "Transmission.gateway_network_identifier": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.NetworkRevision(); ok {
+		if err := transmission.NetworkRevisionValidator(v); err != nil {
+			return &ValidationError{Name: "network_revision", err: fmt.Errorf(`ent: validator failed for field "Transmission.network_revision": %w`, err)}
 		}
 	}
 	return nil
@@ -393,6 +458,21 @@ func (_u *TransmissionUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if value, ok := _u.mutation.ProcessingStatus(); ok {
 		_spec.SetField(transmission.FieldProcessingStatus, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.GatewayNetworkIdentifier(); ok {
+		_spec.SetField(transmission.FieldGatewayNetworkIdentifier, field.TypeString, value)
+	}
+	if _u.mutation.GatewayNetworkIdentifierCleared() {
+		_spec.ClearField(transmission.FieldGatewayNetworkIdentifier, field.TypeString)
+	}
+	if value, ok := _u.mutation.NetworkRevision(); ok {
+		_spec.SetField(transmission.FieldNetworkRevision, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedNetworkRevision(); ok {
+		_spec.AddField(transmission.FieldNetworkRevision, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.NetworkUnresolved(); ok {
+		_spec.SetField(transmission.FieldNetworkUnresolved, field.TypeBool, value)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
@@ -634,6 +714,61 @@ func (_u *TransmissionUpdateOne) SetNillableProcessingStatus(v *transmission.Pro
 	return _u
 }
 
+// SetGatewayNetworkIdentifier sets the "gateway_network_identifier" field.
+func (_u *TransmissionUpdateOne) SetGatewayNetworkIdentifier(v string) *TransmissionUpdateOne {
+	_u.mutation.SetGatewayNetworkIdentifier(v)
+	return _u
+}
+
+// SetNillableGatewayNetworkIdentifier sets the "gateway_network_identifier" field if the given value is not nil.
+func (_u *TransmissionUpdateOne) SetNillableGatewayNetworkIdentifier(v *string) *TransmissionUpdateOne {
+	if v != nil {
+		_u.SetGatewayNetworkIdentifier(*v)
+	}
+	return _u
+}
+
+// ClearGatewayNetworkIdentifier clears the value of the "gateway_network_identifier" field.
+func (_u *TransmissionUpdateOne) ClearGatewayNetworkIdentifier() *TransmissionUpdateOne {
+	_u.mutation.ClearGatewayNetworkIdentifier()
+	return _u
+}
+
+// SetNetworkRevision sets the "network_revision" field.
+func (_u *TransmissionUpdateOne) SetNetworkRevision(v int64) *TransmissionUpdateOne {
+	_u.mutation.ResetNetworkRevision()
+	_u.mutation.SetNetworkRevision(v)
+	return _u
+}
+
+// SetNillableNetworkRevision sets the "network_revision" field if the given value is not nil.
+func (_u *TransmissionUpdateOne) SetNillableNetworkRevision(v *int64) *TransmissionUpdateOne {
+	if v != nil {
+		_u.SetNetworkRevision(*v)
+	}
+	return _u
+}
+
+// AddNetworkRevision adds value to the "network_revision" field.
+func (_u *TransmissionUpdateOne) AddNetworkRevision(v int64) *TransmissionUpdateOne {
+	_u.mutation.AddNetworkRevision(v)
+	return _u
+}
+
+// SetNetworkUnresolved sets the "network_unresolved" field.
+func (_u *TransmissionUpdateOne) SetNetworkUnresolved(v bool) *TransmissionUpdateOne {
+	_u.mutation.SetNetworkUnresolved(v)
+	return _u
+}
+
+// SetNillableNetworkUnresolved sets the "network_unresolved" field if the given value is not nil.
+func (_u *TransmissionUpdateOne) SetNillableNetworkUnresolved(v *bool) *TransmissionUpdateOne {
+	if v != nil {
+		_u.SetNetworkUnresolved(*v)
+	}
+	return _u
+}
+
 // Mutation returns the TransmissionMutation object of the builder.
 func (_u *TransmissionUpdateOne) Mutation() *TransmissionMutation {
 	return _u.mutation
@@ -704,6 +839,16 @@ func (_u *TransmissionUpdateOne) check() error {
 	if v, ok := _u.mutation.ProcessingStatus(); ok {
 		if err := transmission.ProcessingStatusValidator(v); err != nil {
 			return &ValidationError{Name: "processing_status", err: fmt.Errorf(`ent: validator failed for field "Transmission.processing_status": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.GatewayNetworkIdentifier(); ok {
+		if err := transmission.GatewayNetworkIdentifierValidator(v); err != nil {
+			return &ValidationError{Name: "gateway_network_identifier", err: fmt.Errorf(`ent: validator failed for field "Transmission.gateway_network_identifier": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.NetworkRevision(); ok {
+		if err := transmission.NetworkRevisionValidator(v); err != nil {
+			return &ValidationError{Name: "network_revision", err: fmt.Errorf(`ent: validator failed for field "Transmission.network_revision": %w`, err)}
 		}
 	}
 	return nil
@@ -807,6 +952,21 @@ func (_u *TransmissionUpdateOne) sqlSave(ctx context.Context) (_node *Transmissi
 	}
 	if value, ok := _u.mutation.ProcessingStatus(); ok {
 		_spec.SetField(transmission.FieldProcessingStatus, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.GatewayNetworkIdentifier(); ok {
+		_spec.SetField(transmission.FieldGatewayNetworkIdentifier, field.TypeString, value)
+	}
+	if _u.mutation.GatewayNetworkIdentifierCleared() {
+		_spec.ClearField(transmission.FieldGatewayNetworkIdentifier, field.TypeString)
+	}
+	if value, ok := _u.mutation.NetworkRevision(); ok {
+		_spec.SetField(transmission.FieldNetworkRevision, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedNetworkRevision(); ok {
+		_spec.AddField(transmission.FieldNetworkRevision, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.NetworkUnresolved(); ok {
+		_spec.SetField(transmission.FieldNetworkUnresolved, field.TypeBool, value)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	_node = &Transmission{config: _u.config}

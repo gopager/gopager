@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: GoPager API
-  version: 1.2.0
+  version: 1.3.0
   description: |
     GoPager application API. Human guide: docs/http-api.md.
 
@@ -2262,11 +2262,11 @@ paths:
               $ref: '#/components/schemas/ReplaceGatewayNetworksRequest'
       responses:
         '200':
-          description: New Gateway revision.
+          description: New Gateway revision and the queued re-resolution corrections.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GatewayRevisionResponse'
+                $ref: '#/components/schemas/GatewayNetworksResponse'
         '400':
           $ref: '#/components/responses/InvalidInput'
         '401':
@@ -5153,6 +5153,7 @@ components:
       - scope
       - processed
       - remaining
+      - unresolved
       properties:
         id:
           type: string
@@ -5177,6 +5178,11 @@ components:
           type: integer
           minimum: 0
           description: Transmissions with a target inside the scope that still await re-resolution.
+        unresolved:
+          type: integer
+          minimum: 0
+          description: For kind `gateway`, Transmissions of the scope that the current mapping and rules cannot resolve;
+            they keep their Network. Always 0 for other kinds.
         failureCode:
           type: string
           description: Platform error code of the last failure. Omitted when there is none.
@@ -5184,7 +5190,9 @@ components:
       type: object
       description: The targets a correction re-resolves. Kind `address-rules` carries `networkId`, `protocol`
         and either an address range (`addressFrom`, `addressTo`) or an `addressText`, with an optional
-        validity window; kind `unit` carries `unitId`; kind `target` carries `transmissionId` and `targetPosition`.
+        validity window; kind `unit` carries `unitId`; kind `target` carries `transmissionId` and `targetPosition`;
+        kind `gateway` (a Network mapping change) carries `gatewayId` and `protocol` and re-resolves the Network
+        of every Transmission of that Gateway and Protocol.
       required:
       - kind
       properties:
@@ -5194,6 +5202,10 @@ components:
           - address-rules
           - unit
           - target
+          - gateway
+        gatewayId:
+          type: string
+          format: uuid
         networkId:
           type: string
           format: uuid
@@ -5952,6 +5964,25 @@ components:
           $ref: '#/components/schemas/SchemaVersion'
         revision:
           $ref: '#/components/schemas/Revision'
+    GatewayNetworksResponse:
+      type: object
+      description: Unwrapped (no `data` envelope).
+      required:
+      - schemaVersion
+      - revision
+      - correctionIds
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        revision:
+          $ref: '#/components/schemas/Revision'
+        correctionIds:
+          type: array
+          description: One `gateway` correction per Protocol whose candidate Networks changed; empty when none
+            changed. Follow them with `GET /assignment-corrections/{id}`.
+          items:
+            type: string
+            format: uuid
     GatewayCredentialIssueResponse:
       type: object
       description: Unwrapped (no `data` envelope).

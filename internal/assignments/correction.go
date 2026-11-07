@@ -36,11 +36,12 @@ type Suppression struct {
 	LiftedAt       *time.Time `json:"liftedAt"`
 }
 
-// CorrectionScope selects the targets a correction re-resolves: an address selector on one
-// Network and Protocol with an optional validity window (a rule change), one Unit (a Unit
-// deletion) or one target (a suppression change). Exactly one of the three forms is set;
-// Kind names it. Functions of a rule selector are not part of the scope, so a scope is a
-// superset of the rule's targets, which is safe because re-resolution is idempotent.
+// CorrectionScope selects what a correction re-resolves: the targets of an address selector on
+// one Network and Protocol with an optional validity window (a rule change), of one Unit (a Unit
+// deletion) or one target (a suppression change), or the Network and targets of every
+// Transmission of one Gateway and Protocol (a Gateway mapping change). Exactly one of the four
+// forms is set; Kind names it. Functions of a rule selector are not part of the scope, so a
+// scope is a superset of the rule's targets, which is safe because re-resolution is idempotent.
 type CorrectionScope struct {
 	NetworkID      *uuid.UUID         `json:"networkId,omitempty"`
 	Protocol       protocols.Protocol `json:"protocol,omitempty"`
@@ -52,22 +53,26 @@ type CorrectionScope struct {
 	UnitID         *uuid.UUID         `json:"unitId,omitempty"`
 	TransmissionID *uuid.UUID         `json:"transmissionId,omitempty"`
 	TargetPosition *int               `json:"targetPosition,omitempty"`
+	GatewayID      *uuid.UUID         `json:"gatewayId,omitempty"`
 }
 
-// Kind returns address-rules, unit or target, or an empty string for an invalid scope.
+// Kind returns address-rules, unit, target or gateway, or an empty string for an invalid scope.
 func (s CorrectionScope) Kind() string {
 	switch {
-	case s.NetworkID != nil && s.UnitID == nil && s.TransmissionID == nil:
+	case s.NetworkID != nil && s.UnitID == nil && s.TransmissionID == nil && s.GatewayID == nil:
 		return "address-rules"
-	case s.UnitID != nil && s.NetworkID == nil && s.TransmissionID == nil:
+	case s.UnitID != nil && s.NetworkID == nil && s.TransmissionID == nil && s.GatewayID == nil:
 		return "unit"
-	case s.TransmissionID != nil && s.TargetPosition != nil && s.NetworkID == nil && s.UnitID == nil:
+	case s.TransmissionID != nil && s.TargetPosition != nil && s.NetworkID == nil && s.UnitID == nil &&
+		s.GatewayID == nil:
 		return "target"
+	case s.GatewayID != nil && s.NetworkID == nil && s.UnitID == nil && s.TransmissionID == nil:
+		return "gateway"
 	}
 	return ""
 }
 
-// Validate rejects a scope that is not exactly one of the three forms or carries a nil ID.
+// Validate rejects a scope that is not exactly one of the four forms or carries a nil ID.
 func (s CorrectionScope) Validate() error {
 	switch s.Kind() {
 	case "address-rules":
@@ -83,6 +88,12 @@ func (s CorrectionScope) Validate() error {
 		}
 	case "target":
 		if *s.TransmissionID == uuid.Nil || *s.TargetPosition < 0 {
+			return authz.ErrInvalidInput
+		}
+	case "gateway":
+		if *s.GatewayID == uuid.Nil || !s.Protocol.Valid() || s.TargetPosition != nil ||
+			s.AddressFrom != nil || s.AddressTo != nil || s.AddressText != nil || s.ValidFrom != nil ||
+			s.ValidUntil != nil {
 			return authz.ErrInvalidInput
 		}
 	default:
@@ -133,9 +144,17 @@ func TargetScope(transmission uuid.UUID, position int) CorrectionScope {
 	return CorrectionScope{TransmissionID: &id, TargetPosition: &index}
 }
 
+// GatewayScope is the correction scope of the Network resolution of every Transmission of one
+// Gateway and Protocol.
+func GatewayScope(gateway uuid.UUID, protocol protocols.Protocol) CorrectionScope {
+	id := gateway
+	return CorrectionScope{GatewayID: &id, Protocol: protocol}
+}
+
 // CorrectionStatus is a correction scope queued at one assignment revision. State is
 // pending, running, completed, failed or superseded; FailureCode is set for failures;
-// Processed and Remaining count the Transmissions with targets inside the scope. Fields
+// Processed and Remaining count the Transmissions inside the scope; Unresolved counts, for a
+// gateway scope, its Transmissions the current mapping and rules could not resolve (0 otherwise). Fields
 // tagged json:"-" are internal cursor data that are not exposed to API clients.
 type CorrectionStatus struct {
 	ID            uuid.UUID       `json:"id"`
@@ -144,6 +163,7 @@ type CorrectionStatus struct {
 	Scope         CorrectionScope `json:"scope"`
 	Processed     int             `json:"processed"`
 	Remaining     int             `json:"remaining"`
+	Unresolved    int             `json:"unresolved"`
 	FailureCode   string          `json:"failureCode,omitempty"`
 	Reason        string          `json:"-"`
 	CursorAt      *time.Time      `json:"-"`
@@ -155,7 +175,9 @@ type CorrectionStatus struct {
 // correction status used by Service. Reads return authz.ErrNotFound for
 // unknown IDs. RetryCorrection returns authz.ErrRevisionConflict unless the
 // scope is failed, and otherwise supersedes it with a new queued scope at the
-// current assignment revision.
+// current assignment revision. GatewayCorrectionAgencies lists, without
+// duplicates, the Agencies of the Gateway's current Networks of the Protocol and
+// of the Networks its Transmissions of that Protocol reference.
 type CorrectionRepository interface {
 	ReadTargetContext(context.Context, platform.TransactionContext, uuid.UUID, int) (TargetContext, error)
 	ReadSuppression(context.Context, platform.TransactionContext, uuid.UUID) (Suppression, error)
@@ -166,6 +188,7 @@ type CorrectionRepository interface {
 	ReadCorrection(context.Context, platform.TransactionContext, uuid.UUID) (CorrectionStatus, error)
 	CorrectionForRevision(context.Context, platform.TransactionContext, int64) (CorrectionStatus, error)
 	RetryCorrection(context.Context, platform.TransactionContext, uuid.UUID) (CorrectionStatus, error)
+	GatewayCorrectionAgencies(context.Context, platform.TransactionContext, uuid.UUID, protocols.Protocol) ([]uuid.UUID, error)
 }
 
 // CorrectionLease is a claimed correction scope. FencingToken guards every
@@ -188,22 +211,28 @@ type CorrectionLease struct {
 }
 
 // CorrectionBatchItem is one stored transmission within a correction scope,
-// with the original targets and observation time needed to re-match it.
+// with the original targets and observation time needed to re-match it and, for
+// Network re-resolution, its Gateway and declared Gateway Network identifier
+// (empty when none was declared).
 type CorrectionBatchItem struct {
-	TransmissionID uuid.UUID
-	MessageID      uuid.UUID
-	NetworkID      uuid.UUID
-	Protocol       protocols.Protocol
-	Targets        []protocols.Target
-	ObservedAt     time.Time
-	AcceptedAt     time.Time
-	SourceRevision int64
+	TransmissionID  uuid.UUID
+	MessageID       uuid.UUID
+	NetworkID       uuid.UUID
+	GatewayID       uuid.UUID
+	DeclaredNetwork string
+	Protocol        protocols.Protocol
+	Targets         []protocols.Target
+	ObservedAt      time.Time
+	AcceptedAt      time.Time
+	SourceRevision  int64
 }
 
-// CorrectionUpdate pairs a batch item with its fresh match result.
+// CorrectionUpdate pairs a batch item with its fresh match result. Network is set for a
+// gateway scope: the item's re-resolved Network, matched by Match.
 type CorrectionUpdate struct {
-	Item  CorrectionBatchItem
-	Match MatchResult
+	Item    CorrectionBatchItem
+	Match   MatchResult
+	Network *NetworkResolution
 }
 
 // CorrectionChange is one target whose stored resolution was changed by
@@ -218,13 +247,27 @@ type CorrectionChange struct {
 	After          events.IntakeResolution
 }
 
-// CorrectionApplied is the outcome of ApplyCorrectionBatch: the targets whose resolution changed
-// and every Transmission whose targets were restamped at a newer assignment revision, which
-// includes those without a resolution change. The latter still need Processing readmission,
-// because a Transmission's processing context is the highest revision stamped on its targets.
+// CorrectionApplied is the outcome of ApplyCorrectionBatch: the targets whose resolution changed,
+// the Transmissions whose Network moved, the number of Transmissions the current Gateway mapping
+// could not resolve, and every Transmission that needs Processing readmission: those whose
+// targets were restamped at a newer assignment revision (with or without a resolution change,
+// because a Transmission's processing context is the highest revision stamped on its targets)
+// and those that moved.
 type CorrectionApplied struct {
-	Changes   []CorrectionChange
-	Restamped []uuid.UUID
+	Changes    []CorrectionChange
+	Moves      []NetworkMove
+	Unresolved int
+	Restamped  []uuid.UUID
+}
+
+// NetworkMove is one Transmission that a gateway scope moved From one Network To another;
+// MessageRev is the message revision after the move.
+type NetworkMove struct {
+	TransmissionID uuid.UUID
+	MessageID      uuid.UUID
+	From           uuid.UUID
+	To             uuid.UUID
+	MessageRev     int64
 }
 
 // CorrectionWorkRepository is the persistence port used by CorrectionRunner.

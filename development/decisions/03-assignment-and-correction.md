@@ -61,3 +61,21 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Decision:** Selected AP-08 explicit target-specific suppression; no broad selector rules. AP-08 persists one Suppression per immutable `(transmissionId, targetPosition)`. This makes each exclusion, authorization context, audit record, and lift apply only to the manager-selected original target. Broad selectors that silently suppress future or multiple targets are not part of this slice.
 - **Consequences:** [C-05 historical-correction 1.0](../../docs/architecture.md#historical-correction-worker-role) owns the exact data and revision contract; [C-06](../../docs/http-api.md#authorization) owns authorization. D-10's confirmed no-deletion/no-implicit-Payload-masking boundary, C-05 initial target admission, original evidence, Message membership, and Delivery non-trigger behavior remain unchanged.
 - **Owner detail:** This record is the only current definition
+
+<a id="d-141"></a>
+## D-141 AP-20 boundary crossing for Gateway mapping re-resolution
+
+- **Status:** accepted
+- **Date:** 2026-11-07
+- **Decision:** For [AP-20](../work-packages/ap-20-gateway-mapping-rematch.md) T090/T091 the user approved three paths outside the AP's write scope: (1) `internal/events/correction.go`: `correction.failed` accepts the reason `gateway-mapping-change`, and a corrected `assignment.changed` carries an optional `previousNetworkId`; its target list may be empty only when the Network moved; (2) `cmd/gopager/` composition only: wiring the Network re-resolver into the correction runner and the correction queue into Gateway administration; (3) PostgreSQL test fixtures in `internal/persistence/ent/borrowed/*_test.go`. Deferring AP-20 behind AP-11 was considered and rejected, because it would turn the fact change into a change of a completed AP-11.
+- **Consequences:** AP-20's write scope includes these paths. The [AP-08 record](../execution/ap-08.md) gets a follow-up for the extended fact vocabulary and runner, with the correction tests rerun. [AP-11](../work-packages/ap-11-events-delivery.md) lists the new optional field and the reason in its compatibility context. C-08 and [Architecture: Historical correction](../../docs/architecture.md#historical-correction-worker-role) describe the facts.
+- **Owner detail:** [C-05](../contracts/c-05-matching-correction.md), [AP-20 record](../execution/ap-20.md)
+
+<a id="d-143"></a>
+## D-143 Network re-inference after Address-rule changes
+
+- **Status:** accepted
+- **Date:** 2026-11-07
+- **Decision:** Because Address rules decide Network inference among a Gateway's Networks of one Protocol, a rule change also re-runs that inference for accepted Transmissions, amending the AP-08 behavior that rule corrections keep the Network. `MarkPending` with reason `rule-change` additionally queues, at the same revision, one `gateway` scope (reason `rule-change`) per Gateway and Protocol whose current mapping contains the rule's Network and at least one other Network of the Protocol. Such a scope selects only undeclared Transmissions with targets; the AP-20 move, unresolved and fact semantics apply. Rule-write authority stays as before: a rule on one Agency's Network of a shared Gateway may move inferred history to or from another Agency, consistent with intake inference. Requiring authority over every affected Agency, or moving only between the writer's Agencies, was considered and rejected by the user. The user agreed that an ambiguous re-inference stays a process warning (no `operation.network-ambiguous` fact, which belongs to intake) and that T091's visibility check (on `message_units`) and restart simulation (failing batch, new runner) are sufficient for AP-20.
+- **Consequences:** The [AP-08 record](../execution/ap-08.md) gets a follow-up; the AP-20 write scope covers the paths (`internal/persistence/ent/assignmentstore/`, borrowed fixtures under [D-141](#d-141)). Case F-101; a rule change on a busy shared Gateway re-reads that Gateway's inferred Transmissions in batches.
+- **Owner detail:** [C-05](../contracts/c-05-matching-correction.md), [AP-20 record](../execution/ap-20.md)

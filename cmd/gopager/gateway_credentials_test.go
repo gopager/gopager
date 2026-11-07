@@ -227,12 +227,14 @@ func TestGatewayNetworkReplacementHTTPAuthorizationAndValidation(t *testing.T) {
 
 	fixture.setGrant(t, []uuid.UUID{fixture.current, fixture.sibling, fixture.proposed}, "gateway.update")
 	var success struct {
-		SchemaVersion int    `json:"schemaVersion"`
-		Revision      string `json:"revision"`
+		SchemaVersion int      `json:"schemaVersion"`
+		Revision      string   `json:"revision"`
+		CorrectionIDs []string `json:"correctionIds"`
 	}
 	response := replace("1", `[{"gatewayNetworkIdentifier":"proposed","networkId":"`+fixture.proposed.String()+`","priority":0}]`,
 		http.StatusOK)
-	if err := json.Unmarshal(response, &success); err != nil || success.Revision != "2" {
+	// The candidate Networks changed, so one re-resolution correction is queued.
+	if err := json.Unmarshal(response, &success); err != nil || success.Revision != "2" || len(success.CorrectionIDs) != 1 {
 		t.Fatalf("replacement response = %s, error=%v", response, err)
 	}
 	replace("1", `[{"gatewayNetworkIdentifier":"proposed","networkId":"`+fixture.proposed.String()+`","priority":0}]`,

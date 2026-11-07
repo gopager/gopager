@@ -7,28 +7,40 @@ import (
 	"github.com/gopager/gopager/internal/events"
 )
 
-// correctionFacts folds the per-target changes of a batch into one assignment.changed fact per
-// Transmission, so the log grows with affected Transmissions rather than with their targets. Facts
-// keep the order in which their Transmission first appears; targets keep the change order, which
-// the repository returns by ascending position.
-func correctionFacts(changes []CorrectionChange, occurred time.Time) []events.CorrectionFact {
+// correctionFacts folds the per-target changes and Network moves of a batch into one
+// assignment.changed fact per Transmission, so the log grows with affected Transmissions rather
+// than with their targets. Facts keep the order in which their Transmission first appears (changes
+// before moves); targets keep the change order, which the repository returns by ascending
+// position. A moved Transmission's fact names its new Network and the previous one, and has no
+// targets when none changed.
+func correctionFacts(changes []CorrectionChange, moves []NetworkMove, occurred time.Time) []events.CorrectionFact {
 	var facts []events.CorrectionFact
-	index := make(map[uuid.UUID]int, len(changes))
-	for _, change := range changes {
-		i, seen := index[change.TransmissionID]
+	index := make(map[uuid.UUID]int, len(changes)+len(moves))
+	fact := func(transmission, message, network uuid.UUID) *events.CorrectionFact {
+		i, seen := index[transmission]
 		if !seen {
 			i = len(facts)
-			index[change.TransmissionID] = i
+			index[transmission] = i
 			facts = append(facts, events.CorrectionFact{
 				ID: uuid.New(), Type: "assignment.changed",
-				Aggregate:  events.EntityRef{Type: "message", ID: change.MessageID},
-				OccurredAt: occurred, TransmissionID: change.TransmissionID,
-				MessageID: change.MessageID, NetworkID: change.NetworkID, Reason: "corrected",
+				Aggregate:  events.EntityRef{Type: "message", ID: message},
+				OccurredAt: occurred, TransmissionID: transmission,
+				MessageID: message, NetworkID: network, Reason: "corrected",
 			})
 		}
-		facts[i].Revision = max(facts[i].Revision, change.MessageRev)
-		facts[i].Targets = append(facts[i].Targets, events.CorrectionTarget{
+		return &facts[i]
+	}
+	for _, change := range changes {
+		current := fact(change.TransmissionID, change.MessageID, change.NetworkID)
+		current.Revision = max(current.Revision, change.MessageRev)
+		current.Targets = append(current.Targets, events.CorrectionTarget{
 			Position: change.TargetPosition, Before: change.Before, After: change.After})
+	}
+	for _, move := range moves {
+		current := fact(move.TransmissionID, move.MessageID, move.To)
+		from := move.From
+		current.NetworkID, current.PreviousNetworkID = move.To, &from
+		current.Revision = max(current.Revision, move.MessageRev)
 	}
 	return facts
 }

@@ -42,6 +42,8 @@ type PendingAssignmentScope struct {
 	TransmissionID *uuid.UUID `json:"transmission_id,omitempty"`
 	// TargetPosition holds the value of the "target_position" field.
 	TargetPosition *int `json:"target_position,omitempty"`
+	// GatewayID holds the value of the "gateway_id" field.
+	GatewayID *uuid.UUID `json:"gateway_id,omitempty"`
 	// RecordedAt holds the value of the "recorded_at" field.
 	RecordedAt time.Time `json:"recorded_at,omitempty"`
 	// State holds the value of the "state" field.
@@ -66,7 +68,7 @@ func (*PendingAssignmentScope) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case pendingassignmentscope.FieldNetworkID, pendingassignmentscope.FieldUnitID, pendingassignmentscope.FieldTransmissionID, pendingassignmentscope.FieldCursorTransmissionID:
+		case pendingassignmentscope.FieldNetworkID, pendingassignmentscope.FieldUnitID, pendingassignmentscope.FieldTransmissionID, pendingassignmentscope.FieldGatewayID, pendingassignmentscope.FieldCursorTransmissionID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		case pendingassignmentscope.FieldAssignmentRevision, pendingassignmentscope.FieldAddressFrom, pendingassignmentscope.FieldAddressTo, pendingassignmentscope.FieldTargetPosition, pendingassignmentscope.FieldAttempts, pendingassignmentscope.FieldFencingToken:
 			values[i] = new(sql.NullInt64)
@@ -178,6 +180,13 @@ func (_m *PendingAssignmentScope) assignValues(columns []string, values []any) e
 			} else if value.Valid {
 				_m.TargetPosition = new(int)
 				*_m.TargetPosition = int(value.Int64)
+			}
+		case pendingassignmentscope.FieldGatewayID:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field gateway_id", values[i])
+			} else if value.Valid {
+				_m.GatewayID = new(uuid.UUID)
+				*_m.GatewayID = *value.S.(*uuid.UUID)
 			}
 		case pendingassignmentscope.FieldRecordedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -319,6 +328,11 @@ func (_m *PendingAssignmentScope) String() string {
 	builder.WriteString(", ")
 	if v := _m.TargetPosition; v != nil {
 		builder.WriteString("target_position=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.GatewayID; v != nil {
+		builder.WriteString("gateway_id=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")

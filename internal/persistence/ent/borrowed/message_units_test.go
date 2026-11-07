@@ -166,7 +166,7 @@ func TestMessageUnitCacheFollowsIntakeAndCorrection(t *testing.T) {
 	if _, err := f.rules.UpdateRule(t.Context(), f.proof, rule.ID, rule.Revision, ruleInput(networkID, unitB.ID, 10, 20, 1), checkedMutation); err != nil {
 		t.Fatal(err)
 	}
-	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, f.ruleStore, f.facts, noProcessingReadmission{})
+	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, noNetworkResolution{}, f.ruleStore, f.facts, noProcessingReadmission{})
 	if err != nil {
 		t.Fatal(err)
 	}

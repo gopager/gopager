@@ -120,7 +120,7 @@ func TestAssignmentChangedIsOneFactPerTransmissionAtIntakeAndCorrection(t *testi
 	if _, err := f.rules.CreateRule(t.Context(), f.proof, uuid.New(), ruleInput(f.networks[0], unit.ID, 10, 20, 1), checkedMutation); err != nil {
 		t.Fatal(err)
 	}
-	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, f.ruleStore, f.facts, noProcessingReadmission{})
+	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, noNetworkResolution{}, f.ruleStore, f.facts, noProcessingReadmission{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -332,19 +332,51 @@ func (s *Service) LiftSuppression(ctx context.Context, proof identity.Proof, id 
 func (s *Service) correctionAuthority(ctx context.Context, tx platform.TransactionContext, authority authz.Authority,
 	action string, status CorrectionStatus, now time.Time,
 ) error {
-	target, err := s.correctionTarget(ctx, tx, status.Scope)
+	targets, err := s.correctionTargets(ctx, tx, status.Scope)
 	if err != nil {
 		return authz.ErrNotFound
 	}
-	if err := authz.Authorize(authority, action, nil, target, now); err != nil {
-		return authz.ErrNotFound
+	for _, target := range targets {
+		if err := authz.Authorize(authority, action, nil, target, now); err != nil {
+			return authz.ErrNotFound
+		}
 	}
 	return nil
 }
 
-// correctionTarget resolves a correction scope to its authorization target: the Agency of the
-// selector's Network, the Unit with its Agency and collections, or the Agency of the target's
-// Network together with its current Unit.
+// correctionTargets resolves a correction scope to the authorization targets that must all be
+// covered: the Gateway with each Agency its scope affects (with none, the Gateway alone, which
+// only an installation-wide grant covers) or the single target of the other kinds.
+func (s *Service) correctionTargets(ctx context.Context, tx platform.TransactionContext,
+	scope CorrectionScope) ([]authz.Target, error) {
+	if scope.Kind() != "gateway" {
+		target, err := s.correctionTarget(ctx, tx, scope)
+		if err != nil {
+			return nil, err
+		}
+		return []authz.Target{target}, nil
+	}
+	repository, err := s.correctionRepository()
+	if err != nil {
+		return nil, err
+	}
+	agencies, err := repository.GatewayCorrectionAgencies(ctx, tx, *scope.GatewayID, scope.Protocol)
+	if err != nil {
+		return nil, err
+	}
+	targets := make([]authz.Target, 0, max(len(agencies), 1))
+	for _, agency := range agencies {
+		targets = append(targets, authz.Target{AgencyID: agency, GatewayID: *scope.GatewayID})
+	}
+	if len(targets) == 0 {
+		targets = append(targets, authz.Target{GatewayID: *scope.GatewayID})
+	}
+	return targets, nil
+}
+
+// correctionTarget resolves a non-gateway correction scope to its authorization target: the Agency
+// of the selector's Network, the Unit with its Agency and collections, or the Agency of the
+// target's Network together with its current Unit.
 func (s *Service) correctionTarget(ctx context.Context, tx platform.TransactionContext, scope CorrectionScope) (authz.Target, error) {
 	switch scope.Kind() {
 	case "address-rules":
@@ -386,8 +418,8 @@ func (s *Service) correctionTarget(ctx context.Context, tx platform.TransactionC
 }
 
 // ReadCorrection returns a correction scope's status if the caller may read
-// assignment corrections for every Network (and the Unit) in its scope;
-// otherwise it returns authz.ErrNotFound.
+// assignment corrections for every Network (and the Unit) in its scope, for a
+// gateway scope every Agency it affects; otherwise it returns authz.ErrNotFound.
 func (s *Service) ReadCorrection(ctx context.Context, proof identity.Proof, id uuid.UUID) (CorrectionStatus, error) {
 	if id == uuid.Nil {
 		return CorrectionStatus{}, authz.ErrInvalidInput

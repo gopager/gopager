@@ -44,3 +44,40 @@ func TestCorrectionAssignmentChangedCarriesChangedTargetsBeforeAndAfter(t *testi
 		}
 	}
 }
+
+func TestCorrectionAssignmentChangedRecordsNetworkMove(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)
+	message, previous, current := uuid.New(), uuid.New(), uuid.New()
+	fact := CorrectionFact{ID: uuid.New(), Type: "assignment.changed",
+		Aggregate: EntityRef{Type: "message", ID: message}, Revision: 2, OccurredAt: now,
+		TransmissionID: uuid.New(), MessageID: message, NetworkID: current, PreviousNetworkID: &previous,
+		Reason: "corrected"}
+	envelope, err := fact.Envelope(now)
+	if err != nil || envelope.Data.PreviousNetworkID == nil || *envelope.Data.PreviousNetworkID != previous ||
+		envelope.Data.NetworkID != current || len(envelope.Data.Targets) != 0 {
+		t.Fatalf("envelope=%+v err=%v", envelope, err)
+	}
+	nilNetwork := uuid.Nil
+	for name, mutate := range map[string]func(*CorrectionFact){
+		"same network": func(f *CorrectionFact) { f.PreviousNetworkID = &current },
+		"nil previous": func(f *CorrectionFact) { f.PreviousNetworkID = &nilNetwork },
+	} {
+		invalid := fact
+		mutate(&invalid)
+		if _, err := invalid.Envelope(now); !errors.Is(err, ErrInvalidFact) {
+			t.Fatalf("%s accepted: %v", name, err)
+		}
+	}
+}
+
+func TestCorrectionFailedAcceptsGatewayMappingReason(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)
+	fact := CorrectionFact{ID: uuid.New(), Type: "correction.failed",
+		Aggregate: EntityRef{Type: "correction", ID: uuid.New()}, Revision: 5, OccurredAt: now,
+		Reason: "gateway-mapping-change", FailureCode: "RETRY_LIMIT"}
+	if envelope, err := fact.Envelope(now); err != nil || envelope.Data.Reason != "gateway-mapping-change" {
+		t.Fatalf("envelope=%+v err=%v", envelope, err)
+	}
+}

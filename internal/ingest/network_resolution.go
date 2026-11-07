@@ -1,10 +1,14 @@
 package ingest
 
 import (
+	"context"
 	"slices"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/assignments"
 	"github.com/gopager/gopager/internal/platform"
+	"github.com/gopager/gopager/internal/protocols"
 )
 
 // ResolveNetwork applies only the assigned, protocol-compatible Gateway Network set, in order:
@@ -69,10 +73,17 @@ func highestPriority(networks []GatewayNetwork) uuid.UUID {
 	return best.NetworkID
 }
 
+// NetworkMatcher reports which of the candidate Networks have a current Address rule matching
+// the targets at the Observation time; assignments.Service implements it.
+type NetworkMatcher interface {
+	NetworksWithMatches(context.Context, platform.TransactionContext, []uuid.UUID,
+		protocols.Protocol, time.Time, []protocols.Target) (assignments.NetworkCandidates, error)
+}
+
 // addressMatches asks the matcher which of the Gateway's Networks of the submission protocol
 // have a rule matching the targets. It is only needed, and only called, when no Gateway Network
 // is declared and more than one Network of the protocol competes; otherwise the result is nil.
-func (s *Service) addressMatches(tx platform.TransactionContext, submission ValidatedSubmission,
+func addressMatches(tx platform.TransactionContext, matcher NetworkMatcher, submission ValidatedSubmission,
 	assigned []GatewayNetwork) ([]uuid.UUID, error) {
 	if submission.GatewayNetworkIdentifier != "" {
 		return nil, nil
@@ -86,7 +97,7 @@ func (s *Service) addressMatches(tx platform.TransactionContext, submission Vali
 	if len(allowed) < 2 {
 		return nil, nil
 	}
-	candidates, err := s.matcher.NetworksWithMatches(tx.Context(), tx, allowed, submission.Protocol,
+	candidates, err := matcher.NetworksWithMatches(tx.Context(), tx, allowed, submission.Protocol,
 		submission.ObservedAt, submission.TransmissionTargets)
 	if err != nil {
 		return nil, err

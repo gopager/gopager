@@ -24,6 +24,14 @@ import (
 // noProcessingReadmission isolates correction derivation tests from Processing readmission, which is covered below.
 type noProcessingReadmission struct{}
 
+// noNetworkResolution is the Network resolver of runners that never claim a gateway scope.
+type noNetworkResolution struct{}
+
+func (noNetworkResolution) ResolveNetwork(context.Context, platform.TransactionContext,
+	assignments.CorrectionBatchItem) (assignments.NetworkResolution, error) {
+	return assignments.NetworkResolution{}, errors.New("unexpected Network re-resolution")
+}
+
 func (noProcessingReadmission) ReadmitProcessing(context.Context, platform.TransactionContext, uuid.UUID) error {
 	return nil
 }
@@ -63,11 +71,11 @@ func TestCorrectionReadmitsProcessingForChangedTargets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, f.ruleStore, f.facts, sourceOwner)
+	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, noNetworkResolution{}, f.ruleStore, f.facts, sourceOwner)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, f.ruleStore, f.facts, nil); err == nil {
+	if _, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, noNetworkResolution{}, f.ruleStore, f.facts, nil); err == nil {
 		t.Fatal("correction runner accepted a missing readmission participant")
 	}
 	service, err := worker.NewWithPublisher(f.store, processingRepository, sourceOwner, processing.CoreRegex{}, uuid.New(), sourceOwner)
@@ -297,7 +305,7 @@ func TestCorrectionExhaustionFailsSafelyAndRetryCreatesCurrentWork(t *testing.T)
 	var jobID uuid.UUID
 	query(`SELECT id FROM assignment_pending_scopes WHERE assignment_revision=$1`, []any{revision}, &jobID)
 
-	failing, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules,
+	failing, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, noNetworkResolution{},
 		failingCorrectionReads{f.ruleStore}, f.facts, noProcessingReadmission{})
 	if err != nil {
 		t.Fatal(err)
@@ -373,7 +381,7 @@ func TestCorrectionExhaustionFailsSafelyAndRetryCreatesCurrentWork(t *testing.T)
 		t.Fatalf("retried job state=%s, want superseded", oldState)
 	}
 
-	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, f.ruleStore, f.facts, noProcessingReadmission{})
+	runner, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, noNetworkResolution{}, f.ruleStore, f.facts, noProcessingReadmission{})
 	if err != nil {
 		t.Fatal(err)
 	}

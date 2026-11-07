@@ -71,7 +71,7 @@ INSERT INTO assignment_control (id) VALUES (1);
 CREATE TABLE assignment_pending_scopes (
     id uuid PRIMARY KEY,
     assignment_revision bigint NOT NULL CHECK (assignment_revision > 0),
-    reason varchar NOT NULL CHECK (reason IN ('rule-change', 'unit-deleted', 'suppression-change')),
+    reason varchar NOT NULL CHECK (reason IN ('rule-change', 'unit-deleted', 'suppression-change', 'gateway-mapping-change')),
     network_id uuid,
     protocol varchar CHECK (protocol IN ('pocsag', 'flex', 'zvei', 'eas')),
     address_from bigint,
@@ -82,6 +82,7 @@ CREATE TABLE assignment_pending_scopes (
     unit_id uuid,
     transmission_id uuid,
     target_position integer CHECK (target_position >= 0),
+    gateway_id uuid,
     recorded_at timestamptz NOT NULL,
     state varchar NOT NULL DEFAULT 'queued'
         CHECK (state IN ('queued', 'running', 'completed', 'failed', 'superseded')),
@@ -93,10 +94,15 @@ CREATE TABLE assignment_pending_scopes (
     failure_code varchar,
     CHECK (
         (network_id IS NOT NULL AND protocol IS NOT NULL AND unit_id IS NULL AND transmission_id IS NULL
+            AND gateway_id IS NULL
             AND ((address_from IS NOT NULL AND address_to IS NOT NULL AND address_text IS NULL)
                 OR (address_text IS NOT NULL AND address_from IS NULL AND address_to IS NULL)))
-        OR (unit_id IS NOT NULL AND network_id IS NULL AND transmission_id IS NULL)
-        OR (transmission_id IS NOT NULL AND target_position IS NOT NULL AND network_id IS NULL AND unit_id IS NULL)
+        OR (unit_id IS NOT NULL AND network_id IS NULL AND transmission_id IS NULL AND gateway_id IS NULL)
+        OR (transmission_id IS NOT NULL AND target_position IS NOT NULL AND network_id IS NULL AND unit_id IS NULL
+            AND gateway_id IS NULL)
+        OR (gateway_id IS NOT NULL AND protocol IS NOT NULL AND network_id IS NULL AND unit_id IS NULL
+            AND transmission_id IS NULL AND address_from IS NULL AND address_to IS NULL AND address_text IS NULL
+            AND valid_from IS NULL AND valid_until IS NULL)
     )
 );
 CREATE INDEX assignment_pending_scopes_state ON assignment_pending_scopes (state, recorded_at, id);

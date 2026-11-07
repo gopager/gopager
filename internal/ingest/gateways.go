@@ -82,23 +82,27 @@ type GatewayAdministration struct {
 	lifecycle    GatewayLifecycleRepository
 	receipts     commands.Repository
 	facts        events.Appender
+	corrections  GatewayCorrectionQueue
 }
 
 // NewGatewayAdministration returns a GatewayAdministration, failing with
 // CodeInvalidInput if any dependency is nil.
 func NewGatewayAdministration(transactions identity.Transactions, resolver *identity.Resolver, clock platform.Clock,
 	repository GatewayAdministrationRepository, lifecycle GatewayLifecycleRepository, receipts commands.Repository,
-	facts events.Appender) (*GatewayAdministration, error) {
+	facts events.Appender, corrections GatewayCorrectionQueue) (*GatewayAdministration, error) {
 	if transactions == nil || resolver == nil || clock == nil || repository == nil || lifecycle == nil ||
-		receipts == nil || facts == nil {
+		receipts == nil || facts == nil || corrections == nil {
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing Gateway administration dependency"))
 	}
 	return &GatewayAdministration{transactions: transactions, resolver: resolver, clock: clock,
-		repository: repository, lifecycle: lifecycle, receipts: receipts, facts: facts}, nil
+		repository: repository, lifecycle: lifecycle, receipts: receipts, facts: facts, corrections: corrections}, nil
 }
 
 // ConfigureNetworks atomically replaces the Gateway's Network assignments,
-// guarded by the expected revision, and returns the new revision. Input must
+// guarded by the expected revision, and returns the new revision together with
+// the correction scopes queued in the same transaction for every Protocol whose
+// candidate Networks changed (see changedProtocols), which re-resolve the
+// Gateway's accepted Transmissions of that Protocol. Input must
 // hold 1..1024 entries with unique identifiers and Network IDs and with
 // priorities that are exactly 0..n-1 (see validPriorities); a referenced Network that
 // does not exist is reported as authz.ErrInvalidInput. check is called with
@@ -107,15 +111,15 @@ func NewGatewayAdministration(transactions identity.Transactions, resolver *iden
 // Agency of every currently and newly assigned Network; a caller without any right on the
 // Gateway at all gets authz.ErrNotFound.
 func (s *GatewayAdministration) ConfigureNetworks(ctx context.Context, proof identity.Proof, gateway uuid.UUID,
-	expected int64, input []GatewayNetworkInput, check func(identity.Authentication) error) (int64, error) {
+	expected int64, input []GatewayNetworkInput, check func(identity.Authentication) error) (GatewayNetworksResult, error) {
 	if gateway == uuid.Nil || expected <= 0 || check == nil {
-		return 0, authz.ErrInvalidInput
+		return GatewayNetworksResult{}, authz.ErrInvalidInput
 	}
 	assignments, err := validateAssignments(input, false)
 	if err != nil {
-		return 0, err
+		return GatewayNetworksResult{}, err
 	}
-	var revision int64
+	var result GatewayNetworksResult
 	err = identity.WithAuthority(ctx, s.transactions, s.clock, s.resolver, proof, true, check,
 		func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
 			current, err := s.repository.GatewayNetworksForAuthorization(tx.Context(), tx, gateway)
@@ -135,10 +139,18 @@ func (s *GatewayAdministration) ConfigureNetworks(ctx context.Context, proof ide
 			if err := authorizeGateway(authority, gateway, scope, now, "gateway.update"); err != nil {
 				return err
 			}
-			revision, err = s.repository.ReplaceGatewayNetworks(tx.Context(), tx, gateway, expected, assignments)
+			if result.Revision, err = s.repository.ReplaceGatewayNetworks(tx.Context(), tx, gateway, expected,
+				assignments); err != nil {
+				return err
+			}
+			result.Corrections, err = s.corrections.QueueGatewayCorrections(tx.Context(), tx, gateway,
+				changedProtocols(current, assignments))
 			return err
 		})
-	return revision, err
+	if err != nil {
+		return GatewayNetworksResult{}, err
+	}
+	return result, nil
 }
 
 // ReadCredentialStatus lists the Gateway's credentials without secrets. The

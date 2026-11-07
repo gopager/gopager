@@ -95,7 +95,7 @@ Classify every need that the AP does not plainly cover:
    5. Update the requirement mapping and package directory if a producer changed.
    6. In this AP's record, add a *Blockers and Deviations* entry that links the D-ID.
    7. Resume the affected work. The approval covers it; do not ask again.
-5. **After rejection:** record the rejection in *Blockers and Deviations* and continue within the scope. If the scope cannot reach a task's done criteria, that task is blocked ([stop conditions](#mandatory-continuation-and-stop-conditions)).
+5. **After rejection:** record the rejection in *Blockers and Deviations* and continue within the scope. If the scope cannot reach a task's done criteria, ask the user how to proceed with that task; it stays open only with their agreement ([continuation](#mandatory-continuation-and-stop-conditions)).
 
 Never change fixed behavior, an earlier result, an AP assignment or a later AP without this procedure, and never silently choose an unowned default.
 
@@ -106,15 +106,20 @@ Existing addenda (for example the [AP-07 intake addendum](addenda/ap-07-intake-i
 
 Executing an AP means the whole package: planning, all tasks, verification, documentation and handover, unless the user explicitly narrows it. After each partial result, reconcile the execution record with every task, done criterion and documentation obligation, and continue with the next actionable item. Milestones, passing focused tests and progress updates are not completion.
 
+**The agent stops only when the AP is complete** ([Handover](#handover)). It never ends a session on its own initiative while a task, done criterion, documentation obligation or handover item is open.
+
+When an item cannot proceed (missing information, a pending boundary crossing, a contradiction, unavailable access or environment), the agent **asks the user immediately** in a structured question, continues all independent work in the meantime and resumes the item with the answer. Writing a question into the execution record is not asking it; an impediment recorded but not asked is not a reason to stop.
+
+An item may stay open only with the user's explicit agreement for that item. Ask for it the same way: name the item, the impediment, what would resolve it and the proposal to leave it open. Without that agreement the item is not done and the agent continues or asks.
+
 An incomplete execution may end only when:
 
-- the user pauses, cancels or narrows the assignment;
-- every remaining item is blocked by an unanswered question, a rejected or pending boundary crossing, a missing start approval, unavailable access or environment, or another concrete impediment that cannot be resolved within the scope;
-- a hard runtime or tool limit prevents further work (leave a truthful checkpoint in the record).
+- the user pauses, cancels or narrows the assignment, or explicitly agrees to leave the remaining items open;
+- a hard runtime or tool limit actually terminates the session (leave a truthful checkpoint in the record).
 
-Package size, effort spent, response length, anticipated context limits or a missing commit are not stop conditions. Do not defer actionable work to a later session or ask whether to continue.
+Package size, effort spent, response length, anticipated context limits, a missing commit, a passing milestone or a recorded blocker are not stop conditions. Do not defer actionable work to a later session, do not ask whether to continue, and do not end with a report of open points instead of a question about them.
 
-When stopping incomplete, record in the execution record: the stop condition, affected task IDs, evidence, who resolves it and what is needed to resume. Keep verified work distinct from blocked or unexecuted work.
+When ending incomplete, record in the execution record: the reason (with the user's agreement or the limit hit), affected task IDs, evidence, who resolves each open item and what is needed to resume. Keep verified work distinct from blocked or unexecuted work.
 
 ## Handover
 
