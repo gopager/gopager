@@ -45,6 +45,9 @@ type GatewayCredential func(*sql.Selector)
 // GatewayNetwork is the predicate function for gatewaynetwork builders.
 type GatewayNetwork func(*sql.Selector)
 
+// GatewayStateHistory is the predicate function for gatewaystatehistory builders.
+type GatewayStateHistory func(*sql.Selector)
+
 // Grant is the predicate function for grant builders.
 type Grant func(*sql.Selector)
 

@@ -124,3 +124,12 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Date:** 2026-11-01
 - **Decision:** Narrow internal execution-Principal authority adapter in the Identity resolver. The user selected A's exact narrow adapter and focused tests after its impact on the prior producer was explained. Extend the active T043 binding only to this additive Identity method, related artifact link and validation. Existing authentication operations and C-10's separate configuration/Principal authorization remain unchanged. Record implementation/evidence in the current AP-12 producer-consumer integration, with the prior AP-07 evidence preserved.
 - **Owner detail:** This record is the only current definition
+
+<a id="d-140"></a>
+## D-140 Not-found versus forbidden for Gateways and Networks
+
+- **Status:** accepted
+- **Date:** 2026-11-07
+- **Decision:** For an existing Gateway or Network, a caller that holds no right on it (no `gateway.*` or `network.*` action covering it, including `gateway.diagnostics.read` and `gateway.credential.rotate`) gets `404 NOT_FOUND`, indistinguishable from a missing object, so IDs cannot be probed. A caller that holds some right on it but not the requested one gets `403 FORBIDDEN`; a Gateway right must cover every Agency of the Gateway's Networks (or name the Gateway) to count. Creation and list routes without any grant for the action stay `403`. This changes the AP-07 credential and Network-replacement routes (403 becomes 404 for an invisible Gateway) and the AP-09 lifecycle routes (404 becomes 403 for a visible Gateway or Network).
+- **Consequences:** `docs/http-api.md` (Gateway administration, Authorization), OpenAPI descriptions; AP-07 follow-up rerunning F-67/F-68; AP-09 follow-up with new evidence. Executed by AP-09 (`internal/ingest/`).
+- **Owner detail:** [HTTP API: Gateway administration](../../docs/http-api.md#gateway-administration)

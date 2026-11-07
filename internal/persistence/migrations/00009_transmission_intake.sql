@@ -11,12 +11,24 @@ CREATE INDEX networks_agency_id ON networks (agency_id);
 CREATE TABLE gateways (
     id uuid PRIMARY KEY,
     revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
-    state varchar NOT NULL DEFAULT 'active' CHECK (state IN ('active', 'degraded', 'stopped', 'contact-lost')),
+    -- The management API always sets a non-blank name; the empty default keeps directly
+    -- inserted rows valid.
+    name varchar(256) NOT NULL DEFAULT '',
+    -- A disabled or deleted Gateway authenticates nothing and is not evaluated for contact loss.
+    enabled boolean NOT NULL DEFAULT true,
+    deleted boolean NOT NULL DEFAULT false,
+    state varchar NOT NULL DEFAULT 'never-seen'
+        CHECK (state IN ('never-seen', 'active', 'degraded', 'stopped', 'contact-lost')),
     last_contact_at timestamptz,
     last_heartbeat_at timestamptz,
     last_transmission_at timestamptz,
-    last_report jsonb
+    last_report jsonb,
+    -- Set by retention to its cutoff when it deletes older gateway_state_history rows.
+    history_removed_before timestamptz
 );
+-- Serves the contact-timeout scan over evaluable Gateways.
+CREATE INDEX gateways_contact_scan ON gateways (last_contact_at)
+    WHERE enabled AND NOT deleted AND state IN ('active', 'degraded');
 CREATE TABLE gateway_networks (
     id uuid PRIMARY KEY,
     gateway_id uuid NOT NULL REFERENCES gateways(id),

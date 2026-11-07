@@ -195,7 +195,8 @@ This is the only delivery-phase classification. It does not repeat REQ acceptanc
 | REQ-129..130 | Phase-1 proposal |
 | REQ-131 | Later |
 | REQ-132 | Phase-1 proposal |
-| REQ-133..134/138 | Delivery classification unresolved; owner planning is assigned under D-126, but these additions are not silently approved or deferred |
+| REQ-133/138 | Delivery classification unresolved; owner planning is assigned under D-126, but these additions are not silently approved or deferred |
+| REQ-134 | Phase 1 approved at the AP-09 start (2026-11-07); server side AP-09, screens AP-15 |
 | REQ-135..137 | Acceptance refinements of already approved field/query goals; verify within AP-10 without broadening frozen authorization |
 | REQ-139 | Later; the event, Subscription and plugin model keeps reaction compatibility ([D-131](#managed-plugin-process-runtime), [D-135](#foundation-redesign-after-the-2026-11-06-re-evaluation)) |
 | REQ-140 | Phase 1 approved ([D-138](decisions/09-process-and-documentation.md#d-138)); AP-15 |

@@ -34,7 +34,8 @@ func writeManagementError(w http.ResponseWriter, err error) {
 		code, fallback, status = "FORBIDDEN", "This action is not permitted.", http.StatusForbidden
 	case errors.Is(err, authz.ErrNotFound):
 		code, fallback, status = "NOT_FOUND", "The requested item is not available.", http.StatusNotFound
-	case errors.Is(err, authz.ErrRevisionConflict), errors.Is(err, assignments.ErrRuleConflict), errors.Is(err, units.ErrAgencyInUse):
+	case errors.Is(err, authz.ErrRevisionConflict), errors.Is(err, assignments.ErrRuleConflict), errors.Is(err, units.ErrAgencyInUse),
+		errors.Is(err, ingest.ErrNetworkInUse):
 		code, fallback, status, retryable = "REVISION_CONFLICT", "This item changed. Reload before saving.", http.StatusConflict, true
 	case errors.As(err, &failure):
 		code, fallback, retryable = string(failure.Code()), failure.Error(), failure.Retryable()

@@ -16,6 +16,12 @@ const (
 	FieldID = "id"
 	// FieldRevision holds the string denoting the revision field in the database.
 	FieldRevision = "revision"
+	// FieldName holds the string denoting the name field in the database.
+	FieldName = "name"
+	// FieldEnabled holds the string denoting the enabled field in the database.
+	FieldEnabled = "enabled"
+	// FieldDeleted holds the string denoting the deleted field in the database.
+	FieldDeleted = "deleted"
 	// FieldState holds the string denoting the state field in the database.
 	FieldState = "state"
 	// FieldLastContactAt holds the string denoting the last_contact_at field in the database.
@@ -26,6 +32,8 @@ const (
 	FieldLastTransmissionAt = "last_transmission_at"
 	// FieldLastReport holds the string denoting the last_report field in the database.
 	FieldLastReport = "last_report"
+	// FieldHistoryRemovedBefore holds the string denoting the history_removed_before field in the database.
+	FieldHistoryRemovedBefore = "history_removed_before"
 	// Table holds the table name of the gateway in the database.
 	Table = "gateways"
 )
@@ -34,11 +42,15 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldRevision,
+	FieldName,
+	FieldEnabled,
+	FieldDeleted,
 	FieldState,
 	FieldLastContactAt,
 	FieldLastHeartbeatAt,
 	FieldLastTransmissionAt,
 	FieldLastReport,
+	FieldHistoryRemovedBefore,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -63,16 +75,25 @@ var (
 	DefaultRevision int64
 	// RevisionValidator is a validator for the "revision" field. It is called by the builders before save.
 	RevisionValidator func(int64) error
+	// DefaultName holds the default value on creation for the "name" field.
+	DefaultName string
+	// NameValidator is a validator for the "name" field. It is called by the builders before save.
+	NameValidator func(string) error
+	// DefaultEnabled holds the default value on creation for the "enabled" field.
+	DefaultEnabled bool
+	// DefaultDeleted holds the default value on creation for the "deleted" field.
+	DefaultDeleted bool
 )
 
 // State defines the type for the "state" enum field.
 type State string
 
-// StateActive is the default value of the State enum.
-const DefaultState = StateActive
+// StateNeverSeen is the default value of the State enum.
+const DefaultState = StateNeverSeen
 
 // State values.
 const (
+	StateNeverSeen   State = "never-seen"
 	StateActive      State = "active"
 	StateDegraded    State = "degraded"
 	StateStopped     State = "stopped"
@@ -86,7 +107,7 @@ func (s State) String() string {
 // StateValidator is a validator for the "state" field enum values. It is called by the builders before save.
 func StateValidator(s State) error {
 	switch s {
-	case StateActive, StateDegraded, StateStopped, StateContactLost:
+	case StateNeverSeen, StateActive, StateDegraded, StateStopped, StateContactLost:
 		return nil
 	default:
 		return fmt.Errorf("gateway: invalid enum value for state field: %q", s)
@@ -104,6 +125,21 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 // ByRevision orders the results by the revision field.
 func ByRevision(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRevision, opts...).ToFunc()
+}
+
+// ByName orders the results by the name field.
+func ByName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldName, opts...).ToFunc()
+}
+
+// ByEnabled orders the results by the enabled field.
+func ByEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEnabled, opts...).ToFunc()
+}
+
+// ByDeleted orders the results by the deleted field.
+func ByDeleted(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDeleted, opts...).ToFunc()
 }
 
 // ByState orders the results by the state field.
@@ -124,4 +160,9 @@ func ByLastHeartbeatAt(opts ...sql.OrderTermOption) OrderOption {
 // ByLastTransmissionAt orders the results by the last_transmission_at field.
 func ByLastTransmissionAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldLastTransmissionAt, opts...).ToFunc()
+}
+
+// ByHistoryRemovedBefore orders the results by the history_removed_before field.
+func ByHistoryRemovedBefore(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldHistoryRemovedBefore, opts...).ToFunc()
 }

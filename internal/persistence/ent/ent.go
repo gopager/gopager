@@ -25,6 +25,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/gateway"
 	"github.com/gopager/gopager/internal/persistence/ent/gatewaycredential"
 	"github.com/gopager/gopager/internal/persistence/ent/gatewaynetwork"
+	"github.com/gopager/gopager/internal/persistence/ent/gatewaystatehistory"
 	"github.com/gopager/gopager/internal/persistence/ent/grant"
 	"github.com/gopager/gopager/internal/persistence/ent/groupingcontrol"
 	"github.com/gopager/gopager/internal/persistence/ent/identitycontrol"
@@ -123,6 +124,7 @@ func checkColumn(t, c string) error {
 			gateway.Table:                   gateway.ValidColumn,
 			gatewaycredential.Table:         gatewaycredential.ValidColumn,
 			gatewaynetwork.Table:            gatewaynetwork.ValidColumn,
+			gatewaystatehistory.Table:       gatewaystatehistory.ValidColumn,
 			grant.Table:                     grant.ValidColumn,
 			groupingcontrol.Table:           groupingcontrol.ValidColumn,
 			identitycontrol.Table:           identitycontrol.ValidColumn,

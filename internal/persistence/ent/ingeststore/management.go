@@ -26,7 +26,7 @@ func (s *Store) ReplaceGatewayNetworks(ctx context.Context, tx platform.Transact
 		return 0, err
 	}
 	var current int64
-	if err := executor.QueryRowContext(ctx, `SELECT revision FROM gateways WHERE id=$1 FOR UPDATE`,
+	if err := executor.QueryRowContext(ctx, `SELECT revision FROM gateways WHERE id=$1 AND NOT deleted FOR UPDATE`,
 		gateway).Scan(&current); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return 0, authz.ErrNotFound
@@ -37,29 +37,11 @@ func (s *Store) ReplaceGatewayNetworks(ctx context.Context, tx platform.Transact
 	if err != nil {
 		return 0, err
 	}
-	for _, network := range networks {
-		var protocol string
-		var deleted bool
-		if err := executor.QueryRowContext(ctx, `SELECT protocol,deleted FROM networks WHERE id=$1 FOR SHARE`,
-			network.NetworkID).Scan(&protocol, &deleted); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return 0, authz.ErrInvalidInput
-			}
-			return 0, err
-		}
-		if deleted || protocol != string(network.Protocol) {
-			return 0, authz.ErrInvalidInput
-		}
-	}
 	if _, err := executor.ExecContext(ctx, `DELETE FROM gateway_networks WHERE gateway_id=$1`, gateway); err != nil {
 		return 0, err
 	}
-	for _, network := range networks {
-		if _, err := executor.ExecContext(ctx, `INSERT INTO gateway_networks
-			(id,gateway_id,gateway_network_identifier,network_id,priority)
-			VALUES($1,$2,$3,$4,$5)`, uuid.New(), gateway, network.Identifier, network.NetworkID, network.Priority); err != nil {
-			return 0, err
-		}
+	if err := writeGatewayNetworks(ctx, executor, gateway, networks); err != nil {
+		return 0, err
 	}
 	if err := executor.QueryRowContext(ctx, `UPDATE gateways SET revision=$2 WHERE id=$1
 		RETURNING revision`, gateway, next).Scan(&next); err != nil {
@@ -79,7 +61,7 @@ func (s *Store) GatewayNetworksForAuthorization(ctx context.Context, tx platform
 		return nil, err
 	}
 	var exists uuid.UUID
-	if err := executor.QueryRowContext(ctx, `SELECT id FROM gateways WHERE id=$1 FOR UPDATE`, gateway).Scan(&exists); err != nil {
+	if err := executor.QueryRowContext(ctx, `SELECT id FROM gateways WHERE id=$1 AND NOT deleted FOR UPDATE`, gateway).Scan(&exists); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, authz.ErrNotFound
 		}
@@ -115,7 +97,7 @@ func (s *Store) GatewayCredentialStatus(ctx context.Context, tx platform.Transac
 		return nil, err
 	}
 	var exists uuid.UUID
-	if err := executor.QueryRowContext(ctx, `SELECT id FROM gateways WHERE id=$1`, gateway).Scan(&exists); err != nil {
+	if err := executor.QueryRowContext(ctx, `SELECT id FROM gateways WHERE id=$1 AND NOT deleted`, gateway).Scan(&exists); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, authz.ErrNotFound
 		}
@@ -167,7 +149,7 @@ func (s *Store) IssueGatewayCredential(ctx context.Context, tx platform.Transact
 		return false, 0, err
 	}
 	var current int64
-	if err := executor.QueryRowContext(ctx, `SELECT revision FROM gateways WHERE id=$1 FOR UPDATE`,
+	if err := executor.QueryRowContext(ctx, `SELECT revision FROM gateways WHERE id=$1 AND NOT deleted FOR UPDATE`,
 		gateway).Scan(&current); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return false, 0, authz.ErrNotFound
@@ -212,7 +194,7 @@ func (s *Store) RevokeGatewayCredential(ctx context.Context, tx platform.Transac
 		return 0, err
 	}
 	var current int64
-	if err := executor.QueryRowContext(ctx, `SELECT revision FROM gateways WHERE id=$1 FOR UPDATE`,
+	if err := executor.QueryRowContext(ctx, `SELECT revision FROM gateways WHERE id=$1 AND NOT deleted FOR UPDATE`,
 		gateway).Scan(&current); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return 0, authz.ErrNotFound

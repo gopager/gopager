@@ -423,6 +423,30 @@ func (f GatewayNetworkMutationRuleFunc) EvalMutation(ctx context.Context, m ent.
 	return Denyf("ent/privacy: unexpected mutation type %T, expect *ent.GatewayNetworkMutation", m)
 }
 
+// The GatewayStateHistoryQueryRuleFunc type is an adapter to allow the use of ordinary
+// functions as a query rule.
+type GatewayStateHistoryQueryRuleFunc func(context.Context, *ent.GatewayStateHistoryQuery) error
+
+// EvalQuery return f(ctx, q).
+func (f GatewayStateHistoryQueryRuleFunc) EvalQuery(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.GatewayStateHistoryQuery); ok {
+		return f(ctx, q)
+	}
+	return Denyf("ent/privacy: unexpected query type %T, expect *ent.GatewayStateHistoryQuery", q)
+}
+
+// The GatewayStateHistoryMutationRuleFunc type is an adapter to allow the use of ordinary
+// functions as a mutation rule.
+type GatewayStateHistoryMutationRuleFunc func(context.Context, *ent.GatewayStateHistoryMutation) error
+
+// EvalMutation calls f(ctx, m).
+func (f GatewayStateHistoryMutationRuleFunc) EvalMutation(ctx context.Context, m ent.Mutation) error {
+	if m, ok := m.(*ent.GatewayStateHistoryMutation); ok {
+		return f(ctx, m)
+	}
+	return Denyf("ent/privacy: unexpected mutation type %T, expect *ent.GatewayStateHistoryMutation", m)
+}
+
 // The GrantQueryRuleFunc type is an adapter to allow the use of ordinary
 // functions as a query rule.
 type GrantQueryRuleFunc func(context.Context, *ent.GrantQuery) error
@@ -1084,6 +1108,8 @@ func queryFilter(q ent.Query) (Filter, error) {
 		return q.Filter(), nil
 	case *ent.GatewayNetworkQuery:
 		return q.Filter(), nil
+	case *ent.GatewayStateHistoryQuery:
+		return q.Filter(), nil
 	case *ent.GrantQuery:
 		return q.Filter(), nil
 	case *ent.GroupingControlQuery:
@@ -1166,6 +1192,8 @@ func mutationFilter(m ent.Mutation) (Filter, error) {
 	case *ent.GatewayCredentialMutation:
 		return m.Filter(), nil
 	case *ent.GatewayNetworkMutation:
+		return m.Filter(), nil
+	case *ent.GatewayStateHistoryMutation:
 		return m.Filter(), nil
 	case *ent.GrantMutation:
 		return m.Filter(), nil

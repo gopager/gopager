@@ -63,7 +63,7 @@ flowchart TD
 | Step | What happens | Package |
 | --- | --- | --- |
 | HTTP decoding | Bearer extraction, `application/json`, size limit, JSON decoding | `internal/httpapi` ([ingest.go](../internal/httpapi/ingest.go)) |
-| Gateway authentication | The bearer secret hash identifies exactly one gateway. A pending replacement credential takes over on first use. | `identity.GatewayAuthenticator`, `ingeststore` |
+| Gateway authentication | The bearer secret hash identifies exactly one enabled, undeleted gateway. A pending replacement credential takes over on first use. | `identity.GatewayAuthenticator`, `ingeststore` |
 | Validation | Submission shape, observation time, payload form per protocol, target address/function ranges | `ingest` (`Submission.Validate`), `protocols` |
 | Submission idempotency | `(gateway, submissionId)` plus an input fingerprint. A matching retry returns the original receipt; a different input is rejected. | `ingest`, `ingeststore` |
 | Payload identity | Each payload form maps to a comparison-only identity (form, subtype, normalized value). The submitted payload is stored unchanged. | `protocols.TransmissionPayload.Identity` |
@@ -124,6 +124,12 @@ Creating, updating or deleting a rule, deleting a Unit, or changing a suppressio
 
 Correction never creates or deletes transmissions or Messages and never changes grouping.
 
+### Gateway state and contact loss (worker role)
+
+A Gateway's state (`never-seen`, `active`, `degraded`, `stopped`, `contact-lost`) changes in three places, each in its own transaction with the Gateway row locked: an authenticated Submission (`AcceptTransmission`) or state report (`ReportGatewayState`), whose next state comes from `ingest.NextGatewayState`, and the contact-loss monitor. Every effective change advances `gateways.revision` and, through `ingeststore.recordTransition`, inserts one `gateway_state_history` row (unique `(gateway_id, revision)`, cause `report`, `submission` or `timeout`) and appends one `gateway.state-changed` fact with that revision; a failure of either rolls back the state change.
+
+`ingest.ContactMonitor` runs in the `worker` role only. Every `--gateway-contact-scan-interval` it runs one short transaction: it reads the database clock and `ingeststore.MarkContactLost` selects up to 100 enabled, undeleted `active` or `degraded` Gateways whose `last_contact_at` is at or before `now - --gateway-contact-timeout` (`FOR UPDATE SKIP LOCKED`, partial index `gateways_contact_scan`), sets them `contact-lost` and records each transition with the last contact as contact time. A full batch is followed immediately by the next scan. A report or Submission that commits first refreshes the contact so the row no longer qualifies; one that waits behind the scan sees `contact-lost` and recovers to `active`. Locked rows are skipped, so several workers never change the same Gateway twice. `stopped`, `never-seen`, disabled and deleted Gateways are never evaluated.
+
 ### Address rule semantics
 
 - **Shape.** A rule belongs to exactly one Network (and so to one protocol) and names one Unit, a selector and a validity interval `[validFrom, validUntil)`; a missing bound is open. Validity is evaluated at the transmission's observation time, never at acceptance or Message time. Rule bounds use microsecond timestamps and unsupported precision is rejected, not truncated.
@@ -154,7 +160,7 @@ flowchart BT
     identity --> authz & events & platform
     units --> identity & commands & events
     assignments --> units & identity & protocols
-    ingest --> assignments & identity & protocols
+    ingest --> assignments & identity & protocols & units
     pexec[processing/execution] --> identity & authz
     pworker[processing/worker] --> processing & identity
     ppub[processing/publication] --> processing & events
@@ -180,7 +186,7 @@ The layering rules that the code follows:
 | Package | Responsibility |
 | --- | --- |
 | `cmd/gopager` | Flag/env configuration, composition of stores and services (`composeCore`, API, worker, correction runner, Processing runtime), wiring of `httpapi` routes, `bootstrap` subcommand |
-| `internal/httpapi` | HTTP adapters of the application routes: management (one file per resource), Gateway intake and credentials, Processing; shared route helper (proof selection, pre-authentication before the body, error mapping), JSON decoding and paging. Exported surface: `RegisterManagementRoutes`, `RegisterIngestRoutes`, `RegisterGatewayManagementRoutes`, `RegisterProcessingRoutes`, `GatewayIntake`, `ProcessingRoutes` |
+| `internal/httpapi` | HTTP adapters of the application routes: management (one file per resource), Gateway intake and credentials, Processing; shared route helper (proof selection, pre-authentication before the body, error mapping), JSON decoding and paging. Exported surface: `RegisterManagementRoutes`, `RegisterIngestRoutes`, `RegisterGatewayManagementRoutes`, `RegisterNetworkManagementRoutes`, `RegisterProcessingRoutes`, `GatewayIntake`, `ProcessingRoutes` |
 | `internal/platform` | Store-neutral runtime: `Config`/roles, `Store` and `Runner` interfaces, `TransactionContext`, `Clock`, `Failure` error codes, readiness/health handlers, graceful shutdown (`StartWithAPI`, `RunningHandle`) |
 | `internal/platform/postgres` | PostgreSQL `Store`: connection/TLS policy, primary-only transactions, failure classification, database clock, goose migration check/apply under an advisory lock |
 | `internal/authz` | Grant/scope/action catalog, field permissions, access-key restrictions, `Authorize` point decisions, age cutoffs |
@@ -191,7 +197,7 @@ The layering rules that the code follows:
 | `internal/messages` | Grouping decision type and the pure grouping function `Decide` |
 | `internal/units` (package `units`) | Agencies, Units, Unit collections, Organizations with setting defaults, Unit templates, bulk Unit operations, setting inheritance |
 | `internal/assignments` | Address rules (selectors, validity intervals, conflict validation), target matching, suppressions, correction status/retry, `CorrectionRunner` |
-| `internal/ingest` | Submission validation, Network resolution, intake service, gateway state reports, gateway administration (network assignment, credentials) |
+| `internal/ingest` | Submission validation, Network resolution, intake service, gateway state reports and transitions, Network and Gateway administration (lifecycle, network assignment, credentials, diagnostics, history), contact-loss monitor |
 | `internal/processing` | Workflow definition model and compiler, CEL predicates, Core regex, value/schema codec, candidate state machine, retry schedule, source capture, plugin host (process pool, verified-artifact cache) and installed-step execution, processing instances |
 | `internal/processing/management` | Authorized workflow/version/instance commands and reads, candidate status reads, manual retry, preview |
 | `internal/processing/worker` | Candidate dispatcher and per-candidate execution (claim, evaluate, complete/fail, publish) |
@@ -224,6 +230,7 @@ erDiagram
     GATEWAY ||--o{ GATEWAY_NETWORK : "assigned to"
     NETWORK ||--o{ GATEWAY_NETWORK : ""
     GATEWAY ||--o{ GATEWAY_CREDENTIAL : authenticates
+    GATEWAY ||--o{ GATEWAY_STATE_HISTORY : "state transitions"
     GATEWAY ||--o{ TRANSMISSION : submits
     NETWORK ||--o{ TRANSMISSION : "resolved to"
     MESSAGE ||--|{ TRANSMISSION : groups
@@ -283,9 +290,10 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 
 | Term | Code | Definition |
 | --- | --- | --- |
-| Gateway | `gateways`, `ingest` | Registered receiver instance that submits transmissions under its own bearer credential. It has a state (`active`, `degraded`, `stopped`, `contact-lost`) and contact timestamps. |
+| Gateway | `gateways`, `ingest` | Registered receiver instance with a name that submits transmissions under its own bearer credential. It can be disabled (credentials authenticate nothing) and soft-deleted. It has a state (`never-seen`, `active`, `degraded`, `stopped`, `contact-lost`), contact timestamps and a history retention marker. |
+| Gateway state history | `gateway_state_history` | One row per Gateway revision that changed the state: old and new state, cause (`report`, `submission`, `timeout`), times and the degraded reason. |
 | Gateway credential | `gateway_credentials` | Hashed bearer secret bound to one gateway. At most one active and one pending replacement per gateway. |
-| Network | `networks` | Logical radio network with exactly one protocol. Context for network resolution and address rules. |
+| Network | `networks` | Logical radio network with exactly one protocol, owned by one Agency; soft-deleted. Context for network resolution and address rules. |
 | Gateway network | `gateway_networks` | Assignment of a Network to a gateway under a gateway-local identifier with a unique `priority` per gateway (lower number first, set `0..n-1`) that orders resolution among its Networks |
 | Protocol | `protocols.Protocol` | `pocsag`, `flex`, `zvei` or `eas`. Determines valid payload forms and address ranges. |
 | Submission | `ingest.Submission` | One gateway request carrying one transmission, identified by `submissionId` for idempotent retries |
@@ -361,7 +369,7 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 | `message.created`, `message.transmission-joined`, `message.merged` | Grouping outcome at intake |
 | `assignment.changed` | One per Transmission: all target resolutions set at intake (`created`), or the changed targets with before and after from a correction (`corrected`) |
 | `suppression.changed` | Suppression created or lifted |
-| `gateway.state-changed` | Effective gateway state change |
+| `gateway.state-changed` | Effective gateway state change from a report, a Submission or the contact-loss monitor; one per Gateway revision, with a matching `gateway_state_history` row |
 | `operation.submission-rejected`, `operation.observation-time-implausible`, `operation.network-ambiguous` | Operational problems at intake; the ambiguity fact carries the chosen Network and the resolution `address-priority` |
 | `configuration.changed` | Account/group/grant, Unit/collection/Organization/template, rule, workflow or processing-instance configuration changed |
 | `principal.access-changed`, `principal.deleted` | Effective access of a principal changed or the account is being deleted |

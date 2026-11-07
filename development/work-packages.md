@@ -12,7 +12,7 @@ Complete each producer and verify its handover before starting a dependent AP. S
 | AP-06 | [Processing Kernel](work-packages/ap-06-processing-kernel.md) | T055..T056 | done ([handover](execution/ap-06.md#handover)) |
 | AP-07 | [Transmission Intake](work-packages/ap-07-transmission-intake.md) | T057..T059 | done ([handover](execution/ap-07.md#handover)) |
 | AP-08 | [Master Data and Correction](work-packages/ap-08-master-data-correction-after-intake.md) | T060..T062 | done ([handover](execution/ap-08.md#handover)) |
-| AP-09 | [Gateway and Network Administration](work-packages/ap-09-gateway-network.md) | T086..T088 | open |
+| AP-09 | [Gateway and Network Administration](work-packages/ap-09-gateway-network.md) | T086..T088 | done ([handover](execution/ap-09.md#handover)) |
 | AP-10 | [Query and Live API](work-packages/ap-10-query-live.md) | T063..T065 | open |
 | AP-11 | [Events and Delivery](work-packages/ap-11-events-delivery.md) | T066..T068 | open |
 | AP-12 | [Plugin Host and Initial Targets](work-packages/ap-12-plugin-host.md) | T069..T071 | open |
@@ -21,6 +21,7 @@ Complete each producer and verify its handover before starting a dependent AP. S
 | AP-15 | [Frontend](work-packages/ap-15-frontend.md) | T078..T080, T089 | open |
 | AP-16 | [Operations and Profile Evidence](work-packages/ap-16-operations.md) | T081..T083 | open |
 | AP-17 | [Integration and Delivery Evidence](work-packages/ap-17-integration-evidence.md) | T084..T085 | open |
+| AP-20 | [Re-resolution after Gateway Network-Mapping Changes](work-packages/ap-20-gateway-mapping-rematch.md) ([D-139](decisions/02-intake-and-grouping.md#d-139)) | T090..T091 | open |
 
 ## Required Foundation Evidence
 

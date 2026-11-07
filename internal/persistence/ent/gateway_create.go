@@ -36,6 +36,48 @@ func (_c *GatewayCreate) SetNillableRevision(v *int64) *GatewayCreate {
 	return _c
 }
 
+// SetName sets the "name" field.
+func (_c *GatewayCreate) SetName(v string) *GatewayCreate {
+	_c.mutation.SetName(v)
+	return _c
+}
+
+// SetNillableName sets the "name" field if the given value is not nil.
+func (_c *GatewayCreate) SetNillableName(v *string) *GatewayCreate {
+	if v != nil {
+		_c.SetName(*v)
+	}
+	return _c
+}
+
+// SetEnabled sets the "enabled" field.
+func (_c *GatewayCreate) SetEnabled(v bool) *GatewayCreate {
+	_c.mutation.SetEnabled(v)
+	return _c
+}
+
+// SetNillableEnabled sets the "enabled" field if the given value is not nil.
+func (_c *GatewayCreate) SetNillableEnabled(v *bool) *GatewayCreate {
+	if v != nil {
+		_c.SetEnabled(*v)
+	}
+	return _c
+}
+
+// SetDeleted sets the "deleted" field.
+func (_c *GatewayCreate) SetDeleted(v bool) *GatewayCreate {
+	_c.mutation.SetDeleted(v)
+	return _c
+}
+
+// SetNillableDeleted sets the "deleted" field if the given value is not nil.
+func (_c *GatewayCreate) SetNillableDeleted(v *bool) *GatewayCreate {
+	if v != nil {
+		_c.SetDeleted(*v)
+	}
+	return _c
+}
+
 // SetState sets the "state" field.
 func (_c *GatewayCreate) SetState(v gateway.State) *GatewayCreate {
 	_c.mutation.SetState(v)
@@ -98,6 +140,20 @@ func (_c *GatewayCreate) SetLastReport(v jsontext.Value) *GatewayCreate {
 	return _c
 }
 
+// SetHistoryRemovedBefore sets the "history_removed_before" field.
+func (_c *GatewayCreate) SetHistoryRemovedBefore(v time.Time) *GatewayCreate {
+	_c.mutation.SetHistoryRemovedBefore(v)
+	return _c
+}
+
+// SetNillableHistoryRemovedBefore sets the "history_removed_before" field if the given value is not nil.
+func (_c *GatewayCreate) SetNillableHistoryRemovedBefore(v *time.Time) *GatewayCreate {
+	if v != nil {
+		_c.SetHistoryRemovedBefore(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *GatewayCreate) SetID(v uuid.UUID) *GatewayCreate {
 	_c.mutation.SetID(v)
@@ -145,6 +201,18 @@ func (_c *GatewayCreate) defaults() error {
 		v := gateway.DefaultRevision
 		_c.mutation.SetRevision(v)
 	}
+	if _, ok := _c.mutation.Name(); !ok {
+		v := gateway.DefaultName
+		_c.mutation.SetName(v)
+	}
+	if _, ok := _c.mutation.Enabled(); !ok {
+		v := gateway.DefaultEnabled
+		_c.mutation.SetEnabled(v)
+	}
+	if _, ok := _c.mutation.Deleted(); !ok {
+		v := gateway.DefaultDeleted
+		_c.mutation.SetDeleted(v)
+	}
 	if _, ok := _c.mutation.State(); !ok {
 		v := gateway.DefaultState
 		_c.mutation.SetState(v)
@@ -161,6 +229,20 @@ func (_c *GatewayCreate) check() error {
 		if err := gateway.RevisionValidator(v); err != nil {
 			return &ValidationError{Name: "revision", err: fmt.Errorf(`ent: validator failed for field "Gateway.revision": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.Name(); !ok {
+		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "Gateway.name"`)}
+	}
+	if v, ok := _c.mutation.Name(); ok {
+		if err := gateway.NameValidator(v); err != nil {
+			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Gateway.name": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.Enabled(); !ok {
+		return &ValidationError{Name: "enabled", err: errors.New(`ent: missing required field "Gateway.enabled"`)}
+	}
+	if _, ok := _c.mutation.Deleted(); !ok {
+		return &ValidationError{Name: "deleted", err: errors.New(`ent: missing required field "Gateway.deleted"`)}
 	}
 	if _, ok := _c.mutation.State(); !ok {
 		return &ValidationError{Name: "state", err: errors.New(`ent: missing required field "Gateway.state"`)}
@@ -209,6 +291,18 @@ func (_c *GatewayCreate) createSpec() (*Gateway, *sqlgraph.CreateSpec) {
 		_spec.SetField(gateway.FieldRevision, field.TypeInt64, value)
 		_node.Revision = value
 	}
+	if value, ok := _c.mutation.Name(); ok {
+		_spec.SetField(gateway.FieldName, field.TypeString, value)
+		_node.Name = value
+	}
+	if value, ok := _c.mutation.Enabled(); ok {
+		_spec.SetField(gateway.FieldEnabled, field.TypeBool, value)
+		_node.Enabled = value
+	}
+	if value, ok := _c.mutation.Deleted(); ok {
+		_spec.SetField(gateway.FieldDeleted, field.TypeBool, value)
+		_node.Deleted = value
+	}
 	if value, ok := _c.mutation.State(); ok {
 		_spec.SetField(gateway.FieldState, field.TypeEnum, value)
 		_node.State = value
@@ -228,6 +322,10 @@ func (_c *GatewayCreate) createSpec() (*Gateway, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.LastReport(); ok {
 		_spec.SetField(gateway.FieldLastReport, field.TypeJSON, value)
 		_node.LastReport = value
+	}
+	if value, ok := _c.mutation.HistoryRemovedBefore(); ok {
+		_spec.SetField(gateway.FieldHistoryRemovedBefore, field.TypeTime, value)
+		_node.HistoryRemovedBefore = &value
 	}
 	return _node, _spec
 }

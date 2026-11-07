@@ -217,11 +217,15 @@ var (
 	GatewaysColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "revision", Type: field.TypeInt64, Default: 1},
-		{Name: "state", Type: field.TypeEnum, Enums: []string{"active", "degraded", "stopped", "contact-lost"}, Default: "active"},
+		{Name: "name", Type: field.TypeString, Size: 256, Default: ""},
+		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "deleted", Type: field.TypeBool, Default: false},
+		{Name: "state", Type: field.TypeEnum, Enums: []string{"never-seen", "active", "degraded", "stopped", "contact-lost"}, Default: "never-seen"},
 		{Name: "last_contact_at", Type: field.TypeTime, Nullable: true},
 		{Name: "last_heartbeat_at", Type: field.TypeTime, Nullable: true},
 		{Name: "last_transmission_at", Type: field.TypeTime, Nullable: true},
 		{Name: "last_report", Type: field.TypeJSON, Nullable: true},
+		{Name: "history_removed_before", Type: field.TypeTime, Nullable: true},
 	}
 	// GatewaysTable holds the schema information for the "gateways" table.
 	GatewaysTable = &schema.Table{
@@ -293,6 +297,32 @@ var (
 				Name:    "gatewaynetwork_gateway_id_priority",
 				Unique:  true,
 				Columns: []*schema.Column{GatewayNetworksColumns[1], GatewayNetworksColumns[4]},
+			},
+		},
+	}
+	// GatewayStateHistoryColumns holds the columns for the "gateway_state_history" table.
+	GatewayStateHistoryColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "gateway_id", Type: field.TypeUUID},
+		{Name: "revision", Type: field.TypeInt64},
+		{Name: "old_state", Type: field.TypeEnum, Enums: []string{"never-seen", "active", "degraded", "stopped", "contact-lost"}},
+		{Name: "new_state", Type: field.TypeEnum, Enums: []string{"active", "degraded", "stopped", "contact-lost"}},
+		{Name: "cause", Type: field.TypeEnum, Enums: []string{"report", "submission", "timeout"}},
+		{Name: "occurred_at", Type: field.TypeTime},
+		{Name: "contact_at", Type: field.TypeTime},
+		{Name: "reason_code", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "detail", Type: field.TypeString, Nullable: true, Size: 512},
+	}
+	// GatewayStateHistoryTable holds the schema information for the "gateway_state_history" table.
+	GatewayStateHistoryTable = &schema.Table{
+		Name:       "gateway_state_history",
+		Columns:    GatewayStateHistoryColumns,
+		PrimaryKey: []*schema.Column{GatewayStateHistoryColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "gatewaystatehistory_gateway_id_revision",
+				Unique:  true,
+				Columns: []*schema.Column{GatewayStateHistoryColumns[1], GatewayStateHistoryColumns[2]},
 			},
 		},
 	}
@@ -998,6 +1028,7 @@ var (
 		GatewaysTable,
 		GatewayCredentialsTable,
 		GatewayNetworksTable,
+		GatewayStateHistoryTable,
 		IdentityGrantsTable,
 		GroupingControlTable,
 		IdentityControlTable,
@@ -1068,6 +1099,9 @@ func init() {
 	}
 	GatewayNetworksTable.Annotation = &entsql.Annotation{
 		Table: "gateway_networks",
+	}
+	GatewayStateHistoryTable.Annotation = &entsql.Annotation{
+		Table: "gateway_state_history",
 	}
 	IdentityGrantsTable.Annotation = &entsql.Annotation{
 		Table: "identity_grants",

@@ -166,7 +166,8 @@ that issues access keys.
 `POST /api/v1/transmissions` and `POST /api/v1/gateway/state` accept only a Gateway
 credential: `Authorization: Bearer <secret>`, with the same secret format as above. The
 Gateway identity is derived from the credential, so a request cannot name a Gateway.
-Missing, malformed, unknown or revoked credentials return `401 LOGIN_REQUIRED`.
+Missing, malformed, unknown or revoked credentials, and credentials of a disabled or deleted
+Gateway, return `401 LOGIN_REQUIRED`.
 Sessions, cookies and Origin/CSRF are not used on these routes.
 
 Gateway credential rotation:
@@ -192,7 +193,7 @@ What callers can do depends on these concepts:
 
 - **Grants** combine an action from a fixed catalog (for example `unit.read`,
   `address-rule.update`, `gateway.update`, `workflow.preview`, `plugin.configure`) with a
-  scope: `all`, or a list of `agency`, `unit`, `unitCollection` or `account` IDs. An Agency is
+  scope: `all`, or a list of `agency`, `unit`, `unitCollection`, `account` or `gateway` IDs. An Agency is
   the operating authority that owns Units and Networks (for example a county's fire dispatch
   centre); a grant on it covers everything of that Agency. A
   grant can carry a maximum data age. Grants from the account and from its user groups
@@ -214,6 +215,7 @@ Scope kinds each action accepts (`internal/authz/grants.go` is the source; a gra
 | `unit-template.*`, `agency.create`, `agency.delete`, `grouping.configure`, `notice.manage`, `plugin.configure`, `operations.manage` | `all` only |
 | `agency.read`, `agency.update`, `gateway.*`, `network.*` | `all`, `agency` |
 | `account.*`, `grant.manage`, `password.local`, `recovery.*`, `session.manage-own`, `key.*`, `subscription.manage-*` | `all`, `account` |
+| `gateway.diagnostics.read`, `gateway.credential.rotate` | `all`, `agency`, `gateway` |
 | `delivery.read`, `delivery.retry`, `delivery.redeliver` | `all`, `agency`, `unit`, `unitCollection`, `account` |
 | `workflow.*`, `presentation.manage` | `all`, `agency`, `unit` |
 | `audit.read` | `all`, `agency`, `account` |
@@ -249,7 +251,9 @@ Scope evaluation per resource:
 | Unit template | Only `all` scope. Referencing an Organization also requires `organization.read` on it. |
 | Address rule | Writes need authority over the Agency of the rule's Network and, additionally, over the rule's Unit or its collections (for an update, also over the existing rule's Network Agency); a Unit or collection grant alone never reaches another Agency's Network. Reads keep their existing predicate. |
 | Suppression / correction | The Agency of the affected transmission target's Network, and the target's Unit. |
-| Gateway administration | The Agency of every Network currently assigned to the Gateway, and for network replacement of every newly proposed Network. A Gateway without Networks needs an `all` grant. |
+| Network | The Network's Agency. Protocol and Agency are fixed at creation. |
+| Gateway administration | The Agency of every Network currently assigned to the Gateway, and for creation and network replacement of every proposed Network. A Gateway without Networks needs an `all` grant. Lists show only Gateways whose every Agency is readable. |
+| Gateway delegation | `gateway.diagnostics.read` and `gateway.credential.rotate` with a `gateway` scope reach exactly the listed Gateways; with `agency` scope they need every Agency of the Gateway. Diagnostics grant only the diagnostics and history routes; rotation grants only credential status, issue and revoke. Neither implies the other, any Message or Payload access, or Gateway administration. A grant on a deleted Gateway stops applying. |
 | Workflow | The workflow's own selection scope (`all`, `network` or `unit`), with each Network resolved to its Agency and each Unit to its Agency and collections. |
 | Processing instance | The global `plugin.configure` right. |
 
@@ -600,26 +604,76 @@ Gateway state: `{"schemaVersion":1,"operation":"degraded","reasonCode":"LOW_SIGN
 
 Gateway state semantics:
 
-- The states are `active`, `degraded`, `stopped` and `contact-lost`. A caller can report only
-  `heartbeat`, `degraded`, `recovered` and `terminated`; `active` and `contact-lost` are
-  server-derived.
-- Every report records authenticated contact. A `heartbeat` does not clear `degraded`.
-  `recovered` sets `active` (idempotent). `terminated` sets `stopped`. An authenticated
-  Submission or report from a `stopped` or `contact-lost` Gateway makes it `active` again
-  without inventing a cause.
-- `gateway.state-changed` is appended only when the effective state changes, including a
-  change caused by a Submission; a contact-only heartbeat or a repeated report appends
-  nothing. The `degraded` fields are diagnostic only and drive no authorization or automation.
-- Detecting `contact-lost` after a missed heartbeat is not implemented yet.
+- The states are `never-seen`, `active`, `degraded`, `stopped` and `contact-lost`. A caller
+  can report only `heartbeat`, `degraded`, `recovered` and `terminated`; `never-seen`,
+  `active` and `contact-lost` are server-derived. A new Gateway is `never-seen` until its
+  first authenticated contact.
+- Every authenticated Submission or report is contact. A `heartbeat` does not clear
+  `degraded`. `recovered` sets `active` (idempotent). `terminated` sets `stopped`. An
+  authenticated Submission or heartbeat from a `never-seen`, `stopped` or `contact-lost`
+  Gateway makes it `active` without inventing a cause.
+- Contact loss: the worker role sets an enabled `active` or `degraded` Gateway to
+  `contact-lost` when its last contact is at or before `now - contact timeout` on the
+  database clock (see [operations](operations.md#configuration-reference)). `contact-lost`
+  takes precedence over `degraded`. `stopped`, `never-seen` and disabled Gateways are never
+  set `contact-lost`; no crash cause is claimed.
+- Every effective state change, whatever its cause, records one history entry and one
+  `gateway.state-changed` fact with the new Gateway revision in the same transaction. A
+  contact-only heartbeat or a repeated report records nothing. The `degraded` fields are
+  diagnostic only and drive no authorization or automation.
 
 ### Gateway administration
 
 | Method | Path | Right | Success | Purpose |
 | --- | --- | --- | --- | --- |
+| GET | `/networks` | `network.read` | 200 | List Networks |
+| POST | `/networks` | `network.create` | 201 | Create a Network (`name`, `protocol`, `agencyId`) |
+| GET | `/networks/{id}` | `network.read` | 200 | Read |
+| PUT | `/networks/{id}` | `network.update` | 200 | Rename |
+| DELETE | `/networks/{id}` | `network.delete` | 200 | Soft delete |
+| GET | `/gateways` | `gateway.read` | 200 | List Gateways |
+| POST | `/gateways` | `gateway.create` | 201 | Create a Gateway (`name`, optional initial `networks`) |
+| GET | `/gateways/{id}` | `gateway.read` | 200 | Configuration, state and contact times |
+| PUT | `/gateways/{id}` | `gateway.update` | 200 | Change `name` and `enabled` |
+| DELETE | `/gateways/{id}` | `gateway.delete` | 200 | Soft delete |
+| GET | `/gateways/{id}/diagnostics` | `gateway.read` or `gateway.diagnostics.read` | 200 | State, contact times, last report, history retention marker |
+| GET | `/gateways/{id}/history` | `gateway.read` or `gateway.diagnostics.read` | 200 | State transitions, newest first |
 | PUT | `/gateways/{id}/networks` | `gateway.update` | 200 | Replace the full Network assignment set |
-| GET | `/gateways/{id}/credentials` | `gateway.read` | 200 | Credential IDs, `status` (`current`, `pending`, `revoked`) and timestamps |
-| POST | `/gateways/{id}/credentials` | `gateway.update` | 201 (replay: 200) | Issue a credential; the secret is returned once |
-| DELETE | `/gateways/{id}/credentials/{credentialId}` | `gateway.update` | 200 | Revoke |
+| GET | `/gateways/{id}/credentials` | `gateway.read` or `gateway.credential.rotate` | 200 | Credential IDs, `status` (`current`, `pending`, `revoked`) and timestamps |
+| POST | `/gateways/{id}/credentials` | `gateway.update` or `gateway.credential.rotate` | 201 (replay: 200) | Issue a credential; the secret is returned once |
+| DELETE | `/gateways/{id}/credentials/{credentialId}` | `gateway.update` or `gateway.credential.rotate` | 200 | Revoke |
+
+The Network and Gateway lifecycle routes and the diagnostics and history reads use the
+management data envelope, `commandId` on creation and `expectedRevision` on change, like
+master data. The assignment and credential routes return unwrapped bodies.
+
+Network and Gateway rules:
+
+- A Network's Protocol and Agency cannot change; another Protocol or Agency is a new Network.
+  Deleting a Network is a soft delete: accepted Transmissions keep their reference, reads
+  return 404 and it cannot be assigned. A Network that is still assigned to a Gateway or
+  referenced by an Address rule or an undeleted Workflow cannot be deleted
+  (`409 REVISION_CONFLICT`); the error names no reference.
+- A new Gateway is enabled, `never-seen` and has no credential; issue one with the credential
+  route. Its initial `networks` follow the replacement rules below but may be empty.
+- `enabled: false` blocks the Gateway: its credentials authenticate nothing and it is not
+  evaluated for contact loss. Enabling it again restores its unrevoked credentials.
+- Deleting a Gateway revokes every unrevoked credential, removes its Network assignments and
+  hides it. Accepted Transmissions and its state history are unchanged.
+- The Gateway revision also advances on state transitions and credential cutover, so a
+  change may need a reload (`409 REVISION_CONFLICT`).
+- Not found versus forbidden: a caller holding no right on an existing Network or Gateway
+  (no `network.*` or `gateway.*` action covering it, including the delegation actions) gets
+  `404 NOT_FOUND`, exactly as for a missing one, so IDs cannot be probed. A caller holding
+  some right on it but not the requested one gets `403 FORBIDDEN`. A Gateway right counts only
+  if it covers every Agency of the Gateway's Networks or names the Gateway. This applies to
+  all Gateway and Network routes, including assignment and credential routes.
+- Diagnostics: `lastContactAt` null means never seen. `lastTransmissionAt` stays after the
+  Transmission itself is removed. `historyRemovedBefore` is set when retention removed older
+  transitions, so a short history is not proof that nothing happened. History entries carry
+  `revision`, `oldState`, `newState`, `cause` (`report`, `submission`, `timeout`),
+  `occurredAt`, `contactAt` (for `timeout` the last contact) and the degraded
+  `reasonCode`/`detail`.
 
 Network replacement body:
 
@@ -637,7 +691,6 @@ Network replacement body:
 - The responses are `{"schemaVersion":1,"revision":"N"}` and, for issuing a credential,
   `{"schemaVersion":1,"credentialId","secret","status","revision"}`.
 
-The HTTP API has no routes that create, list or delete Gateways or Networks.
 
 ### Processing: workflows, versions, candidates
 

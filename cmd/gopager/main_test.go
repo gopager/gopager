@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	ingestdomain "github.com/gopager/gopager/internal/ingest"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing/worker"
 )
@@ -38,6 +39,12 @@ func TestParseConfigBindsExplicitInputs(t *testing.T) {
 		{"unknown role", []string{"--roles=other"}, "synthetic-secret", false},
 		{"empty role", []string{"--roles=worker,"}, "synthetic-secret", false},
 		{"duplicate role", []string{"--roles=worker,worker"}, "synthetic-secret", false},
+		{"configured contact monitor", []string{"--roles=worker", "--gateway-heartbeat-interval=30s", "--gateway-contact-timeout=90s", "--gateway-contact-scan-interval=5s"}, "synthetic-secret", true},
+		{"contact timeout equals heartbeat", []string{"--roles=worker", "--gateway-heartbeat-interval=60s", "--gateway-contact-timeout=60s"}, "synthetic-secret", true},
+		{"contact timeout below heartbeat", []string{"--roles=worker", "--gateway-contact-timeout=59s"}, "synthetic-secret", false},
+		{"zero contact timeout", []string{"--roles=worker", "--gateway-heartbeat-interval=0s", "--gateway-contact-timeout=0s"}, "synthetic-secret", false},
+		{"contact scan above timeout", []string{"--roles=worker", "--gateway-contact-scan-interval=181s"}, "synthetic-secret", false},
+		{"zero contact scan", []string{"--roles=worker", "--gateway-contact-scan-interval=0s"}, "synthetic-secret", false},
 		{"missing listen", []string{"--roles=api"}, "synthetic-secret", false},
 		{"missing dsn", []string{"--roles=worker"}, "", false},
 		{"unknown flag", []string{"--unknown=synthetic-secret"}, "", false},
@@ -80,6 +87,15 @@ func TestParseConfigBindsExplicitInputs(t *testing.T) {
 			}
 			if test.ok && test.name != "configured source limit" && config.LoginLimits.SourceAttempts != 30 {
 				t.Fatalf("default source login limit = %d, want 30", config.LoginLimits.SourceAttempts)
+			}
+			if test.name == "configured contact monitor" && config.GatewayContact != (ingestdomain.ContactConfig{
+				HeartbeatInterval: 30 * time.Second, Timeout: 90 * time.Second, ScanInterval: 5 * time.Second}) {
+				t.Fatalf("contact monitor configuration was not bound: %+v", config.GatewayContact)
+			}
+			if test.ok && !strings.Contains(test.name, "contact") && config.GatewayContact != (ingestdomain.ContactConfig{
+				HeartbeatInterval: ingestdomain.DefaultHeartbeatInterval, Timeout: ingestdomain.DefaultContactTimeout,
+				ScanInterval: ingestdomain.DefaultContactScan}) {
+				t.Fatalf("contact monitor defaults not applied: %+v", config.GatewayContact)
 			}
 			if test.name == "configured artifact root" && config.ProcessingArtifactRoot != "/" {
 				t.Fatal("Processing artifact root was not bound")
