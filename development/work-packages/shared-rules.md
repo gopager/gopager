@@ -2,18 +2,21 @@
 
 [Document authority](../README.md#document-authority) | [Assignments](../work-packages.md#revised-execution-path) | [Record format](../execution/README.md#required-record-structure) | [AP template](ap-template.md)
 
-This file is the only definition of how an agent executes a work package (AP). Other documents link here instead of restating these rules. The approval rule itself is defined in the [plan](../authoritative-plan.md#workflow-and-approval-gates): the user approves a package once, before it starts; that approval covers all of the package's assigned work.
+This file is the only definition of how an agent executes a work package (AP). Other documents link here instead of restating these rules. The approval rule itself is defined in the [plan](../authoritative-plan.md#workflow-and-approval-gates): the user's order to execute a package is its approval; it covers all of the package's assigned work and needs no separate confirmation.
 
-Roles: the **user** approves packages and boundary crossings and accepts results by merging them. The **executing agent** does everything else, including the planning a package assigns and approved [scope changes](#scope-change). Domain names in an AP (Intake, Delivery, …) describe the affected code area, not a person.
+Roles: the **user** approves packages by ordering their execution, approves boundary crossings and accepts results by merging them. The **executing agent** does everything else, including the planning a package assigns and approved [scope changes](#scope-change). Domain names in an AP (Intake, Delivery, …) describe the affected code area, not a person.
+
+Ask the user only for the AP's open user decisions, a [clarification](#scope-change), an input gap or boundary crossing, or an item that [cannot proceed](#mandatory-continuation-and-stop-conditions) (for example a planned approach that turns out impossible or needs a product decision). Never ask for confirmation to start, to follow the AP's plan or to continue.
 
 ## Session Start
 
 1. Read the assigned AP file and this file. Do not preload anything else: follow an AP link only when the current task needs it, and read only the linked section.
 2. Read the user stories of the AP's REQ IDs: only their rows in the [requirements catalog](../requirements-catalog.md) (story and acceptance), for example `grep -E '^\| REQ-(041|042|134) \|' development/requirements-catalog.md`. They explain what the tasks are for; the AP's tasks and done criteria define what is built. Where the AP names its part of a shared REQ, the rest belongs to the AP named there.
-3. Ask the user for the package start approval if it is missing. Ask the AP's **Open user decisions** in the same structured question; record the answers at the owner named there (usually [delivery scope](../authoritative-plan.md#delivery-scope) or an ADR) before dependent work.
-4. Inspect the worktree (`git status`, `git log -1`). Preserve changes you did not make.
-5. Verify every **Input** against the linked handover and the actual artifacts (files, routes, migrations, tests). A missing or contradicting input is a [scope change](#scope-change) of class *input gap*, not a reason to backfill it.
-6. Create or continue only this AP's execution record (`development/execution/ap-NN.md`) with the [required structure](../execution/README.md#required-record-structure): baseline revision and uncommitted delta, start approval, assignee, task IDs.
+3. The execution order is the start approval; do not ask for it. Ask the AP's **Open user decisions**, if any, in one structured question; record the answers at the owner named there (usually [delivery scope](../authoritative-plan.md#delivery-scope) or an ADR) before dependent work.
+4. Work only in the AP's own git worktree `.claude/worktrees/ap-NN-<slug>` on the feature branch of the same name (the AP file name), so several tasks run at once without touching each other's checkout. Continue an existing worktree; otherwise add it, with `git worktree add .claude/worktrees/ap-NN-<slug> ap-NN-<slug>` for an existing branch or `git worktree add -b ap-NN-<slug> .claude/worktrees/ap-NN-<slug> main` for a new one. If the branch is already checked out in another checkout, work there instead. Never commit to `main`, and never switch branches in a checkout you did not create.
+5. Inspect the worktree (`git status`, `git log -1`). Preserve changes you did not make.
+6. Verify every **Input** against the linked handover and the actual artifacts (files, routes, migrations, tests). A missing or contradicting input is a [scope change](#scope-change) of class *input gap*, not a reason to backfill it.
+7. Create or continue only this AP's execution record (`development/execution/ap-NN.md`) with the [required structure](../execution/README.md#required-record-structure): baseline revision, worktree, branch and uncommitted delta, start approval (the execution order), assignee, task IDs.
 
 ## Scope
 
@@ -117,7 +120,7 @@ An incomplete execution may end only when:
 - the user pauses, cancels or narrows the assignment, or explicitly agrees to leave the remaining items open;
 - a hard runtime or tool limit actually terminates the session (leave a truthful checkpoint in the record).
 
-Package size, effort spent, response length, anticipated context limits, a missing commit, a passing milestone or a recorded blocker are not stop conditions. Do not defer actionable work to a later session, do not ask whether to continue, and do not end with a report of open points instead of a question about them.
+Package size, effort spent, response length, anticipated context limits, a missing commit, a passing milestone or a recorded blocker are not stop conditions. Do not defer actionable work to a later session, do not ask whether to start or continue, and do not end with a report of open points instead of a question about them.
 
 When ending incomplete, record in the execution record: the reason (with the user's agreement or the limit hit), affected task IDs, evidence, who resolves each open item and what is needed to resume. Keep verified work distinct from blocked or unexecuted work.
 

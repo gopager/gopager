@@ -33,7 +33,7 @@ Changes to an AP file after it is approved follow the [scope-change procedure](s
 
 ## Open User Decisions
 
-Questions asked together with the start approval, each with the destination of the answer. "None" if there are none.
+Questions asked in one structured question at session start, each with the destination of the answer. "None" if there are none.
 
 ## Planning Before Coding
 
