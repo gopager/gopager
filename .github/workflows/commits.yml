@@ -28,4 +28,4 @@ jobs:
       - name: commitlint
         env:
           TITLE: ${{ github.event.pull_request.title }}
-        run: printf '%s\n' "$TITLE" | npx --no -- commitlint
+        run: printf '%s\n' "$TITLE" | npx --no -- commitlint --config commitlint.pr-title.config.mjs

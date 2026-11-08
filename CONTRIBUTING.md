@@ -25,7 +25,7 @@ Every commit and every pull request title follows [Conventional Commits 1.0.0](h
 - The scope is optional and names the area, for example a package (`ingest`, `assignments`, `httpapi`) or `web`.
 - Pull requests are squash-merged. The pull request title becomes the commit header on `main` and its description the body, so the title must describe the whole change; CI checks it.
 
-Only a missing or unknown type and an empty description are rejected. Header length (100) and a trailing full stop give warnings; case and line lengths are not checked. The rules are in [commitlint.config.mjs](commitlint.config.mjs). The `commit-msg` hook checks every commit locally once `npm ci` has run (see [Development](docs/development.md#prerequisites)).
+Only a missing or unknown type and an empty description are rejected. Header length (100) and a trailing full stop give warnings; case and line lengths are not checked. The rules are in [commitlint.config.mjs](commitlint.config.mjs). Locally, commitlint skips the messages git generates itself (`Merge branch …`, `Revert "…"`, `fixup! …`), since they are squashed away; pull request titles get no such exception ([commitlint.pr-title.config.mjs](commitlint.pr-title.config.mjs)), so the title of a pull request from GitHub's revert button must be changed to `revert: …`. The `commit-msg` hook checks every commit locally once `npm ci` has run (see [Development](docs/development.md#prerequisites)).
 
 ## Documentation
 
