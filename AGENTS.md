@@ -7,3 +7,5 @@
 - Configuration and runtime: [docs/operations.md](docs/operations.md)
 
 Before finishing a change, run `make` and `go test ./...`. Update affected documentation, OpenAPI/proto files and Go doc comments in the same change, as described in [CONTRIBUTING.md](CONTRIBUTING.md#documentation).
+
+Commit messages and pull request titles follow Conventional Commits, as described in [CONTRIBUTING.md](CONTRIBUTING.md#commit-messages). Never bypass the `commit-msg` hook with `--no-verify`.

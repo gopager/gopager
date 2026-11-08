@@ -1,0 +1,5 @@
+# Git hooks, installed by "npm ci" (lefthook's postinstall runs "lefthook install").
+commit-msg:
+  jobs:
+    - name: commitlint
+      run: npx --no -- commitlint --edit "{1}"

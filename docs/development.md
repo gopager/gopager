@@ -10,6 +10,9 @@ Contribution and documentation rules: [CONTRIBUTING.md](../CONTRIBUTING.md). Run
 | Make | all `make` targets below |
 | Network access | the first run of a tool downloads its pinned module; `make vuln` also queries the vulnerability database |
 | Docker (running daemon, pull access to `postgres:18.0-alpine`) | integration tests, unless an external test database is supplied |
+| Node.js ≥ 22.12 with npm | the commit message hook: run `npm ci` once per clone |
+
+`npm ci` installs the repository tooling pinned in [package.json](../package.json) and [package-lock.json](../package-lock.json): [commitlint](https://commitlint.js.org/) and [lefthook](https://lefthook.dev/), whose install step registers the git hooks from [lefthook.yml](../lefthook.yml) (it skips that when `CI` is set). The `commit-msg` hook rejects messages that break the [commit message rules](../CONTRIBUTING.md#commit-messages). Git worktrees below the clone, such as `.claude/worktrees/`, share the hooks and find the tooling in the clone's `node_modules`.
 
 All other tools are pinned and run through `go tool`, offline once downloaded; nothing needs a global install. The Ent code generator, the Ginkgo CLI and gotestsum are `tool` entries in [go.mod](../go.mod). golangci-lint (`v2.15.0`) and govulncheck (`v1.9.0`) each have a dedicated module file ([golangci-lint.mod](../golangci-lint.mod), [govulncheck.mod](../govulncheck.mod)), as golangci-lint's install docs advise, so their dependencies cannot change the application's. Bump one with `go get -tool -modfile=<tool>.mod <module>@<version>`; never edit the dependencies in those files by hand.
 
@@ -94,7 +97,19 @@ make vuln               # govulncheck ./... (pinned version, needs network)
 
 ### Continuous integration
 
-[.github/workflows/ci.yml](../.github/workflows/ci.yml) runs on pull requests and pushes to `main`. Job `static`: `make fmt-check`, `make vet`, `make golangci`, `make test`, `make generate-check`. Job `integration` (after `static`, 15 minute limit): `make test-race` on the runner's Docker daemon, then it uploads `build/test-reports` (`junit.xml`, `test.json`) as the `test-reports` artifact and appends `make test-slowest` to the job summary, both even when tests fail. Job `vulnerabilities` runs `make vuln` as non-blocking information. The Go version comes from `go.mod`.
+[.github/workflows/ci.yml](../.github/workflows/ci.yml) runs on pull requests and pushes to `main`. Job `static`: `make fmt-check`, `make vet`, `make golangci`, `make test`, `make generate-check`. Job `integration` (after `static`, 15 minute limit): `make test-race` on the runner's Docker daemon, then it uploads `build/test-reports` (`junit.xml`, `test.json`) as the `test-reports` artifact and appends `make test-slowest` to the job summary, both even when tests fail. Job `image` builds the container image from `deploy/compose/Dockerfile` without pushing it. Job `vulnerabilities` runs `make vuln` as non-blocking information. The Go version comes from `go.mod`.
+
+[.github/workflows/commits.yml](../.github/workflows/commits.yml) checks the pull request title with commitlint on every title edit and push, because the title becomes the squash commit header on `main`. It uses [commitlint.pr-title.config.mjs](../commitlint.pr-title.config.mjs), the shared rules without commitlint's default ignores for git-generated messages.
+
+The repository ruleset `main` makes changes to the default branch go through pull requests, allows squash merges only, blocks force pushes and deletion, and requires the checks `Static checks and quick tests`, `Integration tests`, `Container image` and `Conventional pull request title` (`Vulnerability scan` stays informational). A pull request must be up to date with `main` before it merges, so the squash commit is exactly the tree the checks passed on. Nobody can bypass the ruleset; in an emergency an admin disables it temporarily.
+
+### Releases
+
+[release-please](https://github.com/googleapis/release-please) ([.github/workflows/release.yml](../.github/workflows/release.yml), configured in [release-please-config.json](../release-please-config.json) and [.release-please-manifest.json](../.release-please-manifest.json)) reads the Conventional Commits on `main` since the last release and keeps one release pull request open that raises the version and updates `CHANGELOG.md`. Each merge to `main` only updates that pull request, so changes from any number of pull requests accumulate; nothing is released until a maintainer merges the release pull request, which tags `vX.Y.Z` and publishes a GitHub release. The whole repository has one version: the Go module (whose tags `pluginsdk` users import) and, once it exists, the frontend in `web/`, which is embedded in the same binary and image. Until 1.0.0 a breaking change bumps the minor version (`bump-minor-pre-major`). Commits before `bootstrap-sha` are ignored, as they predate the commit rules.
+
+When `web/package.json` is added, add it to the `"."` package's `extra-files` as `{"type": "json", "path": "web/package.json", "jsonpath": "$.version"}` so its version follows the release.
+
+A release is cut only from a tree on which every required check passed: the release pull request runs the same checks as any other pull request and cannot be merged before they pass. Pull requests opened with the workflow's `GITHUB_TOKEN` start no workflows, so release-please uses a token of a GitHub App created with [actions/create-github-app-token](https://github.com/actions/create-github-app-token). The App needs the repository permissions Contents, Pull requests and Issues (read and write) and is installed on this repository only; its client ID is the repository variable `RELEASE_APP_CLIENT_ID` and its private key the repository secret `RELEASE_APP_PRIVATE_KEY`. Without them the release workflow fails, and no release pull request is created.
 
 ## Tests
 
