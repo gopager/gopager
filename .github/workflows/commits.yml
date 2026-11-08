@@ -1,0 +1,31 @@
+name: Commit messages
+
+# Pull requests are squash-merged with the title as the commit header, so the title is the
+# message release-please reads. Separate from CI so a title edit re-runs only this check.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commits-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  title:
+    name: Conventional pull request title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: package.json
+          cache: npm
+      - run: npm ci
+      # The title goes through the environment, never into the script text (injection).
+      - name: commitlint
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s\n' "$TITLE" | npx --no -- commitlint

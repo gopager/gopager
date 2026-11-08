@@ -8,3 +8,6 @@
 
 # Test reports
 /build/
+
+# Repository tooling (commitlint, lefthook)
+/node_modules/

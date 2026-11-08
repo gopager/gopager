@@ -1,0 +1,36 @@
+name: Release
+
+# release-please keeps a release pull request open with the next version and CHANGELOG.md,
+# derived from the Conventional Commits on main. Merges only update that pull request; a
+# release happens only when a maintainer merges it, which tags vX.Y.Z and publishes a
+# GitHub release.
+on:
+  push:
+    branches: [main]
+
+# The GITHUB_TOKEN only reads; release-please writes with the GitHub App token below.
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      # A GitHub App token, because pull requests opened with GITHUB_TOKEN start no workflows:
+      # the release pull request must pass the same required checks as every other one.
+      # Actions that handle credentials or write are pinned to commits.
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        id: app-token
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ steps.app-token.outputs.token }}
