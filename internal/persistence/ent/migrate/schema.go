@@ -37,6 +37,7 @@ var (
 		{Name: "valid_from", Type: field.TypeTime, Nullable: true},
 		{Name: "valid_until", Type: field.TypeTime, Nullable: true},
 		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "encrypted", Type: field.TypeBool, Default: false},
 		{Name: "network_id", Type: field.TypeUUID},
 		{Name: "unit_id", Type: field.TypeUUID},
 	}
@@ -48,13 +49,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "address_rules_networks_address_rules",
-				Columns:    []*schema.Column{AddressRulesColumns[7]},
+				Columns:    []*schema.Column{AddressRulesColumns[8]},
 				RefColumns: []*schema.Column{NetworksColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "address_rules_units_address_rules",
-				Columns:    []*schema.Column{AddressRulesColumns[8]},
+				Columns:    []*schema.Column{AddressRulesColumns[9]},
 				RefColumns: []*schema.Column{UnitsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -63,12 +64,12 @@ var (
 			{
 				Name:    "addressrule_network_id_protocol_enabled",
 				Unique:  false,
-				Columns: []*schema.Column{AddressRulesColumns[7], AddressRulesColumns[2], AddressRulesColumns[6]},
+				Columns: []*schema.Column{AddressRulesColumns[8], AddressRulesColumns[2], AddressRulesColumns[6]},
 			},
 			{
 				Name:    "addressrule_unit_id",
 				Unique:  false,
-				Columns: []*schema.Column{AddressRulesColumns[8]},
+				Columns: []*schema.Column{AddressRulesColumns[9]},
 			},
 		},
 	}

@@ -16,7 +16,7 @@ import (
 func correctionFacts(changes []CorrectionChange, moves []NetworkMove, occurred time.Time) []events.CorrectionFact {
 	var facts []events.CorrectionFact
 	index := make(map[uuid.UUID]int, len(changes)+len(moves))
-	fact := func(transmission, message, network uuid.UUID) *events.CorrectionFact {
+	fact := func(transmission, message, network uuid.UUID, messageTime time.Time) *events.CorrectionFact {
 		i, seen := index[transmission]
 		if !seen {
 			i = len(facts)
@@ -25,19 +25,19 @@ func correctionFacts(changes []CorrectionChange, moves []NetworkMove, occurred t
 				ID: uuid.New(), Type: "assignment.changed",
 				Aggregate:  events.EntityRef{Type: "message", ID: message},
 				OccurredAt: occurred, TransmissionID: transmission,
-				MessageID: message, NetworkID: network, Reason: "corrected",
+				MessageID: message, NetworkID: network, Reason: "corrected", MessageTime: messageTime,
 			})
 		}
 		return &facts[i]
 	}
 	for _, change := range changes {
-		current := fact(change.TransmissionID, change.MessageID, change.NetworkID)
+		current := fact(change.TransmissionID, change.MessageID, change.NetworkID, change.MessageTime)
 		current.Revision = max(current.Revision, change.MessageRev)
 		current.Targets = append(current.Targets, events.CorrectionTarget{
 			Position: change.TargetPosition, Before: change.Before, After: change.After})
 	}
 	for _, move := range moves {
-		current := fact(move.TransmissionID, move.MessageID, move.To)
+		current := fact(move.TransmissionID, move.MessageID, move.To, move.MessageTime)
 		from := move.From
 		current.NetworkID, current.PreviousNetworkID = move.To, &from
 		current.Revision = max(current.Revision, move.MessageRev)

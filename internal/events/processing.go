@@ -60,9 +60,11 @@ func (f ProcessingInstanceFact) Envelope(recorded time.Time) (ProcessingEnvelope
 // ProcessingCompletionFact is emitted only by the atomic source-publication participant.
 // Persisting a private completed evaluation alone does not authorize appending this fact.
 type ProcessingCompletionFact struct {
-	ID                  uuid.UUID
-	TransmissionID      uuid.UUID
-	MessageID           uuid.UUID
+	ID             uuid.UUID
+	TransmissionID uuid.UUID
+	MessageID      uuid.UUID
+	// MessageTime is the Message time (first observation) of MessageID; required.
+	MessageTime         time.Time
 	WorkflowID          uuid.UUID
 	DefinitionVersionID uuid.UUID
 	ResultID            uuid.UUID
@@ -152,7 +154,7 @@ func (f ProcessingCompletionFact) Envelope(recorded time.Time) (ProcessingEnvelo
 	if err != nil {
 		return ProcessingEnvelope{}, err
 	}
-	if f.TransmissionID == uuid.Nil || f.MessageID == uuid.Nil || f.WorkflowID == uuid.Nil || f.DefinitionVersionID == uuid.Nil ||
+	if f.TransmissionID == uuid.Nil || f.MessageID == uuid.Nil || !validMessageTime(f.MessageTime) || f.WorkflowID == uuid.Nil || f.DefinitionVersionID == uuid.Nil ||
 		f.ResultID == uuid.Nil || f.SourceRevision <= 0 || f.ContextRevision <= 0 || !f.Result.Selected ||
 		(f.Result.Fields == nil) == (len(f.Result.TargetResults) == 0) || f.OutputSchema == nil {
 		return ProcessingEnvelope{}, processingInvalid(errors.New("incomplete Processing publication fact"))
@@ -174,6 +176,7 @@ func (f ProcessingCompletionFact) Envelope(recorded time.Time) (ProcessingEnvelo
 	envelope.Data, err = json.Marshal(struct {
 		TransmissionID      uuid.UUID             `json:"transmissionId"`
 		MessageID           uuid.UUID             `json:"messageId"`
+		MessageTime         time.Time             `json:"messageTime"`
 		WorkflowID          uuid.UUID             `json:"workflowId"`
 		DefinitionVersionID uuid.UUID             `json:"definitionVersionId"`
 		ResultID            uuid.UUID             `json:"resultId"`
@@ -182,7 +185,7 @@ func (f ProcessingCompletionFact) Envelope(recorded time.Time) (ProcessingEnvelo
 		ContextRevision     int64                 `json:"contextRevision,string"`
 		Status              string                `json:"status"`
 		Result              processing.Evaluation `json:"result"`
-	}{f.TransmissionID, f.MessageID, f.WorkflowID, f.DefinitionVersionID, f.ResultID, f.ResultRevision,
+	}{f.TransmissionID, f.MessageID, f.MessageTime.UTC(), f.WorkflowID, f.DefinitionVersionID, f.ResultID, f.ResultRevision,
 		f.SourceRevision, f.ContextRevision, "completed", f.Result})
 	if err != nil {
 		return ProcessingEnvelope{}, processingInvalid(err)

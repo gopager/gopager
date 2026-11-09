@@ -38,6 +38,8 @@ type AddressRule struct {
 	ValidUntil *time.Time `json:"valid_until,omitempty"`
 	// Enabled holds the value of the "enabled" field.
 	Enabled bool `json:"enabled,omitempty"`
+	// Encrypted holds the value of the "encrypted" field.
+	Encrypted bool `json:"encrypted,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the AddressRuleQuery when eager-loading is set.
 	Edges        AddressRuleEdges `json:"edges"`
@@ -84,7 +86,7 @@ func (*AddressRule) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case addressrule.FieldSelector:
 			values[i] = new([]byte)
-		case addressrule.FieldEnabled:
+		case addressrule.FieldEnabled, addressrule.FieldEncrypted:
 			values[i] = new(sql.NullBool)
 		case addressrule.FieldRevision:
 			values[i] = new(sql.NullInt64)
@@ -167,6 +169,12 @@ func (_m *AddressRule) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Enabled = value.Bool
 			}
+		case addressrule.FieldEncrypted:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field encrypted", values[i])
+			} else if value.Valid {
+				_m.Encrypted = value.Bool
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -240,6 +248,9 @@ func (_m *AddressRule) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Enabled))
+	builder.WriteString(", ")
+	builder.WriteString("encrypted=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Encrypted))
 	builder.WriteByte(')')
 	return builder.String()
 }

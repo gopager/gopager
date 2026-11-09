@@ -164,6 +164,20 @@ func (_u *AddressRuleUpdate) SetNillableEnabled(v *bool) *AddressRuleUpdate {
 	return _u
 }
 
+// SetEncrypted sets the "encrypted" field.
+func (_u *AddressRuleUpdate) SetEncrypted(v bool) *AddressRuleUpdate {
+	_u.mutation.SetEncrypted(v)
+	return _u
+}
+
+// SetNillableEncrypted sets the "encrypted" field if the given value is not nil.
+func (_u *AddressRuleUpdate) SetNillableEncrypted(v *bool) *AddressRuleUpdate {
+	if v != nil {
+		_u.SetEncrypted(*v)
+	}
+	return _u
+}
+
 // SetUnit sets the "unit" edge to the Unit entity.
 func (_u *AddressRuleUpdate) SetUnit(v *Unit) *AddressRuleUpdate {
 	return _u.SetUnitID(v.ID)
@@ -283,6 +297,9 @@ func (_u *AddressRuleUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	}
 	if value, ok := _u.mutation.Enabled(); ok {
 		_spec.SetField(addressrule.FieldEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Encrypted(); ok {
+		_spec.SetField(addressrule.FieldEncrypted, field.TypeBool, value)
 	}
 	if _u.mutation.UnitCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -495,6 +512,20 @@ func (_u *AddressRuleUpdateOne) SetNillableEnabled(v *bool) *AddressRuleUpdateOn
 	return _u
 }
 
+// SetEncrypted sets the "encrypted" field.
+func (_u *AddressRuleUpdateOne) SetEncrypted(v bool) *AddressRuleUpdateOne {
+	_u.mutation.SetEncrypted(v)
+	return _u
+}
+
+// SetNillableEncrypted sets the "encrypted" field if the given value is not nil.
+func (_u *AddressRuleUpdateOne) SetNillableEncrypted(v *bool) *AddressRuleUpdateOne {
+	if v != nil {
+		_u.SetEncrypted(*v)
+	}
+	return _u
+}
+
 // SetUnit sets the "unit" edge to the Unit entity.
 func (_u *AddressRuleUpdateOne) SetUnit(v *Unit) *AddressRuleUpdateOne {
 	return _u.SetUnitID(v.ID)
@@ -644,6 +675,9 @@ func (_u *AddressRuleUpdateOne) sqlSave(ctx context.Context) (_node *AddressRule
 	}
 	if value, ok := _u.mutation.Enabled(); ok {
 		_spec.SetField(addressrule.FieldEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Encrypted(); ok {
+		_spec.SetField(addressrule.FieldEncrypted, field.TypeBool, value)
 	}
 	if _u.mutation.UnitCleared() {
 		edge := &sqlgraph.EdgeSpec{

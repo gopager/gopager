@@ -319,8 +319,11 @@ func (s *Service) UpdateRule(ctx context.Context, proof identity.Proof, id uuid.
 		if err := s.repository.SaveRule(tx.Context(), tx, authority, value, expected, now); err != nil {
 			return err
 		}
-		if _, err := s.repository.MarkPending(tx.Context(), tx, []CorrectionScope{RuleScope(before), RuleScope(value)}, "rule-change"); err != nil {
-			return err
+		// A label-only change resolves every target as before, so it needs no correction.
+		if !before.sameAssignment(value) {
+			if _, err := s.repository.MarkPending(tx.Context(), tx, []CorrectionScope{RuleScope(before), RuleScope(value)}, "rule-change"); err != nil {
+				return err
+			}
 		}
 		if err := s.record(tx.Context(), tx, authority, value, "updated", "address-rule.update", nil, now); err != nil {
 			return err

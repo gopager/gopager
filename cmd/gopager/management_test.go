@@ -296,10 +296,17 @@ func TestManagementHTTPAPI(t *testing.T) {
 	rule := managementRequest(t, client, origin, "POST", "/api/v1/address-rules",
 		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`",`+ruleValues+`}`, login.CSRFToken, "", http.StatusCreated)
 	ruleID, _ := managementResultID(t, rule)
-	managementRequest(t, client, origin, "GET", "/api/v1/address-rules/"+ruleID.String(), "", "", "", http.StatusOK)
+	readRule := managementRequest(t, client, origin, "GET", "/api/v1/address-rules/"+ruleID.String(), "", "", "", http.StatusOK)
+	if !strings.Contains(string(readRule.Data), `"encrypted":false`) {
+		t.Fatalf("rule created without encrypted is not returned as false: %s", readRule.Data)
+	}
 	managementRequest(t, client, origin, "GET", "/api/v1/address-rules?limit=1", "", "", "", http.StatusOK)
 	managementRequest(t, client, origin, "PUT", "/api/v1/address-rules/"+ruleID.String(),
-		`{"schemaVersion":1,"expectedRevision":"1",`+ruleValues+`}`, login.CSRFToken, "", http.StatusOK)
+		`{"schemaVersion":1,"expectedRevision":"1","encrypted":true,`+ruleValues+`}`, login.CSRFToken, "", http.StatusOK)
+	readRule = managementRequest(t, client, origin, "GET", "/api/v1/address-rules/"+ruleID.String(), "", "", "", http.StatusOK)
+	if !strings.Contains(string(readRule.Data), `"encrypted":true`) || !strings.Contains(string(readRule.Data), `"revision":"2"`) {
+		t.Fatalf("encrypted update not returned with bumped revision: %s", readRule.Data)
+	}
 	managementRequest(t, client, origin, "DELETE", "/api/v1/address-rules/"+ruleID.String(),
 		`{"schemaVersion":1,"expectedRevision":"1"}`, login.CSRFToken, "", http.StatusConflict)
 	deleted := managementRequest(t, client, origin, "DELETE", "/api/v1/address-rules/"+ruleID.String(),

@@ -22,8 +22,8 @@ One Go module, `github.com/gopager/gopager`.
 
 | Path | Contents |
 | --- | --- |
-| `cmd/gopager/` | Executable: flag parsing (`main.go`), `bootstrap` subcommand, composition of stores and services (`compose.go` builds the shared set once; `processing_runtime.go`, `processing_worker.go`, `processing_adapters.go`, `processing_preparation.go`, `scopes.go` compose Processing and its ports) |
-| `internal/httpapi/` | HTTP adapters for the application routes: `management_*.go` (one file per resource), `ingest.go`, `gateway_credentials.go`, `processing*.go`, and the shared `route.go` (route helper with pre-authentication), `json.go`, `request.go`, `errors.go` |
+| `cmd/gopager/` | Executable: flag parsing (`main.go`), `bootstrap` subcommand, composition of stores and services (`compose.go` builds the shared set once; `processing_runtime.go`, `processing_worker.go`, `processing_adapters.go`, `processing_preparation.go`, `scopes.go` compose Processing and its ports; `query_runtime.go` composes the Message read side) |
+| `internal/httpapi/` | HTTP adapters for the application routes: `management_*.go` (one file per resource), `messages.go`, `ingest.go`, `gateway_credentials.go`, `processing*.go`, and the shared `route.go` (route helper with pre-authentication), `json.go`, `request.go`, `errors.go` |
 | `api/openapi/v1.yaml` | HTTP API schema |
 | `api/plugin/v2/plugin.proto` | Plugin gRPC service definition |
 | `pluginsdk/` | Public Go SDK for plugin executables (handshake, `Serve`, gRPC client/server) |
@@ -37,6 +37,7 @@ One Go module, `github.com/gopager/gopager`.
 | `internal/ingest/` | Gateway transmission intake, Gateway/Network administration and credentials |
 | `internal/protocols/` | Protocol and transmission payload validation |
 | `internal/messages/` | Grouping of transmissions into messages |
+| `internal/readmodel/` | Message feed, detail and filter-option service, filters, page tokens, projections and the ports they need |
 | `internal/commands/` | Administrative command receipts |
 | `internal/events/` | Domain fact types appended to the event store |
 | `internal/processing/` | Workflow model, evaluation, budgets, CEL predicates, regex, plugin host and installed artifacts |
@@ -54,6 +55,7 @@ One Go module, `github.com/gopager/gopager`.
 | `internal/persistence/ent/permissions/` | Translation of authz decisions into Ent predicates |
 | `internal/persistence/ent/borrowed/` | Ent driver that runs inside an existing platform transaction; hosts most store integration tests |
 | `internal/persistence/ent/*store/` | Repository adapters per domain: `identitystore`, `unitstore`, `assignmentstore`, `ingeststore`, `processingstore`, `eventstore` (sequenced domain event log), `commandstore` |
+| `internal/persistence/ent/readstore/` | PostgreSQL implementation of the `readmodel` store in raw SQL: eligibility, filters, text search, keyset paging and the page token key |
 | `internal/testutil/postgres/` | Test PostgreSQL lifecycle (`Run(m)`) |
 | `internal/testutil/pluginfixture/` | Builds plugin fixtures for tests (`Binary(t, name)`) |
 

@@ -31,11 +31,12 @@ func (s *Store) ReadTargetContext(ctx context.Context, tx platform.TransactionCo
 	var status string
 	var unitID, ruleID sql.NullString
 	err = executor.QueryRowContext(ctx, `SELECT target.transmission_id,t.message_id,t.network_id,target.position,
-		target.resolution_status,target.unit_id::text,target.matched_rule_id::text,t.observed_at,t.accepted_at
+		target.resolution_status,target.unit_id::text,target.matched_rule_id::text,t.observed_at,t.accepted_at,m.first_observed_at
 		FROM transmission_targets target JOIN transmissions t ON t.id=target.transmission_id
+		JOIN messages m ON m.id=t.message_id
 		WHERE target.transmission_id=$1 AND target.position=$2`,
 		transmission, position).Scan(&result.TransmissionID, &result.MessageID, &result.NetworkID,
-		&result.Position, &status, &unitID, &ruleID, &result.ObservedAt, &result.AcceptedAt)
+		&result.Position, &status, &unitID, &ruleID, &result.ObservedAt, &result.AcceptedAt, &result.MessageTime)
 	if errors.Is(err, sql.ErrNoRows) {
 		return assignments.TargetContext{}, authz.ErrNotFound
 	}

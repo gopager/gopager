@@ -9,8 +9,10 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/identitystore"
 	"github.com/gopager/gopager/internal/persistence/ent/ingeststore"
 	"github.com/gopager/gopager/internal/persistence/ent/processingstore"
+	"github.com/gopager/gopager/internal/persistence/ent/readstore"
 	"github.com/gopager/gopager/internal/persistence/ent/unitstore"
 	"github.com/gopager/gopager/internal/platform/postgres"
+	"github.com/gopager/gopager/internal/readmodel"
 	"github.com/gopager/gopager/internal/units"
 )
 
@@ -27,6 +29,7 @@ type core struct {
 	facts       *eventstore.Store
 	intake      *ingeststore.Store
 	processing  *processingstore.Store
+	reads       *readstore.Store
 
 	resolver *identity.Resolver
 	// unitService manages master data.
@@ -34,6 +37,18 @@ type core struct {
 	// rules matches and administers address rules against the production Network owner
 	// (the intake store); the correction runner and the Processing source use it as their matcher.
 	rules *assignments.Service
+	// classification supplies the field groups of Workflow definition versions to the Message
+	// read side. The Processing runtime sets it to its own definition preparer; when nil the
+	// read side compiles definitions without installed artifacts.
+	classification readmodel.Classification
+	// searchAttempts is the per-minute search admission limit; zero selects the default.
+	searchAttempts int
+	// live carries the wake hub and replay window of the Message live stream; the stream route
+	// exists only when the process composed an event runtime and set it.
+	live *liveConfig
+	// readSide is the Message read service and search admission shared by the query, saved-view
+	// and live routes, composed once so that they share one classification cache.
+	readSide *readSide
 }
 
 // composeCore builds every store and the services every role needs. Constructors report
@@ -60,6 +75,9 @@ func composeCore(store *postgres.Store) (*core, error) {
 		return nil, err
 	}
 	if c.processing, err = processingstore.New(store); err != nil {
+		return nil, err
+	}
+	if c.reads, err = readstore.New(store); err != nil {
 		return nil, err
 	}
 	if c.resolver, err = identity.NewResolver(c.identity, store, applicationScopeOwners{

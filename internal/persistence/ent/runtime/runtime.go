@@ -108,6 +108,10 @@ func init() {
 	addressruleDescEnabled := addressruleFields[6].Descriptor()
 	// addressrule.DefaultEnabled holds the default value on creation for the enabled field.
 	addressrule.DefaultEnabled = addressruleDescEnabled.Default.(bool)
+	// addressruleDescEncrypted is the schema descriptor for encrypted field.
+	addressruleDescEncrypted := addressruleFields[7].Descriptor()
+	// addressrule.DefaultEncrypted holds the default value on creation for the encrypted field.
+	addressrule.DefaultEncrypted = addressruleDescEncrypted.Default.(bool)
 	// addressruleDescID is the schema descriptor for id field.
 	addressruleDescID := addressruleMixinFields0[0].Descriptor()
 	// addressrule.DefaultID holds the default value on creation for the id field.

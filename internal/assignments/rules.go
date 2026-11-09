@@ -7,7 +7,8 @@
 // correction management (CreateSuppression, LiftSuppression, RetryCorrection,
 // and reads), and the transaction-participating matcher used by ingest
 // (MatchTargets, NetworksWithMatches). Every rule or suppression change bumps
-// the global assignment revision and queues a pending correction scope;
+// the global assignment revision and queues a pending correction scope, except
+// that updating only the Encrypted label of a rule queues none;
 // CorrectionRunner drains those scopes in the background, rewrites stored
 // target resolutions and appends assignment.changed facts.
 package assignments
@@ -17,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"time"
 
 	"github.com/google/uuid"
@@ -84,6 +86,8 @@ func (s *Selector) UnmarshalJSON(data []byte) error {
 }
 
 // Rule is mutable configuration, not an immutable historical rule-version entity.
+// Encrypted is a label only: it claims no available decryption and never affects
+// matching, correction or Payload access.
 type Rule struct {
 	ID         uuid.UUID          `json:"id"`
 	Revision   int64              `json:"revision,string"`
@@ -94,6 +98,24 @@ type Rule struct {
 	ValidFrom  *time.Time         `json:"validFrom"`
 	ValidUntil *time.Time         `json:"validUntil"`
 	Enabled    bool               `json:"enabled"`
+	Encrypted  bool               `json:"encrypted"`
+}
+
+// sameAssignment reports whether both rules resolve every target identically, i.e. they differ
+// at most in labels such as Encrypted. It lets updates skip needless historical correction.
+func (r Rule) sameAssignment(other Rule) bool {
+	r.Selector.modeSpecified, other.Selector.modeSpecified = false, false
+	return r.NetworkID == other.NetworkID && r.UnitID == other.UnitID && r.Protocol == other.Protocol &&
+		r.Enabled == other.Enabled && reflect.DeepEqual(r.Selector, other.Selector) &&
+		equalTime(r.ValidFrom, other.ValidFrom) && equalTime(r.ValidUntil, other.ValidUntil)
+}
+
+// equalTime compares optional instants by value rather than by pointer or location.
+func equalTime(a, b *time.Time) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.Equal(*b)
 }
 
 // Validate checks a complete rule's shape without querying owner references.

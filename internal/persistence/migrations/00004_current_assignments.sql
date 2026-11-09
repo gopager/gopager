@@ -55,6 +55,7 @@ CREATE TABLE address_rules (
     valid_from timestamptz,
     valid_until timestamptz,
     enabled boolean NOT NULL DEFAULT true,
+    encrypted boolean NOT NULL DEFAULT false,
     CHECK (valid_from IS NULL OR valid_until IS NULL OR valid_from < valid_until)
 );
 CREATE INDEX address_rule_network_id_protocol_enabled ON address_rules (network_id, protocol, enabled);

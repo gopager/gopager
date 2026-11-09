@@ -94,6 +94,7 @@ var schemaGraph = func() *sqlgraph.Schema {
 			addressrule.FieldValidFrom:  {Type: field.TypeTime, Column: addressrule.FieldValidFrom},
 			addressrule.FieldValidUntil: {Type: field.TypeTime, Column: addressrule.FieldValidUntil},
 			addressrule.FieldEnabled:    {Type: field.TypeBool, Column: addressrule.FieldEnabled},
+			addressrule.FieldEncrypted:  {Type: field.TypeBool, Column: addressrule.FieldEncrypted},
 		},
 	}
 	graph.Nodes[2] = &sqlgraph.Node{
@@ -1219,6 +1220,11 @@ func (f *AddressRuleFilter) WhereValidUntil(p entql.TimeP) {
 // WhereEnabled applies the entql bool predicate on the enabled field.
 func (f *AddressRuleFilter) WhereEnabled(p entql.BoolP) {
 	f.Where(p.Field(addressrule.FieldEnabled))
+}
+
+// WhereEncrypted applies the entql bool predicate on the encrypted field.
+func (f *AddressRuleFilter) WhereEncrypted(p entql.BoolP) {
+	f.Where(p.Field(addressrule.FieldEncrypted))
 }
 
 // WhereHasUnit applies a predicate to check if query has an edge unit.

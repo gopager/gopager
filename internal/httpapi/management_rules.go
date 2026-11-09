@@ -24,15 +24,16 @@ type ruleMutation struct {
 	ValidFrom        *time.Time            `json:"validFrom"`
 	ValidUntil       *time.Time            `json:"validUntil"`
 	Enabled          *bool                 `json:"enabled"`
+	Encrypted        bool                  `json:"encrypted"`
 }
 
-// input requires explicit full mutable values and leaves reference/Protocol validation to the owner.
+// input requires explicit full mutable values (an absent encrypted label means false) and leaves reference/Protocol validation to the owner.
 func (input ruleMutation) input() (assignments.RuleInput, error) {
 	if input.Selector == nil || input.Enabled == nil {
 		return assignments.RuleInput{}, authz.ErrInvalidInput
 	}
 	return assignments.RuleInput{NetworkID: input.NetworkID, UnitID: input.UnitID, Protocol: input.Protocol,
-		Selector: *input.Selector, ValidFrom: input.ValidFrom, ValidUntil: input.ValidUntil, Enabled: *input.Enabled}, nil
+		Selector: *input.Selector, ValidFrom: input.ValidFrom, ValidUntil: input.ValidUntil, Enabled: *input.Enabled, Encrypted: input.Encrypted}, nil
 }
 
 // registerRules exposes current configuration and pure preview, never arbitrary public matching.

@@ -21,7 +21,7 @@ func TestCorrectionAssignmentChangedCarriesChangedTargetsBeforeAndAfter(t *testi
 	}
 	fact := CorrectionFact{ID: uuid.New(), Type: "assignment.changed",
 		Aggregate: EntityRef{Type: "message", ID: message}, Revision: 3, OccurredAt: now,
-		TransmissionID: uuid.New(), MessageID: message, NetworkID: uuid.New(), Targets: targets, Reason: "corrected"}
+		TransmissionID: uuid.New(), MessageID: message, NetworkID: uuid.New(), Targets: targets, Reason: "corrected", MessageTime: now}
 	envelope, err := fact.Envelope(now)
 	if err != nil || len(envelope.Data.Targets) != 2 || envelope.Data.Targets[1].Position != 2 {
 		t.Fatalf("envelope=%+v err=%v", envelope, err)
@@ -52,7 +52,7 @@ func TestCorrectionAssignmentChangedRecordsNetworkMove(t *testing.T) {
 	fact := CorrectionFact{ID: uuid.New(), Type: "assignment.changed",
 		Aggregate: EntityRef{Type: "message", ID: message}, Revision: 2, OccurredAt: now,
 		TransmissionID: uuid.New(), MessageID: message, NetworkID: current, PreviousNetworkID: &previous,
-		Reason: "corrected"}
+		Reason: "corrected", MessageTime: now}
 	envelope, err := fact.Envelope(now)
 	if err != nil || envelope.Data.PreviousNetworkID == nil || *envelope.Data.PreviousNetworkID != previous ||
 		envelope.Data.NetworkID != current || len(envelope.Data.Targets) != 0 {

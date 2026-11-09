@@ -294,7 +294,7 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 		Scan(&groupingRevision, &window); err != nil {
 		return ingest.Receipt{}, err
 	}
-	decision, err := s.groupMessage(ctx, executor, groupingRevision, window, submission)
+	decision, times, err := s.groupMessage(ctx, executor, groupingRevision, window, submission)
 	if err != nil {
 		return ingest.Receipt{}, err
 	}
@@ -342,7 +342,7 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 		}
 	}
 	if err := s.storeTargets(ctx, tx, executor, transmissionID, messageID, decision.MessageRevision,
-		submission, accepted, match); err != nil {
+		times.Current, submission, accepted, match); err != nil {
 		return ingest.Receipt{}, err
 	}
 	for _, id := range decision.AbsorbedMessage {
@@ -367,24 +367,28 @@ func (s *Store) AcceptTransmission(ctx context.Context, tx platform.TransactionC
 	switch decision.Kind {
 	case "created":
 		if err := s.appendFact(ctx, tx, events.IntakeFact{ID: uuid.New(), Type: events.MessageCreated,
-			TransmissionID: transmissionID, MessageID: messageID, Revision: decision.MessageRevision, OccurredAt: now}); err != nil {
+			TransmissionID: transmissionID, MessageID: messageID, Revision: decision.MessageRevision, OccurredAt: now,
+			MessageTime: times.Current}); err != nil {
 			return ingest.Receipt{}, err
 		}
 	case "merged":
 		if err := s.appendFact(ctx, tx, events.IntakeFact{ID: uuid.New(), Type: events.MessageMerged,
 			TransmissionID: transmissionID, MessageID: messageID, Absorbed: decision.AbsorbedMessage,
-			Revision: decision.MessageRevision, OccurredAt: now}); err != nil {
+			Revision: decision.MessageRevision, OccurredAt: now, MessageTime: times.Current,
+			PreviousMessageTime: times.Previous}); err != nil {
 			return ingest.Receipt{}, err
 		}
 		if err := s.appendFact(ctx, tx, events.IntakeFact{ID: uuid.New(), Type: events.MessageTransmissionJoined,
 			TransmissionID: transmissionID, MessageID: messageID, LateJoin: decision.LateJoin,
-			Revision: decision.MessageRevision, OccurredAt: now}); err != nil {
+			Revision: decision.MessageRevision, OccurredAt: now, MessageTime: times.Current,
+			PreviousMessageTime: times.Previous}); err != nil {
 			return ingest.Receipt{}, err
 		}
 	default:
 		if err := s.appendFact(ctx, tx, events.IntakeFact{ID: uuid.New(), Type: events.MessageTransmissionJoined,
 			TransmissionID: transmissionID, MessageID: messageID, LateJoin: decision.LateJoin,
-			Revision: decision.MessageRevision, OccurredAt: now}); err != nil {
+			Revision: decision.MessageRevision, OccurredAt: now, MessageTime: times.Current,
+			PreviousMessageTime: times.Previous}); err != nil {
 			return ingest.Receipt{}, err
 		}
 	}
@@ -479,7 +483,7 @@ func (s *Store) admitProcessing(ctx context.Context, executor postgres.Executor,
 }
 
 func (s *Store) storeTargets(ctx context.Context, tx platform.TransactionContext, executor postgres.Executor,
-	transmission, message uuid.UUID, messageRevision int64, submission ingest.ValidatedSubmission,
+	transmission, message uuid.UUID, messageRevision int64, messageTime time.Time, submission ingest.ValidatedSubmission,
 	accepted time.Time, match assignments.MatchResult) error {
 	resolved := make([]events.IntakeTarget, 0, len(submission.TransmissionTargets))
 	unassigned := false
@@ -526,7 +530,7 @@ func (s *Store) storeTargets(ctx context.Context, tx platform.TransactionContext
 		// One fact per Transmission keeps the log proportional to submissions, not to targets.
 		if err := s.appendFact(ctx, tx, events.IntakeFact{ID: uuid.New(), Type: events.AssignmentChanged,
 			TransmissionID: transmission, MessageID: message, Revision: messageRevision, OccurredAt: accepted,
-			Reason: "created", Targets: resolved}); err != nil {
+			Reason: "created", Targets: resolved, MessageTime: messageTime}); err != nil {
 			return err
 		}
 	}

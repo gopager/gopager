@@ -1018,6 +1018,7 @@ func TestHistoricalCorrectionAndSuppressionRebuildSupportsWithoutChangingEvidenc
 	if err != nil {
 		t.Fatal(err)
 	}
+	requireFactsAtMessageTime(t, f.store, "suppression.changed", "transmissionId", transmissionID.String(), messageID, 1)
 	// A replay after an uncertain commit finds the suppression already active and must still
 	// return the stored result.
 	beforeReplay := configurationCounts(t, f)

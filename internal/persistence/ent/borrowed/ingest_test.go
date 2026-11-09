@@ -1420,6 +1420,8 @@ func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	requireFactsAtMessageTime(t, store, "processing.completed", "transmissionId", receipt.TransmissionID.String(),
+		receipt.MessageID, 2)
 }
 
 func receiptInStore(t *testing.T, store *postgres.Store, repository *ingeststore.Store,

@@ -104,6 +104,20 @@ func (_c *AddressRuleCreate) SetNillableEnabled(v *bool) *AddressRuleCreate {
 	return _c
 }
 
+// SetEncrypted sets the "encrypted" field.
+func (_c *AddressRuleCreate) SetEncrypted(v bool) *AddressRuleCreate {
+	_c.mutation.SetEncrypted(v)
+	return _c
+}
+
+// SetNillableEncrypted sets the "encrypted" field if the given value is not nil.
+func (_c *AddressRuleCreate) SetNillableEncrypted(v *bool) *AddressRuleCreate {
+	if v != nil {
+		_c.SetEncrypted(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *AddressRuleCreate) SetID(v uuid.UUID) *AddressRuleCreate {
 	_c.mutation.SetID(v)
@@ -173,6 +187,10 @@ func (_c *AddressRuleCreate) defaults() error {
 		v := addressrule.DefaultEnabled
 		_c.mutation.SetEnabled(v)
 	}
+	if _, ok := _c.mutation.Encrypted(); !ok {
+		v := addressrule.DefaultEncrypted
+		_c.mutation.SetEncrypted(v)
+	}
 	if _, ok := _c.mutation.ID(); !ok {
 		if addressrule.DefaultID == nil {
 			return fmt.Errorf("ent: uninitialized addressrule.DefaultID (forgotten import ent/runtime?)")
@@ -212,6 +230,9 @@ func (_c *AddressRuleCreate) check() error {
 	}
 	if _, ok := _c.mutation.Enabled(); !ok {
 		return &ValidationError{Name: "enabled", err: errors.New(`ent: missing required field "AddressRule.enabled"`)}
+	}
+	if _, ok := _c.mutation.Encrypted(); !ok {
+		return &ValidationError{Name: "encrypted", err: errors.New(`ent: missing required field "AddressRule.encrypted"`)}
 	}
 	if len(_c.mutation.UnitIDs()) == 0 {
 		return &ValidationError{Name: "unit", err: errors.New(`ent: missing required edge "AddressRule.unit"`)}
@@ -277,6 +298,10 @@ func (_c *AddressRuleCreate) createSpec() (*AddressRule, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Enabled(); ok {
 		_spec.SetField(addressrule.FieldEnabled, field.TypeBool, value)
 		_node.Enabled = value
+	}
+	if value, ok := _c.mutation.Encrypted(); ok {
+		_spec.SetField(addressrule.FieldEncrypted, field.TypeBool, value)
+		_node.Encrypted = value
 	}
 	if nodes := _c.mutation.UnitIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

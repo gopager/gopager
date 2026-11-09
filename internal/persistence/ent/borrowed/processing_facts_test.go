@@ -46,7 +46,7 @@ func TestProcessingFactParticipantUsesCallerTransactionAndRejectsExpiredCapabili
 		}
 		// These are explicit standalone publication-fixture references, not ready production originals.
 		completion := events.ProcessingCompletionFact{ID: resultFactID, WorkflowID: workflowID,
-			ResultID: resultID, ResultRevision: 1, TransmissionID: uuid.New(), MessageID: uuid.New(),
+			ResultID: resultID, ResultRevision: 1, TransmissionID: uuid.New(), MessageID: uuid.New(), MessageTime: now,
 			DefinitionVersionID: uuid.New(), SourceRevision: 1, ContextRevision: 1, OccurredAt: now,
 			OutputSchema: map[string]processing.FieldSchema{},
 			Result:       processing.Evaluation{Selected: true, Fields: map[string]processing.FieldValue{}}}

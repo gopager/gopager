@@ -19,7 +19,9 @@ import (
 // a move; Reason must be "corrected"),
 // "correction.failed" records a correction scope that used up its attempts, and
 // "suppression.changed" records that an operator created or lifted a
-// suppression (Aggregate is the suppression; ChangeKind is created or lifted).
+// suppression (Aggregate is the suppression; ChangeKind is created or lifted;
+// MessageID is the Message of the suppressed target's Transmission). Both
+// Message-related types carry the Message time.
 type CorrectionFact struct {
 	ID             uuid.UUID
 	Type           string
@@ -39,6 +41,9 @@ type CorrectionFact struct {
 	ChangeKind        string
 	Reason            string
 	FailureCode       string
+	// MessageTime is the Message time (first observation) of the fact's Message; required for
+	// assignment.changed and suppression.changed.
+	MessageTime time.Time
 }
 
 // CorrectionTarget is one target position whose resolution a correction changed.
@@ -62,6 +67,8 @@ type CorrectionData struct {
 	ChangeKind        string             `json:"changeKind,omitempty"`
 	Reason            string             `json:"reason,omitempty"`
 	FailureCode       string             `json:"failureCode,omitempty"`
+	// MessageTime is set on assignment.changed and suppression.changed facts.
+	MessageTime *time.Time `json:"messageTime,omitempty"`
 }
 
 // CorrectionEnvelope is the persisted serialization of a CorrectionFact,
@@ -108,23 +115,24 @@ func (fact CorrectionFact) Envelope(recordedAt time.Time) (CorrectionEnvelope, e
 	case "assignment.changed":
 		if fact.Aggregate.Type != "message" || fact.MessageID != fact.Aggregate.ID ||
 			fact.TransmissionID == uuid.Nil || fact.NetworkID == uuid.Nil || fact.Reason != "corrected" ||
-			!validMove(fact.PreviousNetworkID, fact.NetworkID) ||
+			!validMessageTime(fact.MessageTime) || !validMove(fact.PreviousNetworkID, fact.NetworkID) ||
 			!validCorrectionTargets(fact.Targets, fact.PreviousNetworkID != nil) {
 			return CorrectionEnvelope{}, ErrInvalidFact
 		}
 		envelope.Data = CorrectionData{TransmissionID: fact.TransmissionID, MessageID: fact.MessageID,
 			NetworkID: fact.NetworkID, PreviousNetworkID: fact.PreviousNetworkID,
-			Targets: slices.Clone(fact.Targets), Reason: fact.Reason}
+			Targets: slices.Clone(fact.Targets), Reason: fact.Reason, MessageTime: utcPointer(fact.MessageTime)}
 	case "suppression.changed":
 		if fact.Aggregate.Type != "suppression" || fact.TransmissionID == uuid.Nil || fact.NetworkID == uuid.Nil ||
-			fact.TargetPosition == nil || *fact.TargetPosition < 0 ||
-			!slices.Contains([]string{"created", "lifted"}, fact.ChangeKind) {
+			fact.MessageID == uuid.Nil || fact.TargetPosition == nil || *fact.TargetPosition < 0 ||
+			!validMessageTime(fact.MessageTime) || !slices.Contains([]string{"created", "lifted"}, fact.ChangeKind) {
 			return CorrectionEnvelope{}, ErrInvalidFact
 		}
 		envelope.Data = CorrectionData{TargetPosition: fact.TargetPosition, TransmissionID: fact.TransmissionID,
-			NetworkID: fact.NetworkID, UnitID: fact.UnitID, ChangeKind: fact.ChangeKind}
+			NetworkID: fact.NetworkID, UnitID: fact.UnitID, ChangeKind: fact.ChangeKind,
+			MessageID: fact.MessageID, MessageTime: utcPointer(fact.MessageTime)}
 	case "correction.failed":
-		if fact.Aggregate.Type != "correction" || fact.Aggregate.ID == uuid.Nil || fact.FailureCode == "" ||
+		if !fact.MessageTime.IsZero() || fact.Aggregate.Type != "correction" || fact.Aggregate.ID == uuid.Nil || fact.FailureCode == "" ||
 			!slices.Contains([]string{"rule-change", "unit-deleted", "suppression-change", "gateway-mapping-change"},
 				fact.Reason) {
 			return CorrectionEnvelope{}, ErrInvalidFact
@@ -170,4 +178,9 @@ func equalIntakeResolution(left, right *IntakeResolution) bool {
 		return false
 	}
 	return true
+}
+
+func utcPointer(value time.Time) *time.Time {
+	utc := value.UTC()
+	return &utc
 }

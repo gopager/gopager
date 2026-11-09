@@ -11,6 +11,7 @@
   - [AP-08 handover](../execution/ap-08.md#handover): master-data, default and Agency APIs, Unit bulk API.
   - [AP-09 handover](../execution/ap-09.md#handover): Gateway/Network management, diagnostics, history and credential APIs; actions `network.*`, `gateway.*`, `gateway.diagnostics.read`, `gateway.credential.rotate` (REQ-134 server side).
   - [AP-10 handover](ap-10-query-live.md#handover): Query/SSE API, personal and global saved views with their visibility contract.
+  - [D-145](../decisions/03-assignment-and-correction.md#d-145): Address rules carry the `encrypted` marker (rule create, update and read), projected as a label on assigned targets.
   - [AP-11 handover](ap-11-events-delivery.md#handover): Subscription and Delivery APIs, domain event listing.
   - [AP-12 handover](ap-12-plugin-host.md#handover): plugin instance configuration API, per-Unit value API (REQ-129).
   - [AP-13 handover](ap-13-processing-presentation-integration.md#handover): Workflow, presentation, layout-definition, preference and banner APIs.

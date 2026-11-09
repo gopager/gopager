@@ -839,8 +839,9 @@ func (o *ProcessingSourceOwner) CapturePublication(ctx context.Context, tx platf
 	if err != nil {
 		return processing.PublicationBinding{}, nil, err
 	}
-	if err := executor.QueryRowContext(ctx, `SELECT revision FROM messages WHERE id=$1 FOR UPDATE`,
-		snapshot.message).Scan(&snapshot.messageRevision); err != nil {
+	var messageTime time.Time
+	if err := executor.QueryRowContext(ctx, `SELECT revision, first_observed_at FROM messages WHERE id=$1 FOR UPDATE`,
+		snapshot.message).Scan(&snapshot.messageRevision, &messageTime); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return processing.PublicationBinding{}, nil, authz.ErrNotFound
 		}
@@ -863,7 +864,7 @@ func (o *ProcessingSourceOwner) CapturePublication(ctx context.Context, tx platf
 		})
 	}
 	return processing.PublicationBinding{Source: snapshot.identity, MessageID: snapshot.message,
-		SourceFence: snapshot.messageRevision}, bindings, nil
+		MessageTime: messageTime.UTC(), SourceFence: snapshot.messageRevision}, bindings, nil
 }
 
 // CheckItem rechecks, in the publishing transaction, that one publication item is still

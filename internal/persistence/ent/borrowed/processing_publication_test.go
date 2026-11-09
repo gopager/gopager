@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
@@ -173,7 +174,7 @@ func TestProcessingPublicationAtomicEvidenceAndFences(t *testing.T) {
 			t.Parallel()
 			source := processing.PublicationBinding{Source: processing.SourceIdentity{
 				TransmissionID: uuid.New(), NetworkID: uuid.New(), SourceRevision: 1, ContextRevision: 1},
-				MessageID: uuid.New(), SourceFence: 1}
+				MessageID: uuid.New(), MessageTime: time.Now().UTC().Truncate(time.Microsecond), SourceFence: 1}
 			owner := &publicationSourceFixture{primary: primary, repository: repository, binding: source,
 				deny: name == "principal-revoked", failStatus: name == "status-failure",
 				mutate: name == "detached-check", staleFence: name == "stale-fence", supersede: name == "superseded"}

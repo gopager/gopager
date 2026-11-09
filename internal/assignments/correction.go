@@ -14,9 +14,11 @@ import (
 
 // TargetContext is the stored state of one target position of a transmission:
 // its message, Network, current Resolution and observation/acceptance times.
+// MessageTime is the Message's time (first observation), carried by facts about the target.
 type TargetContext struct {
 	TransmissionID uuid.UUID
 	MessageID      uuid.UUID
+	MessageTime    time.Time
 	NetworkID      uuid.UUID
 	Position       int
 	Resolution     Resolution
@@ -236,10 +238,12 @@ type CorrectionUpdate struct {
 }
 
 // CorrectionChange is one target whose stored resolution was changed by
-// ApplyCorrectionBatch; MessageRev is the message revision after the change.
+// ApplyCorrectionBatch; MessageRev is the message revision after the change and
+// MessageTime the Message's time (first observation).
 type CorrectionChange struct {
 	TransmissionID uuid.UUID
 	MessageID      uuid.UUID
+	MessageTime    time.Time
 	NetworkID      uuid.UUID
 	TargetPosition int
 	MessageRev     int64
@@ -261,10 +265,12 @@ type CorrectionApplied struct {
 }
 
 // NetworkMove is one Transmission that a gateway scope moved From one Network To another;
-// MessageRev is the message revision after the move.
+// MessageRev is the message revision after the move and MessageTime the Message's
+// time (first observation).
 type NetworkMove struct {
 	TransmissionID uuid.UUID
 	MessageID      uuid.UUID
+	MessageTime    time.Time
 	From           uuid.UUID
 	To             uuid.UUID
 	MessageRev     int64

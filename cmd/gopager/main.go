@@ -20,10 +20,13 @@
 // cookie and Origin checks; required with the api role),
 // -processing-concurrency (default 2) and -processing-poll-interval (default 5s)
 // bound parallel Processing evaluation and the fallback poll for due work;
+// -event-poll-interval (default 5s) is the fallback poll of event consumers;
+// -live-replay-window (default 24h, positive) is how old a position may be when a live
+// stream resumes from it;
 // -processing-artifact-root (directory of operator-provisioned plugin
 // executables; falls back to $GOPAGER_PROCESSING_ARTIFACT_ROOT),
 // -login-attempts-per-account and -login-attempts-per-instance (per-minute
-// login limits, positive), -gateway-heartbeat-interval (default 60s),
+// login limits, positive), -search-attempts-per-minute (default 60, at least 1), -gateway-heartbeat-interval (default 60s),
 // -gateway-contact-timeout (default 180s, at least the heartbeat interval) and
 // -gateway-contact-scan-interval (default 15s, at most the contact timeout) for
 // the worker's Gateway contact-loss monitor, and -allow-insecure-db (accept a
@@ -57,8 +60,10 @@ import (
 	"slices"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/gopager/gopager/internal/assignments"
+	"github.com/gopager/gopager/internal/events"
 	"github.com/gopager/gopager/internal/httpapi"
 	"github.com/gopager/gopager/internal/identity"
 	ingestdomain "github.com/gopager/gopager/internal/ingest"
@@ -66,6 +71,7 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
 	"github.com/gopager/gopager/internal/processing/worker"
+	"github.com/gopager/gopager/internal/readmodel"
 )
 
 var errInvalidRoles = errors.New("invalid role list")
@@ -75,7 +81,10 @@ type startupConfig struct {
 	PublicOrigin           string
 	ProcessingArtifactRoot string
 	LoginLimits            identity.LoginRateLimits
+	SearchAttempts         int
 	ProcessingDispatch     worker.DispatchConfig
+	EventPollInterval      time.Duration
+	LiveReplayWindow       time.Duration
 	GatewayContact         ingestdomain.ContactConfig
 }
 
@@ -109,12 +118,24 @@ func run() (result error) {
 	defer stop()
 	var runners []platform.Runner
 	var processingRuntime *processingAPIRuntime
+	// eventRuntime owns the wake hub that the live stream subscribes to.
+	var eventRuntime *eventsRuntime
 	var shared *core
 	if slices.Contains(config.Roles, platform.RoleAPI) || slices.Contains(config.Roles, platform.RoleWorker) {
 		shared, err = composeCore(store)
 		if err != nil {
 			return errors.Join(err, store.Close())
 		}
+		eventRuntime, err = composeEventsRuntime(shared, slices.Contains(config.Roles, platform.RoleWorker), config.EventPollInterval)
+		if err != nil {
+			return errors.Join(err, store.Close())
+		}
+		shared.live = &liveConfig{wake: eventRuntime.hub, replayWindow: config.LiveReplayWindow}
+		runners = append(runners, eventRuntime.runners...)
+		stopEventHub := eventRuntime.startStandaloneHub(ctx)
+		defer func() {
+			result = errors.Join(result, stopEventHub())
+		}()
 		processingRuntime, err = composeProcessingAPIRuntime(ctx, shared, config.ProcessingArtifactRoot)
 		if err != nil {
 			return errors.Join(err, store.Close())
@@ -146,6 +167,7 @@ func run() (result error) {
 	}
 	var api http.Handler
 	if slices.Contains(config.Roles, platform.RoleAPI) {
+		shared.searchAttempts = config.SearchAttempts
 		api, err = composeApplicationAPI(config.PublicOrigin, config.LoginLimits, shared, nil, processingRuntime.routes)
 		if err != nil {
 			return errors.Join(err, store.Close())
@@ -184,8 +206,11 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 	loginAccount := flags.Int("login-attempts-per-account", defaultLimits.AccountAttempts, "Per-minute login attempt limit per normalized username")
 	loginSource := flags.Int("login-attempts-per-source", defaultLimits.SourceAttempts, "Per-minute login attempt limit per client source (remote address host)")
 	loginInstance := flags.Int("login-attempts-per-instance", defaultLimits.InstanceAttempts, "Per-minute instance login attempt limit")
+	searchAttempts := flags.Int("search-attempts-per-minute", readmodel.DefaultSearchAttempts, "Per-minute Message search limit per access key, Principal or guest client source (at least 1)")
 	processingConcurrency := flags.Int("processing-concurrency", worker.DefaultDispatchConcurrency, "Maximum Processing candidates evaluated in parallel")
 	processingPoll := flags.Duration("processing-poll-interval", worker.DefaultDispatchPollInterval, "Fallback interval for discovering due Processing work (wake-ups arrive through notifications)")
+	eventPoll := flags.Duration("event-poll-interval", events.DefaultPollInterval, "Fallback interval at which event consumers look for new facts (wake-ups arrive through notifications)")
+	liveReplayWindow := flags.Duration("live-replay-window", readmodel.DefaultLiveReplayWindow, "How old a live stream position may be when a stream resumes from it (positive); keep domain events at least this long")
 	heartbeatInterval := flags.Duration("gateway-heartbeat-interval", ingestdomain.DefaultHeartbeatInterval, "Interval in which Gateways are expected to send a heartbeat")
 	contactTimeout := flags.Duration("gateway-contact-timeout", ingestdomain.DefaultContactTimeout, "Silence after which an active or degraded Gateway is contact-lost (at least the heartbeat interval)")
 	contactScan := flags.Duration("gateway-contact-scan-interval", ingestdomain.DefaultContactScan, "Interval of the worker's Gateway contact-loss scan (at most the contact timeout)")
@@ -226,6 +251,9 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 	if *loginAccount <= 0 || *loginSource <= 0 || *loginInstance <= 0 {
 		return startupConfig{}, platform.NewFailure(platform.CodeInvalidInput, identity.ErrInvalidInput)
 	}
+	if *searchAttempts < 1 {
+		return startupConfig{}, platform.NewFailure(platform.CodeInvalidInput, errors.New("invalid search attempt limit"))
+	}
 	if *processingArtifactRoot != "" {
 		if strings.TrimSpace(*processingArtifactRoot) != *processingArtifactRoot {
 			return startupConfig{}, platform.NewFailure(platform.CodeInvalidInput, errors.New("invalid Processing artifact root"))
@@ -243,15 +271,21 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 	if err := dispatch.Validate(); err != nil {
 		return startupConfig{}, err
 	}
+	if *eventPoll <= 0 {
+		return startupConfig{}, platform.NewFailure(platform.CodeInvalidInput, errors.New("invalid event poll interval"))
+	}
+	if *liveReplayWindow <= 0 {
+		return startupConfig{}, platform.NewFailure(platform.CodeInvalidInput, errors.New("invalid live replay window"))
+	}
 	contact := ingestdomain.ContactConfig{HeartbeatInterval: *heartbeatInterval, Timeout: *contactTimeout,
 		ScanInterval: *contactScan}
 	if err := contact.Validate(); err != nil {
 		return startupConfig{}, err
 	}
 	return startupConfig{Config: config, PublicOrigin: *publicOrigin,
-		ProcessingArtifactRoot: *processingArtifactRoot,
-		LoginLimits:            identity.LoginRateLimits{AccountAttempts: *loginAccount, SourceAttempts: *loginSource, InstanceAttempts: *loginInstance},
-		ProcessingDispatch:     dispatch, GatewayContact: contact}, nil
+		ProcessingArtifactRoot: *processingArtifactRoot, SearchAttempts: *searchAttempts,
+		LoginLimits:        identity.LoginRateLimits{AccountAttempts: *loginAccount, SourceAttempts: *loginSource, InstanceAttempts: *loginInstance},
+		ProcessingDispatch: dispatch, EventPollInterval: *eventPoll, LiveReplayWindow: *liveReplayWindow, GatewayContact: contact}, nil
 }
 
 // composeApplicationAPI binds the shared services to the HTTP listener. A non-nil networkOwner
@@ -300,6 +334,12 @@ func composeApplicationAPI(publicOrigin string, limits identity.LoginRateLimits,
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/auth/", authHandler)
 	httpapi.RegisterManagementRoutes(mux, transport, preauthenticator, c.unitService, ruleService)
+	if err := registerQueryRoutes(mux, transport, preauthenticator, c); err != nil {
+		return nil, err
+	}
+	if err := registerLiveRoutes(mux, transport, preauthenticator, c); err != nil {
+		return nil, err
+	}
 	httpapi.RegisterIngestRoutes(mux, intakeService)
 	httpapi.RegisterGatewayManagementRoutes(mux, transport, preauthenticator, gatewayAdministration)
 	httpapi.RegisterNetworkManagementRoutes(mux, transport, preauthenticator, networkAdministration)

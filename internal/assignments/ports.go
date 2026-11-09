@@ -32,6 +32,7 @@ type Repository interface {
 }
 
 // RuleInput omits server-owned ID/revision and preserves the explicit selector/interval.
+// Encrypted is a label only (default false) and never changes matching.
 type RuleInput struct {
 	NetworkID  uuid.UUID          `json:"networkId"`
 	UnitID     uuid.UUID          `json:"unitId"`
@@ -40,12 +41,14 @@ type RuleInput struct {
 	ValidFrom  *time.Time         `json:"validFrom"`
 	ValidUntil *time.Time         `json:"validUntil"`
 	Enabled    bool               `json:"enabled"`
+	Encrypted  bool               `json:"encrypted"`
 }
 
 // Rule constructs the complete server-owned candidate before ordinary validation.
 func (input RuleInput) Rule(id uuid.UUID, revision int64) Rule {
 	return Rule{ID: id, Revision: revision, NetworkID: input.NetworkID, UnitID: input.UnitID,
-		Protocol: input.Protocol, Selector: input.Selector, ValidFrom: input.ValidFrom, ValidUntil: input.ValidUntil, Enabled: input.Enabled}
+		Protocol: input.Protocol, Selector: input.Selector, ValidFrom: input.ValidFrom, ValidUntil: input.ValidUntil, Enabled: input.Enabled,
+		Encrypted: input.Encrypted}
 }
 
 // MatchResult is the resolution of one transmission's targets at assignment

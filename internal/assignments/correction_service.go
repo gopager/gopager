@@ -118,6 +118,7 @@ func (s *Service) recordSuppression(ctx context.Context, tx platform.Transaction
 		Revision: value.Revision, OccurredAt: now, CausationID: command,
 		TargetPosition: &target.Position, TransmissionID: target.TransmissionID,
 		NetworkID: target.NetworkID, UnitID: target.Resolution.UnitID, ChangeKind: kind,
+		MessageID: target.MessageID, MessageTime: target.MessageTime,
 	})
 	return err
 }
