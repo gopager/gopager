@@ -18,7 +18,9 @@ const (
 	// kindChange facts can also make a Message leave a view, which the client learns through
 	// a remove frame.
 	kindChange
-	// kindMerge facts replace Messages: the survivor is upserted and the absorbed ones removed.
+	// kindMerge facts replace Messages. They never produce Message frames: which absorbed IDs a
+	// caller had loaded is unknowable without disclosing hidden IDs, so a merge the caller may see
+	// resynchronizes the view.
 	kindMerge
 	// kindResync facts can change membership, names or Agencies of every view.
 	kindResync
@@ -37,6 +39,7 @@ type liveEnvelope struct {
 	} `json:"aggregateRef"`
 	Data struct {
 		MessageID           uuid.UUID    `json:"messageId"`
+		TransmissionID      uuid.UUID    `json:"transmissionId"`
 		MessageTime         *time.Time   `json:"messageTime"`
 		PreviousMessageTime *time.Time   `json:"previousMessageTime"`
 		Absorbed            []uuid.UUID  `json:"absorbedMessageIds"`
@@ -74,8 +77,11 @@ type liveFact struct {
 	position  events.Position
 	kind      liveKind
 	messageID uuid.UUID
-	absorbed  []uuid.UUID
-	before    liveBefore
+	// transmissionID is the joining Transmission of a merge; its current Message is the final
+	// survivor even when later merges absorbed the fact's survivor.
+	transmissionID uuid.UUID
+	absorbed       []uuid.UUID
+	before         liveBefore
 }
 
 // liveOutcome is the result of decoding one fact record.
@@ -126,7 +132,7 @@ func decodeLiveFact(record events.Record, from, until *time.Time) (liveFact, liv
 	case "message.created", "message.transmission-joined":
 		fact.kind = kindAdd
 	case "message.merged":
-		fact.kind, fact.absorbed = kindMerge, data.Absorbed
+		fact.kind, fact.absorbed, fact.transmissionID = kindMerge, data.Absorbed, data.TransmissionID
 	case "processing.completed":
 		fact.kind = kindChange
 	case "assignment.changed":

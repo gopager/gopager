@@ -196,15 +196,23 @@ func (s *Service) classify(ctx context.Context, version uuid.UUID) []string {
 	return groups
 }
 
-// key returns the page token secret, remembered after the first successful load.
-func (s *Service) key(ctx context.Context, tx platform.TransactionContext) ([]byte, error) {
+// key returns the page token secret, remembered after the first successful load. On first use
+// the secret is created in its own transaction, committed before it is remembered: created
+// inside a read that later fails, it would roll back while this process kept signing with it,
+// and every other process would create a different one. It runs before the caller's authority
+// transaction so it never waits for a second pool connection while holding one.
+func (s *Service) key(ctx context.Context) ([]byte, error) {
 	s.mu.Lock()
 	key := s.tokenKey
 	s.mu.Unlock()
 	if key != nil {
 		return key, nil
 	}
-	key, err := s.keys.TokenKey(ctx, tx)
+	err := s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
+		var err error
+		key, err = s.keys.TokenKey(tx.Context(), tx)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -221,13 +229,13 @@ func (s *Service) Feed(ctx context.Context, proof identity.Proof, request FeedRe
 	if err := s.warmClassifications(ctx); err != nil {
 		return FeedPage{}, err
 	}
+	key, err := s.key(ctx)
+	if err != nil {
+		return FeedPage{}, err
+	}
 	var page FeedPage
-	err := s.run(ctx, proof, func(tx platform.TransactionContext, current access, now time.Time) error {
+	err = s.run(ctx, proof, func(tx platform.TransactionContext, current access, now time.Time) error {
 		if err := current.requireGroups(request.Filters.RequiredFieldGroups()); err != nil {
-			return err
-		}
-		key, err := s.key(tx.Context(), tx)
-		if err != nil {
 			return err
 		}
 		var after *Cursor

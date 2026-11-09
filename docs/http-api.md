@@ -660,8 +660,10 @@ previous Message time meets the loaded range.
   target's Unit, the Unit-less context of the Network the Transmission came from, or the Unit or
   Network Agency of the suppressed target (the Message age is not re-evaluated). Traffic the
   caller never could read produces nothing.
-- A merge produces an `upsert` of the surviving Message when it matches and a `remove` for every
-  absorbed Message, when the survivor is readable.
+- A merge produces `resync-required` when its final survivor (the Message that now holds the
+  merge's joining Transmission, also after later merges) is readable for the caller, and nothing
+  otherwise. It never produces `remove` events for the absorbed Messages: the fact does not say
+  which of them the caller could read, and naming the others would disclose them.
 - A configuration change of a Unit, Unit collection, Organization or Agency produces
   `resync-required`, because it can change membership, names and Agencies of every view. Address
   rule changes are current at the next read. Gateway state, operation and identity facts produce no

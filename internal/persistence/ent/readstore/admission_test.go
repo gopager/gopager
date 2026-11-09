@@ -64,8 +64,11 @@ func TestTakeSearchAttemptCountsOnlyBelowTheLimitAndPrunesOldWindows(t *testing.
 	if got := count(bucket); got != 1 {
 		t.Fatalf("older windows of the bucket were kept: sum = %d", got)
 	}
-	if got := count(other); got != 1 {
-		t.Fatalf("another bucket was pruned: %d", got)
+	if !take(other, window.Add(time.Minute), 2) {
+		t.Fatal("another bucket was rejected in the next window")
+	}
+	if got := count(bucket); got != 1 {
+		t.Fatalf("another bucket's request pruned a current window: sum = %d", got)
 	}
 }
 
@@ -144,4 +147,49 @@ func TestSavedViewStoreRoundTrip(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+}
+
+// TestTakeSearchAttemptSweepsExpiredWindowsOfOtherBuckets checks that windows of buckets that
+// never come back are removed in bounded batches by other callers' admitted requests, and that
+// the current minute's windows stay.
+func TestTakeSearchAttemptSweepsExpiredWindowsOfOtherBuckets(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	window := base.Truncate(time.Minute)
+	for range 150 {
+		bucket := uuid.New()
+		w.exec(`INSERT INTO search_admissions (bucket, window_start, count) VALUES ($1, $2, 1)`,
+			append(bucket[:], bucket[:]...), window.Add(-time.Hour))
+	}
+	current := uuid.New()
+	w.exec(`INSERT INTO search_admissions (bucket, window_start, count) VALUES ($1, $2, 1)`,
+		append(current[:], current[:]...), window)
+	rows := func() (expired, total int) {
+		w.within(func(ctx context.Context, tx platform.TransactionContext) {
+			executor, err := w.store.Resolve(tx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := executor.QueryRowContext(ctx, `SELECT count(*) FILTER (WHERE window_start < $1), count(*) FROM search_admissions`,
+				window).Scan(&expired, &total); err != nil {
+				t.Fatal(err)
+			}
+		})
+		return expired, total
+	}
+	take := func(bucket [32]byte) {
+		w.within(func(ctx context.Context, tx platform.TransactionContext) {
+			if admitted, err := w.reads.TakeSearchAttempt(ctx, tx, bucket, window, 5); err != nil || !admitted {
+				t.Fatalf("admitted %v, %v", admitted, err)
+			}
+		})
+	}
+	take([32]byte{7})
+	if expired, total := rows(); expired != 50 || total != 52 {
+		t.Errorf("after one admission: %d expired of %d rows, want 50 of 52", expired, total)
+	}
+	take([32]byte{8})
+	if expired, total := rows(); expired != 0 || total != 3 {
+		t.Errorf("after two admissions: %d expired of %d rows, want 0 of 3", expired, total)
+	}
 }

@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -465,5 +466,39 @@ func TestMessageLiveHelpersReuseTheFeedRules(t *testing.T) {
 	}
 	if _, err = service.Evaluate(t.Context(), proof, readmodel.Filters{Networks: []uuid.UUID{f.network}}, []uuid.UUID{visible}); !errors.Is(err, authz.ErrForbidden) {
 		t.Fatalf("filter without its group: %v", err)
+	}
+}
+
+// TestPageTokenKeySurvivesAFailedFirstRead checks that the token secret created by a read that
+// fails is still committed, so the tokens this process issues afterwards are accepted by any
+// other process of the installation.
+func TestPageTokenKeySurvivesAFailedFirstRead(t *testing.T) {
+	t.Parallel()
+	f := newQueryFixture(t)
+	unit := f.unit("A", nil)
+	base := time.Now().UTC().Add(-time.Hour)
+	for i := range 3 {
+		f.message(base.Add(time.Duration(i)*time.Minute), "alarm", unit)
+	}
+	bearer, _ := f.caller([]string{"message.read"}, authz.Scope{Kind: "all"}, []string{"payload", "unit"})
+	f.feed(bearer, "?pageSize=1&pageToken=invalid", http.StatusBadRequest)
+	token := f.feed(bearer, "?pageSize=1", http.StatusOK).Data.NextPageToken
+	if token == "" {
+		t.Fatal("no page token")
+	}
+
+	other := httptest.NewUnstartedServer(nil)
+	t.Cleanup(other.Close)
+	origin := "http://" + other.Listener.Addr().String()
+	handler, err := composeApplicationAPI(origin, identity.DefaultLoginRateLimits(), mustComposeCore(t, f.store), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other.Config.Handler = handler
+	other.Start()
+	second := *f
+	second.origin, second.client = origin, other.Client()
+	if got := second.feed(bearer, "?pageSize=1&pageToken="+url.QueryEscape(token), http.StatusOK); len(got.Data.Items) != 1 {
+		t.Errorf("second process page = %v", got.Data.Items)
 	}
 }

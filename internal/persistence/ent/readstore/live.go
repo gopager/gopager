@@ -77,3 +77,27 @@ func (s *Store) NetworkAgencies(ctx context.Context, tx platform.TransactionCont
 	}
 	return agencies, rows.Err()
 }
+
+// TransmissionMessages returns the current Message of each listed Transmission. A merge moves
+// Transmissions to the surviving Message, so this resolves chains of merges to the final one.
+func (s *Store) TransmissionMessages(ctx context.Context, tx platform.TransactionContext,
+	ids []uuid.UUID) (map[uuid.UUID]uuid.UUID, error) {
+	executor, err := s.primary.Resolve(tx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := executor.QueryContext(ctx, `SELECT id, message_id FROM transmissions WHERE id = ANY($1::uuid[])`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	messages := make(map[uuid.UUID]uuid.UUID, len(ids))
+	for rows.Next() {
+		var id, message uuid.UUID
+		if err := rows.Scan(&id, &message); err != nil {
+			return nil, err
+		}
+		messages[id] = message
+	}
+	return messages, rows.Err()
+}

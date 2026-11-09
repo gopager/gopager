@@ -208,7 +208,7 @@ F-10e (core table) and F-97..F-102 are the AP-20 cases for [C-01](c-01-transmiss
 
 ### AP-10 Query and Live Cases
 
-F-103..F-112 bind the [C-07 query and live behavior](c-07-query-live.md#implemented-behavior-specified-in-docs-and-openapi) together with the re-bound F-11 family, F-12..F-14, F-17, F-30 and F-32. Execution evidence is in the [AP-10 record](../execution/ap-10.md).
+F-103..F-113 bind the [C-07 query and live behavior](c-07-query-live.md#implemented-behavior-specified-in-docs-and-openapi) together with the re-bound F-11 family, F-12..F-14, F-17, F-30 and F-32. Execution evidence is in the [AP-10 record](../execution/ap-10.md).
 
 | Case | Concrete input | Expected result |
 | --- | --- | --- |
@@ -222,3 +222,4 @@ F-103..F-112 bind the [C-07 query and live behavior](c-07-query-live.md#implemen
 | F-110 assignment state | Rule R1 has `encrypted: true`; target T1 assigned by R1 to Unit A, target T2 unassigned, target T3 `failed`; then a correction marks the Message `correcting`. | Feed: `units[A].encrypted = true`, `withoutUnit = true`, `correctionStatus = correcting`; detail shows T1 `assigned`, T2 `unassigned` and T3 `failed` as different resolutions. Nothing claims decryption. |
 | F-111 loaded range | A stream with `from=12:00` (no `until`). Facts: a `processing.completed` for a Message at 11:00; a late join that moves a Message from 12:30 to 11:50; a new Message at 12:40. | No frame for the 11:00 Message; `upsert` for the moved Message (interval [11:50, 12:30] intersects) with time 11:50; `upsert` for the new one. Reopening with `from=11:00` after loading another page also delivers the 11:00 update. |
 | F-112 stream boundaries | One batch would produce 300 frames; the caller's session is revoked while idle; a grant change raises the caller's access revision; a reconnect uses a position issued 25 h ago; heartbeat interval passes without facts. | `resync-required` and close instead of 256+ frames; `error` `LOGIN_REQUIRED` and close at the next heartbeat; `resync-required` after the grant change; `resync-required` for the old position; a `heartbeat` frame with the current position and no private data. |
+| F-113 merges without disclosure | V holds `message.read` on Unit A. M1 (A) absorbs M2 (A); M3 (A) absorbs hidden M4 (B); hidden M5 (B) absorbs hidden M6 (C); M7 (A, loaded) is absorbed by hidden M8 (B), which hidden M9 (B) absorbs before V's stream reads either fact. | `resync-required` without any Message ID for the M1, M3 and M7/M8/M9 merges (the last resolved through the joining Transmission to M9); no frame for M5/M6, and the stream continues. |

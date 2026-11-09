@@ -282,7 +282,16 @@ func TestLiveStreamCutoffHasNoGap(t *testing.T) {
 	}
 	between := f.newMessage(base.Add(time.Minute), "between", unit)
 	stream := f.openStream(bearer, query+"&position="+page.Data.Position)
-	event := stream.expect(t, "upsert", between)
+	// The cutoff lies below every transaction still in flight when the page was read, including
+	// those of parallel tests, so the stream may replay the page's own Message first; such a
+	// duplicate upsert is harmless, a missing one would be a gap.
+	event := stream.next(t)
+	for event.Event == "upsert" && strings.Contains(event.Data, first.String()) {
+		event = stream.next(t)
+	}
+	if event.Event != "upsert" || !strings.Contains(event.Data, between.String()) {
+		t.Fatalf("event %+v, want upsert of %s", event, between)
+	}
 	if event.ID == "" {
 		t.Error("the last frame of a fact carries the position")
 	}
@@ -385,21 +394,6 @@ func TestLiveStreamRemoveBasis(t *testing.T) {
 			MessageID: message, TransmissionID: uuid.New(), NetworkID: moved, PreviousNetworkID: &f.network, Reason: "corrected",
 			MessageTime: base})
 		agencyStream.expect(t, "remove", message)
-	})
-	t.Run("a merge upserts the survivor and removes the absorbed Message", func(t *testing.T) {
-		survivor := f.newMessage(base.Add(3*time.Minute), "survivor", a)
-		absorbed := f.newMessage(base.Add(4*time.Minute), "absorbed", a)
-		stream.expect(t, "upsert", survivor)
-		stream.expect(t, "upsert", absorbed)
-		f.exec(`DELETE FROM message_units WHERE message_id = $1`, absorbed)
-		f.intake(events.IntakeFact{Type: events.MessageMerged, MessageID: survivor, TransmissionID: uuid.New(),
-			MessageTime: base.Add(3 * time.Minute), Absorbed: []uuid.UUID{absorbed}})
-		first := stream.next(t)
-		second := stream.next(t)
-		if first.Event != "upsert" || second.Event != "remove" || first.ID != "" || second.ID == "" ||
-			!strings.Contains(second.Data, absorbed.String()) {
-			t.Fatalf("merge frames %+v %+v", first, second)
-		}
 	})
 	t.Run("processing completion upserts and a Gateway state change yields nothing", func(t *testing.T) {
 		message := f.newMessage(base.Add(5*time.Minute), "processed", a)
@@ -573,4 +567,98 @@ func TestLiveStreamRequestRules(t *testing.T) {
 		!strings.Contains(body, "RATE_LIMITED") {
 		t.Errorf("third open = %d %s, want 429 RATE_LIMITED", status, body)
 	}
+}
+
+// mergeInto moves the absorbed Message's Transmissions and appearances to the survivor and
+// deletes it, as Grouping does, and adds the joining Transmission to the survivor. It returns
+// the merged fact without appending it.
+func (f *liveFixture) mergeInto(survivor, absorbed uuid.UUID, at time.Time) events.IntakeFact {
+	f.t.Helper()
+	joining := uuid.New()
+	f.exec(`INSERT INTO transmissions (id, gateway_id, network_id, submission_id, submission_fingerprint, network_resolution, protocol,
+		payload, observed_at, observation_offset_seconds, accepted_at, source_revision, message_id)
+		VALUES ($1, $2, $3, $4, $5, 'declared', 'pocsag', '{"form":"tone-only"}'::json, $6, 0, $6, 1, $7)`,
+		joining, f.gateway, f.network, uuid.NewString(), make([]byte, 32), at, survivor)
+	f.exec(`UPDATE transmissions SET message_id = $1 WHERE message_id = $2`, survivor, absorbed)
+	f.exec(`INSERT INTO message_units (message_id, unit_id, agency_id, first_observed_at, age_anchor)
+		SELECT $1, unit_id, agency_id, first_observed_at, age_anchor FROM message_units WHERE message_id = $2
+		ON CONFLICT DO NOTHING`, survivor, absorbed)
+	f.exec(`DELETE FROM messages WHERE id = $1`, absorbed)
+	return events.IntakeFact{ID: uuid.New(), Type: events.MessageMerged, MessageID: survivor, TransmissionID: joining,
+		MessageTime: at, Absorbed: []uuid.UUID{absorbed}, Revision: f.revision.Add(1), OccurredAt: microsecondNow()}
+}
+
+// appendIntake appends the facts in one transaction, as one Grouping commit would.
+func (f *liveFixture) appendIntake(facts ...events.IntakeFact) {
+	f.t.Helper()
+	f.appendFact(func(ctx context.Context, tx platform.TransactionContext) error {
+		for _, fact := range facts {
+			if _, err := f.core.facts.AppendIntakeFact(ctx, tx, fact); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+//nolint:tparallel,paralleltest // every open stream sees every merge, so the subtests run in order
+func TestLiveStreamMergesResynchronizeWithoutDisclosingIDs(t *testing.T) {
+	f := newLiveFixture(t, 0)
+	a, b, c := f.unit("A", nil), f.unit("B", nil), f.unit("C", nil)
+	base := microsecondNow().Add(-time.Hour)
+	reader, _ := f.caller([]string{"message.read"}, authz.Scope{Kind: "unit", References: []string{a.String()}}, []string{"payload", "unit"})
+	query := "?from=" + rfc(base.Add(-time.Hour))
+	open := func() *sseClient {
+		t.Helper()
+		return f.openStream(reader, query+"&position="+f.feed(reader, query, http.StatusOK).Data.Position)
+	}
+	expectResync := func(t *testing.T, stream *sseClient, hidden ...uuid.UUID) {
+		t.Helper()
+		event := stream.next(t)
+		if event.Event != "resync-required" {
+			t.Fatalf("event %+v, want resync-required", event)
+		}
+		for _, id := range hidden {
+			if strings.Contains(event.Data, id.String()) {
+				t.Fatalf("the resync discloses %s: %+v", id, event)
+			}
+		}
+		stream.closed(t)
+	}
+
+	t.Run("a visible merge resynchronizes", func(t *testing.T) {
+		survivor := f.newMessage(base, "survivor", a)
+		absorbed := f.newMessage(base.Add(time.Minute), "absorbed", a)
+		stream := open()
+		f.appendIntake(f.mergeInto(survivor, absorbed, base))
+		expectResync(t, stream)
+	})
+	t.Run("a hidden absorbed Message is never named", func(t *testing.T) {
+		survivor := f.newMessage(base.Add(2*time.Minute), "readable", a)
+		hidden := f.newMessage(base.Add(3*time.Minute), "hidden", b)
+		stream := open()
+		f.appendIntake(f.mergeInto(survivor, hidden, base.Add(2*time.Minute)))
+		expectResync(t, stream, hidden)
+	})
+	t.Run("a merge of hidden Messages yields nothing", func(t *testing.T) {
+		survivor := f.newMessage(base.Add(4*time.Minute), "hidden survivor", b)
+		absorbed := f.newMessage(base.Add(5*time.Minute), "hidden absorbed", c)
+		stream := open()
+		f.appendIntake(f.mergeInto(survivor, absorbed, base.Add(4*time.Minute)))
+		stream.quiet(t)
+		visible := f.newMessage(base.Add(6*time.Minute), "still live", a)
+		stream.expect(t, "upsert", visible)
+	})
+	t.Run("a chain of merges resolves to the final survivor", func(t *testing.T) {
+		loaded := f.newMessage(base.Add(7*time.Minute), "loaded", a)
+		middle := f.newMessage(base.Add(8*time.Minute), "middle", b)
+		final := f.newMessage(base.Add(9*time.Minute), "final", b)
+		stream := open()
+		// The middle Message absorbs the loaded one and is itself absorbed before the stream reads
+		// either fact, so the first fact's survivor no longer exists.
+		first := f.mergeInto(middle, loaded, base.Add(7*time.Minute))
+		second := f.mergeInto(final, middle, base.Add(7*time.Minute))
+		f.appendIntake(first, second)
+		expectResync(t, stream, middle, final)
+	})
 }

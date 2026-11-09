@@ -31,6 +31,9 @@ type LiveStore interface {
 	UnitContexts(ctx context.Context, tx platform.TransactionContext, ids []uuid.UUID) (map[uuid.UUID]UnitContext, error)
 	// NetworkAgencies returns the Agency of each listed Network; unknown Networks are absent.
 	NetworkAgencies(ctx context.Context, tx platform.TransactionContext, ids []uuid.UUID) (map[uuid.UUID]uuid.UUID, error)
+	// TransmissionMessages returns the current Message of each listed Transmission; unknown
+	// Transmissions are absent.
+	TransmissionMessages(ctx context.Context, tx platform.TransactionContext, ids []uuid.UUID) (map[uuid.UUID]uuid.UUID, error)
 }
 
 // Live produces the frames of Message live streams. It is not a durable consumer: every stream
@@ -159,6 +162,13 @@ func (s *LiveSession) evaluate(ctx context.Context, tx platform.TransactionConte
 		}
 	}
 	next.Issued = now
+	merged, err := s.mergeVisible(ctx, tx, current, facts)
+	if err != nil {
+		return LiveBatch{}, Position{}, err
+	}
+	if merged {
+		return resync, s.position, nil
+	}
 	batch := LiveBatch{Position: next.String(), More: len(records) == LiveBatchFacts}
 	view, err := s.view(ctx, tx, current, now, facts)
 	if err != nil {
@@ -170,6 +180,47 @@ func (s *LiveSession) evaluate(ctx context.Context, tx platform.TransactionConte
 	}
 	batch.Frames = frames
 	return batch, next, nil
+}
+
+// mergeVisible reports whether a merge among the facts may concern the caller: its final
+// survivor, the current Message of the merge's joining Transmission, is readable for the caller,
+// or it cannot be determined. A caller who could read an absorbed Message can read the survivor
+// that now holds its appearances, so a merge whose survivor is hidden needs no frame. A visible
+// merge is answered with a resync instead of removes, because the fact names absorbed Messages
+// without their former contexts and a remove would disclose the IDs of ones the caller never saw;
+// resolving through the Transmission also covers chains in which a later merge absorbed the
+// survivor before this batch ran.
+func (s *LiveSession) mergeVisible(ctx context.Context, tx platform.TransactionContext, current access,
+	facts []liveFact) (bool, error) {
+	var transmissions []uuid.UUID
+	for _, fact := range facts {
+		if fact.kind == kindMerge {
+			if fact.transmissionID == uuid.Nil {
+				return true, nil
+			}
+			transmissions = append(transmissions, fact.transmissionID)
+		}
+	}
+	if len(transmissions) == 0 {
+		return false, nil
+	}
+	survivors, err := s.live.store.TransmissionMessages(tx.Context(), tx, transmissions)
+	if err != nil {
+		return false, err
+	}
+	var ids []uuid.UUID
+	for _, transmission := range transmissions {
+		survivor, known := survivors[transmission]
+		if !known {
+			return true, nil
+		}
+		ids = append(ids, survivor)
+	}
+	eligible, err := s.live.service.store.Eligible(tx.Context(), tx, current.rows, ids)
+	if err != nil {
+		return false, err
+	}
+	return len(eligible) > 0, nil
 }
 
 // view reads what the facts' evaluation needs. The affected Messages are evaluated with the

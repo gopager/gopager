@@ -2583,6 +2583,8 @@ paths:
           time range. The client places it by its `messageTime` or drops it when it lies outside the
           loaded range.
         - `remove`: `{"messageId"}`, the Message no longer belongs to the view.
+          A Message merge the caller can see is answered with `resync-required`, never with
+          removes of the absorbed Messages.
         - `resync-required`: `{}`; the view cannot be continued. The client reloads the feed and
           opens a new stream. The server closes the stream after it.
         - `error`: `{"code"}` with `LOGIN_REQUIRED` (or the public code of another failure). The

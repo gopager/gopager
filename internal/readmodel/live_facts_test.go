@@ -145,8 +145,9 @@ func TestDecodeLiveFactKindsAndBefore(t *testing.T) {
 		t.Errorf("suppression of a Unit-less target: %+v", suppressedLess)
 	}
 	absorbed := []uuid.UUID{uuid.New(), uuid.New()}
-	merged := decode("message.merged", map[string]any{"absorbedMessageIds": absorbed})
-	if merged.kind != kindMerge || fmt.Sprint(merged.absorbed) != fmt.Sprint(absorbed) {
+	joining := uuid.New()
+	merged := decode("message.merged", map[string]any{"absorbedMessageIds": absorbed, "transmissionId": joining})
+	if merged.kind != kindMerge || fmt.Sprint(merged.absorbed) != fmt.Sprint(absorbed) || merged.transmissionID != joining {
 		t.Errorf("merged: %+v", merged)
 	}
 	if fact := decode("processing.completed", map[string]any{}); fact.kind != kindChange {

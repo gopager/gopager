@@ -105,18 +105,6 @@ func (v liveView) frames(fact liveFact) []LiveFrame {
 		case v.eligible[fact.messageID] || v.beforeEligible(fact.before):
 			return []LiveFrame{removeFrame(fact.messageID)}
 		}
-	case kindMerge:
-		if !v.eligible[fact.messageID] && !matches {
-			return nil
-		}
-		var out []LiveFrame
-		if matches {
-			out = append(out, upsertFrame(item))
-		}
-		for _, id := range fact.absorbed {
-			out = append(out, removeFrame(id))
-		}
-		return out
 	}
 	return nil
 }

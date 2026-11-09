@@ -52,17 +52,9 @@ func TestFramesPerFactKind(t *testing.T) {
 	if frames := view.frames(liveFact{kind: kindChange, messageID: uuid.New()}); frames != nil {
 		t.Errorf("hidden traffic yields nothing: %v", frames)
 	}
-	absorbed := []uuid.UUID{uuid.New(), uuid.New()}
-	frames := view.frames(liveFact{kind: kindMerge, messageID: message, absorbed: absorbed})
-	if len(frames) != 3 || frames[0].Event != FrameUpsert || frames[1].Event != FrameRemove || frames[2].Event != FrameRemove {
-		t.Errorf("a merge upserts the survivor and removes absorbed Messages: %v", frames)
-	}
-	if frames := view.frames(liveFact{kind: kindMerge, messageID: uuid.New(), absorbed: absorbed}); frames != nil {
-		t.Errorf("a merge into a Message the caller cannot read yields nothing: %v", frames)
-	}
-	removeOnly := view.frames(liveFact{kind: kindMerge, messageID: other, absorbed: absorbed})
-	if len(removeOnly) != 2 {
-		t.Errorf("a merge into an eligible Message that does not match only removes: %v", removeOnly)
+	merge := liveFact{kind: kindMerge, messageID: message, absorbed: []uuid.UUID{uuid.New(), uuid.New()}}
+	if frames := view.frames(merge); frames != nil {
+		t.Errorf("a merge never yields Message frames, which could disclose absorbed IDs: %v", frames)
 	}
 }
 
@@ -128,16 +120,16 @@ func TestBuildFramesStampsLastFrameOfEachFact(t *testing.T) {
 	view.matches[message] = FeedItem{MessageID: message}
 	view.eligible[message] = true
 	facts := []liveFact{
-		{position: events.Position{TxID: 5, Seq: 9}, kind: kindMerge, messageID: message, absorbed: []uuid.UUID{uuid.New()}},
-		{position: events.Position{TxID: 6, Seq: 10}, kind: kindAdd, messageID: other},
-		{position: events.Position{TxID: 6, Seq: 11}, kind: kindAdd, messageID: message},
+		{position: events.Position{TxID: 5, Seq: 9}, kind: kindAdd, messageID: other},
+		{position: events.Position{TxID: 6, Seq: 10}, kind: kindAdd, messageID: message},
+		{position: events.Position{TxID: 6, Seq: 11}, kind: kindChange, messageID: message},
 	}
 	frames, ok := view.buildFrames(facts, now)
-	if !ok || len(frames) != 3 {
+	if !ok || len(frames) != 2 {
 		t.Fatalf("frames %v ok %v", frames, ok)
 	}
-	if frames[0].ID != "" || frames[1].ID != "5-9-1800000000" || frames[2].ID != "6-11-1800000000" {
-		t.Errorf("IDs %q %q %q", frames[0].ID, frames[1].ID, frames[2].ID)
+	if frames[0].ID != "6-10-1800000000" || frames[1].ID != "6-11-1800000000" {
+		t.Errorf("IDs %q %q", frames[0].ID, frames[1].ID)
 	}
 }
 
@@ -149,14 +141,14 @@ func TestBuildFramesBounds(t *testing.T) {
 	view.matches[message] = FeedItem{MessageID: message}
 	view.eligible[message] = true
 
-	absorbed := make([]uuid.UUID, LiveBatchFrames)
-	for i := range absorbed {
-		absorbed[i] = uuid.New()
+	facts := make([]liveFact, LiveBatchFrames+1)
+	for i := range facts {
+		facts[i] = liveFact{kind: kindAdd, messageID: message}
 	}
-	if _, ok := view.buildFrames([]liveFact{{kind: kindMerge, messageID: message, absorbed: absorbed}}, now); ok {
+	if _, ok := view.buildFrames(facts, now); ok {
 		t.Error("more than the frame bound must fail")
 	}
-	if _, ok := view.buildFrames([]liveFact{{kind: kindMerge, messageID: message, absorbed: absorbed[:LiveBatchFrames-1]}}, now); !ok {
+	if _, ok := view.buildFrames(facts[:LiveBatchFrames], now); !ok {
 		t.Error("exactly the frame bound must pass")
 	}
 

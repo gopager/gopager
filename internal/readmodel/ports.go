@@ -29,7 +29,8 @@ type Store interface {
 
 // TokenKeys supplies the secret that signs page tokens.
 type TokenKeys interface {
-	// TokenKey returns the installation's 32-byte secret, creating it on first use.
+	// TokenKey returns the installation's 32-byte secret, creating it on first use. Callers run it
+	// in a transaction of its own, so that a created secret is committed before it is used.
 	TokenKey(ctx context.Context, tx platform.TransactionContext) ([]byte, error)
 }
 

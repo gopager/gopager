@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/platform"
@@ -37,6 +38,25 @@ func TestLiveContextsAreCurrent(t *testing.T) {
 		head, err := w.reads.CurrentTxID(ctx, tx)
 		if err != nil || head <= 0 {
 			t.Errorf("current transaction ID = %d, %v", head, err)
+		}
+	})
+}
+
+// TestTransmissionMessagesFollowMerges checks that a Transmission resolves to the Message that
+// holds it now, which after merges is the final survivor.
+func TestTransmissionMessagesFollowMerges(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	network := w.network(w.agency("county"), "N", "pocsag")
+	at := time.Now().UTC().Truncate(time.Microsecond)
+	first, final := w.message(at, "text", "x"), w.message(at, "text", "x")
+	transmission := w.transmission(transmissionSpec{network: network, message: first, accepted: at})
+	w.exec(`UPDATE transmissions SET message_id = $1 WHERE message_id = $2`, final, first)
+	w.exec(`DELETE FROM messages WHERE id = $1`, first)
+	w.within(func(ctx context.Context, tx platform.TransactionContext) {
+		messages, err := w.reads.TransmissionMessages(ctx, tx, []uuid.UUID{transmission, uuid.New()})
+		if err != nil || len(messages) != 1 || messages[transmission] != final {
+			t.Errorf("transmission messages = %v, %v", messages, err)
 		}
 	})
 }
