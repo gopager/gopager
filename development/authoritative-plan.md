@@ -233,11 +233,11 @@ P-19 was never assigned. This table owns **remaining gate/status**, not contract
 
 ## Workflow and Approval Gates
 
-There is one approval gate: **the user approves a work package before it starts.** Read this section for current authority; consult the [ADR index](decisions/README.md) only to verify a named decision.
+There is one approval gate: **the user approves a work package by ordering its execution.** Read this section for current authority; consult the [ADR index](decisions/README.md) only to verify a named decision.
 
 | Activity | Required authority |
 | --- | --- |
-| Starting a work package | User approval of that package (its assignment, approved delivery scope and fixed required inputs) before it starts. This is the only gate. |
+| Starting a work package | The user's order to execute that package, which approves its assignment, approved delivery scope and fixed required inputs. This is the only gate; no separate confirmation. |
 | Planning and contract details inside the package | Included in the approved package; no further owner sign-off, freeze permission or intermediate approval |
 | Fixed behavior or outside-scope change | User approval of the change, recorded as an ADR with a D-ID before the affected implementation; procedure in the [scope-change rules](work-packages/shared-rules.md#scope-change) |
 | External effects, experiments, parallel work | Explicit approved environment or slice, or disjoint scope; the package's own acceptance tests remain assigned work |
