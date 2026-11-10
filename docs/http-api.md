@@ -1173,7 +1173,7 @@ data, not a template: it has no expressions, loops or markup. Schemas: `Layout`,
   `text` (literal `text`), `field` and `chip` (a catalog `field` and an optional `label`), `link` (a `label` and a
   `url` built from a template with the placeholders `{0}` to `{9}` over up to 10 `fields`), `section` (an optional
   `title` and nested `blocks`), `conditional` (a `when` predicate, `then` blocks and optional `else` blocks) and
-  `fallback` (2 to 8 alternative `blocks`; the first one that renders something is used; a present but empty, unlabelled value renders nothing, and an alternative without content never fails the 64 KiB output limit; independently, one render holds at most 1 MiB of values). A property that does
+  `fallback` (2 to 8 alternative `blocks`; the first one that renders something is used; a present but empty, unlabelled value renders nothing, and an alternative without content never fails the 64 KiB output limit, while everything a chosen alternative emits counts; independently, one render holds at most 1 MiB of values). A property that does
   not belong to the block kind is `400`. Fields use the [catalog](#subscriptions); an unknown field is `400`. A
   definition may hold at most 256 blocks, nested at most 8 levels; text is limited to 4096 bytes and labels
   and titles to 256 bytes. Exceeding such a limit is `413 RESOURCE_LIMIT`. A name is 1 to 256 bytes, valid UTF-8 and

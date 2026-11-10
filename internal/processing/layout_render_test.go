@@ -403,3 +403,20 @@ func TestLayoutHeldValuesAreBoundedEvenWithVisibleContent(t *testing.T) {
 		}
 	}
 }
+
+// TestLayoutJSONOutputWithoutContentCountsOnceEmitted proves that output without content counts
+// against the bound wherever it is emitted: outside a fallback, and in a chosen alternative.
+func TestLayoutJSONOutputWithoutContentCountsOnceEmitted(t *testing.T) {
+	t.Parallel()
+	fixture := lfixture(t, map[string]any{"a": strings.Repeat("\r", MaxLayoutOutputBytes), "b": "alternate"})
+	for name, blocks := range map[string]string{
+		"outside a fallback": `[{"kind":"field","field":` + fa + `}]`,
+		"chosen alternative": `[{"kind":"fallback","blocks":[{"kind":"section","title":"T","blocks":[{"kind":"field","field":` +
+			fa + `}]},{"kind":"field","field":` + fb + `}]}]`,
+	} {
+		_, err := renderLayout(t, "json", blocks, fixture)
+		if platform.FailureCode(err) != platform.CodeResourceLimit {
+			t.Fatalf("%s: emitted output without content was not bounded: %v", name, err)
+		}
+	}
+}

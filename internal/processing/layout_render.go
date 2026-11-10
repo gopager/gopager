@@ -76,9 +76,13 @@ type layoutRenderer struct {
 	// json selects the JSON representation for the size estimate.
 	json bool
 	// held counts what the rendered items hold, with or without content, so that no render grows
-	// without limit; size only counts output with content against the output bound, because a
-	// fallback may still discard an alternative without content.
+	// without limit.
 	held int
+	// trying counts the fallback alternatives being tried. Their output without content is kept in
+	// pending instead of size: it counts once the alternative is chosen, and is dropped with a
+	// discarded alternative, which never fails the output bound.
+	trying  int
+	pending int
 }
 
 // maxHeldLayoutBytes bounds what one render may hold at a time.
@@ -87,7 +91,9 @@ const maxHeldLayoutBytes = 16 * MaxLayoutOutputBytes
 func (r *layoutRenderer) charge(items []layoutItem) error {
 	for _, item := range items {
 		r.held += item.heldSize()
-		if hasContent([]layoutItem{item}) {
+		if r.trying > 0 && !hasContent([]layoutItem{item}) {
+			r.pending += item.size(r.json)
+		} else {
 			r.size += item.size(r.json)
 		}
 	}
@@ -175,15 +181,24 @@ func (r *layoutRenderer) block(node layoutNode) ([]layoutItem, error) {
 		return r.blocks(node.otherwise)
 	default: // blockFallback
 		for _, alternative := range node.children {
-			before, held := r.size, r.held
+			before, held, pending := r.size, r.held, r.pending
+			r.trying++
 			items, err := r.block(alternative)
+			r.trying--
 			if err != nil {
 				return nil, err
 			}
 			if hasContent(items) {
+				if r.trying == 0 {
+					// The chosen alternative's output without content is now part of the body.
+					r.size, r.pending = r.size+r.pending-pending, pending
+					if r.size > MaxLayoutOutputBytes {
+						return nil, resource(errors.New("layout output boundary"))
+					}
+				}
 				return items, nil
 			}
-			r.size, r.held = before, held
+			r.size, r.held, r.pending = before, held, pending
 		}
 		return nil, nil
 	}
