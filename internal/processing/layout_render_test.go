@@ -331,3 +331,37 @@ func TestLayoutBudgetChargesTextWithoutControlCharacters(t *testing.T) {
 		}
 	}
 }
+
+// TestLayoutMarkdownLinkKeepsAmpersandsLiteral proves that an `&` in a link destination is
+// backslash-escaped, so query separators survive and entity-shaped text such as `&copy;` cannot
+// turn into another character.
+func TestLayoutMarkdownLinkKeepsAmpersandsLiteral(t *testing.T) {
+	t.Parallel()
+	blocks := `[{"kind":"link","label":"L","url":{"template":"https://e.com/?a={0}&copy;=2&b=3","fields":[` + fa + `]}}]`
+	got, err := renderLayout(t, "markdown", blocks, lfixture(t, map[string]any{"a": "x"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `[L](https://e.com/?a=x\&copy;=2\&b=3)`; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// TestLayoutFallbackDiscardsAnOversizedAlternativeWithoutContent proves that an alternative that
+// has no content does not fail the render by its size, in every output kind, while a chosen
+// alternative above the bound still does.
+func TestLayoutFallbackDiscardsAnOversizedAlternativeWithoutContent(t *testing.T) {
+	t.Parallel()
+	controlOnly := strings.Repeat("\r", MaxLayoutOutputBytes+1)
+	blocks := `[{"kind":"fallback","blocks":[{"kind":"field","field":` + fa + `},{"kind":"field","field":` + fb + `}]}]`
+	for _, kind := range []string{"text", "markdown", "json"} {
+		got, err := renderLayout(t, kind, blocks, lfixture(t, map[string]any{"a": controlOnly, "b": "alternate"}))
+		if err != nil || !strings.Contains(got, "alternate") {
+			t.Fatalf("%s: got %q, %v", kind, got, err)
+		}
+		_, err = renderLayout(t, kind, blocks, lfixture(t, map[string]any{"a": strings.Repeat("x", MaxLayoutOutputBytes+1), "b": "alternate"}))
+		if platform.FailureCode(err) != platform.CodeResourceLimit {
+			t.Fatalf("%s: an oversized chosen alternative: %v", kind, err)
+		}
+	}
+}

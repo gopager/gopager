@@ -1173,14 +1173,14 @@ data, not a template: it has no expressions, loops or markup. Schemas: `Layout`,
   `text` (literal `text`), `field` and `chip` (a catalog `field` and an optional `label`), `link` (a `label` and a
   `url` built from a template with the placeholders `{0}` to `{9}` over up to 10 `fields`), `section` (an optional
   `title` and nested `blocks`), `conditional` (a `when` predicate, `then` blocks and optional `else` blocks) and
-  `fallback` (2 to 8 alternative `blocks`; the first one that renders something is used; a present but empty, unlabelled value renders nothing). A property that does
+  `fallback` (2 to 8 alternative `blocks`; the first one that renders something is used; a present but empty, unlabelled value renders nothing, and an alternative without content never fails the size limit). A property that does
   not belong to the block kind is `400`. Fields use the [catalog](#subscriptions); an unknown field is `400`. A
   definition may hold at most 256 blocks, nested at most 8 levels; text is limited to 4096 bytes and labels
   and titles to 256 bytes. Exceeding such a limit is `413 RESOURCE_LIMIT`. A name is 1 to 256 bytes, valid UTF-8 and
   not blank (`400` otherwise).
 - **Output kinds.** `text` renders plain lines, `markdown` renders Markdown and `json` renders a JSON array of typed
   items. The output kind is part of the definition and cannot change on update. Markdown escapes every
-  interpolated value, including angle brackets, `~`, `=` and `&`, and no layout ever produces HTML. Interpolated text drops
+  interpolated value, including angle brackets, `~`, `=` and `&`, and escapes `&` in link destinations so entity-shaped text stays literal, and no layout ever produces HTML. Interpolated text drops
   control characters. Absent fields render nothing. A link renders only when all its fields are present and the
   result is an `http`, `https` or `mailto` URL; each value is percent-encoded except for the unreserved characters (letters, digits, `-`, `.`, `_`, `~`) and `@`, so a value can never add a path segment, query parameter or fragment. A rendered body is limited to 64 KiB.
 - **Versions.** Every save appends an immutable version whose number is the layout's new revision (create is version 1).

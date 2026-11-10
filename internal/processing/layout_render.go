@@ -66,13 +66,17 @@ type layoutRenderer struct {
 	size   int
 	// json selects the JSON representation for the size estimate.
 	json bool
+	// trying counts the fallback alternatives being tried: until one is chosen, its output is
+	// counted but not yet held against the bound, because an alternative without content is
+	// discarded.
+	trying int
 }
 
 func (r *layoutRenderer) charge(items []layoutItem) error {
 	for _, item := range items {
 		r.size += item.size(r.json)
 	}
-	if r.size > MaxLayoutOutputBytes {
+	if r.trying == 0 && r.size > MaxLayoutOutputBytes {
 		return resource(errors.New("layout output boundary"))
 	}
 	return nil
@@ -157,11 +161,16 @@ func (r *layoutRenderer) block(node layoutNode) ([]layoutItem, error) {
 	default: // blockFallback
 		for _, alternative := range node.children {
 			before := r.size
+			r.trying++
 			items, err := r.block(alternative)
+			r.trying--
 			if err != nil {
 				return nil, err
 			}
 			if hasContent(items) {
+				if r.trying == 0 && r.size > MaxLayoutOutputBytes {
+					return nil, resource(errors.New("layout output boundary"))
+				}
 				return items, nil
 			}
 			r.size = before

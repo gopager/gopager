@@ -100,8 +100,11 @@ func escapeMarkdown(s string) string {
 	return escaped.String()
 }
 
-// markdownURLEscaper encodes the characters that would end or escape a Markdown link destination.
-var markdownURLEscaper = strings.NewReplacer(" ", "%20", "(", "%28", ")", "%29", "<", "%3C", ">", "%3E", "\\", "%5C")
+// markdownURLEscaper encodes the characters that would end or escape a Markdown link destination
+// and backslash-escapes `&`, which Markdown would otherwise read as the start of an entity
+// reference such as `&copy;`; `\&` stays a literal `&`.
+var markdownURLEscaper = strings.NewReplacer(" ", "%20", "(", "%28", ")", "%29", "<", "%3C", ">", "%3E", "\\", "%5C",
+	"&", "\\&")
 
 func serializeLayout(kind string, items []layoutItem) ([]byte, error) {
 	if kind == LayoutJSON {
