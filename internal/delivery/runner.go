@@ -13,7 +13,6 @@ import (
 	"github.com/gopager/gopager/internal/events"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
-	"github.com/gopager/gopager/internal/readmodel"
 )
 
 // ErrLeaseLost reports a claimed write whose token is no longer current or whose lease expired.
@@ -113,9 +112,6 @@ func (r *Runner) Run(ctx context.Context) error {
 // Tick recovers lost claims, claims one batch of due Deliveries and processes it. It reports
 // whether the batch was full, so that another may follow at once.
 func (r *Runner) Tick(ctx context.Context) (bool, error) {
-	if err := r.deps.Projector.WarmClassifications(ctx); err != nil {
-		return false, err
-	}
 	var claimed []DeliveryRecord
 	err := r.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
 		now, err := r.clock.Now(tx.Context(), tx)
@@ -405,12 +401,7 @@ func (r *Runner) keep(ctx context.Context, claim Claim, record DeliveryRecord) b
 		if err != nil || authority.Revision == record.AccessRevision {
 			return err
 		}
-		err = r.stillVisible(tx.Context(), tx, now, record)
-		if errors.Is(err, readmodel.ErrClassificationUnavailable) {
-			// Not a loss of access: the call continues and the next renewal checks again.
-			return nil
-		}
-		return err
+		return r.stillVisible(tx.Context(), tx, now, record)
 	})
 	return err == nil
 }

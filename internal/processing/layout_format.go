@@ -84,10 +84,11 @@ func sanitizeLayoutText(s string) string {
 	}, s)
 }
 
-const markdownMetacharacters = "\\`*_{}[]()#+-.!|<>"
+const markdownMetacharacters = "\\`*_{}[]()#+-.!|<>~="
 
 // escapeMarkdown backslash-escapes every Markdown metacharacter, including the angle
-// brackets that would otherwise start raw HTML.
+// brackets that would otherwise start raw HTML, `~` (strikethrough, fenced code) and `=`
+// (setext headings).
 func escapeMarkdown(s string) string {
 	var escaped strings.Builder
 	for _, r := range s {
@@ -111,7 +112,10 @@ func serializeLayout(kind string, items []layoutItem) ([]byte, error) {
 	walk = func(items []layoutItem) error {
 		for _, item := range items {
 			for _, line := range itemLines(item, kind == LayoutMarkdown) {
-				size += len(line) + 1
+				if len(lines) > 0 {
+					size++ // the separating newline
+				}
+				size += len(line)
 				if size > MaxLayoutOutputBytes {
 					return resource(errors.New("layout output boundary"))
 				}

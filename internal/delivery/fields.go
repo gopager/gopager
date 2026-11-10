@@ -54,8 +54,8 @@ var staticFields = map[string]fieldSpec{
 	"gateway.contactTime":      {kind: processing.TimestampValue, group: "gateway"},
 }
 
-// resultGroup is the field group of every result field; the classification of the producing
-// version is enforced by the read side, which shows only results the subscriber may read.
+// resultGroup is the field group of every result field. Beyond it, the read side shows a result
+// only when the subscriber may read all field groups stored with it.
 const resultGroup = "derived"
 
 // staticKey returns the catalog key of a two-segment reference, or "".

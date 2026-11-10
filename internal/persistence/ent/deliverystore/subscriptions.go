@@ -138,9 +138,9 @@ func (s *Store) InsertSubscription(ctx context.Context, tx platform.TransactionC
 		subscription.ID, subscription.Revision, subscription.Kind, subscription.SubscriberID, subscription.CreatedBy,
 		subscription.State, subscription.EventTypes, filter, layout, subscription.SplitByUnit, maxAge,
 		subscription.CreatedAt.UTC(), subscription.UpdatedAt.UTC()); err != nil {
-		return err
+		return referenceGone(err)
 	}
-	return insertTargets(ctx, executor, subscription)
+	return referenceGone(insertTargets(ctx, executor, subscription))
 }
 
 // Subscription implements delivery.Store.
@@ -219,7 +219,7 @@ func (s *Store) UpdateSubscription(ctx context.Context, tx platform.TransactionC
 		subscription.ID, subscription.Revision, subscription.State, subscription.EventTypes, filter, layout,
 		subscription.SplitByUnit, maxAge, subscription.UpdatedAt.UTC(), expected)
 	if err != nil {
-		return err
+		return referenceGone(err)
 	}
 	if changed, err := result.RowsAffected(); err != nil || changed != 1 {
 		if err != nil {
@@ -230,7 +230,7 @@ func (s *Store) UpdateSubscription(ctx context.Context, tx platform.TransactionC
 	if _, err := executor.ExecContext(ctx, `DELETE FROM subscription_targets WHERE subscription_id = $1`, subscription.ID); err != nil {
 		return err
 	}
-	return insertTargets(ctx, executor, subscription)
+	return referenceGone(insertTargets(ctx, executor, subscription))
 }
 
 // DeleteSubscription implements delivery.Store.

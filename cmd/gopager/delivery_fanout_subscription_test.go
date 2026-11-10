@@ -100,17 +100,24 @@ func (f *deliveryFixture) levelWorkflow() uuid.UUID {
 }
 
 // publishLevel publishes a result of the Workflow for the Message with the given level and
-// returns the result ID.
+// returns the result ID. Its stored classification is what the level Workflow reads: `derived`
+// and `payload`.
 func (f *deliveryFixture) publishLevel(workflow, message uuid.UUID, level string) uuid.UUID {
+	f.t.Helper()
+	return f.publishLevelClassified(workflow, message, level, `["derived","payload"]`)
+}
+
+// publishLevelClassified publishes a level result with the given stored field groups.
+func (f *deliveryFixture) publishLevelClassified(workflow, message uuid.UUID, level, groups string) uuid.UUID {
 	f.t.Helper()
 	candidate, result := uuid.New(), uuid.New()
 	f.exec(`INSERT INTO processing_candidates (id, transmission_id, workflow_id, definition_version_id, workflow_revision, configuration_revision,
 		source_revision, context_revision, state, selected, due_at, created_at, updated_at)
 		SELECT $1, t.id, w.id, w.active_version_id, 1, 1, 1, 1, 'completed', true, now(), now(), now()
 		FROM transmissions t, processing_workflows w WHERE t.message_id = $3 AND w.id = $2`, candidate, workflow, message)
-	f.exec(`INSERT INTO processing_results (id, candidate_id, producing_fence, evaluation, completed_at, published_at, message_id)
-		VALUES ($1, $2, 1, $3::jsonb, now(), now(), $4)`, result, candidate,
-		`{"selected":true,"fields":{"level":{"state":"present","value":{"kind":"integer","value":"`+level+`"}}}}`, message)
+	f.exec(`INSERT INTO processing_results (id, candidate_id, producing_fence, evaluation, field_groups, completed_at, published_at, message_id)
+		VALUES ($1, $2, 1, $3::jsonb, $5::jsonb, now(), now(), $4)`, result, candidate,
+		`{"selected":true,"fields":{"level":{"state":"present","value":{"kind":"integer","value":"`+level+`"}}}}`, message, groups)
 	return result
 }
 
@@ -171,6 +178,34 @@ func TestSubscriptionProcessingCompletedWithoutVisibleResultCreatesNothing(t *te
 	f.fanOutAll()
 	if listed := f.deliveries(bearer, ""); len(listed) != 0 {
 		t.Fatalf("a fact without a visible result created %+v", listed)
+	}
+}
+
+// TestSubscriptionProcessingCompletedWithUnreadableResultGroupsCreatesNothing proves that a
+// published result whose stored field groups include one the subscriber cannot read neither
+// triggers a Delivery nor reaches another Delivery's input.
+func TestSubscriptionProcessingCompletedWithUnreadableResultGroupsCreatesNothing(t *testing.T) {
+	t.Parallel()
+	f := newDeliveryFixture(t, delivery.AdmissionLimits{})
+	bearer, _ := f.subscriber("payload", "unit", "derived")
+	instance := f.instance(true)
+	workflow := f.levelWorkflow()
+	f.subCreated(bearer, subInput(instance, map[string]any{"eventTypes": []string{"processing.completed", "message.created"}}))
+	message := f.message(f.now().Add(-time.Minute), "HIDDEN RESULT", f.unit("Engine 2", nil))
+	result := f.publishLevelClassified(workflow, message, "9", `["derived","payload","quality"]`)
+	f.messageFact("processing.completed", message, map[string]any{"resultId": result})
+	created := f.messageFact("message.created", message, nil)
+
+	f.fanOutAll()
+	listed := f.deliveries(bearer, "")
+	if len(listed) != 1 || listed[0].DomainEventID != created {
+		t.Fatalf("Deliveries = %+v, want only the message.created one", listed)
+	}
+	f.attempt()
+	for _, call := range f.targets.calls() {
+		if strings.Contains(call.Input.Body, workflow.String()) || strings.Contains(call.Input.Body, `"9"`) {
+			t.Fatalf("an unreadable result reached the input: %q", call.Input.Body)
+		}
 	}
 }
 

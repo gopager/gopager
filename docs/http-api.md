@@ -336,7 +336,7 @@ Every application error, except for unmatched routes, has this shape:
 | `RESOURCE_LIMIT` | 413 | false | Body or collection size limit exceeded, or revision counter exhausted |
 | `RATE_LIMITED` | 429 | true | Login throttled ([Login rate limiting](#login-rate-limiting)), a Message search over its limit ([Search rate limiting](#search-rate-limiting)) or a Subscription create or redelivery over the subscriber's sending limit ([Delivery sending admission](#delivery-sending-admission)); see `Retry-After` |
 | `STORAGE_UNAVAILABLE` | 503 | true | Database unavailable |
-| `AUTHORITY_UNAVAILABLE` | 503 | true | Process not ready, or a required component is unavailable. For a Subscription target or redelivery whose instance is unavailable it carries `parameters.status` and `parameters.instanceId` and is `retryable: false`: change the configuration instead of repeating the request. |
+| `AUTHORITY_UNAVAILABLE` | 503 | true | Process not ready, or a required component is unavailable. For a Subscription target or redelivery whose instance is unavailable it carries `parameters.status` and `parameters.instanceId`: the request can succeed once the instance is enabled and its provider is available. |
 | `COMMIT_UNCERTAIN` | 503 | false | The write may have committed. Re-send with the **same** command ID or `submissionId`, or read the resource, instead of creating a new operation. |
 | `INTERNAL_ERROR` | 500 | false | Unexpected failure |
 
@@ -1094,7 +1094,7 @@ cannot read is absent when evaluated and rejected when saved.
 | `unit.id`, `unit.name` | string | `unit` |
 | `gateway.id`, `gateway.name`, `gateway.oldState`, `gateway.newState` | string | `gateway` |
 | `gateway.contactTime` | timestamp | `gateway` |
-| `result` with path `[workflowId, output]` | the output's declared type | `derived` |
+| `result` with path `[workflowId, output]` | the output's declared type | `derived`; the result counts only when all field groups stored with it are readable |
 
 ### Deliveries
 
@@ -1173,14 +1173,14 @@ data, not a template: it has no expressions, loops or markup. Schemas: `Layout`,
   `text` (literal `text`), `field` and `chip` (a catalog `field` and an optional `label`), `link` (a `label` and a
   `url` built from a template with the placeholders `{0}` to `{9}` over up to 10 `fields`), `section` (an optional
   `title` and nested `blocks`), `conditional` (a `when` predicate, `then` blocks and optional `else` blocks) and
-  `fallback` (2 to 8 alternative `blocks`; the first one that renders something is used). A property that does
+  `fallback` (2 to 8 alternative `blocks`; the first one that renders something is used; a present but empty, unlabelled value renders nothing). A property that does
   not belong to the block kind is `400`. Fields use the [catalog](#subscriptions); an unknown field is `400`. A
   definition may hold at most 256 blocks, nested at most 8 levels; text is limited to 4096 bytes and labels
   and titles to 256 bytes. Exceeding such a limit is `413 RESOURCE_LIMIT`. A name is 1 to 256 bytes, valid UTF-8 and
   not blank (`400` otherwise).
 - **Output kinds.** `text` renders plain lines, `markdown` renders Markdown and `json` renders a JSON array of typed
   items. The output kind is part of the definition and cannot change on update. Markdown escapes every
-  interpolated value, including angle brackets, and no layout ever produces HTML. Interpolated text drops
+  interpolated value, including angle brackets, `~` and `=`, and no layout ever produces HTML. Interpolated text drops
   control characters. Absent fields render nothing. A link renders only when all its fields are present and the
   result is an `http`, `https` or `mailto` URL; each value is percent-encoded except for the unreserved characters (letters, digits, `-`, `.`, `_`, `~`) and `@`, so a value can never add a path segment, query parameter or fragment. A rendered body is limited to 64 KiB.
 - **Versions.** Every save appends an immutable version whose number is the layout's new revision (create is version 1).

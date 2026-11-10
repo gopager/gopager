@@ -378,3 +378,28 @@ func TestReleaseSendAttemptTakesBackExactlyOneUnit(t *testing.T) {
 		t.Fatal("releasing the last units did not restore exactly the limit")
 	}
 }
+
+// TestSubscriptionWithAVanishedLayoutIsInvalidInput proves that a Subscription naming a layout
+// removed after it was checked is rejected as invalid input, not as a storage failure.
+func TestSubscriptionWithAVanishedLayoutIsInvalidInput(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	now := w.now()
+	gone := uuid.New()
+	subscription := w.subscription
+	subscription.ID, subscription.LayoutID, subscription.CreatedAt, subscription.UpdatedAt = uuid.New(), &gone, now, now
+	err := w.primary.WithinTransaction(context.Background(), func(tx platform.TransactionContext) error {
+		return w.store.InsertSubscription(tx.Context(), tx, subscription)
+	})
+	if !errors.Is(err, authz.ErrInvalidInput) {
+		t.Fatalf("insert with a vanished layout: %v", err)
+	}
+	updated := w.subscription
+	updated.Revision, updated.LayoutID = 2, &gone
+	err = w.primary.WithinTransaction(context.Background(), func(tx platform.TransactionContext) error {
+		return w.store.UpdateSubscription(tx.Context(), tx, updated, 1)
+	})
+	if !errors.Is(err, authz.ErrInvalidInput) {
+		t.Fatalf("update with a vanished layout: %v", err)
+	}
+}

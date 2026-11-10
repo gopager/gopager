@@ -102,11 +102,6 @@ type batchResult struct {
 func (r *Runner) runBatch(ctx context.Context) (bool, error) {
 	var result batchResult
 	name := r.consumer.Name()
-	if preparer, ok := r.consumer.(BatchPreparer); ok {
-		if err := preparer.Prepare(ctx); err != nil {
-			return false, err
-		}
-	}
 	err := r.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
 		result = batchResult{}
 		offset, err := r.log.Offset(tx.Context(), tx, name)

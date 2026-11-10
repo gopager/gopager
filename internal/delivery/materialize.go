@@ -22,7 +22,6 @@ import (
 type Projector interface {
 	ProjectForDelivery(ctx context.Context, tx platform.TransactionContext, authority authz.Authority, now time.Time,
 		messageID uuid.UUID) (readmodel.DeliveryProjection, bool, error)
-	WarmClassifications(ctx context.Context) error
 }
 
 // Dependencies are the ports the Delivery services share.

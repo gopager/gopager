@@ -240,3 +240,53 @@ func TestDeleteRefusesReferencedLayout(t *testing.T) {
 		t.Fatalf("versions survived delete: %v", err)
 	}
 }
+
+// TestDeleteWaitsForAConcurrentReferenceAndConflicts proves that deleting a layout while a
+// Subscription that references it is being saved waits for that save and answers a revision
+// conflict instead of failing on the foreign key.
+func TestDeleteWaitsForAConcurrentReferenceAndConflicts(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	ctx := context.Background()
+	created, err := w.manager.Create(ctx, identity.Proof{}, uuid.New(),
+		presentation.LayoutInput{Name: "A", Definition: layout("text", "v1")}, allow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inserted, release, saved := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+	go func() {
+		saved <- w.store.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
+			executor, err := w.store.Resolve(tx)
+			if err != nil {
+				return err
+			}
+			if _, err := executor.ExecContext(tx.Context(), `INSERT INTO subscriptions (id, revision, kind, subscriber_id,
+				created_by, state, event_types, layout_id, split_by_unit, created_at, updated_at)
+				VALUES ($1, 1, 'global', $2, $2, 'active', ARRAY['message.created'], $3, false, now(), now())`,
+				uuid.New(), uuid.New(), created.ID); err != nil {
+				return err
+			}
+			close(inserted)
+			<-release
+			return nil
+		})
+	}()
+	<-inserted
+	deleted := make(chan error, 1)
+	go func() {
+		_, err := w.manager.Delete(ctx, identity.Proof{}, created.ID, 1, allow)
+		deleted <- err
+	}()
+	select {
+	case err := <-deleted:
+		t.Fatalf("delete did not wait for the referencing save: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	close(release)
+	if err := <-saved; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-deleted; !errors.Is(err, authz.ErrRevisionConflict) {
+		t.Fatalf("delete during a referencing save: %v", err)
+	}
+}

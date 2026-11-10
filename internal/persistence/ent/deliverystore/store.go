@@ -15,6 +15,7 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
 	"github.com/gopager/gopager/internal/processing"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // Store holds no transaction of its own; every method joins the caller's transaction.
@@ -48,6 +49,16 @@ func uuidList(encoded string) ([]uuid.UUID, error) {
 		return nil, platform.NewFailure(platform.CodeInternalError, err)
 	}
 	return ids, nil
+}
+
+// referenceGone maps a foreign-key violation to authz.ErrInvalidInput: a layout or instance a
+// Subscription names was removed by a concurrent change after it was checked.
+func referenceGone(err error) error {
+	var databaseError *pgconn.PgError
+	if errors.As(err, &databaseError) && databaseError.Code == "23503" {
+		return authz.ErrInvalidInput
+	}
+	return err
 }
 
 // notFound maps a missing row to authz.ErrNotFound.

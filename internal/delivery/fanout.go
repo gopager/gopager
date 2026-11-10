@@ -19,10 +19,7 @@ type FanOut struct {
 	clock platform.Clock
 }
 
-var (
-	_ events.Consumer      = (*FanOut)(nil)
-	_ events.BatchPreparer = (*FanOut)(nil)
-)
+var _ events.Consumer = (*FanOut)(nil)
 
 // NewFanOut returns the fan-out consumer. It fails with authz.ErrInvalidInput on a missing port.
 func NewFanOut(deps Dependencies, clock platform.Clock) (*FanOut, error) {
@@ -47,10 +44,6 @@ func (f *FanOut) Supports(eventType string, schemaVersion int) events.Support {
 	}
 	return events.Supported
 }
-
-// Prepare implements events.BatchPreparer: it classifies new Workflow versions so that their
-// results are visible to the projections of the batch.
-func (f *FanOut) Prepare(ctx context.Context) error { return f.deps.Projector.WarmClassifications(ctx) }
 
 // Handle implements events.Consumer. A fact of another replay mode than normal, a fact recorded
 // more than the fan-out window ago and Subscriptions created after the fact create nothing.

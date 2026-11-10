@@ -140,6 +140,11 @@ func (s *Store) Delete(ctx context.Context, tx platform.TransactionContext, id u
 	if err != nil {
 		return err
 	}
+	// Locking the layout first makes a concurrent Subscription save that references it finish
+	// before the check below, so the reference is seen instead of failing the delete.
+	if _, err := executor.ExecContext(ctx, `SELECT 1 FROM layout_definitions WHERE id = $1 FOR UPDATE`, id); err != nil {
+		return err
+	}
 	var referenced bool
 	if err := executor.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM subscriptions WHERE layout_id = $1)`, id).Scan(&referenced); err != nil {
 		return err

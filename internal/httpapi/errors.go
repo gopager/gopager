@@ -60,7 +60,8 @@ func writeManagementError(w http.ResponseWriter, err error) {
 			parameters["deliveryId"] = uncertain.DeliveryID.String()
 		}
 	case errors.As(err, &unavailableTarget):
-		code, fallback = string(platform.CodeAuthorityUnavailable), platform.NewFailure(platform.CodeAuthorityUnavailable, nil).Error()
+		unavailable := platform.NewFailure(platform.CodeAuthorityUnavailable, nil)
+		code, fallback, retryable = string(unavailable.Code()), unavailable.Error(), unavailable.Retryable()
 		status = platform.HTTPStatus(platform.CodeAuthorityUnavailable)
 		parameters["status"], parameters["instanceId"] = unavailableTarget.Status(), unavailableTarget.InstanceID.String()
 	case errors.As(err, &failure):

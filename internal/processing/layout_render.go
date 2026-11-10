@@ -157,13 +157,24 @@ func (r *layoutRenderer) block(node layoutNode) ([]layoutItem, error) {
 			if err != nil {
 				return nil, err
 			}
-			if len(items) > 0 {
+			if hasContent(items) {
 				return items, nil
 			}
 			r.size = before
 		}
 		return nil, nil
 	}
+}
+
+// hasContent reports whether rendered items show anything: a label, title, URL or non-empty
+// text somewhere. A present but empty, unlabelled value is no content, in every output kind.
+func hasContent(items []layoutItem) bool {
+	for _, item := range items {
+		if item.label != "" || item.title != "" || item.url != "" || item.text != "" || hasContent(item.children) {
+			return true
+		}
+	}
+	return false
 }
 
 // emit charges a single item against the output budget. Children of a section were charged

@@ -231,3 +231,47 @@ func TestLayoutLargeFieldIsChargedOnceForItsOutputKind(t *testing.T) {
 		}
 	}
 }
+
+// TestLayoutMarkdownEscapesFencesAndSetextHeadings proves that values cannot open a fenced code
+// block with `~~~` or turn the previous line into a heading with `===`.
+func TestLayoutMarkdownEscapesFencesAndSetextHeadings(t *testing.T) {
+	t.Parallel()
+	got, err := renderLayout(t, "markdown", `[{"kind":"field","field":`+fa+`},{"kind":"text","text":"after"}]`,
+		lfixture(t, map[string]any{"a": "~~~\ntitle\n==="}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "\\~\\~\\~\ntitle\n\\=\\=\\=\nafter"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// TestLayoutTextBodyOfExactlyTheBoundFits proves that the newline count covers only separators,
+// so a body of exactly the output bound renders.
+func TestLayoutTextBodyOfExactlyTheBoundFits(t *testing.T) {
+	t.Parallel()
+	exact := strings.Repeat("x", MaxLayoutOutputBytes)
+	body, err := renderLayout(t, "text", `[{"kind":"field","field":`+fa+`}]`, lfixture(t, map[string]any{"a": exact}))
+	if err != nil || len(body) != MaxLayoutOutputBytes {
+		t.Fatalf("a body of exactly %d bytes: %d bytes, %v", MaxLayoutOutputBytes, len(body), err)
+	}
+}
+
+// TestLayoutFallbackSkipsAnEmptyUnlabelledValue proves that a present but empty, unlabelled value
+// does not end a fallback, in every output kind, while a labelled empty value does.
+func TestLayoutFallbackSkipsAnEmptyUnlabelledValue(t *testing.T) {
+	t.Parallel()
+	fixture := lfixture(t, map[string]any{"a": "", "b": "alternate"})
+	unlabelled := `[{"kind":"fallback","blocks":[{"kind":"field","field":` + fa + `},{"kind":"field","field":` + fb + `}]}]`
+	for kind, want := range map[string]string{"text": "alternate", "markdown": "alternate",
+		"json": `[{"kind":"field","value":{"kind":"string","value":"alternate"}}]`} {
+		got, err := renderLayout(t, kind, unlabelled, fixture)
+		if err != nil || got != want {
+			t.Fatalf("%s: got %q (%v), want %q", kind, got, err, want)
+		}
+	}
+	labelled := `[{"kind":"fallback","blocks":[{"kind":"field","field":` + fa + `,"label":"A"},{"kind":"field","field":` + fb + `}]}]`
+	if got, err := renderLayout(t, "text", labelled, fixture); err != nil || got != "A: " {
+		t.Fatalf("labelled empty value: %q (%v)", got, err)
+	}
+}
