@@ -420,3 +420,21 @@ func TestLayoutJSONOutputWithoutContentCountsOnceEmitted(t *testing.T) {
 		}
 	}
 }
+
+// TestLayoutValuesOfDiscardedAlternativesStayBounded proves that values looked up for discarded
+// fallback alternatives keep counting against what a render may hold, since they stay cached.
+func TestLayoutValuesOfDiscardedAlternativesStayBounded(t *testing.T) {
+	t.Parallel()
+	controlOnly := strings.Repeat("\r", 250<<10)
+	values, alternatives := map[string]any{}, make([]string, 0, 6)
+	for _, name := range []string{"a", "b", "c", "d", "e"} {
+		values[name] = controlOnly
+		alternatives = append(alternatives, `{"kind":"field","field":{"namespace":"source","path":["`+name+`"]}}`)
+	}
+	alternatives = append(alternatives, `{"kind":"text","text":"alternate"}`)
+	blocks := `[{"kind":"fallback","blocks":[` + strings.Join(alternatives, ",") + `]}]`
+	_, err := renderLayout(t, "text", blocks, lfixture(t, values))
+	if platform.FailureCode(err) != platform.CodeResourceLimit {
+		t.Fatalf("1.25 MiB of values in discarded alternatives was not bounded: %v", err)
+	}
+}

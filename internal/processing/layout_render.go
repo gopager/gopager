@@ -75,9 +75,11 @@ type layoutRenderer struct {
 	size   int
 	// json selects the JSON representation for the size estimate.
 	json bool
-	// held counts what the rendered items hold, with or without content, so that no render grows
-	// without limit.
-	held int
+	// held counts what the rendered items hold, with or without content, and cached the values
+	// looked up for the render; together they are bounded so that no render grows without limit.
+	// held is given back with a discarded fallback alternative, cached is not.
+	held   int
+	cached int
 	// trying counts the fallback alternatives being tried. Their output without content is kept in
 	// pending instead of size: it counts once the alternative is chosen, and is dropped with a
 	// discarded alternative, which never fails the output bound.
@@ -97,7 +99,7 @@ func (r *layoutRenderer) charge(items []layoutItem) error {
 			r.size += item.size(r.json)
 		}
 	}
-	if r.size > MaxLayoutOutputBytes || r.held > maxHeldLayoutBytes {
+	if r.size > MaxLayoutOutputBytes || r.held+r.cached > maxHeldLayoutBytes {
 		return resource(errors.New("layout output boundary"))
 	}
 	return nil
@@ -124,6 +126,14 @@ func (r *layoutRenderer) value(ref FieldRef, schema FieldSchema) (*Value, error)
 		}
 	default:
 		return nil, invalid(errors.New("invalid layout field state"))
+	}
+	if result != nil {
+		// Cached values live as long as the render, also those of a discarded fallback
+		// alternative, so they are counted once and never given back.
+		r.cached += len(result.Value)
+		if r.cached+r.held > maxHeldLayoutBytes {
+			return nil, resource(errors.New("layout value boundary"))
+		}
 	}
 	r.cache[ref.key()] = result
 	return result, nil
