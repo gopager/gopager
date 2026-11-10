@@ -26,6 +26,15 @@ type layoutItem struct {
 	children []layoutItem
 }
 
+// heldSize is what the renderer holds for the item, whatever the output kind emits of it.
+func (i layoutItem) heldSize() int {
+	size := len(i.label) + len(i.title) + len(i.url) + len(i.text)
+	if i.value != nil {
+		size += len(i.value.Value)
+	}
+	return size
+}
+
 // size estimates the item's share of the output: JSON output carries a field's typed value and
 // the texts as given; text and Markdown carry the formatted texts without control characters,
 // never both. The serializer checks the exact length.
@@ -66,17 +75,23 @@ type layoutRenderer struct {
 	size   int
 	// json selects the JSON representation for the size estimate.
 	json bool
-	// trying counts the fallback alternatives being tried: until one is chosen, its output is
-	// counted but not yet held against the bound, because an alternative without content is
-	// discarded.
-	trying int
+	// held counts what the rendered items hold, with or without content, so that no render grows
+	// without limit; size only counts output with content against the output bound, because a
+	// fallback may still discard an alternative without content.
+	held int
 }
+
+// maxHeldLayoutBytes bounds what one render may hold at a time.
+const maxHeldLayoutBytes = 16 * MaxLayoutOutputBytes
 
 func (r *layoutRenderer) charge(items []layoutItem) error {
 	for _, item := range items {
-		r.size += item.size(r.json)
+		r.held += item.heldSize()
+		if hasContent([]layoutItem{item}) {
+			r.size += item.size(r.json)
+		}
 	}
-	if r.trying == 0 && r.size > MaxLayoutOutputBytes {
+	if r.size > MaxLayoutOutputBytes || r.held > maxHeldLayoutBytes {
 		return resource(errors.New("layout output boundary"))
 	}
 	return nil
@@ -160,20 +175,15 @@ func (r *layoutRenderer) block(node layoutNode) ([]layoutItem, error) {
 		return r.blocks(node.otherwise)
 	default: // blockFallback
 		for _, alternative := range node.children {
-			before := r.size
-			r.trying++
+			before, held := r.size, r.held
 			items, err := r.block(alternative)
-			r.trying--
 			if err != nil {
 				return nil, err
 			}
 			if hasContent(items) {
-				if r.trying == 0 && r.size > MaxLayoutOutputBytes {
-					return nil, resource(errors.New("layout output boundary"))
-				}
 				return items, nil
 			}
-			r.size = before
+			r.size, r.held = before, held
 		}
 		return nil, nil
 	}

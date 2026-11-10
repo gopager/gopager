@@ -365,3 +365,41 @@ func TestLayoutFallbackDiscardsAnOversizedAlternativeWithoutContent(t *testing.T
 		}
 	}
 }
+
+// TestLayoutOutputWithoutContentIsBoundedToo proves that output without content, which a fallback
+// may discard, still has a hard bound, so a render cannot grow without limit.
+func TestLayoutOutputWithoutContentIsBoundedToo(t *testing.T) {
+	t.Parallel()
+	controlOnly := strings.Repeat("\r", 250<<10)
+	values, fields := map[string]any{}, make([]string, 0, 5)
+	for _, name := range []string{"a", "b", "c", "d", "e"} {
+		values[name] = controlOnly
+		fields = append(fields, `{"kind":"field","field":{"namespace":"source","path":["`+name+`"]}}`)
+	}
+	blocks := `[{"kind":"fallback","blocks":[{"kind":"section","blocks":[` + strings.Join(fields, ",") +
+		`]},{"kind":"text","text":"alternate"}]}]`
+	for _, kind := range []string{"text", "markdown", "json"} {
+		_, err := renderLayout(t, kind, blocks, lfixture(t, values))
+		if platform.FailureCode(err) != platform.CodeResourceLimit {
+			t.Fatalf("%s: 1.25 MiB without content was not bounded: %v", kind, err)
+		}
+	}
+}
+
+// TestLayoutHeldValuesAreBoundedEvenWithVisibleContent proves that values whose visible text is
+// tiny but which carry large removed padding still count against what a render may hold.
+func TestLayoutHeldValuesAreBoundedEvenWithVisibleContent(t *testing.T) {
+	t.Parallel()
+	padded := "x" + strings.Repeat("\r", 250<<10)
+	values, fields := map[string]any{}, make([]string, 0, 5)
+	for _, name := range []string{"a", "b", "c", "d", "e"} {
+		values[name] = padded
+		fields = append(fields, `{"kind":"field","field":{"namespace":"source","path":["`+name+`"]}}`)
+	}
+	for _, kind := range []string{"text", "markdown"} {
+		_, err := renderLayout(t, kind, "["+strings.Join(fields, ",")+"]", lfixture(t, values))
+		if platform.FailureCode(err) != platform.CodeResourceLimit {
+			t.Fatalf("%s: 1.25 MiB held for five visible characters was not bounded: %v", kind, err)
+		}
+	}
+}
