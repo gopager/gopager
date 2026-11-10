@@ -159,7 +159,7 @@ func (s *Subscriptions) Read(ctx context.Context, proof identity.Proof, id uuid.
 	}
 	var result Subscription
 	err := s.within(ctx, proof, false, nil, func(tx platform.TransactionContext, who manager) error {
-		subscription, err := s.deps.Store.Subscription(tx.Context(), tx, id, false)
+		subscription, err := s.deps.Store.Subscription(tx.Context(), tx, id, NoLock)
 		if err != nil {
 			return err
 		}
@@ -199,7 +199,7 @@ func (s *Subscriptions) Create(ctx context.Context, proof identity.Proof, comman
 			if err != nil {
 				return err
 			}
-			result, err = s.deps.Store.Subscription(tx.Context(), tx, stored.ID, false)
+			result, err = s.deps.Store.Subscription(tx.Context(), tx, stored.ID, NoLock)
 			if err == nil && !who.visible(result) {
 				result, err = Subscription{}, authz.ErrNotFound
 			}
@@ -239,7 +239,7 @@ func (s *Subscriptions) Update(ctx context.Context, proof identity.Proof, id uui
 	}
 	var result Subscription
 	err = s.within(ctx, proof, true, check, func(tx platform.TransactionContext, who manager) error {
-		current, err := s.deps.Store.Subscription(tx.Context(), tx, id, true)
+		current, err := s.deps.Store.Subscription(tx.Context(), tx, id, UpdateLock)
 		if err != nil {
 			return err
 		}
@@ -284,7 +284,7 @@ func (s *Subscriptions) Delete(ctx context.Context, proof identity.Proof, id uui
 	}
 	var result commands.Result
 	err := s.within(ctx, proof, true, check, func(tx platform.TransactionContext, who manager) error {
-		current, err := s.deps.Store.Subscription(tx.Context(), tx, id, true)
+		current, err := s.deps.Store.Subscription(tx.Context(), tx, id, UpdateLock)
 		if err != nil {
 			return err
 		}

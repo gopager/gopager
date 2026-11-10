@@ -34,6 +34,19 @@ type DeliveryRecord struct {
 	ClaimExpiresAt *time.Time
 }
 
+// RowLock is the row lock a read holds until its transaction ends.
+type RowLock int
+
+const (
+	// NoLock reads the committed row without locking it.
+	NoLock RowLock = iota
+	// ShareLock keeps concurrent changes out until the reading transaction ends, so a check made
+	// on the row stays true for what the transaction records.
+	ShareLock
+	// UpdateLock reserves the row for a change in the same transaction.
+	UpdateLock
+)
+
 // SubscriptionListQuery selects Subscriptions: the personal ones of Owner (uuid.Nil: none), all
 // global ones with Global, otherwise the global ones of GlobalSubscribers.
 type SubscriptionListQuery struct {
@@ -72,8 +85,9 @@ type AttemptRecord struct {
 type Store interface {
 	// InsertSubscription stores a new Subscription with its targets.
 	InsertSubscription(ctx context.Context, tx platform.TransactionContext, subscription Subscription) error
-	// Subscription returns a Subscription or authz.ErrNotFound; lock takes a row lock for update.
-	Subscription(ctx context.Context, tx platform.TransactionContext, id uuid.UUID, lock bool) (Subscription, error)
+	// Subscription returns a Subscription or authz.ErrNotFound, holding the requested row lock
+	// until the caller's transaction ends.
+	Subscription(ctx context.Context, tx platform.TransactionContext, id uuid.UUID, lock RowLock) (Subscription, error)
 	// ListSubscriptions returns one page ordered by creation then ID, and the total.
 	ListSubscriptions(ctx context.Context, tx platform.TransactionContext, query SubscriptionListQuery) ([]Subscription, int, error)
 	// UpdateSubscription replaces the Subscription at the expected revision (else

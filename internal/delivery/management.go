@@ -238,7 +238,7 @@ func (d *Deliveries) prepareRedelivery(ctx context.Context, tx platform.Transact
 	if !now.Before(ceiling) {
 		return DeliveryRecord{}, &DependencyError{Dependency: "input-ceiling"}
 	}
-	subscription, err := d.deps.Store.Subscription(ctx, tx, original.SubscriptionID, false)
+	subscription, err := d.deps.Store.Subscription(ctx, tx, original.SubscriptionID, NoLock)
 	if errors.Is(err, authz.ErrNotFound) {
 		return DeliveryRecord{}, &DependencyError{Dependency: "subscription"}
 	}

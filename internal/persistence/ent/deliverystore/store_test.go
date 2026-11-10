@@ -272,13 +272,13 @@ func TestDeleteAccountDataRemovesTheSubscribersRows(t *testing.T) {
 		return w.store.DeleteAccountData(tx.Context(), tx, w.subscriber)
 	})
 	w.within(func(tx platform.TransactionContext) error {
-		if _, err := w.store.Subscription(tx.Context(), tx, w.subscription.ID, false); !errors.Is(err, authz.ErrNotFound) {
+		if _, err := w.store.Subscription(tx.Context(), tx, w.subscription.ID, delivery.NoLock); !errors.Is(err, authz.ErrNotFound) {
 			return errors.Join(err, errors.New("subscription kept"))
 		}
 		if _, err := w.store.Delivery(tx.Context(), tx, mine.ID, false); !errors.Is(err, authz.ErrNotFound) {
 			return errors.Join(err, errors.New("delivery kept"))
 		}
-		_, err := w.store.Subscription(tx.Context(), tx, other.ID, false)
+		_, err := w.store.Subscription(tx.Context(), tx, other.ID, delivery.NoLock)
 		return err
 	})
 }

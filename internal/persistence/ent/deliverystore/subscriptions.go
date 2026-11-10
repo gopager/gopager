@@ -144,13 +144,16 @@ func (s *Store) InsertSubscription(ctx context.Context, tx platform.TransactionC
 }
 
 // Subscription implements delivery.Store.
-func (s *Store) Subscription(ctx context.Context, tx platform.TransactionContext, id uuid.UUID, lock bool) (delivery.Subscription, error) {
+func (s *Store) Subscription(ctx context.Context, tx platform.TransactionContext, id uuid.UUID, lock delivery.RowLock) (delivery.Subscription, error) {
 	executor, err := s.executor(tx)
 	if err != nil {
 		return delivery.Subscription{}, err
 	}
 	query := `SELECT ` + subscriptionColumns + ` FROM subscriptions s WHERE s.id = $1`
-	if lock {
+	switch lock {
+	case delivery.ShareLock:
+		query += ` FOR SHARE`
+	case delivery.UpdateLock:
 		query += ` FOR UPDATE`
 	}
 	subscription, err := scanSubscription(executor.QueryRowContext(ctx, query, id))

@@ -180,7 +180,9 @@ func (r *Runner) start(ctx context.Context, tx platform.TransactionContext, clai
 	if !now.Before(record.ExpiresAt) {
 		return end(Expired, CodeExpired)
 	}
-	subscription, err := r.deps.Store.Subscription(ctx, tx, record.SubscriptionID, false)
+	// The share lock holds until the start commits: a pause or update either waits for this start
+	// or is seen by it, so no attempt starts after a pause has been confirmed.
+	subscription, err := r.deps.Store.Subscription(ctx, tx, record.SubscriptionID, ShareLock)
 	switch {
 	case errors.Is(err, authz.ErrNotFound):
 		return end(Cancelled, CodeSubscriptionDeleted)
@@ -412,7 +414,7 @@ var errNoLongerVisible = errors.New("delivery data no longer visible to the subs
 // stillVisible re-projects the Delivery's fact for its subscriber and requires its split to be
 // visible. A removed fact or Subscription counts as not visible.
 func (r *Runner) stillVisible(ctx context.Context, tx platform.TransactionContext, now time.Time, record DeliveryRecord) error {
-	subscription, err := r.deps.Store.Subscription(ctx, tx, record.SubscriptionID, false)
+	subscription, err := r.deps.Store.Subscription(ctx, tx, record.SubscriptionID, NoLock)
 	if errors.Is(err, authz.ErrNotFound) {
 		return errNoLongerVisible
 	}
