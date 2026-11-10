@@ -275,3 +275,43 @@ func TestLayoutFallbackSkipsAnEmptyUnlabelledValue(t *testing.T) {
 		t.Fatalf("labelled empty value: %q (%v)", got, err)
 	}
 }
+
+// TestLayoutMarkdownKeepsEntityShapedTextLiteral proves that `&` is escaped, so entity references
+// in values stay literal text.
+func TestLayoutMarkdownKeepsEntityShapedTextLiteral(t *testing.T) {
+	t.Parallel()
+	got, err := renderLayout(t, "markdown", `[{"kind":"field","field":`+fa+`}]`, lfixture(t, map[string]any{"a": "AT&amp;T &#65;"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `AT\&amp;T \&\#65;`; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// TestLayoutMarkdownLinkEncodesBackslashes proves that a backslash in a link destination is
+// percent-encoded, so it cannot escape the closing parenthesis.
+func TestLayoutMarkdownLinkEncodesBackslashes(t *testing.T) {
+	t.Parallel()
+	blocks := `[{"kind":"link","label":"L","url":{"template":"https://e.com/?path=\\{0}","fields":[` + fa + `]}}]`
+	got, err := renderLayout(t, "markdown", blocks, lfixture(t, map[string]any{"a": "x"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "[L](https://e.com/?path=%5Cx)"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// TestLayoutFallbackSkipsAControlOnlyValue proves that a value that is empty once control
+// characters are removed does not end a fallback.
+func TestLayoutFallbackSkipsAControlOnlyValue(t *testing.T) {
+	t.Parallel()
+	blocks := `[{"kind":"fallback","blocks":[{"kind":"field","field":` + fa + `},{"kind":"field","field":` + fb + `}]}]`
+	fixture := lfixture(t, map[string]any{"a": "\r", "b": "alternate"})
+	for _, kind := range []string{"text", "markdown"} {
+		if got, err := renderLayout(t, kind, blocks, fixture); err != nil || got != "alternate" {
+			t.Fatalf("%s: got %q (%v)", kind, got, err)
+		}
+	}
+}

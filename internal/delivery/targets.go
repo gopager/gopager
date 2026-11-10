@@ -19,8 +19,9 @@ const (
 	InvocationVersion = 1
 )
 
-// InputField declares one typed input a target accepts. MaxBytes bounds the encoded value; zero
-// means the Delivery body bound.
+// InputField declares one typed input a target accepts: a unique name and a scalar kind (string,
+// boolean, integer, number, timestamp or bytes). MaxBytes bounds the encoded value; zero means
+// the Delivery body bound.
 type InputField struct {
 	Name     string               `json:"name"`
 	Kind     processing.ValueKind `json:"kind"`
@@ -65,8 +66,20 @@ func (d TargetDescriptor) validate(instance processing.InstanceConfiguration) er
 			return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("unknown target output kind"))
 		}
 	}
+	names := map[string]bool{}
+	for _, field := range d.Inputs {
+		if field.Name == "" || names[field.Name] || !slices.Contains(scalarInputKinds, field.Kind) || field.MaxBytes < 0 {
+			return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("invalid target input declaration"))
+		}
+		names[field.Name] = true
+	}
 	return nil
 }
+
+// scalarInputKinds are the value kinds a descriptor input may declare. A kind alone cannot
+// describe the elements or properties of a list or object, so composite inputs are not offered.
+var scalarInputKinds = []processing.ValueKind{processing.StringValue, processing.BooleanValue, processing.IntegerValue,
+	processing.NumberValue, processing.TimestampValue, processing.BytesValue}
 
 // input returns the declaration of a named input.
 func (d TargetDescriptor) input(name string) (InputField, bool) {

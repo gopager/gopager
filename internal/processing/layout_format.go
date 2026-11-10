@@ -84,11 +84,11 @@ func sanitizeLayoutText(s string) string {
 	}, s)
 }
 
-const markdownMetacharacters = "\\`*_{}[]()#+-.!|<>~="
+const markdownMetacharacters = "\\`*_{}[]()#+-.!|<>~=&"
 
 // escapeMarkdown backslash-escapes every Markdown metacharacter, including the angle
-// brackets that would otherwise start raw HTML, `~` (strikethrough, fenced code) and `=`
-// (setext headings).
+// brackets that would otherwise start raw HTML, `~` (strikethrough, fenced code), `=` (setext
+// headings) and `&` (entity references).
 func escapeMarkdown(s string) string {
 	var escaped strings.Builder
 	for _, r := range s {
@@ -100,7 +100,8 @@ func escapeMarkdown(s string) string {
 	return escaped.String()
 }
 
-var markdownURLEscaper = strings.NewReplacer(" ", "%20", "(", "%28", ")", "%29", "<", "%3C", ">", "%3E")
+// markdownURLEscaper encodes the characters that would end or escape a Markdown link destination.
+var markdownURLEscaper = strings.NewReplacer(" ", "%20", "(", "%28", ")", "%29", "<", "%3C", ">", "%3E", "\\", "%5C")
 
 func serializeLayout(kind string, items []layoutItem) ([]byte, error) {
 	if kind == LayoutJSON {

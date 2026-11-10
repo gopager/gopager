@@ -166,11 +166,13 @@ func (r *layoutRenderer) block(node layoutNode) ([]layoutItem, error) {
 	}
 }
 
-// hasContent reports whether rendered items show anything: a label, title, URL or non-empty
-// text somewhere. A present but empty, unlabelled value is no content, in every output kind.
+// hasContent reports whether rendered items show anything: a label, title, URL or text that is
+// not empty once control characters are removed, somewhere. A present but empty (or
+// control-only), unlabelled value is no content, in every output kind.
 func hasContent(items []layoutItem) bool {
 	for _, item := range items {
-		if item.label != "" || item.title != "" || item.url != "" || item.text != "" || hasContent(item.children) {
+		if sanitizeLayoutText(item.label) != "" || sanitizeLayoutText(item.title) != "" || item.url != "" ||
+			sanitizeLayoutText(item.text) != "" || hasContent(item.children) {
 			return true
 		}
 	}
