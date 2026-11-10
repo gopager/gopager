@@ -2592,10 +2592,11 @@ paths:
           Message data is sent.
         - `heartbeat`: `{}` every 15 s when nothing else was sent, with the current position as `id`.
 
-        The `id` of an event is a position `<txId>-<seq>-<issuedUnixSeconds>`; treat it as opaque.
+        The `id` of an event is a signed position `<txId>-<seq>-<issuedUnixSeconds>.<mac>`; treat it
+        as opaque.
         Frames of one change carry it on their last frame only. A position issued before the replay
         window (`--live-replay-window`, default 24 h), a malformed one or one that the server never
-        issued is answered with `resync-required` in a 200 response. A change of the caller's
+        issued (its signature does not verify) is answered with `resync-required` in a 200 response. A change of the caller's
         access revision (grants, restrictions, field permissions) is `resync-required`, as is a
         change of Units, Unit collections, Organizations or Agencies, a batch of more than 256
         events or 1 MiB, and a fact of an unknown schema version.
@@ -7617,7 +7618,7 @@ components:
               description: Absent on the last page. Opaque, signed, bound to the filters and the caller; it does not expire.
             position:
               type: string
-              description: 'Opaque `<txId>-<seq>-<issuedUnixSeconds>` cutoff of this page in the event order, for resuming live updates.'
+              description: 'Opaque signed `<txId>-<seq>-<issuedUnixSeconds>.<mac>` cutoff of this page in the event order, for resuming live updates.'
     MessageDetail:
       allOf:
       - $ref: '#/components/schemas/MessageFeedItem'

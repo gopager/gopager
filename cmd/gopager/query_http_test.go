@@ -377,8 +377,14 @@ func TestMessageDerivedClassificationOverHTTP(t *testing.T) {
 	protocol := processing.FieldRef{Namespace: "source", Path: []string{"protocol"}}
 	name := processing.FieldRef{Namespace: "source", Path: []string{"network", "name"}}
 	pocsag := processing.Value{Kind: processing.StringValue, Value: json.RawMessage(`"pocsag"`)}
+	// The installed step's instance does not exist: classification must come from the definition
+	// alone, as it would for a disabled or superseded instance whose results stay published.
 	definition, err := json.Marshal(processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "eq", Field: &protocol, Value: &pocsag},
+		Selector: processing.Predicate{Op: "eq", Field: &protocol, Value: &pocsag},
+		Steps: []processing.Step{{ID: "plugin", Kind: "installed",
+			OutputSchema: map[string]processing.FieldSchema{"tag": {Kind: processing.StringValue, Optional: true}},
+			Installed: &processing.InstalledStep{InstanceID: uuid.New(), ConfigurationRevision: 1,
+				Input: map[string]processing.Assignment{"text": {Field: &name}}}}},
 		OutputSchema: map[string]processing.FieldSchema{"network": {Kind: processing.StringValue}},
 		Outputs:      map[string]processing.Assignment{"network": {Field: &name}}})
 	if err != nil {

@@ -255,7 +255,7 @@ func (s *Service) Feed(ctx context.Context, proof identity.Proof, request FeedRe
 			return err
 		}
 		page = FeedPage{Items: make([]FeedItem, 0, len(result.Items)),
-			Position: Position{TxID: result.TxID, Seq: result.Seq, Issued: now}.String()}
+			Position: Position{TxID: result.TxID, Seq: result.Seq, Issued: now}.Sign(key)}
 		for _, record := range result.Items {
 			page.Items = append(page.Items, current.viewer.feedItem(record, false))
 		}

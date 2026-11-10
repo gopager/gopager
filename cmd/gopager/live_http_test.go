@@ -437,9 +437,14 @@ func TestLiveStreamBoundsAndResync(t *testing.T) {
 	query := "?from=" + rfc(base.Add(-time.Hour))
 	bearer, _ := f.caller([]string{"message.read"}, authz.Scope{Kind: "all"}, []string{"payload", "unit"})
 	page := f.feed(bearer, query, http.StatusOK)
+	pagePosition, err := readmodel.ParseSignedPosition(f.tokenKey(), page.Data.Position)
+	if err != nil {
+		t.Fatal(err)
+	}
 	positionPart := func(issued time.Time) string {
-		parts := strings.Split(page.Data.Position, "-")
-		return parts[0] + "-" + parts[1] + "-" + strconv.FormatInt(issued.Unix(), 10)
+		moved := pagePosition
+		moved.Issued = issued
+		return url.QueryEscape(moved.Sign(f.tokenKey()))
 	}
 	fresh := func() string { return f.feed(bearer, query, http.StatusOK).Data.Position }
 	requireResync := func(t *testing.T, stream *sseClient) {
@@ -450,24 +455,31 @@ func TestLiveStreamBoundsAndResync(t *testing.T) {
 		stream.closed(t)
 	}
 
-	t.Run("more than 256 frames", func(t *testing.T) {
-		survivor := f.newMessage(base, "survivor", unit)
-		stream := f.openStream(bearer, query+"&position="+page.Data.Position)
-		stream.expect(t, "upsert", survivor)
-		absorbed := make([]uuid.UUID, 257)
-		for i := range absorbed {
-			absorbed[i] = uuid.New()
+	t.Run("more than 1 MiB in one batch", func(t *testing.T) {
+		large := f.newMessage(base, strings.Repeat("x", 8*1024), unit)
+		stream := f.openStream(bearer, query+"&position="+url.QueryEscape(page.Data.Position))
+		stream.expect(t, "upsert", large)
+		// 200 updates of an 8 KiB item exceed the 1 MiB batch bound before the 256-fact read
+		// limit; each fact yields at most one frame, so the byte bound is the reachable one.
+		facts := make([]events.IntakeFact, 200)
+		for i := range facts {
+			facts[i] = events.IntakeFact{ID: uuid.New(), Type: events.MessageTransmissionJoined, MessageID: large,
+				TransmissionID: uuid.New(), MessageTime: base, Revision: f.revision.Add(1), OccurredAt: microsecondNow()}
 		}
-		f.intake(events.IntakeFact{Type: events.MessageMerged, MessageID: survivor, TransmissionID: uuid.New(), MessageTime: base,
-			Absorbed: absorbed})
+		f.appendIntake(facts...)
 		requireResync(t, stream)
 	})
 	t.Run("a position older than the replay window", func(t *testing.T) {
 		requireResync(t, f.openStream(bearer, query+"&position="+positionPart(time.Now().Add(-25*time.Hour))))
 	})
-	t.Run("malformed and future positions", func(t *testing.T) {
+	t.Run("malformed, forged and future positions", func(t *testing.T) {
 		requireResync(t, f.openStream(bearer, query+"&position=garbage"))
-		requireResync(t, f.openStream(bearer, query+"&position=99999999999999-0-"+strconv.FormatInt(time.Now().Unix(), 10)))
+		future := readmodel.Position{TxID: 99999999999999, Issued: time.Now()}
+		requireResync(t, f.openStream(bearer, query+"&position="+url.QueryEscape(future.Sign(f.tokenKey()))))
+		renewed := strings.Split(page.Data.Position, ".")
+		parts := strings.Split(renewed[0], "-")
+		forged := parts[0] + "-" + parts[1] + "-" + strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10) + "." + renewed[1]
+		requireResync(t, f.openStream(bearer, query+"&position="+url.QueryEscape(forged)))
 	})
 	t.Run("a grant change", func(t *testing.T) {
 		stream := f.openStream(bearer, query+"&position="+fresh())
@@ -661,4 +673,46 @@ func TestLiveStreamMergesResynchronizeWithoutDisclosingIDs(t *testing.T) {
 		f.appendIntake(first, second)
 		expectResync(t, stream, middle, final)
 	})
+}
+
+// TestLiveStreamAgeLimitedCallerGetsNoRemoveIDs checks that a caller whose grant has a maximum
+// age is never told the ID of a Message that may have been too old for it to load: a correction
+// that moves an old Message out of its Unit resynchronizes the view instead.
+func TestLiveStreamAgeLimitedCallerGetsNoRemoveIDs(t *testing.T) {
+	t.Parallel()
+	f := newLiveFixture(t, 0)
+	a, b := f.unit("A", nil), f.unit("B", nil)
+	old := microsecondNow().Add(-48 * time.Hour)
+	reader, principal := f.caller([]string{"message.read"}, authz.Scope{Kind: "unit", References: []string{a.String()}}, []string{"payload", "unit"})
+	f.exec(`UPDATE identity_grants SET max_age_seconds = 3600 WHERE subject_id = $1`, principal)
+	message := f.message(old, "too old", a)
+	query := "?from=" + rfc(old.Add(-time.Hour))
+	page := f.feed(reader, query, http.StatusOK)
+	if len(page.Data.Items) != 0 {
+		t.Fatalf("the old Message is outside the maximum age: %v", itemIDs(page.Data.Items))
+	}
+	stream := f.openStream(reader, query+"&position="+page.Data.Position)
+	f.reassign(message, a, b, old)
+	event := stream.next(t)
+	if event.Event != "resync-required" || strings.Contains(event.Data, message.String()) {
+		t.Fatalf("event %+v, want an ID-free resync-required", event)
+	}
+	stream.closed(t)
+}
+
+// tokenKey returns the installation's token secret, with which tests sign positions they move.
+func (f *liveFixture) tokenKey() []byte {
+	f.t.Helper()
+	var key []byte
+	err := f.store.WithinTransaction(f.t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := f.store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		return executor.QueryRowContext(tx.Context(), `SELECT secret FROM query_token_keys WHERE id = 1`).Scan(&key)
+	})
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return key
 }

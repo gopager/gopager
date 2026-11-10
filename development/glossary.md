@@ -77,7 +77,7 @@ Fixed names of the architecture domains. Ownership and boundaries: [Domains and 
 | **Contribution age anchor** | Derived basis for contribution age permissions, stored as `age_anchor` on the message_units cache row. Formula/maintenance: [C-05](contracts/c-05-matching-correction.md). | Message time, job creation time |
 | **Unit appearance** | One `message_units` row read by a query: a Message with one Unit (or, Unit-less, with the Agency of its unassigned traffic); the unit of row eligibility, filter correlation and per-Unit first time. Rules: [HTTP API: Messages: query and detail](../docs/http-api.md#messages-query-and-detail). | Message contribution, Transmission target |
 | **Saved view** | Stored, named set of Message filters, personal (owner only) or global (every Message reader); opening it never widens the viewer's rights. Rules: [HTTP API: Saved views](../docs/http-api.md#saved-views). | Subscription, Message view |
-| **Live position** | Opaque resume point of a Message live stream (`(txId, seq)` in the fact log plus issue time), also returned as a feed page's cutoff. Rules: [HTTP API: Messages: live stream](../docs/http-api.md#messages-live-stream). | Consumer offset, page token |
+| **Live position** | Opaque resume point of a Message live stream (`(txId, seq)` in the fact log plus issue time, signed with the installation's token secret), also returned as a feed page's cutoff. Rules: [HTTP API: Messages: live stream](../docs/http-api.md#messages-live-stream). | Consumer offset, page token |
 
 ## Units and Assignment
 

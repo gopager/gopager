@@ -65,29 +65,69 @@ type liveView struct {
 	units    map[uuid.UUID]UnitContext
 	networks map[uuid.UUID]uuid.UUID
 	rows     authz.MessageAccess
-	// now anchors the before-basis eligibility, so the age of a row is not reevaluated.
+	// now is the batch time; a before context admitted at it is covered by some grant.
 	now time.Time
+	// key signs the positions of the frames.
+	key []byte
 }
 
-// beforeEligible reports whether any context a fact names as before the change was readable for
-// the caller. The age anchor is set to now, so a maximum age never excludes a context: the
-// client already holds the Message, and the question is only whether the caller may be told that
-// it is gone.
-func (v liveView) beforeEligible(before liveBefore) bool {
+// beforeBasis is what the contexts a fact names as before the change say about a Message the
+// caller can no longer read.
+type beforeBasis int
+
+const (
+	// basisNone: no before context was readable for the caller, so it never held the Message.
+	basisNone beforeBasis = iota
+	// basisRemove: a grant without a maximum age covers a before context, so the caller could
+	// have loaded the Message and may be told that it is gone.
+	basisRemove
+	// basisResync: only grants with a maximum age cover a before context. The fact does not say
+	// how old the Message's appearance was, so a remove could name a Message too old for the
+	// caller ever to have loaded; the view is resynchronized without naming it.
+	basisResync
+)
+
+// longAgo is an age anchor no maximum age admits, so only grants without one match it.
+var longAgo = time.Date(1, time.January, 2, 0, 0, 0, 0, time.UTC)
+
+// beforeBasis evaluates the contexts a fact names as before the change against the caller's
+// current grants: first with an anchor no age limit admits, then with an anchor every age
+// limit admits.
+func (v liveView) beforeBasis(before liveBefore) beforeBasis {
+	var targets []authz.Target
 	for _, id := range before.units {
-		context, known := v.units[id]
-		if known && v.rows.ReadEligible(authz.Target{AgencyID: context.AgencyID, UnitID: id,
-			UnitCollections: context.Collections, AgeAnchor: v.now}) {
-			return true
+		if context, known := v.units[id]; known {
+			targets = append(targets, authz.Target{AgencyID: context.AgencyID, UnitID: id, UnitCollections: context.Collections})
 		}
 	}
 	for _, id := range before.networks {
-		agency, known := v.networks[id]
-		if known && v.rows.ReadEligible(authz.Target{AgencyID: agency, WithoutUnit: true, AgeAnchor: v.now}) {
-			return true
+		if agency, known := v.networks[id]; known {
+			targets = append(targets, authz.Target{AgencyID: agency, WithoutUnit: true})
 		}
 	}
-	return false
+	basis := basisNone
+	for _, target := range targets {
+		target.AgeAnchor = longAgo
+		if v.rows.ReadEligible(target) {
+			return basisRemove
+		}
+		target.AgeAnchor = v.now
+		if v.rows.ReadEligible(target) {
+			basis = basisResync
+		}
+	}
+	return basis
+}
+
+// needsResync reports whether a fact can only be reconciled by resynchronizing the view.
+func (v liveView) needsResync(fact liveFact) bool {
+	if fact.kind != kindChange {
+		return false
+	}
+	if _, matches := v.matches[fact.messageID]; matches || v.eligible[fact.messageID] {
+		return false
+	}
+	return v.beforeBasis(fact.before) == basisResync
 }
 
 // frames renders one fact. Hidden traffic produces none.
@@ -102,7 +142,7 @@ func (v liveView) frames(fact liveFact) []LiveFrame {
 		switch {
 		case matches:
 			return []LiveFrame{upsertFrame(item)}
-		case v.eligible[fact.messageID] || v.beforeEligible(fact.before):
+		case v.eligible[fact.messageID] || v.beforeBasis(fact.before) == basisRemove:
 			return []LiveFrame{removeFrame(fact.messageID)}
 		}
 	}
@@ -122,12 +162,16 @@ func removeFrame(id uuid.UUID) LiveFrame {
 }
 
 // buildFrames renders the facts in log order and stamps each fact's last frame with its
-// position, issued at now. It reports false when the frames exceed a batch bound, in which case
-// the stream must resynchronize instead of delivering a partial view.
+// position, issued at now. It reports false when the frames exceed a batch bound or a fact can
+// only be reconciled by a resync, in which case the stream must resynchronize instead of
+// delivering a partial view.
 func (v liveView) buildFrames(facts []liveFact, now time.Time) ([]LiveFrame, bool) {
 	var out []LiveFrame
 	size := 0
 	for _, fact := range facts {
+		if v.needsResync(fact) {
+			return nil, false
+		}
 		frames := v.frames(fact)
 		if len(frames) == 0 {
 			continue
@@ -138,7 +182,7 @@ func (v liveView) buildFrames(facts []liveFact, now time.Time) ([]LiveFrame, boo
 		if len(out)+len(frames) > LiveBatchFrames || size > LiveBatchBytes {
 			return nil, false
 		}
-		frames[len(frames)-1].ID = Position{TxID: int64(fact.position.TxID), Seq: fact.position.Seq, Issued: now}.String()
+		frames[len(frames)-1].ID = Position{TxID: int64(fact.position.TxID), Seq: fact.position.Seq, Issued: now}.Sign(v.key)
 		out = append(out, frames...)
 	}
 	return out, true

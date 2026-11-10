@@ -18,7 +18,7 @@ func liveRows(clauses ...authz.AccessClause) authz.MessageAccess {
 
 func newView(rows authz.MessageAccess, now time.Time) liveView {
 	return liveView{matches: map[uuid.UUID]FeedItem{}, eligible: map[uuid.UUID]bool{}, units: map[uuid.UUID]UnitContext{},
-		networks: map[uuid.UUID]uuid.UUID{}, rows: rows, now: now}
+		networks: map[uuid.UUID]uuid.UUID{}, rows: rows, now: now, key: []byte("live-frames-test-key")}
 }
 
 func decodeFrame(t *testing.T, frame LiveFrame) map[string]any {
@@ -58,41 +58,46 @@ func TestFramesPerFactKind(t *testing.T) {
 	}
 }
 
-func TestBeforeBasisIgnoresAgeAndUsesCurrentContexts(t *testing.T) {
+func TestBeforeBasisSeparatesUnlimitedAndAgeLimitedGrants(t *testing.T) {
 	t.Parallel()
 	now := time.Now().UTC()
 	agency, unit, collection, network := uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	cutoff := now.Add(-time.Hour)
-	rows := liveRows(authz.AccessClause{Kind: "unitCollection", References: []uuid.UUID{collection}, Cutoff: &cutoff})
-	view := newView(rows, now)
+	limited := authz.AccessClause{Kind: "unitCollection", References: []uuid.UUID{collection}, Cutoff: &cutoff}
+	view := newView(liveRows(limited), now)
 	view.units[unit] = UnitContext{AgencyID: agency, Collections: []uuid.UUID{collection}}
-	if !view.beforeEligible(liveBefore{units: []uuid.UUID{unit}}) {
-		t.Error("a before Unit in a readable collection is eligible although the Message is older than the maximum age")
+	if got := view.beforeBasis(liveBefore{units: []uuid.UUID{unit}}); got != basisResync {
+		t.Errorf("a before Unit reached only by an age-limited grant needs a resync, got %v", got)
 	}
-	if view.beforeEligible(liveBefore{units: []uuid.UUID{uuid.New()}}) {
-		t.Error("an unknown Unit is not eligible")
+	if got := view.beforeBasis(liveBefore{units: []uuid.UUID{uuid.New()}}); got != basisNone {
+		t.Errorf("an unknown Unit is no basis, got %v", got)
 	}
 	view.units[unit] = UnitContext{AgencyID: agency}
-	if view.beforeEligible(liveBefore{units: []uuid.UUID{unit}}) {
-		t.Error("a Unit that left the readable collection is not eligible")
+	if got := view.beforeBasis(liveBefore{units: []uuid.UUID{unit}}); got != basisNone {
+		t.Errorf("a Unit that left the readable collection is no basis, got %v", got)
+	}
+	both := newView(liveRows(limited, authz.AccessClause{Kind: "unit", References: []uuid.UUID{unit}}), now)
+	both.units[unit] = UnitContext{AgencyID: agency, Collections: []uuid.UUID{collection}}
+	if got := both.beforeBasis(liveBefore{units: []uuid.UUID{unit}}); got != basisRemove {
+		t.Errorf("a grant without a maximum age makes the remove safe, got %v", got)
 	}
 
 	agencyRows := liveRows(authz.AccessClause{Kind: "agency", References: []uuid.UUID{agency}})
 	less := newView(agencyRows, now)
 	less.networks[network] = agency
-	if !less.beforeEligible(liveBefore{networks: []uuid.UUID{network}}) {
-		t.Error("the Unit-less context of a readable Agency's Network is eligible")
+	if got := less.beforeBasis(liveBefore{networks: []uuid.UUID{network}}); got != basisRemove {
+		t.Errorf("the Unit-less context of a readable Agency's Network is a remove basis, got %v", got)
 	}
 	less.networks[network] = uuid.New()
-	if less.beforeEligible(liveBefore{networks: []uuid.UUID{network}}) {
-		t.Error("the Unit-less context of another Agency is not eligible")
+	if got := less.beforeBasis(liveBefore{networks: []uuid.UUID{network}}); got != basisNone {
+		t.Errorf("the Unit-less context of another Agency is no basis, got %v", got)
 	}
 	noWithoutUnit := agencyRows
 	noWithoutUnit.WithoutUnit = authz.ActionAccess{}
 	denied := newView(noWithoutUnit, now)
 	denied.networks[network] = agency
-	if denied.beforeEligible(liveBefore{networks: []uuid.UUID{network}}) {
-		t.Error("a Unit-less context needs without-unit.read")
+	if got := denied.beforeBasis(liveBefore{networks: []uuid.UUID{network}}); got != basisNone {
+		t.Errorf("a Unit-less context needs without-unit.read, got %v", got)
 	}
 }
 
@@ -112,6 +117,26 @@ func TestBeforeBasisDrivesRemove(t *testing.T) {
 	}
 }
 
+func TestAgeLimitedBeforeBasisResynchronizesWithoutAnID(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	message, unit, agency := uuid.New(), uuid.New(), uuid.New()
+	cutoff := now.Add(-24 * time.Hour)
+	view := newView(liveRows(authz.AccessClause{Kind: "unit", References: []uuid.UUID{unit}, Cutoff: &cutoff}), now)
+	view.units[unit] = UnitContext{AgencyID: agency}
+	fact := liveFact{kind: kindChange, messageID: message, before: liveBefore{units: []uuid.UUID{unit}}}
+	if frames := view.frames(fact); frames != nil {
+		t.Errorf("an age-limited caller gets no remove naming the Message: %v", frames)
+	}
+	if frames, ok := view.buildFrames([]liveFact{fact}, now); ok || frames != nil {
+		t.Errorf("the batch resynchronizes instead: %v %v", frames, ok)
+	}
+	view.eligible[message] = true
+	if frames, ok := view.buildFrames([]liveFact{fact}, now); !ok || len(frames) != 1 || frames[0].Event != FrameRemove {
+		t.Errorf("a Message the caller still reads but that no longer matches is removed: %v %v", frames, ok)
+	}
+}
+
 func TestBuildFramesStampsLastFrameOfEachFact(t *testing.T) {
 	t.Parallel()
 	now := time.Unix(1_800_000_000, 0).UTC()
@@ -128,8 +153,10 @@ func TestBuildFramesStampsLastFrameOfEachFact(t *testing.T) {
 	if !ok || len(frames) != 2 {
 		t.Fatalf("frames %v ok %v", frames, ok)
 	}
-	if frames[0].ID != "6-10-1800000000" || frames[1].ID != "6-11-1800000000" {
-		t.Errorf("IDs %q %q", frames[0].ID, frames[1].ID)
+	for i, want := range []Position{{TxID: 6, Seq: 10, Issued: now}, {TxID: 6, Seq: 11, Issued: now}} {
+		if got, err := ParseSignedPosition(view.key, frames[i].ID); err != nil || got != want {
+			t.Errorf("frame %d ID %q = %+v, %v; want %+v", i, frames[i].ID, got, err, want)
+		}
 	}
 }
 

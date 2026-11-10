@@ -72,8 +72,10 @@ type LiveBatch struct {
 type LiveSession struct {
 	live    *Live
 	filters Filters
+	// start is the client's start position until the first batch verifies its signature.
+	start string
 	// position is the last fact the session has processed; invalid marks a start position that
-	// could not be parsed.
+	// is malformed or not signed by this installation.
 	position Position
 	invalid  bool
 	// revision is the access revision of the first batch; zero until then.
@@ -81,8 +83,8 @@ type LiveSession struct {
 }
 
 // Open starts a session over the client's loaded range and start position. The filters need a
-// From; a malformed position is not an error here but ends the stream with a resync on the first
-// batch, after the caller was authenticated. Failures are authz.ErrInvalidInput.
+// From; a malformed or unsigned position is not an error here but ends the stream with a resync on
+// the first batch, after the caller was authenticated. Failures are authz.ErrInvalidInput.
 func (l *Live) Open(filters Filters, position string) (*LiveSession, error) {
 	if filters.From == nil || position == "" {
 		return nil, authz.ErrInvalidInput
@@ -91,11 +93,7 @@ func (l *Live) Open(filters Filters, position string) (*LiveSession, error) {
 	if err != nil {
 		return nil, err
 	}
-	session := &LiveSession{live: l, filters: filters}
-	if session.position, err = ParsePosition(position); err != nil {
-		session.invalid = true
-	}
-	return session, nil
+	return &LiveSession{live: l, filters: filters, start: position}, nil
 }
 
 // Batch runs one batch for the caller in a single transaction: it resolves the caller's
@@ -108,12 +106,22 @@ func (s *LiveSession) Batch(ctx context.Context, proof identity.Proof) (LiveBatc
 	if err := service.warmClassifications(ctx); err != nil {
 		return LiveBatch{}, err
 	}
+	key, err := service.key(ctx)
+	if err != nil {
+		return LiveBatch{}, err
+	}
+	if s.start != "" {
+		if s.position, err = ParseSignedPosition(key, s.start); err != nil {
+			s.invalid = true
+		}
+		s.start = ""
+	}
 	var batch LiveBatch
 	var next Position
 	var revision int64
-	err := service.run(ctx, proof, func(tx platform.TransactionContext, current access, now time.Time) error {
+	err = service.run(ctx, proof, func(tx platform.TransactionContext, current access, now time.Time) error {
 		var err error
-		batch, next, err = s.evaluate(ctx, tx, current, now)
+		batch, next, err = s.evaluate(ctx, tx, current, now, key)
 		revision = current.revision
 		return err
 	})
@@ -129,7 +137,7 @@ func (s *LiveSession) Batch(ctx context.Context, proof identity.Proof) (LiveBatc
 
 // evaluate is the body of one batch. It returns the batch and the position to continue from.
 func (s *LiveSession) evaluate(ctx context.Context, tx platform.TransactionContext, current access,
-	now time.Time) (LiveBatch, Position, error) {
+	now time.Time, key []byte) (LiveBatch, Position, error) {
 	l := s.live
 	resync := LiveBatch{Resync: true, Frames: []LiveFrame{ResyncFrame()}}
 	if err := current.requireGroups(s.filters.RequiredFieldGroups()); err != nil {
@@ -169,11 +177,12 @@ func (s *LiveSession) evaluate(ctx context.Context, tx platform.TransactionConte
 	if merged {
 		return resync, s.position, nil
 	}
-	batch := LiveBatch{Position: next.String(), More: len(records) == LiveBatchFacts}
+	batch := LiveBatch{Position: next.Sign(key), More: len(records) == LiveBatchFacts}
 	view, err := s.view(ctx, tx, current, now, facts)
 	if err != nil {
 		return LiveBatch{}, Position{}, err
 	}
+	view.key = key
 	frames, ok := view.buildFrames(facts, now)
 	if !ok {
 		return resync, s.position, nil

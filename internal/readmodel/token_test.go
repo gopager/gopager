@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/base64"
 	"errors"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -58,19 +60,27 @@ func TestPageTokenRejections(t *testing.T) {
 	}
 }
 
-func TestPositionRoundTripAndMalformed(t *testing.T) {
+func TestSignedPositionRoundTripTamperAndMalformed(t *testing.T) {
 	t.Parallel()
+	key, other := []byte("0123456789abcdef0123456789abcdef"), []byte("fedcba9876543210fedcba9876543210")
 	position := Position{TxID: 812, Seq: 3401, Issued: time.Unix(1_800_000_000, 0)}
-	if position.String() != "812-3401-1800000000" {
-		t.Fatalf("String = %q", position.String())
+	signed := position.Sign(key)
+	if !strings.HasPrefix(signed, "812-3401-1800000000.") {
+		t.Fatalf("Sign = %q", signed)
 	}
-	parsed, err := ParsePosition(position.String())
+	parsed, err := ParseSignedPosition(key, signed)
 	if err != nil || parsed.TxID != 812 || parsed.Seq != 3401 || parsed.Issued.Unix() != 1_800_000_000 {
 		t.Fatalf("parsed %+v, %v", parsed, err)
 	}
-	for _, text := range []string{"", "1-2", "1-2-3-4", "a-2-3", "1--3", "-1-2-3", "01-2-3", "1-2-3 "} {
-		if _, err := ParsePosition(text); !errors.Is(err, authz.ErrInvalidInput) {
-			t.Errorf("%q: %v", text, err)
+	_, mac, _ := strings.Cut(signed, ".")
+	renewed := "812-3401-" + strconv.FormatInt(time.Now().Unix(), 10) + "." + mac
+	for name, text := range map[string]string{
+		"renewed issue time": renewed, "moved coordinates": "1-3401-1800000000." + mac,
+		"other installation": position.Sign(other), "unsigned": "812-3401-1800000000", "empty": "",
+		"bad signature encoding": "812-3401-1800000000.!!", "malformed body": Position{}.Sign(key)[1:],
+	} {
+		if _, err := ParseSignedPosition(key, text); !errors.Is(err, authz.ErrInvalidInput) {
+			t.Errorf("%s %q: %v", name, text, err)
 		}
 	}
 }

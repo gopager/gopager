@@ -96,15 +96,41 @@ type Position struct {
 	Issued time.Time
 }
 
-// String renders the opaque form `<txId>-<seq>-<issuedUnixSeconds>`.
-func (p Position) String() string {
+// positionDomain separates position signatures from page tokens signed with the same secret.
+const positionDomain = "live-position\x00"
+
+// Sign renders the opaque form `<txId>-<seq>-<issuedUnixSeconds>.<mac>`. The mac is the
+// base64url HMAC-SHA256 of the part before the dot under the installation's token secret, so a
+// client can neither move the coordinates nor renew the issue time that bounds the replay window.
+func (p Position) Sign(key []byte) string {
+	body := p.body()
+	return body + "." + base64.RawURLEncoding.EncodeToString(positionMAC(key, body))
+}
+
+// body renders the signed part of a position.
+func (p Position) body() string {
 	return strconv.FormatInt(p.TxID, 10) + "-" + strconv.FormatInt(p.Seq, 10) + "-" + strconv.FormatInt(p.Issued.Unix(), 10)
 }
 
-// ParsePosition reads the form produced by Position.String; anything else is
-// authz.ErrInvalidInput.
-func ParsePosition(text string) (Position, error) {
-	parts := strings.Split(text, "-")
+func positionMAC(key []byte, body string) []byte {
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(positionDomain))
+	mac.Write([]byte(body))
+	return mac.Sum(nil)
+}
+
+// ParseSignedPosition reads a position produced by Sign with the same key. A malformed,
+// unsigned or tampered position is authz.ErrInvalidInput.
+func ParseSignedPosition(key []byte, text string) (Position, error) {
+	body, signature, found := strings.Cut(text, ".")
+	if !found {
+		return Position{}, authz.ErrInvalidInput
+	}
+	got, err := base64.RawURLEncoding.DecodeString(signature)
+	if err != nil || !hmac.Equal(got, positionMAC(key, body)) {
+		return Position{}, authz.ErrInvalidInput
+	}
+	parts := strings.Split(body, "-")
 	if len(parts) != 3 {
 		return Position{}, authz.ErrInvalidInput
 	}

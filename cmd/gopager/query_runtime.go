@@ -15,22 +15,18 @@ import (
 	"github.com/gopager/gopager/internal/readmodel"
 )
 
-// workflowPreparer compiles a stored definition so its source references can be read.
-type workflowPreparer interface {
-	PrepareWorkflow(context.Context, processing.Definition) (*processing.WorkflowProgram, error)
-	ClosePreparedWorkflow(context.Context, *processing.WorkflowProgram) error
-}
-
 // workflowClassification answers readmodel.Classification from the stored Workflow definition
-// versions: `derived` plus the field groups of every source field the version reads.
+// versions: `derived` plus the field groups of every source field the version reads. It reads
+// the immutable definition and the source declarations only, so the classification does not
+// change when a plugin instance used by the version is disabled, updated or removed.
 type workflowClassification struct {
-	store    *postgres.Store
-	reads    *readstore.Store
-	preparer workflowPreparer
+	store        *postgres.Store
+	reads        *readstore.Store
+	declarations processing.SourceDeclarationOwner
 }
 
-// ClassificationGroups loads the immutable version in its own short transaction and compiles it
-// outside any transaction, as Workflow preparation expects.
+// ClassificationGroups loads the immutable version in its own short transaction and collects its
+// source references outside any transaction.
 func (c workflowClassification) ClassificationGroups(ctx context.Context, version uuid.UUID) ([]string, error) {
 	var stored []byte
 	err := c.store.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
@@ -45,30 +41,26 @@ func (c workflowClassification) ClassificationGroups(ctx context.Context, versio
 	if err := processing.Decode(stored, &definition); err != nil {
 		return nil, err
 	}
-	program, err := c.preparer.PrepareWorkflow(ctx, definition)
+	declarations, err := c.declarations.ProcessingDeclarations(ctx)
+	if err != nil {
+		return nil, err
+	}
+	references, err := processing.DefinitionSourceReferences(ctx, definition, declarations, processing.CoreRegex{})
 	if err != nil {
 		return nil, err
 	}
 	groups := []string{"derived"}
-	for _, reference := range program.SourceReferences() {
+	for _, reference := range references {
 		groups = append(groups, reference.Groups...)
-	}
-	if err := c.preparer.ClosePreparedWorkflow(ctx, program); err != nil {
-		return nil, err
 	}
 	slices.Sort(groups)
 	return slices.Compact(groups), nil
 }
 
-// defaultClassification compiles definitions without installed plugin artifacts. Definitions
-// that need one stay unclassified, which hides their results, until the Processing runtime
-// supplies its own preparer.
+// defaultClassification classifies with the trusted source declarations of the Processing owner.
 func defaultClassification(c *core) (readmodel.Classification, error) {
-	preparer, err := processing.NewWorkflowDefinitionPreparer(processing.NewSyntheticDeclarationOwner(), processing.CoreRegex{}, nil)
-	if err != nil {
-		return nil, err
-	}
-	return workflowClassification{store: c.store, reads: c.reads, preparer: preparer}, nil
+	return workflowClassification{store: c.store, reads: c.reads,
+		declarations: processing.NewSyntheticDeclarationOwner()}, nil
 }
 
 // readSide is the composed Message read service with its search admission.
@@ -82,12 +74,9 @@ func composeReadSide(c *core) (*readSide, error) {
 	if c.readSide != nil {
 		return c.readSide, nil
 	}
-	classification := c.classification
-	if classification == nil {
-		var err error
-		if classification, err = defaultClassification(c); err != nil {
-			return nil, err
-		}
+	classification, err := defaultClassification(c)
+	if err != nil {
+		return nil, err
 	}
 	service, err := readmodel.NewService(c.store, c.resolver, c.store, c.reads, c.reads, classification)
 	if err != nil {

@@ -12,7 +12,6 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/readstore"
 	"github.com/gopager/gopager/internal/persistence/ent/unitstore"
 	"github.com/gopager/gopager/internal/platform/postgres"
-	"github.com/gopager/gopager/internal/readmodel"
 	"github.com/gopager/gopager/internal/units"
 )
 
@@ -37,10 +36,6 @@ type core struct {
 	// rules matches and administers address rules against the production Network owner
 	// (the intake store); the correction runner and the Processing source use it as their matcher.
 	rules *assignments.Service
-	// classification supplies the field groups of Workflow definition versions to the Message
-	// read side. The Processing runtime sets it to its own definition preparer; when nil the
-	// read side compiles definitions without installed artifacts.
-	classification readmodel.Classification
 	// searchAttempts is the per-minute search admission limit; zero selects the default.
 	searchAttempts int
 	// live carries the wake hub and replay window of the Message live stream; the stream route

@@ -582,8 +582,9 @@ depends on the filters. The response is `{"items":[…],"nextPageToken":"…","p
   last Message time and ID, the canonical filters and the caller (Principal, plus the credential
   of an access key). A token that fails the MAC, or belongs to other filters or another caller,
   is `400 INVALID_INPUT`. Tokens do not expire and a Message arriving later never shifts a page.
-- `position` is `<txId>-<seq>-<issuedUnixSeconds>`, the cutoff of the page in the domain-event
-  order, taken in the page statement's own snapshot. Treat it as opaque.
+- `position` is `<txId>-<seq>-<issuedUnixSeconds>.<mac>`, the cutoff of the page in the
+  domain-event order, taken in the page statement's own snapshot and signed with the installation's
+  token secret. Treat it as opaque.
 
 Feed item: `messageId`, `messageTime`, `processingStatus` (`pending` if any supporting readable
 Transmission is pending, else `failed`, else `completed`, else `none`), `correctionStatus`
@@ -593,7 +594,9 @@ readable supporting Transmission that is not `incomplete`, then the earliest acc
 lowest ID. `derived` lists, per Workflow, the latest published result among the supporting
 readable Transmissions (`workflowId`, `resultId`, `fields` with each output's `state` and `value`;
 `targetResults` only for visible targets). A result appears only if the caller reads `derived` and
-every field group the Workflow definition version reads; an unavailable classification hides it.
+every field group the Workflow definition version reads. That classification comes from the
+immutable definition and the source declarations only, so a result stays visible when a plugin
+instance it used is later disabled, updated or removed; an unreadable definition hides it.
 
 **Detail (`GET /messages/{id}`).** A Message that is absent, merged away or without a
 detail-eligible appearance is `404 NOT_FOUND`. The feed item is extended by `firstObservedAt` on
@@ -640,7 +643,10 @@ The response is `200` `text/event-stream; charset=utf-8` with `Cache-Control: no
 | `error` | `{"code"}` | The caller's authority ended (`LOGIN_REQUIRED`, or the public code of another failure); the server closes the stream |
 | `heartbeat` | `{}` | Sent every 15 s when nothing else was; its `id` is the current position |
 
-**Positions.** An event `id` is a position `<txId>-<seq>-<issuedUnixSeconds>`, opaque to clients.
+**Positions.** An event `id` is a position `<txId>-<seq>-<issuedUnixSeconds>.<mac>`, opaque to
+clients. The MAC (HMAC-SHA256 with the installation's token secret, the one that signs page
+tokens) covers the coordinates and the issue time, so a client cannot move a position or renew
+it past the replay window; a position that fails it is answered like a malformed one.
 The feed page's position is the cutoff in its own snapshot, so every change a page could not see
 lies after it: opening the stream from the page position loses nothing in between. The events of
 one change carry the `id` on their last event only; reconnecting with `Last-Event-ID` resumes after
@@ -658,8 +664,10 @@ previous Message time meets the loaded range.
   `upsert` when the Message matches. Otherwise they produce a `remove` when the Message is still
   readable for the caller, or when a context the change names as "before" was readable: a former
   target's Unit, the Unit-less context of the Network the Transmission came from, or the Unit or
-  Network Agency of the suppressed target (the Message age is not re-evaluated). Traffic the
-  caller never could read produces nothing.
+  Network Agency of the suppressed target. Such a "before" `remove` is sent only when a grant
+  without a maximum age covers that context; if only grants with a maximum age cover it, the change
+  does not prove that the Message was young enough for the caller to load, and the stream sends
+  `resync-required` instead of naming it. Traffic the caller never could read produces nothing.
 - A merge produces `resync-required` when its final survivor (the Message that now holds the
   merge's joining Transmission, also after later merges) is readable for the caller, and nothing
   otherwise. It never produces `remove` events for the absorbed Messages: the fact does not say

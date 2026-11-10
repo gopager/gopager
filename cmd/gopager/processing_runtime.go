@@ -79,7 +79,6 @@ func composeProcessingAPIRuntime(ctx context.Context, c *core, artifactRoot stri
 	if err != nil {
 		return nil, err
 	}
-	c.classification = workflowClassification{store: store, reads: c.reads, preparer: preparer}
 	workflows, err := processingmanagement.New(store, c.resolver, store, c.processing,
 		processingScopeContext{networks: syntheticAssignmentNetworkOwner{owner: networks}, units: c.units},
 		preparer, c.receipts, c.facts)
