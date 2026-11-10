@@ -174,7 +174,7 @@ func (s *Subscriptions) Read(ctx context.Context, proof identity.Proof, id uuid.
 
 // Create stores a Subscription with actor-bound command idempotency and takes one unit of the
 // subscriber's sending admission (*identity.RateLimited when exhausted). An identical replay
-// returns the Subscription as it is now.
+// returns the Subscription as it is now, or authz.ErrNotFound when the caller may no longer see it.
 func (s *Subscriptions) Create(ctx context.Context, proof identity.Proof, command uuid.UUID, input SubscriptionInput,
 	check func(identity.Authentication) error) (Subscription, error) {
 	if command == uuid.Nil {
@@ -200,6 +200,9 @@ func (s *Subscriptions) Create(ctx context.Context, proof identity.Proof, comman
 				return err
 			}
 			result, err = s.deps.Store.Subscription(tx.Context(), tx, stored.ID, false)
+			if err == nil && !who.visible(result) {
+				result, err = Subscription{}, authz.ErrNotFound
+			}
 			return err
 		}
 		subscription := Subscription{ID: uuid.New(), Revision: 1, CreatedAt: who.now, UpdatedAt: who.now, CreatedBy: who.principal}

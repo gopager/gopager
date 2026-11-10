@@ -192,14 +192,15 @@ type eventView struct {
 
 // eventData holds the data fields Delivery reads from the deliverable fact types.
 type eventData struct {
-	MessageID   uuid.UUID  `json:"messageId"`
-	ResultID    uuid.UUID  `json:"resultId"`
-	GatewayID   uuid.UUID  `json:"gatewayId"`
-	OldState    string     `json:"oldState"`
-	NewState    string     `json:"newState"`
-	ContactTime *time.Time `json:"contactTime"`
-	LateJoin    *bool      `json:"lateJoin"`
-	Reason      string     `json:"reason"`
+	MessageID      uuid.UUID  `json:"messageId"`
+	TransmissionID uuid.UUID  `json:"transmissionId"`
+	ResultID       uuid.UUID  `json:"resultId"`
+	GatewayID      uuid.UUID  `json:"gatewayId"`
+	OldState       string     `json:"oldState"`
+	NewState       string     `json:"newState"`
+	ContactTime    *time.Time `json:"contactTime"`
+	LateJoin       *bool      `json:"lateJoin"`
+	Reason         string     `json:"reason"`
 }
 
 // parseEvent decodes the envelope fields Delivery needs from a stored record.

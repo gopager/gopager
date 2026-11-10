@@ -207,6 +207,23 @@ func (s *Store) DomainEvent(ctx context.Context, tx platform.TransactionContext,
 	return envelope, nil
 }
 
+// CurrentMessage implements delivery.Store.
+func (s *Store) CurrentMessage(ctx context.Context, tx platform.TransactionContext, message, transmission uuid.UUID) (uuid.UUID, error) {
+	executor, err := s.executor(tx)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	var current uuid.NullUUID
+	if err := executor.QueryRowContext(ctx, `SELECT coalesce((SELECT id FROM messages WHERE id = $1),
+		(SELECT message_id FROM transmissions WHERE id = $2))`, message, transmission).Scan(&current); err != nil {
+		return uuid.Nil, err
+	}
+	if !current.Valid {
+		return uuid.Nil, authz.ErrNotFound
+	}
+	return current.UUID, nil
+}
+
 // MessageExists implements delivery.Store.
 func (s *Store) MessageExists(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (bool, error) {
 	executor, err := s.executor(tx)
@@ -218,8 +235,16 @@ func (s *Store) MessageExists(ctx context.Context, tx platform.TransactionContex
 	return exists, err
 }
 
-// TakeSendAttempt implements delivery.Store. The upsert increments only below the limit, and older
-// windows of the bucket are deleted in the same transaction.
+// expiredSweepLimit bounds how many expired windows of other buckets one admitted send deletes.
+// Each admitted send adds at most one row per bucket, so the sweep keeps the table proportional
+// to the current minute's subscribers and instances.
+const expiredSweepLimit = 100
+
+// TakeSendAttempt implements delivery.Store. The upsert increments only below the limit. In the
+// same transaction an admitted send deletes the older windows of its own bucket and up to
+// expiredSweepLimit expired windows of any bucket, so buckets that never return (deleted
+// subscribers, removed instances) do not stay behind; rows locked by a concurrent sweep are
+// skipped.
 func (s *Store) TakeSendAttempt(ctx context.Context, tx platform.TransactionContext, bucket [32]byte, window time.Time,
 	limit int) (bool, error) {
 	executor, err := s.executor(tx)
@@ -240,9 +265,16 @@ func (s *Store) TakeSendAttempt(ctx context.Context, tx platform.TransactionCont
 	if !taken {
 		return false, nil
 	}
-	_, err = executor.ExecContext(ctx, `DELETE FROM delivery_admissions WHERE bucket = $1 AND window_start < $2`,
-		bucket[:], window.UTC())
-	return true, err
+	if _, err := executor.ExecContext(ctx, `DELETE FROM delivery_admissions WHERE bucket = $1 AND window_start < $2`,
+		bucket[:], window.UTC()); err != nil {
+		return false, err
+	}
+	if _, err := executor.ExecContext(ctx, `DELETE FROM delivery_admissions WHERE (bucket, window_start) IN (
+		SELECT bucket, window_start FROM delivery_admissions WHERE window_start < $1
+		ORDER BY window_start LIMIT $2 FOR UPDATE SKIP LOCKED)`, window.UTC(), expiredSweepLimit); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // ReleaseSendAttempt implements delivery.Store.
@@ -261,8 +293,8 @@ func (s *Store) ReleaseSendAttempt(ctx context.Context, tx platform.TransactionC
 }
 
 // DeleteAccountData implements delivery.Store: the account's Subscriptions and the Deliveries
-// and attempts it is the subscriber of. Admission windows are keyed by a hash and expire within
-// a minute.
+// and attempts it is the subscriber of. Admission windows are keyed by a hash and are swept by
+// later admitted sends once their minute has passed.
 func (s *Store) DeleteAccountData(ctx context.Context, tx platform.TransactionContext, account uuid.UUID) error {
 	executor, err := s.executor(tx)
 	if err != nil {

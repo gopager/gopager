@@ -131,15 +131,6 @@ func run() (result error) {
 			return errors.Join(err, store.Close())
 		}
 		shared.deliveryConfig = config.Delivery
-		// Processing sets the Workflow classification that the read side, and through it the
-		// Delivery fan-out, must use, so it is composed before the event consumers.
-		processingRuntime, err = composeProcessingAPIRuntime(ctx, shared, config.ProcessingArtifactRoot)
-		if err != nil {
-			return errors.Join(err, store.Close())
-		}
-		defer func() {
-			result = errors.Join(result, processingRuntime.Close(context.Background()))
-		}()
 		eventRuntime, err = composeEventsRuntime(shared, slices.Contains(config.Roles, platform.RoleWorker), config.EventPollInterval)
 		if err != nil {
 			return errors.Join(err, store.Close())
@@ -149,6 +140,13 @@ func run() (result error) {
 		stopEventHub := eventRuntime.startStandaloneHub(ctx)
 		defer func() {
 			result = errors.Join(result, stopEventHub())
+		}()
+		processingRuntime, err = composeProcessingAPIRuntime(ctx, shared, config.ProcessingArtifactRoot)
+		if err != nil {
+			return errors.Join(err, store.Close())
+		}
+		defer func() {
+			result = errors.Join(result, processingRuntime.Close(context.Background()))
 		}()
 	}
 	if slices.Contains(config.Roles, platform.RoleWorker) {
