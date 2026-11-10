@@ -12,7 +12,7 @@ Add a decision to the ADR file of its topic with status, date, supersession, the
 | [02-intake-and-grouping.md](02-intake-and-grouping.md) | Intake and Grouping | 34 (D-17..D-139) |
 | [03-assignment-and-correction.md](03-assignment-and-correction.md) | Assignment and correction | 10 (D-08..D-145) |
 | [04-processing-and-plugins.md](04-processing-and-plugins.md) | Processing and plugins | 33 (D-05..D-147) |
-| [05-events-and-delivery.md](05-events-and-delivery.md) | Events and Delivery | 12 (D-06..D-144) |
+| [05-events-and-delivery.md](05-events-and-delivery.md) | Events and Delivery | 13 (D-06..D-148) |
 | [06-identity-and-authorization.md](06-identity-and-authorization.md) | Identity and authorization | 17 (D-07..D-146) |
 | [07-query-and-live.md](07-query-and-live.md) | Query and live | 3 (D-16..D-28) |
 | [08-operations-and-http.md](08-operations-and-http.md) | Operations and HTTP | 3 (D-52..D-133) |
@@ -170,3 +170,4 @@ Add a decision to the ADR file of its topic with status, date, supersession, the
 | D-145 | Encrypted marker on Address rules | accepted | 2026-11-08 | [03-assignment-and-correction](03-assignment-and-correction.md#d-145) |
 | D-146 | Shared client source and retry delay for search admission | accepted | 2026-11-09 | [06-identity-and-authorization](06-identity-and-authorization.md#d-146) |
 | D-147 | Workflow classification without installed-step preparation | accepted | 2026-11-10 | [04-processing-and-plugins](04-processing-and-plugins.md#d-147) |
+| D-148 | Per-instance use of Delivery targets belongs to AP-12 | accepted | 2026-11-10 | [05-events-and-delivery](05-events-and-delivery.md#d-148) |
