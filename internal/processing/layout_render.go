@@ -26,12 +26,14 @@ type layoutItem struct {
 	children []layoutItem
 }
 
-func (i layoutItem) size() int {
-	size := len(i.text) + len(i.label) + len(i.title) + len(i.url)
-	if i.value != nil {
-		size += len(i.value.Value)
+// size estimates the item's share of the output: JSON output carries a field's typed value, text
+// and Markdown its formatted text, never both. The serializer checks the exact length.
+func (i layoutItem) size(json bool) int {
+	size := len(i.label) + len(i.title) + len(i.url)
+	if json && i.value != nil {
+		return size + len(i.value.Value)
 	}
-	return size
+	return size + len(i.text)
 }
 
 // Render evaluates the layout against reader and returns the body for the program's output
@@ -41,7 +43,7 @@ func (p *LayoutProgram) Render(ctx context.Context, reader FieldReader) (Rendere
 	if p == nil || ctx == nil || reader == nil {
 		return RenderedLayout{}, invalid(errors.New("missing layout program/reader/context"))
 	}
-	r := &layoutRenderer{ctx: ctx, reader: reader, cache: make(map[string]*Value)}
+	r := &layoutRenderer{ctx: ctx, reader: reader, cache: make(map[string]*Value), json: p.outputKind == LayoutJSON}
 	items, err := r.blocks(p.nodes)
 	if err != nil {
 		return RenderedLayout{}, err
@@ -58,11 +60,13 @@ type layoutRenderer struct {
 	reader FieldReader
 	cache  map[string]*Value
 	size   int
+	// json selects the JSON representation for the size estimate.
+	json bool
 }
 
 func (r *layoutRenderer) charge(items []layoutItem) error {
 	for _, item := range items {
-		r.size += item.size()
+		r.size += item.size(r.json)
 	}
 	if r.size > MaxLayoutOutputBytes {
 		return resource(errors.New("layout output boundary"))
@@ -190,7 +194,7 @@ func (r *layoutRenderer) link(node layoutNode) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		target.WriteString(url.PathEscape(formatted))
+		target.WriteString(escapeURLValue(formatted))
 		if target.Len() > MaxLayoutOutputBytes {
 			return "", resource(errors.New("layout output boundary"))
 		}
@@ -209,4 +213,25 @@ func (r *layoutRenderer) link(node layoutNode) (string, error) {
 		return "", nil
 	}
 	return parsed.String(), nil
+}
+
+// escapeURLValue percent-encodes a field value for any position of a link template: everything
+// except the RFC 3986 unreserved characters and "@" is encoded, so a value can never add a path
+// segment, query parameter (&, =), plus-as-space or fragment of its own. "@" stays literal for
+// readable mailto addresses.
+func escapeURLValue(value string) string {
+	const hex = "0123456789ABCDEF"
+	var escaped strings.Builder
+	for i := 0; i < len(value); i++ {
+		c := value[i]
+		if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' ||
+			c == '-' || c == '.' || c == '_' || c == '~' || c == '@' {
+			escaped.WriteByte(c)
+			continue
+		}
+		escaped.WriteByte('%')
+		escaped.WriteByte(hex[c>>4])
+		escaped.WriteByte(hex[c&15])
+	}
+	return escaped.String()
 }

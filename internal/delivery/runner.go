@@ -13,6 +13,7 @@ import (
 	"github.com/gopager/gopager/internal/events"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
+	"github.com/gopager/gopager/internal/readmodel"
 )
 
 // ErrLeaseLost reports a claimed write whose token is no longer current or whose lease expired.
@@ -404,7 +405,12 @@ func (r *Runner) keep(ctx context.Context, claim Claim, record DeliveryRecord) b
 		if err != nil || authority.Revision == record.AccessRevision {
 			return err
 		}
-		return r.stillVisible(tx.Context(), tx, now, record)
+		err = r.stillVisible(tx.Context(), tx, now, record)
+		if errors.Is(err, readmodel.ErrClassificationUnavailable) {
+			// Not a loss of access: the call continues and the next renewal checks again.
+			return nil
+		}
+		return err
 	})
 	return err == nil
 }

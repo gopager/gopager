@@ -283,12 +283,18 @@ func (s *Store) ReleaseSendAttempt(ctx context.Context, tx platform.TransactionC
 	if err != nil {
 		return err
 	}
-	if _, err := executor.ExecContext(ctx, `UPDATE delivery_admissions SET count = count - 1
-		WHERE bucket = $1 AND window_start = $2 AND count > 1`, bucket[:], window.UTC()); err != nil {
+	// The last unit removes the row; otherwise one unit is taken back. Deleting first keeps a
+	// decremented row from being mistaken for a last unit.
+	deleted, err := executor.ExecContext(ctx, `DELETE FROM delivery_admissions WHERE bucket = $1 AND window_start = $2
+		AND count = 1`, bucket[:], window.UTC())
+	if err != nil {
 		return err
 	}
-	_, err = executor.ExecContext(ctx, `DELETE FROM delivery_admissions WHERE bucket = $1 AND window_start = $2 AND count = 1`,
-		bucket[:], window.UTC())
+	if removed, err := deleted.RowsAffected(); err != nil || removed == 1 {
+		return err
+	}
+	_, err = executor.ExecContext(ctx, `UPDATE delivery_admissions SET count = count - 1
+		WHERE bucket = $1 AND window_start = $2 AND count > 1`, bucket[:], window.UTC())
 	return err
 }
 
