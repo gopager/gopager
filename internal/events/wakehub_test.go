@@ -109,11 +109,14 @@ func TestWakeHubFansOutAndCoalesces(t *testing.T) {
 	expectSignal(t, first)
 	expectSignal(t, second)
 
-	// Several signals while a subscriber is busy collapse into one.
+	// Several signals while a subscriber is busy collapse into one. The second subscriber
+	// acknowledges each broadcast, and releasing it takes the hub's lock, so it returns only
+	// after the last broadcast has also reached the first subscriber.
 	for range 3 {
 		source.signals <- struct{}{}
-		time.Sleep(10 * time.Millisecond)
+		expectSignal(t, second)
 	}
+	releaseSecond()
 	expectSignal(t, first)
 	expectNoSignal(t, first)
 }
