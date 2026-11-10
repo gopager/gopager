@@ -21,6 +21,8 @@ const (
 	FieldProducingFence = "producing_fence"
 	// FieldEvaluation holds the string denoting the evaluation field in the database.
 	FieldEvaluation = "evaluation"
+	// FieldFieldGroups holds the string denoting the field_groups field in the database.
+	FieldFieldGroups = "field_groups"
 	// FieldCompletedAt holds the string denoting the completed_at field in the database.
 	FieldCompletedAt = "completed_at"
 	// FieldPublishedAt holds the string denoting the published_at field in the database.
@@ -38,6 +40,7 @@ var Columns = []string{
 	FieldCandidateID,
 	FieldProducingFence,
 	FieldEvaluation,
+	FieldFieldGroups,
 	FieldCompletedAt,
 	FieldPublishedAt,
 	FieldMessageID,

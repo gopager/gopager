@@ -2,6 +2,8 @@
 
 ## Handover
 
+Changed by the 2026-11-09 follow-up below: search admission reuses `identity.ClientSource` and `RateLimited.Seconds()` ([D-146](../decisions/06-identity-and-authorization.md#d-146)).
+
 Verified prerequisite: bootstrap, login/logout/self-Session, current-authority resolution, point authorization/native filtering, restricting-key resolution, global fields and immediate invalidation. [E-02..E-13](#e-02-credential-primitives-and-api-registration) and the [field-correction evidence](#unscoped-field-correction-verification-and-handover) retain exact checks; [C-06](../../docs/http-api.md#authorization) owns executable interface/artifact bindings.
 
 AP-06/AP-07 and each later protected domain compose server-derived scope-existence/filter/projection adapters in the live primary transaction; point authorization never permits raw entity output. No Guest/admin/worker fallback for missing authority.
@@ -157,3 +159,14 @@ AP-08 T028/standalone T029, AP-12 T043 and AP-06 T022/T023 must compose their cu
 ### E-14 Resliced Execution Path Reconciliation
 
 Date: 2026-11-03. Under the user's explicit [D-96 approval](../authoritative-plan.md#work-package-reslicing-decision), E-13 and the global-field correction remain the evidence owners for their verified partial identity/AuthZ handovers. The original T025..T027 `in-progress` entries above describe their recorded state at the time and are no longer active work. Only the evidenced core handovers are consumed earlier in the revised path; remaining account, Recovery/key, scope-management, and full deletion work was assigned to historical AP-24, then AP-13, now [AP-14 under D-126](../work-packages/ap-14-identity-lifecycle.md). This navigation update does not accept or complete whole source AP-07 or change earlier evidence.
+
+## Follow-up (D-146), 2026-11-09
+
+Executed by AP-10 under [D-146](../decisions/06-identity-and-authorization.md#d-146): `identity.ClientSource` exports the login source derivation and `RateLimited.Seconds()` the `Retry-After` rounding; the login handler uses `Seconds()`. Login behavior is unchanged.
+
+### E-15 Identity and login rerun (D-146)
+
+Date: 2026-11-09. `make test-race` (Go 1.27.3, PostgreSQL 18.0-alpine via Testcontainers, darwin/arm64) on the AP-10 branch exit 0, 1002 tests, including `internal/identity` and the login tests in `internal/persistence/ent/borrowed` and `cmd/gopager`.
+
+Handover change: search admission reuses `identity.ClientSource` and `RateLimited.Seconds()` ([D-146](../decisions/06-identity-and-authorization.md#d-146)).
+

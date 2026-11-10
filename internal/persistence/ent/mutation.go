@@ -1002,6 +1002,7 @@ type AddressRuleMutation struct {
 	valid_from     *time.Time
 	valid_until    *time.Time
 	enabled        *bool
+	encrypted      *bool
 	clearedFields  map[string]struct{}
 	unit           *uuid.UUID
 	clearedunit    bool
@@ -1450,6 +1451,42 @@ func (m *AddressRuleMutation) ResetEnabled() {
 	m.enabled = nil
 }
 
+// SetEncrypted sets the "encrypted" field.
+func (m *AddressRuleMutation) SetEncrypted(b bool) {
+	m.encrypted = &b
+}
+
+// Encrypted returns the value of the "encrypted" field in the mutation.
+func (m *AddressRuleMutation) Encrypted() (r bool, exists bool) {
+	v := m.encrypted
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEncrypted returns the old "encrypted" field's value of the AddressRule entity.
+// If the AddressRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AddressRuleMutation) OldEncrypted(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEncrypted is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEncrypted requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEncrypted: %w", err)
+	}
+	return oldValue.Encrypted, nil
+}
+
+// ResetEncrypted resets all changes to the "encrypted" field.
+func (m *AddressRuleMutation) ResetEncrypted() {
+	m.encrypted = nil
+}
+
 // ClearUnit clears the "unit" edge to the Unit entity.
 func (m *AddressRuleMutation) ClearUnit() {
 	m.clearedunit = true
@@ -1538,7 +1575,7 @@ func (m *AddressRuleMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AddressRuleMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 9)
 	if m.revision != nil {
 		fields = append(fields, addressrule.FieldRevision)
 	}
@@ -1562,6 +1599,9 @@ func (m *AddressRuleMutation) Fields() []string {
 	}
 	if m.enabled != nil {
 		fields = append(fields, addressrule.FieldEnabled)
+	}
+	if m.encrypted != nil {
+		fields = append(fields, addressrule.FieldEncrypted)
 	}
 	return fields
 }
@@ -1587,6 +1627,8 @@ func (m *AddressRuleMutation) Field(name string) (ent.Value, bool) {
 		return m.ValidUntil()
 	case addressrule.FieldEnabled:
 		return m.Enabled()
+	case addressrule.FieldEncrypted:
+		return m.Encrypted()
 	}
 	return nil, false
 }
@@ -1612,6 +1654,8 @@ func (m *AddressRuleMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldValidUntil(ctx)
 	case addressrule.FieldEnabled:
 		return m.OldEnabled(ctx)
+	case addressrule.FieldEncrypted:
+		return m.OldEncrypted(ctx)
 	}
 	return nil, fmt.Errorf("unknown AddressRule field %s", name)
 }
@@ -1676,6 +1720,13 @@ func (m *AddressRuleMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetEnabled(v)
+		return nil
+	case addressrule.FieldEncrypted:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEncrypted(v)
 		return nil
 	}
 	return fmt.Errorf("unknown AddressRule field %s", name)
@@ -1779,6 +1830,9 @@ func (m *AddressRuleMutation) ResetField(name string) error {
 		return nil
 	case addressrule.FieldEnabled:
 		m.ResetEnabled()
+		return nil
+	case addressrule.FieldEncrypted:
+		m.ResetEncrypted()
 		return nil
 	}
 	return fmt.Errorf("unknown AddressRule field %s", name)
@@ -20100,6 +20154,8 @@ type ProcessingResultMutation struct {
 	producing_fence    *int64
 	addproducing_fence *int64
 	evaluation         *processing.Evaluation
+	field_groups       *[]string
+	appendfield_groups []string
 	completed_at       *time.Time
 	published_at       *time.Time
 	message_id         *uuid.UUID
@@ -20397,6 +20453,57 @@ func (m *ProcessingResultMutation) ResetEvaluation() {
 	m.evaluation = nil
 }
 
+// SetFieldGroups sets the "field_groups" field.
+func (m *ProcessingResultMutation) SetFieldGroups(s []string) {
+	m.field_groups = &s
+	m.appendfield_groups = nil
+}
+
+// FieldGroups returns the value of the "field_groups" field in the mutation.
+func (m *ProcessingResultMutation) FieldGroups() (r []string, exists bool) {
+	v := m.field_groups
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFieldGroups returns the old "field_groups" field's value of the ProcessingResult entity.
+// If the ProcessingResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessingResultMutation) OldFieldGroups(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFieldGroups is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFieldGroups requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFieldGroups: %w", err)
+	}
+	return oldValue.FieldGroups, nil
+}
+
+// AppendFieldGroups adds s to the "field_groups" field.
+func (m *ProcessingResultMutation) AppendFieldGroups(s []string) {
+	m.appendfield_groups = append(m.appendfield_groups, s...)
+}
+
+// AppendedFieldGroups returns the list of values that were appended to the "field_groups" field in this mutation.
+func (m *ProcessingResultMutation) AppendedFieldGroups() ([]string, bool) {
+	if len(m.appendfield_groups) == 0 {
+		return nil, false
+	}
+	return m.appendfield_groups, true
+}
+
+// ResetFieldGroups resets all changes to the "field_groups" field.
+func (m *ProcessingResultMutation) ResetFieldGroups() {
+	m.field_groups = nil
+	m.appendfield_groups = nil
+}
+
 // SetCompletedAt sets the "completed_at" field.
 func (m *ProcessingResultMutation) SetCompletedAt(t time.Time) {
 	m.completed_at = &t
@@ -20565,7 +20672,7 @@ func (m *ProcessingResultMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProcessingResultMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 8)
 	if m.revision != nil {
 		fields = append(fields, processingresult.FieldRevision)
 	}
@@ -20577,6 +20684,9 @@ func (m *ProcessingResultMutation) Fields() []string {
 	}
 	if m.evaluation != nil {
 		fields = append(fields, processingresult.FieldEvaluation)
+	}
+	if m.field_groups != nil {
+		fields = append(fields, processingresult.FieldFieldGroups)
 	}
 	if m.completed_at != nil {
 		fields = append(fields, processingresult.FieldCompletedAt)
@@ -20603,6 +20713,8 @@ func (m *ProcessingResultMutation) Field(name string) (ent.Value, bool) {
 		return m.ProducingFence()
 	case processingresult.FieldEvaluation:
 		return m.Evaluation()
+	case processingresult.FieldFieldGroups:
+		return m.FieldGroups()
 	case processingresult.FieldCompletedAt:
 		return m.CompletedAt()
 	case processingresult.FieldPublishedAt:
@@ -20626,6 +20738,8 @@ func (m *ProcessingResultMutation) OldField(ctx context.Context, name string) (e
 		return m.OldProducingFence(ctx)
 	case processingresult.FieldEvaluation:
 		return m.OldEvaluation(ctx)
+	case processingresult.FieldFieldGroups:
+		return m.OldFieldGroups(ctx)
 	case processingresult.FieldCompletedAt:
 		return m.OldCompletedAt(ctx)
 	case processingresult.FieldPublishedAt:
@@ -20668,6 +20782,13 @@ func (m *ProcessingResultMutation) SetField(name string, value ent.Value) error 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetEvaluation(v)
+		return nil
+	case processingresult.FieldFieldGroups:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFieldGroups(v)
 		return nil
 	case processingresult.FieldCompletedAt:
 		v, ok := value.(time.Time)
@@ -20792,6 +20913,9 @@ func (m *ProcessingResultMutation) ResetField(name string) error {
 		return nil
 	case processingresult.FieldEvaluation:
 		m.ResetEvaluation()
+		return nil
+	case processingresult.FieldFieldGroups:
+		m.ResetFieldGroups()
 		return nil
 	case processingresult.FieldCompletedAt:
 		m.ResetCompletedAt()

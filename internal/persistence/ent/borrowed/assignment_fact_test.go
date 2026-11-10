@@ -111,6 +111,7 @@ func TestAssignmentChangedIsOneFactPerTransmissionAtIntakeAndCorrection(t *testi
 	if len(created) != 1 || created[0]["reason"] != "created" {
 		t.Fatalf("intake facts = %v, want exactly one created fact", created)
 	}
+	requireFactsAtMessageTime(t, f.store, "assignment.changed", "transmissionId", receipt.TransmissionID.String(), receipt.MessageID, 1)
 	if targets, _ := created[0]["targets"].([]any); len(targets) != 2 ||
 		targets[0].(map[string]any)["position"] != float64(0) || targets[1].(map[string]any)["position"] != float64(1) ||
 		targets[0].(map[string]any)["status"] != "unassigned" {
@@ -129,6 +130,7 @@ func TestAssignmentChangedIsOneFactPerTransmissionAtIntakeAndCorrection(t *testi
 	if len(all) != 2 || all[1]["reason"] != "corrected" {
 		t.Fatalf("facts after correction = %v, want created plus one corrected fact", all)
 	}
+	requireFactsAtMessageTime(t, f.store, "assignment.changed", "transmissionId", receipt.TransmissionID.String(), receipt.MessageID, 2)
 	targets, _ := all[1]["targets"].([]any)
 	if len(targets) != 2 {
 		t.Fatalf("corrected targets = %v, want both positions", all[1]["targets"])

@@ -78,7 +78,7 @@ func seedProcessingReadCandidate(t *testing.T, store *postgres.Store, workflowID
 			secret := processing.FieldValue{State: processing.FieldPresent,
 				Value: &processing.Value{Kind: processing.StringValue, Value: json.RawMessage(`"private-evaluation-sentinel"`)}}
 			return client.ProcessingResult.Create().SetID(fixture.resultID).
-				SetCandidateID(fixture.candidateID).SetRevision(1).SetProducingFence(1).
+				SetCandidateID(fixture.candidateID).SetRevision(1).SetProducingFence(1).SetFieldGroups([]string{"derived"}).
 				SetEvaluation(processing.Evaluation{Selected: true, Fields: map[string]processing.FieldValue{"secret": secret}}).
 				SetCompletedAt(at).Exec(scope)
 		}

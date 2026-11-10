@@ -199,3 +199,34 @@ func TestSelectorJSONIsTypedAndDoesNotConvertFunctionListsToBase64(t *testing.T)
 		t.Fatal("explicit unsupported ZVEI mode disappeared during parsing")
 	}
 }
+
+func TestEncryptedLabelDoesNotChangeAssignment(t *testing.T) {
+	t.Parallel()
+	rule := numericRule(uuid.New(), 10, 20, []uint16{1})
+	labelled := rule
+	labelled.Encrypted = true
+	labelled.Revision++
+	if !rule.sameAssignment(labelled) {
+		t.Fatal("encrypted label counted as an assignment change")
+	}
+	moved := labelled
+	last := uint64(21)
+	moved.Selector.To = &last
+	if rule.sameAssignment(moved) {
+		t.Fatal("selector change not counted as an assignment change")
+	}
+	disabled := labelled
+	disabled.Enabled = false
+	if rule.sameAssignment(disabled) {
+		t.Fatal("enabled change not counted as an assignment change")
+	}
+	input := RuleInput{NetworkID: rule.NetworkID, UnitID: rule.UnitID, Protocol: rule.Protocol,
+		Selector: rule.Selector, Enabled: true, Encrypted: true}
+	if !input.Rule(rule.ID, 1).Encrypted {
+		t.Fatal("RuleInput lost the encrypted label")
+	}
+	var decoded RuleInput
+	if err := json.Unmarshal([]byte(`{"networkId":"`+rule.NetworkID.String()+`"}`), &decoded); err != nil || decoded.Encrypted {
+		t.Fatalf("absent encrypted must default to false: %v", err)
+	}
+}

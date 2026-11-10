@@ -86,6 +86,11 @@ func Enabled(v bool) predicate.AddressRule {
 	return predicate.AddressRule(sql.FieldEQ(FieldEnabled, v))
 }
 
+// Encrypted applies equality check predicate on the "encrypted" field. It's identical to EncryptedEQ.
+func Encrypted(v bool) predicate.AddressRule {
+	return predicate.AddressRule(sql.FieldEQ(FieldEncrypted, v))
+}
+
 // RevisionEQ applies the EQ predicate on the "revision" field.
 func RevisionEQ(v int64) predicate.AddressRule {
 	return predicate.AddressRule(sql.FieldEQ(FieldRevision, v))
@@ -294,6 +299,16 @@ func EnabledEQ(v bool) predicate.AddressRule {
 // EnabledNEQ applies the NEQ predicate on the "enabled" field.
 func EnabledNEQ(v bool) predicate.AddressRule {
 	return predicate.AddressRule(sql.FieldNEQ(FieldEnabled, v))
+}
+
+// EncryptedEQ applies the EQ predicate on the "encrypted" field.
+func EncryptedEQ(v bool) predicate.AddressRule {
+	return predicate.AddressRule(sql.FieldEQ(FieldEncrypted, v))
+}
+
+// EncryptedNEQ applies the NEQ predicate on the "encrypted" field.
+func EncryptedNEQ(v bool) predicate.AddressRule {
+	return predicate.AddressRule(sql.FieldNEQ(FieldEncrypted, v))
 }
 
 // HasUnit applies the HasEdge predicate on the "unit" edge.

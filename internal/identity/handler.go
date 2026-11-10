@@ -155,13 +155,7 @@ func writeIdentityError(w http.ResponseWriter, err error) {
 		code, fallback, status = "FORBIDDEN", "This action is not permitted.", http.StatusForbidden
 	case errors.As(err, &limited):
 		code, fallback, status = "RATE_LIMITED", "Try again later.", http.StatusTooManyRequests
-		seconds := int64(limited.RetryAfter / time.Second)
-		if limited.RetryAfter%time.Second != 0 {
-			seconds++
-		}
-		if seconds < 1 {
-			seconds = 1
-		}
+		seconds := limited.Seconds()
 		retryAfter, retryable = &seconds, true
 		w.Header().Set("Retry-After", strconv.FormatInt(seconds, 10))
 	case errors.As(err, &failure):

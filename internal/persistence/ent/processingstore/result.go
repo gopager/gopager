@@ -44,6 +44,11 @@ func (s *Store) CompleteCandidate(ctx context.Context, tx platform.TransactionCo
 		if !evaluation.Selected {
 			return completed, nil
 		}
+		// Classified before the round-trip below, which drops the unexported dependencies.
+		fieldGroups, err := evaluation.FieldGroups()
+		if err != nil {
+			return processing.Candidate{}, err
+		}
 		encoded, err := json.Marshal(evaluation)
 		if err != nil {
 			return processing.Candidate{}, platform.NewFailure(platform.CodeInvalidInput, err)
@@ -54,7 +59,7 @@ func (s *Store) CompleteCandidate(ctx context.Context, tx platform.TransactionCo
 		}
 		row, err := client.ProcessingResult.Create().SetID(uuid.New()).SetCandidateID(current.ID).
 			SetRevision(completed.Revision).SetProducingFence(current.FencingToken).
-			SetEvaluation(detached).SetCompletedAt(now).Save(scope)
+			SetEvaluation(detached).SetFieldGroups(fieldGroups).SetCompletedAt(now).Save(scope)
 		if err != nil {
 			return processing.Candidate{}, err
 		}

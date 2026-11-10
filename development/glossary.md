@@ -72,11 +72,12 @@ Fixed names of the architecture domains. Ownership and boundaries: [Domains and 
 | **Message merge** | Combining Messages when a Transmission links to several of them. Enduring Message IDs, aliases and old/new ID mappings are not required under D-40; C-03 owns grouping behavior. | — |
 | **Message target** | Derived Address/Function summary of Message contributions, not another stored target/Unit mapping. Network/Protocol and resolution context distinguish otherwise equal Addresses. | Transmission target, Delivery target, Unit appearance |
 | **Representative Transmission** | Original member selected to supply displayed Payload. Preference/tie-break: [C-03](contracts/c-03-message-grouping.md); readable projection: [C-07](contracts/c-07-query-live.md). | Canonical payload, Message time, permission |
-| **Message time** | Internal Message-origin timestamp. Calculation: [C-03](contracts/c-03-message-grouping.md); retention use: [C-12](contracts/c-12-persistence-operations.md). | View time, Acceptance time |
+| **Message time** | Message-origin timestamp (earliest observation of any member); the feed order and time filter (D-135). Calculation: [C-03](contracts/c-03-message-grouping.md); retention use: [C-12](contracts/c-12-persistence-operations.md). | Unit first time, Acceptance time |
 | **Contribution time** | First usable time summarized by a message_units cache row (`first_observed_at`). Maintenance algorithm: [C-05](contracts/c-05-matching-correction.md). | Rule Validity time, rule-edit time |
 | **Contribution age anchor** | Derived basis for contribution age permissions, stored as `age_anchor` on the message_units cache row. Formula/maintenance: [C-05](contracts/c-05-matching-correction.md). | Message time, job creation time |
-| **Unit appearance** | Query-derived summary for one Message and Unit. Formation/ordering: [C-07](contracts/c-07-query-live.md#planned-and-not-yet-implemented-ap-10). | Message contribution, Transmission target |
-| **View time** | Query-dependent displayed/sort time of a Message. Algorithm: [C-07](contracts/c-07-query-live.md#planned-and-not-yet-implemented-ap-10). | Stored Message time, most recent reception |
+| **Unit appearance** | One `message_units` row read by a query: a Message with one Unit (or, Unit-less, with the Agency of its unassigned traffic); the unit of row eligibility, filter correlation and per-Unit first time. Rules: [HTTP API: Messages: query and detail](../docs/http-api.md#messages-query-and-detail). | Message contribution, Transmission target |
+| **Saved view** | Stored, named set of Message filters, personal (owner only) or global (every Message reader); opening it never widens the viewer's rights. Rules: [HTTP API: Saved views](../docs/http-api.md#saved-views). | Subscription, Message view |
+| **Live position** | Opaque resume point of a Message live stream (`(txId, seq)` in the fact log plus issue time, signed with the installation's token secret), also returned as a feed page's cutoff. Rules: [HTTP API: Messages: live stream](../docs/http-api.md#messages-live-stream). | Consumer offset, page token |
 
 ## Units and Assignment
 
@@ -249,6 +250,7 @@ These rules bind every work package and every agent or person working on GoPager
 
 | Date | Old name(s) | New name | Meaning / reason | Package |
 | --- | --- | --- | --- | --- |
+| 2026-11-08 | View time | Message time | D-135 orders and filters feeds by the stored Message time; the per-query View time is retired, per-Unit first times stay in details. | AP-10 |
 | 2026-11-06 | DOM-01..DOM-08 | Intake, Grouping, Master data, Assignment, Identity, Query, Delivery, Processing | Numbered domain IDs replaced by fixed names usable in code (`producer.domain`) and permanent documentation. | Documentation |
 | 2026-10-26 | Mandatory Message aliases / enduring Message identity | Message merge without identity-continuity requirement | D-40 withdraws old-link and ID-mapping requirements; authorization-relevant identities and operation-specific deduplication are unaffected. | AP-05 |
 | 2026-10-25 | Reception, Observation (noun) | Transmission | Record that one Gateway received one Emission; same name on Gateway and server side. | AP-01 |

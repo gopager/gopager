@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/platform"
 )
 
@@ -481,6 +482,28 @@ func (e Evaluation) Dependencies() ([]Dependency, error) {
 		}
 	}
 	return UnionDependencies(dependencies)
+}
+
+// FieldGroups returns the definition-level classification of the result's outputs: the
+// `derived` group plus the groups of every source field in Dependencies, sorted and without
+// duplicates. It is stored with the result so that readers never compile the definition.
+func (e Evaluation) FieldGroups() ([]string, error) {
+	dependencies, err := e.Dependencies()
+	if err != nil {
+		return nil, err
+	}
+	groups := []string{"derived"}
+	for _, dependency := range dependencies {
+		groups = append(groups, dependency.Groups...)
+	}
+	slices.Sort(groups)
+	groups = slices.Compact(groups)
+	for _, group := range groups {
+		if !authz.ValidField(group) {
+			return nil, invalid(errors.New("invalid field group"))
+		}
+	}
+	return groups, nil
 }
 
 // MarshalJSON preserves an explicitly empty successful field map as a result container.

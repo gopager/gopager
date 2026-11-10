@@ -364,8 +364,8 @@ func TestMergeMovesPublishedResultsToSurvivor(t *testing.T) {
 			return err
 		}
 		_, err = executor.ExecContext(tx.Context(), `INSERT INTO processing_results
-			(id,candidate_id,revision,producing_fence,evaluation,completed_at,published_at,message_id)
-			VALUES($1,$2,99,1,'{"selected":true,"fields":{}}',clock_timestamp(),clock_timestamp(),$3)`,
+			(id,candidate_id,revision,producing_fence,evaluation,field_groups,completed_at,published_at,message_id)
+			VALUES($1,$2,99,1,'{"selected":true,"fields":{}}','["derived"]',clock_timestamp(),clock_timestamp(),$3)`,
 			uuid.New(), candidate, uuid.New())
 		return err
 	})

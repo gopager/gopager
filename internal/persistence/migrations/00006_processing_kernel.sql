@@ -76,6 +76,7 @@ CREATE TABLE processing_results (
         jsonb_typeof(evaluation) = 'object' AND evaluation @> '{"selected":true}'::jsonb
         AND ((evaluation ? 'fields') <> (evaluation ? 'targetResults'))
     ),
+    field_groups jsonb NOT NULL CHECK (jsonb_typeof(field_groups) = 'array' AND field_groups ? 'derived'),
     completed_at timestamptz NOT NULL,
     published_at timestamptz,
     message_id uuid,

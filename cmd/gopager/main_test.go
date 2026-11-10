@@ -30,12 +30,22 @@ func TestParseConfigBindsExplicitInputs(t *testing.T) {
 		{"configured source limit", []string{"--roles=worker", "--login-attempts-per-source=5"}, "synthetic-secret", true},
 		{"invalid source limit", []string{"--roles=worker", "--login-attempts-per-source=0"}, "synthetic-secret", false},
 		{"invalid login limit", []string{"--roles=worker", "--login-attempts-per-account=0"}, "synthetic-secret", false},
+		{"configured search limit", []string{"--roles=worker", "--search-attempts-per-minute=3"}, "synthetic-secret", true},
+		{"zero search limit", []string{"--roles=worker", "--search-attempts-per-minute=0"}, "synthetic-secret", false},
 		{"configured dispatch", []string{"--roles=worker", "--processing-concurrency=8", "--processing-poll-interval=750ms"}, "synthetic-secret", true},
 		{"zero concurrency", []string{"--roles=worker", "--processing-concurrency=0"}, "synthetic-secret", false},
 		{"negative concurrency", []string{"--roles=worker", "--processing-concurrency=-1"}, "synthetic-secret", false},
 		{"zero poll interval", []string{"--roles=worker", "--processing-poll-interval=0s"}, "synthetic-secret", false},
 		{"negative poll interval", []string{"--roles=worker", "--processing-poll-interval=-1s"}, "synthetic-secret", false},
 		{"malformed poll interval", []string{"--roles=worker", "--processing-poll-interval=soon"}, "synthetic-secret", false},
+		{"configured event poll", []string{"--roles=worker", "--event-poll-interval=750ms"}, "synthetic-secret", true},
+		{"zero event poll", []string{"--roles=worker", "--event-poll-interval=0s"}, "synthetic-secret", false},
+		{"negative event poll", []string{"--roles=worker", "--event-poll-interval=-1s"}, "synthetic-secret", false},
+		{"malformed event poll", []string{"--roles=worker", "--event-poll-interval=soon"}, "synthetic-secret", false},
+		{"configured live replay window", []string{"--roles=worker", "--live-replay-window=48h"}, "synthetic-secret", true},
+		{"zero live replay window", []string{"--roles=worker", "--live-replay-window=0s"}, "synthetic-secret", false},
+		{"negative live replay window", []string{"--roles=worker", "--live-replay-window=-1h"}, "synthetic-secret", false},
+		{"malformed live replay window", []string{"--roles=worker", "--live-replay-window=long"}, "synthetic-secret", false},
 		{"unknown role", []string{"--roles=other"}, "synthetic-secret", false},
 		{"empty role", []string{"--roles=worker,"}, "synthetic-secret", false},
 		{"duplicate role", []string{"--roles=worker,worker"}, "synthetic-secret", false},
@@ -73,6 +83,12 @@ func TestParseConfigBindsExplicitInputs(t *testing.T) {
 			}
 			if test.name == "configured login limits" && (config.LoginLimits.AccountAttempts != 2 || config.LoginLimits.InstanceAttempts != 20) {
 				t.Fatal("configured login limits were not bound")
+			}
+			if test.name == "configured search limit" && config.SearchAttempts != 3 {
+				t.Fatal("configured search limit was not bound")
+			}
+			if test.ok && test.name != "configured search limit" && config.SearchAttempts != 60 {
+				t.Fatalf("default search limit = %d, want 60", config.SearchAttempts)
 			}
 			if test.name == "configured dispatch" && (config.ProcessingDispatch.Concurrency != 8 ||
 				config.ProcessingDispatch.PollInterval != 750*time.Millisecond) {

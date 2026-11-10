@@ -245,6 +245,7 @@ func TestGatewayRemapMovesDeclaredTransmission(t *testing.T) {
 		t.Fatalf("Processing not re-admitted: %+v", candidates)
 	}
 	facts := f.movedFacts(t, receipt.TransmissionID)
+	requireFactsAtMessageTime(t, f.store, "assignment.changed", "transmissionId", receipt.TransmissionID.String(), receipt.MessageID, 2)
 	if len(facts) != 1 || facts[0]["networkId"] != f.networks[1].String() ||
 		facts[0]["previousNetworkId"] != f.networks[0].String() || len(facts[0]["targets"].([]any)) != 1 {
 		t.Fatalf("facts=%v", facts)
@@ -349,6 +350,7 @@ func TestGatewayPrioritySwapMovesInferredAndTargetlessTransmissions(t *testing.T
 		}
 	}
 	facts := f.movedFacts(t, targetless.TransmissionID)
+	requireFactsAtMessageTime(t, f.store, "assignment.changed", "transmissionId", targetless.TransmissionID.String(), targetless.MessageID, 1)
 	if len(facts) != 1 || facts[0]["previousNetworkId"] != f.networks[0].String() || facts[0]["targets"] != nil {
 		t.Fatalf("targetless move fact=%v", facts)
 	}

@@ -103,7 +103,7 @@ func (s *Service) Publish(ctx context.Context, tx platform.TransactionContext, t
 			return err
 		}
 		_, err = s.facts.AppendProcessingCompletion(ctx, tx, events.ProcessingCompletionFact{
-			ID: uuid.New(), TransmissionID: transmission, MessageID: binding.MessageID,
+			ID: uuid.New(), TransmissionID: transmission, MessageID: binding.MessageID, MessageTime: binding.MessageTime,
 			WorkflowID: item.Candidate.WorkflowID, DefinitionVersionID: item.Candidate.DefinitionVersionID,
 			ResultID: item.Result.ID, ResultRevision: item.Result.Revision,
 			SourceRevision: binding.Source.SourceRevision, ContextRevision: binding.Source.ContextRevision,

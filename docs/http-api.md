@@ -154,6 +154,19 @@ Retry-After: 37
  "fallback":"Try again later.","requestId":"…","retryable":true,"retryAfterSeconds":37}
 ```
 
+### Search rate limiting
+
+Every `GET /messages` page and every [live stream](#messages-live-stream) open is admitted against a fixed one-minute window. The bucket is the
+access key's credential for a key, the Principal for a session (all sessions of one Principal
+share it) and, for the guest, the client source: the host of the connection's remote address.
+Logged-in users behind a shared address keep their own buckets, and a key is separate from its
+owner's sessions. The limit is `-search-attempts-per-minute` (default 60, at least 1). A request
+is counted after authentication and after its parameters parsed; a request with invalid
+parameters, and a request rejected for exceeding the limit, are not counted. The rejection has
+the shape of the [login response](#login-rate-limiting): `429 RATE_LIMITED` with `Retry-After`
+and `retryAfterSeconds` set to the seconds until the window ends (rounded up, at least 1). Behind
+a reverse proxy that does not preserve the client address, all guests share one bucket.
+
 ### Bearer access keys
 
 A bearer secret in `Authorization` that is not a Gateway credential is resolved as an
@@ -204,6 +217,9 @@ What callers can do depends on these concepts:
   collections also require the `unit` field group. Address-rule reads require both
   `address` and `unit`.
 - **Access-key restrictions** intersect with the owning account's rights.
+- **`saved-view.manage-global`** (scope `all`) creates, changes and deletes global saved views
+  (see [Saved views](#saved-views)). It grants no Message access, no Address-rule management and
+  no access to anyone's personal views.
 
 Scope kinds each action accepts (`internal/authz/grants.go` is the source; a grant with another kind is invalid):
 
@@ -212,7 +228,7 @@ Scope kinds each action accepts (`internal/authz/grants.go` is the source; a gra
 | `message.read`, `message.detail` | `all`, `agency`, `unit`, `unitCollection` |
 | `without-unit.read` | `all`, `agency` |
 | `unit.*`, `organization.*`, `unit-collection.*`, `address-rule.*`, `suppression.*`, `assignment-correction.read`, `assignment-correction.retry` | `all`, `agency`, `unit`, `unitCollection` |
-| `unit-template.*`, `agency.create`, `agency.delete`, `grouping.configure`, `notice.manage`, `plugin.configure`, `operations.manage` | `all` only |
+| `unit-template.*`, `agency.create`, `agency.delete`, `grouping.configure`, `notice.manage`, `plugin.configure`, `operations.manage`, `saved-view.manage-global` | `all` only |
 | `agency.read`, `agency.update`, `gateway.*`, `network.*` | `all`, `agency` |
 | `account.*`, `grant.manage`, `password.local`, `recovery.*`, `session.manage-own`, `key.*`, `subscription.manage-*` | `all`, `account` |
 | `gateway.diagnostics.read`, `gateway.credential.rotate` | `all`, `agency`, `gateway` |
@@ -310,7 +326,7 @@ Every application error, except for unmatched routes, has this shape:
 | `IDEMPOTENCY_CONFLICT` | 409 | false | A `commandId` was reused by the same caller for a different operation or input, or a Gateway `submissionId` was reused with different content. Retrying the same request cannot succeed; send the original request again or use a new identifier. |
 | `INCOMPATIBLE_VERSION` | 409 | false | Incompatible version |
 | `RESOURCE_LIMIT` | 413 | false | Body or collection size limit exceeded, or revision counter exhausted |
-| `RATE_LIMITED` | 429 | true | Login throttled; see `Retry-After` |
+| `RATE_LIMITED` | 429 | true | Login throttled ([Login rate limiting](#login-rate-limiting)) or a Message search over its limit ([Search rate limiting](#search-rate-limiting)); see `Retry-After` |
 | `STORAGE_UNAVAILABLE` | 503 | true | Database unavailable |
 | `AUTHORITY_UNAVAILABLE` | 503 | true | Process not ready, or a required component is unavailable |
 | `COMMIT_UNCERTAIN` | 503 | false | The write may have committed. Re-send with the **same** command ID or `submissionId`, or read the resource, instead of creating a new operation. |
@@ -325,6 +341,7 @@ attempts; other `failureCode` values there are the codes above. Retry such a cor
 
 Creating operations take a client-generated `commandId` (UUID, not nil). These are:
 
+- `POST /saved-views`
 - `POST` on organizations, unit-templates, units, `units/from-template`, `units/bulk`,
   unit-collections, address-rules and suppressions
 - `POST /assignment-corrections/{id}/retry`
@@ -383,6 +400,9 @@ List routes use offset paging with query parameters only:
 Any other query parameter, a repeated parameter or a non-integer value is
 `400 INVALID_INPUT`. Responses have the shape `{"items":[…],"total":N}`, where `total` is
 the caller-visible count. There are no cursors.
+
+`GET /messages` is the exception: it uses keyset tokens (`pageSize`, `pageToken`), has no
+offset and no `total`; see [Messages: query and detail](#messages-query-and-detail).
 
 ### Time, IDs and numbers
 
@@ -475,7 +495,10 @@ or `unset`). Create and update commands return `{"id","revision"}`.
 | POST | `/assignment-corrections/{id}/retry` | `assignment-correction.retry` | **202** | Reschedule a failed correction (`commandId`) |
 
 On create and update, `selector`, `enabled` and `protocol` are required, and `id` must
-not be sent. Overlapping rules return `409 REVISION_CONFLICT`. Rule, Unit and suppression
+not be sent. `encrypted` (boolean, default `false`) is a label only: it claims no available
+decryption, changes no matching or Payload access and, when it is the only change of an update,
+queues no correction (the rule revision and audit still advance). Overlapping rules return
+`409 REVISION_CONFLICT`. Rule, Unit and suppression
 changes re-evaluate stored transmissions asynchronously. A rule change on a Network that shares a
 Gateway with other Networks of its Protocol also re-runs the Network inference of that Gateway's
 undeclared Transmissions with targets, like a mapping replacement (see
@@ -483,6 +506,227 @@ undeclared Transmissions with targets, like a mapping replacement (see
 Network and, with it, to another Agency's visibility. The `202` responses return the
 `correctionId` (suppressions) or `status: "pending"`. Follow progress with
 `GET /assignment-corrections/{id}`.
+
+### Messages: query and detail
+
+| Method | Path | Right | Success | Purpose |
+| --- | --- | --- | --- | --- |
+| GET | `/messages` | `message.read` | 200 | Page of Messages, newest first |
+| GET | `/messages/{id}` | `message.detail` and `message.read` | 200 | One Message with its supporting Transmissions |
+| GET | `/messages/filter-options` | `message.read` | 200 | Objects the caller may filter by |
+| GET | `/messages/stream` | `message.read` | 200 | Server-sent live updates ([below](#messages-live-stream)) |
+
+The routes are open to the guest under its grants. A caller without any covering grant gets
+`403 FORBIDDEN`. Responses use the data envelope. A feed page over the caller's search limit is
+`429 RATE_LIMITED` ([Search rate limiting](#search-rate-limiting)).
+
+**Appearances and eligibility.** An appearance is one `message_units` row: a Unit row (Message,
+Unit, the Unit's Agency) or a Unit-less row (Message, Agency of the resolved Network) for
+targetless or unassigned traffic; a suppressed target produces none. A Unit row is eligible when
+a `message.read` grant matches the Agency, the Unit or one of its collections and that grant's
+maximum age admits the row's `age_anchor`; a Unit-less row additionally needs `without-unit.read`
+on its Agency, with its own age. A restricting key intersects action, scope, fields and age. A
+detail needs `message.detail` and `message.read` on the same appearance. Eligibility is decided in
+the database before filtering, ordering and paging, so a Message with only suppressed, hidden or
+failed targets is absent, and hidden Messages never take a page slot.
+
+**Field groups.** Rows and fields are independent. `messageId`, `messageTime`, `processingStatus`
+and `correctionStatus` are always present. The rest is omitted, not emptied, unless the caller
+reads its group:
+
+| Group | Projection | Filters |
+| --- | --- | --- |
+| `payload` | `payload`, `protocol`, `incomplete` | `text`, `protocol` |
+| `unit` | `units` (`unitId`, `name`, `agencyId`, `organizationId`, `encrypted`), `withoutUnit`, targets' `unitId` and `encrypted`, Unit, Organization and Agency options | `unit`, `organization`, `agency`, `withoutUnit` |
+| `address` | targets' `address` and `function` | none |
+| `gateway` | Transmissions' `observedAt`, `networkId`, `networkName`, Network options | `network` |
+| `quality` | `qualityMetrics` | none |
+| `derived` | `derived` | `derived` |
+
+A filter that needs an unreadable group is `403 FORBIDDEN`; it is never dropped or widened.
+`networkUnresolved: true` appears only where the caller's `network.read` reaches the Network's Agency.
+
+**Feed (`GET /messages`).** Query parameters; unknown parameters and repeated scalars are
+`400 INVALID_INPUT`:
+
+| Parameter | Meaning |
+| --- | --- |
+| `from`, `until` | RFC 3339; `[from, until)` on the Message time |
+| `text` | literal substring of the text or numeric Payload value; empty means no filter; invalid UTF-8 or more than 1024 bytes is `INVALID_INPUT` |
+| `unit`, `organization`, `agency`, `network` | repeatable UUIDs |
+| `protocol` | repeatable `pocsag`, `flex`, `zvei`, `eas` |
+| `derived` | repeatable `<outputName>=<value>` |
+| `withoutUnit` | `true` adds Unit-less appearances as an alternative of the Unit dimension |
+| `pageSize` | 1–200, default 50 |
+| `pageToken` | the previous `nextPageToken` |
+
+At most 100 values per dimension. Values of one dimension are alternatives; dimensions combine
+with AND on the same eligible appearance: Unit, Organization and Agency on the appearance itself,
+Network and Protocol through a Transmission that supports that appearance (an unsuppressed
+assigned target of that Unit, or for a Unit-less row a targetless or unassigned Transmission of a
+Network of that Agency). `derived` matches an output of the latest published result of a
+Workflow, among the supporting readable Transmissions, that equals the value as a string, a
+decimal number or `true`/`false`; conditions with the same name are alternatives.
+
+Text search is evaluated in PostgreSQL: both sides are normalized to NFC, case-folded with full
+Unicode case folding (`casefold` with the `pg_unicode_fast` collation) and normalized again, then
+matched as a literal substring. `Straße` matches `STRASSE`, composed and decomposed `é` match
+each other, `é` does not match `e`, and `%`, `_` and `.*` are ordinary characters. The Unicode
+version is that of the PostgreSQL server (18.0: Unicode 16.0).
+
+Each Message is one row, ordered by `(messageTime, messageId)` descending. The Message time is
+the stored earliest observation time, so it can stem from a member the caller cannot see; it never
+depends on the filters. The response is `{"items":[…],"nextPageToken":"…","position":"…"}`:
+
+- `nextPageToken` is absent on the last page. It is `base64url(payload ‖ HMAC-SHA256)` over the
+  last Message time and ID, the canonical filters and the caller (Principal, plus the credential
+  of an access key). A token that fails the MAC, or belongs to other filters or another caller,
+  is `400 INVALID_INPUT`. Tokens do not expire and a Message arriving later never shifts a page.
+- `position` is `<txId>-<seq>-<issuedUnixSeconds>.<mac>`, the cutoff of the page in the
+  domain-event order, taken in the page statement's own snapshot and signed with the installation's
+  token secret. Treat it as opaque.
+
+Feed item: `messageId`, `messageTime`, `processingStatus` (`pending` if any supporting readable
+Transmission is pending, else `failed`, else `completed`, else `none`), `correctionStatus`
+(`correcting` if an eligible appearance is correcting, else `current`), and per group the
+properties above. `payload` is the original Payload of the Representative Transmission: the
+readable supporting Transmission that is not `incomplete`, then the earliest acceptance, then the
+lowest ID. `derived` lists, per Workflow, the latest published result among the supporting
+readable Transmissions (`workflowId`, `resultId`, `fields` with each output's `state` and `value`;
+`targetResults` only for visible targets). A result appears only if the caller reads `derived` and
+every field group stored with the result: the groups its Workflow definition version reads,
+recorded when the worker wrote the result. Reads never evaluate Workflows, and a result stays
+visible when a plugin instance it used is later disabled, updated or removed.
+
+**Detail (`GET /messages/{id}`).** A Message that is absent, merged away or without a
+detail-eligible appearance is `404 NOT_FOUND`. The feed item is extended by `firstObservedAt` on
+each Unit, `withoutUnitAppearances` (`agencyId`, `firstObservedAt`) and `transmissions`: the
+supporting readable Transmissions (`transmissionId`, `acceptedAt`, `processingStatus`,
+`observedAt`, `networkId`, `networkName`, `payload`, `protocol`, `incomplete`, `qualityMetrics`,
+`networkUnresolved`) with their visible, unsuppressed `targets` (`position`, `resolution`,
+`unitId`, `encrypted`, `address`, `function`). `resolution` is `assigned`, `unassigned`,
+`pending`, `failed` or `unresolved`, so a failed attempt differs from no matching Unit. A target is
+visible when its own context is eligible: assigned through its Unit appearance, unassigned
+through the Unit-less appearance, any other status through `message.read` and `message.detail`
+on the Network's Agency. `encrypted` labels an assignment made by an encrypted Address rule and
+claims no decryption.
+
+**Filter options (`GET /messages/filter-options`).** Takes no parameters. Returns `units`,
+`organizations` and `agencies` (group `unit`), `networks` (group `gateway`) and `protocols`
+(group `payload`), each limited to what the caller's `message.read` scopes reach: `all` reaches
+every non-deleted object, `agency` its Units, the Organizations of those Units and its Networks,
+`unit` and `unitCollection` those Units with their Organizations and Agencies. A family whose
+group is unreadable is omitted. There are no counts and no Message-derived values.
+
+Responses never depend on the UI language: `Accept-Language` changes no ID, field name, enum,
+timestamp, token or authorization outcome.
+
+### Messages: live stream
+
+`GET /messages/stream` keeps a loaded part of the feed current. It takes the feed filters with a
+required `from` and an optional `until` (the range the client has loaded) and a start position: the
+`Last-Event-ID` header if present, otherwise the `position` parameter, which is the `position` of
+the feed page the client holds. One of them is required. A missing `from` or position, an unknown
+or repeated parameter and invalid filters are `400 INVALID_INPUT`, a caller without a covering
+grant `403`, a bad credential `401` and a stream open over the [search limit](#search-rate-limiting)
+`429`; all of these are ordinary error responses sent before the stream starts. The guest may use
+the stream under its grants.
+
+The response is `200` `text/event-stream; charset=utf-8` with `Cache-Control: no-store` and
+`X-Accel-Buffering: no`. Every event has an `event` name and a one-line JSON `data`:
+
+| Event | Data | Meaning |
+| --- | --- | --- |
+| `upsert` | feed item | The Message matches the view's filters (all filters except the time range); the client places it by `messageTime` or drops it if it lies outside the loaded range |
+| `remove` | `{"messageId"}` | The Message no longer belongs to the view |
+| `resync-required` | `{}` | The view cannot be continued; reload the feed and open a new stream. The server closes the stream |
+| `error` | `{"code"}` | The caller's authority ended (`LOGIN_REQUIRED`, or the public code of another failure); the server closes the stream |
+| `heartbeat` | `{}` | Sent every 15 s when nothing else was; its `id` is the current position |
+
+**Positions.** An event `id` is a position `<txId>-<seq>-<issuedUnixSeconds>.<mac>`, opaque to
+clients. The MAC (HMAC-SHA256 with the installation's token secret, the one that signs page
+tokens) covers the coordinates and the issue time, so a client cannot move a position or renew
+it past the replay window; a position that fails it is answered like a malformed one.
+The feed page's position is the cutoff in its own snapshot, so every change a page could not see
+lies after it: opening the stream from the page position loses nothing in between. The events of
+one change carry the `id` on their last event only; reconnecting with `Last-Event-ID` resumes after
+the last change the client fully processed. A change that produces no event still advances the
+stream, and the next heartbeat carries the new position.
+
+**What produces events.** Each change is evaluated against the caller's current rights, with the
+feed query minus its time filter, so a Message that moved in time is upserted and the client
+decides where it belongs. A change is considered only if the span from its Message time to its
+previous Message time meets the loaded range.
+
+- A new Message, a joined Transmission, an assignment at intake and a lifted suppression
+  produce an `upsert` when the Message matches the view.
+- A corrected assignment, a created suppression and a completed Processing result produce an
+  `upsert` when the Message matches. Otherwise they produce a `remove` when the Message is still
+  readable for the caller, or when a context the change names as "before" was readable: a former
+  target's Unit, the Unit-less context of the Network the Transmission came from, or the Unit or
+  Network Agency of the suppressed target. Such a "before" `remove` is sent only when a grant
+  without a maximum age covers that context; if only grants with a maximum age cover it, the change
+  does not prove that the Message was young enough for the caller to load, and the stream sends
+  `resync-required` instead of naming it. Traffic the caller never could read produces nothing.
+- A merge produces `resync-required` when its final survivor (the Message that now holds the
+  merge's joining Transmission, also after later merges) is readable for the caller, and nothing
+  otherwise. It never produces `remove` events for the absorbed Messages: the fact does not say
+  which of them the caller could read, and naming the others would disclose them.
+- A configuration change of a Unit, Unit collection, Organization or Agency produces
+  `resync-required`, because it can change membership, names and Agencies of every view. Address
+  rule changes are current at the next read. Gateway state, operation and identity facts produce no
+  Message event.
+
+**Bounds and resync.** Each wake-up or heartbeat runs one batch in one transaction: it
+re-resolves the caller's authority (a failed resolution, such as a revoked session or key, sends
+`error` and closes before any further Message data), reads at most 256 changes, evaluates them
+and then writes. A changed access revision (grants, restrictions or field permissions) sends
+`resync-required`. So does a batch that would exceed 256 events or 1 MiB of event data, a
+change of an unknown schema version, and a start position that is malformed, issued before the
+replay window (`--live-replay-window`, default 24 h) or never issued by this installation; the
+last three are answered in a `200` stream with the single event and closed. Every write has a 30 s
+deadline: a client that does not read is disconnected, and the stream is not subject to the HTTP
+server's response timeout.
+
+### Saved views
+
+| Method | Path | Right | Success | Purpose |
+| --- | --- | --- | --- | --- |
+| GET | `/saved-views` | any `message.read` | 200 | Own personal views and the global views |
+| POST | `/saved-views` | see below | 201 | Create (`commandId`, `ownership`, `name`, `definition`) |
+| GET | `/saved-views/{id}` | any `message.read` | 200 | Read |
+| PUT | `/saved-views/{id}` | see below | 200 | Replace `name` and `definition` at `expectedRevision` |
+| DELETE | `/saved-views/{id}` | see below | 200 | Delete at `expectedRevision`; returns `{"id","revision"}` |
+
+A view is `{"id","revision","ownership":"personal"|"global","name","definition","unavailableFilters","createdAt","updatedAt"}`
+in the data envelope. `name` is 1–256 Unicode scalars, valid UTF-8 and not blank. The
+`definition` is `{"schemaVersion":1,"filters":{…},"from"?,"until"?}`; `filters` takes the feed
+dimensions as arrays `units`, `agencies`, `organizations`, `networks`, `protocols` and
+`derived` (`[{"name","value"}]`), the string `text` and the boolean `withoutUnit`, with the
+limits of the [feed filters](#messages-query-and-detail). Unknown fields are `400 INVALID_INPUT`.
+A view stores no Message and no snapshot; opening it runs its filters through `GET /messages`.
+
+- **Personal views.** Any non-guest caller with a `message.read` grant creates, reads, updates and
+  deletes its own. Another Principal, including a global-view manager, gets `404 NOT_FOUND`; the
+  guest can read global views but its state-changing requests are `401 LOGIN_REQUIRED`.
+- **Global views.** Created, changed and deleted with `saved-view.manage-global`; a reader that
+  lacks it gets `403 FORBIDDEN` on `PUT` and `DELETE`. Every caller with any `message.read` grant
+  lists and reads them, the guest included, and so does every holder of
+  `saved-view.manage-global`, who could not maintain them otherwise; reading a definition grants
+  no Message access.
+- **Field groups.** A save whose filters need a field group the author cannot read is
+  `403 FORBIDDEN` and stores nothing. `unavailableFilters` lists, sorted, the filter dimensions
+  (named like the feed parameters: `text`, `unit`, `organization`, `agency`, `network`,
+  `protocol`, `derived`, `withoutUnit`) whose field group the *caller* cannot read now, `[]`
+  if none, so a client marks the view unavailable instead of dropping them. Running such a
+  view through `GET /messages` is `403`; filters of readable groups work alone.
+- `POST` takes a `commandId` ([Command IDs](#command-ids-idempotent-creation)); an identical
+  replay returns the view as it is now, or `404` if it was deleted since. `PUT` and `DELETE` take
+  `expectedRevision` and no `commandId`; a stale revision is `409 REVISION_CONFLICT`. A `PUT`
+  that changes nothing keeps the revision.
+- `GET /saved-views` uses [offset paging](#pagination), ordered by name, then ID. A caller
+  without any `message.read` grant gets an empty page.
+- Views write no domain event and no audit record.
 
 ### Ingest, Gateway credential
 

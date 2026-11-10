@@ -200,6 +200,7 @@ func (AddressRule) Fields() []ent.Field {
 		field.Time("valid_from").Optional().Nillable(),
 		field.Time("valid_until").Optional().Nillable(),
 		field.Bool("enabled").Default(true),
+		field.Bool("encrypted").Default(false),
 	}
 }
 

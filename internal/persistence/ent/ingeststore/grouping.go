@@ -75,43 +75,57 @@ func groupCandidates(ctx context.Context, executor postgres.Executor, window int
 	return candidates, rows.Err()
 }
 
+// messageTimes is the Message time (first observation) a Grouping decision left on the Message,
+// and the latest Message time among the Messages it replaced when that was later.
+type messageTimes struct {
+	// Current is the Message's first_observed_at after the decision.
+	Current time.Time
+	// Previous is the latest first_observed_at of the joined and absorbed Messages before the
+	// decision; nil for a created Message and when the decision did not move the time.
+	Previous *time.Time
+}
+
 // groupMessage decides the submission's Message with the pure messages.Decide model and applies
 // the decision: it creates the Message, or joins and merges candidates into the survivor, widening
-// the survivor's observation bounds. The caller holds the payload-identity lock.
+// the survivor's observation bounds. It also returns the Message time after the decision and the
+// latest Message time before it. The caller holds the payload-identity lock.
 func (s *Store) groupMessage(ctx context.Context, executor postgres.Executor, revision, window int64,
-	submission ingest.ValidatedSubmission) (messages.Decision, error) {
+	submission ingest.ValidatedSubmission) (messages.Decision, messageTimes, error) {
 	var candidates []messages.ExistingMessage
 	if window > 0 {
 		var err error
 		if candidates, err = groupCandidates(ctx, executor, window, submission); err != nil {
-			return messages.Decision{}, err
+			return messages.Decision{}, messageTimes{}, err
 		}
 	}
 	decision, err := messages.Decide(messages.Policy{Revision: revision, WindowSeconds: window},
 		messages.Member{TransmissionID: uuid.New(), ObservedAt: submission.ObservedAt.UTC(),
 			Identity: submission.Identity}, candidates)
 	if err != nil {
-		return messages.Decision{}, err
+		return messages.Decision{}, messageTimes{}, err
 	}
 	if !decision.Joined {
 		if _, err := executor.ExecContext(ctx, `INSERT INTO messages
 			(id,identity_form,identity_subtype,identity_value,first_observed_at,last_observed_at)
 			VALUES($1,$2,$3,$4,$5,$5)`, decision.MessageID, submission.Identity.Form, submission.Identity.Subtype,
 			submission.Identity.Value, submission.ObservedAt); err != nil {
-			return messages.Decision{}, err
+			return messages.Decision{}, messageTimes{}, err
 		}
 		decision.MessageRevision = 1
-		return decision, nil
+		return decision, messageTimes{Current: submission.ObservedAt.UTC()}, nil
 	}
-	var first, last time.Time
+	var first, last, previousFirst time.Time
 	for i, id := range append([]uuid.UUID{decision.MessageID}, decision.AbsorbedMessage...) {
 		var candidateFirst, candidateLast time.Time
 		if err := executor.QueryRowContext(ctx, `SELECT first_observed_at,last_observed_at FROM messages WHERE id=$1`,
 			id).Scan(&candidateFirst, &candidateLast); err != nil {
-			return messages.Decision{}, err
+			return messages.Decision{}, messageTimes{}, err
 		}
 		if i == 0 || candidateFirst.Before(first) {
 			first = candidateFirst
+		}
+		if i == 0 || candidateFirst.After(previousFirst) {
+			previousFirst = candidateFirst
 		}
 		if i == 0 || candidateLast.After(last) {
 			last = candidateLast
@@ -127,7 +141,12 @@ func (s *Store) groupMessage(ctx context.Context, executor postgres.Executor, re
 	if err := executor.QueryRowContext(ctx, `UPDATE messages SET revision=revision+1,
 		first_observed_at=$2,last_observed_at=$3 WHERE id=$1
 		RETURNING revision`, decision.MessageID, first, last).Scan(&decision.MessageRevision); err != nil {
-		return messages.Decision{}, err
+		return messages.Decision{}, messageTimes{}, err
 	}
-	return decision, nil
+	times := messageTimes{Current: first.UTC()}
+	if previousFirst.After(first) {
+		previous := previousFirst.UTC()
+		times.Previous = &previous
+	}
+	return decision, times, nil
 }

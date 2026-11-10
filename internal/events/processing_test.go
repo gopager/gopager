@@ -19,7 +19,8 @@ func completionFixture(t *testing.T) ProcessingCompletionFact {
 	}
 	transmission := uuid.New()
 	return ProcessingCompletionFact{ID: uuid.New(), TransmissionID: transmission, MessageID: uuid.New(),
-		WorkflowID: uuid.New(), DefinitionVersionID: uuid.New(), ResultID: uuid.New(),
+		MessageTime: time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC),
+		WorkflowID:  uuid.New(), DefinitionVersionID: uuid.New(), ResultID: uuid.New(),
 		ResultRevision: 3, SourceRevision: 7, ContextRevision: 9, OccurredAt: time.Unix(100, 0),
 		OutputSchema: map[string]processing.FieldSchema{"level": {Kind: processing.StringValue}},
 		Result: processing.Evaluation{Selected: true, Fields: map[string]processing.FieldValue{"level": {

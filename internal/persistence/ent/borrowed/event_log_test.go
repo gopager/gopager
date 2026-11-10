@@ -140,7 +140,7 @@ func TestEventLogAllProducersAreAtomic(t *testing.T) {
 			// Publication fixture references are not production originals.
 			return s.AppendProcessingCompletion(tx.Context(), tx, events.ProcessingCompletionFact{
 				ID: id, WorkflowID: uuid.New(), ResultID: uuid.New(), ResultRevision: 1,
-				TransmissionID: uuid.New(), MessageID: uuid.New(), DefinitionVersionID: uuid.New(),
+				TransmissionID: uuid.New(), MessageID: uuid.New(), MessageTime: now, DefinitionVersionID: uuid.New(),
 				SourceRevision: 1, ContextRevision: 1, OccurredAt: now,
 				OutputSchema: map[string]processing.FieldSchema{},
 				Result:       processing.Evaluation{Selected: true, Fields: map[string]processing.FieldValue{}},

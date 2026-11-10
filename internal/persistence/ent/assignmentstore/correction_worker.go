@@ -319,6 +319,7 @@ func (s *Store) ApplyCorrectionBatch(ctx context.Context, tx platform.Transactio
 		}
 	}
 	revisionByMessage := make(map[uuid.UUID]int64, len(messages))
+	timeByMessage := make(map[uuid.UUID]time.Time, len(messages))
 	for _, message := range messages {
 		if err := refreshMessageUnits(ctx, executor, message); err != nil {
 			return assignments.CorrectionApplied{}, err
@@ -326,17 +327,21 @@ func (s *Store) ApplyCorrectionBatch(ctx context.Context, tx platform.Transactio
 	}
 	for _, message := range changedMessages {
 		var revision int64
+		var messageTime time.Time
 		if err := executor.QueryRowContext(ctx, `UPDATE messages SET revision=revision+1
-			WHERE id=$1 RETURNING revision`, message).Scan(&revision); err != nil {
+			WHERE id=$1 RETURNING revision,first_observed_at`, message).Scan(&revision, &messageTime); err != nil {
 			return assignments.CorrectionApplied{}, err
 		}
 		revisionByMessage[message] = revision
+		timeByMessage[message] = messageTime.UTC()
 	}
 	for i := range applied.Changes {
 		applied.Changes[i].MessageRev = revisionByMessage[applied.Changes[i].MessageID]
+		applied.Changes[i].MessageTime = timeByMessage[applied.Changes[i].MessageID]
 	}
 	for i := range applied.Moves {
 		applied.Moves[i].MessageRev = revisionByMessage[applied.Moves[i].MessageID]
+		applied.Moves[i].MessageTime = timeByMessage[applied.Moves[i].MessageID]
 	}
 	_, err = executor.ExecContext(ctx, `UPDATE assignment_pending_scopes SET lease_until=$3
 		WHERE id=$1 AND state='running' AND fencing_token=$2`, lease.ID, lease.FencingToken, now.Add(30*time.Second))

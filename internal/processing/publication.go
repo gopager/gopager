@@ -3,6 +3,7 @@ package processing
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/platform"
@@ -11,8 +12,11 @@ import (
 // PublicationBinding comes from the current source-publication owner, never a compute worker.
 // Its source fence is rechecked when the source owner refreshes the Transmission's processing status.
 type PublicationBinding struct {
-	Source      SourceIdentity
-	MessageID   uuid.UUID
+	Source    SourceIdentity
+	MessageID uuid.UUID
+	// MessageTime is the Message's time (first observation) at capture; it travels with the
+	// completion fact so consumers can place the fact on the Message timeline.
+	MessageTime time.Time
 	SourceFence int64
 }
 
@@ -20,7 +24,7 @@ type PublicationBinding struct {
 func (b PublicationBinding) Validate() error {
 	if b.Source.Synthetic || b.Source.TransmissionID == uuid.Nil || b.Source.NetworkID == uuid.Nil ||
 		b.Source.SourceRevision <= 0 || b.Source.ContextRevision <= 0 ||
-		b.Source.OriginalTargetCount > MaxArguments || b.MessageID == uuid.Nil || b.SourceFence <= 0 {
+		b.Source.OriginalTargetCount > MaxArguments || b.MessageID == uuid.Nil || b.MessageTime.IsZero() || b.SourceFence <= 0 {
 		return invalid(errors.New("invalid source publication binding"))
 	}
 	return nil

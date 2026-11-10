@@ -133,3 +133,14 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Decision:** For an existing Gateway or Network, a caller that holds no right on it (no `gateway.*` or `network.*` action covering it, including `gateway.diagnostics.read` and `gateway.credential.rotate`) gets `404 NOT_FOUND`, indistinguishable from a missing object, so IDs cannot be probed. A caller that holds some right on it but not the requested one gets `403 FORBIDDEN`; a Gateway right must cover every Agency of the Gateway's Networks (or name the Gateway) to count. Creation and list routes without any grant for the action stay `403`. This changes the AP-07 credential and Network-replacement routes (403 becomes 404 for an invisible Gateway) and the AP-09 lifecycle routes (404 becomes 403 for a visible Gateway or Network).
 - **Consequences:** `docs/http-api.md` (Gateway administration, Authorization), OpenAPI descriptions; AP-07 follow-up rerunning F-67/F-68; AP-09 follow-up with new evidence. Executed by AP-09 (`internal/ingest/`).
 - **Owner detail:** [HTTP API: Gateway administration](../../docs/http-api.md#gateway-administration)
+
+<a id="d-146"></a>
+## D-146 Shared client source and retry delay for search admission
+
+- **Status:** accepted
+- **Date:** 2026-11-09
+- **Decision:** AP-10 search admission buckets the guest by client source like the login source buckets and answers `RATE_LIMITED` with the same `Retry-After` rounding as login. The user approved sharing both rules instead of copying them: `identity.ClientSource(r)` exports the existing login source derivation (host of the connection's remote address, forwarding headers ignored), `identity.RateLimited.Seconds()` returns the retry delay rounded up to whole seconds, at least 1, and the login handler uses it in place of its inline rounding. Login behavior is unchanged. Copying the source rule and the rounding into `internal/httpapi` was considered and rejected by the user.
+- **Scope (AP-10 write scope extension):** `internal/identity/source.go` and the `RATE_LIMITED` branch of `internal/identity/handler.go`.
+- **Consequences:** The [identity record](../execution/source-ap-07.md) gets a follow-up with the identity and login tests rerun.
+- **Owner detail:** [C-06](../contracts/c-06-identity-authorization.md), [AP-10 record](../execution/ap-10.md)
+

@@ -26,4 +26,4 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Date:** 2026-10-25
 - **Superseded by:** [D-135](10-foundation-redesign.md#d-135)
 - **Decision:** Confirmed query-time model; supersedes universal public Message-time exception.
-- **Owner detail:** [C-07 time algorithm](../contracts/c-07-query-live.md#planned-and-not-yet-implemented-ap-10), [C-05 stored minima](../../docs/architecture.md#address-rule-semantics)
+- **Owner detail:** [C-07 time algorithm](../contracts/c-07-query-live.md#implemented-behavior-specified-in-docs-and-openapi), [C-05 stored minima](../../docs/architecture.md#address-rule-semantics)

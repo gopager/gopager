@@ -32,6 +32,8 @@ const (
 	FieldValidUntil = "valid_until"
 	// FieldEnabled holds the string denoting the enabled field in the database.
 	FieldEnabled = "enabled"
+	// FieldEncrypted holds the string denoting the encrypted field in the database.
+	FieldEncrypted = "encrypted"
 	// EdgeUnit holds the string denoting the unit edge name in mutations.
 	EdgeUnit = "unit"
 	// EdgeNetwork holds the string denoting the network edge name in mutations.
@@ -65,6 +67,7 @@ var Columns = []string{
 	FieldValidFrom,
 	FieldValidUntil,
 	FieldEnabled,
+	FieldEncrypted,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -91,6 +94,8 @@ var (
 	RevisionValidator func(int64) error
 	// DefaultEnabled holds the default value on creation for the "enabled" field.
 	DefaultEnabled bool
+	// DefaultEncrypted holds the default value on creation for the "encrypted" field.
+	DefaultEncrypted bool
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -161,6 +166,11 @@ func ByValidUntil(opts ...sql.OrderTermOption) OrderOption {
 // ByEnabled orders the results by the enabled field.
 func ByEnabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEnabled, opts...).ToFunc()
+}
+
+// ByEncrypted orders the results by the encrypted field.
+func ByEncrypted(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEncrypted, opts...).ToFunc()
 }
 
 // ByUnitField orders the results by unit field.

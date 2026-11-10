@@ -2,6 +2,7 @@ package borrowed_test
 
 import (
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -82,7 +83,7 @@ func TestProcessingCandidateNativeReselectionRetainsResultsAndAttempts(t *testin
 			return err
 		}
 		return client.ProcessingResult.Create().SetID(resultID).SetCandidateID(initial.ID).
-			SetRevision(1).SetProducingFence(8).SetCompletedAt(initial.CreatedAt).
+			SetRevision(1).SetProducingFence(8).SetFieldGroups([]string{"derived"}).SetCompletedAt(initial.CreatedAt).
 			SetEvaluation(processing.Evaluation{Selected: true, Fields: map[string]processing.FieldValue{}}).Exec(scope)
 	}); err != nil {
 		t.Fatal(err)
@@ -338,6 +339,14 @@ func TestProcessingCandidateNativeReselectionRetainsResultsAndAttempts(t *testin
 				result.Revision != completed.Revision || result.ProducingFence != manual.FencingToken ||
 				result.CandidateID != manual.ID || completed.WorkerID != nil {
 				t.Fatalf("private completion fabricated readiness or lost fencing: %+v %+v", completed, result)
+			}
+			stored, err := client.ProcessingResult.Query().Only(guard.Bind(tx.Context(),
+				guard.Access{Current: driver.Current, Predicates: map[string]entql.P{"ProcessingResult": entql.FieldEQ("id", result.ID)}}))
+			if err != nil {
+				return err
+			}
+			if want := []string{"derived"}; !slices.Equal(stored.FieldGroups, want) {
+				t.Fatalf("completion stored field groups %v, want %v", stored.FieldGroups, want)
 			}
 			if _, _, err := store.CompleteCandidate(tx.Context(), tx, lease, 0,
 				processing.Evaluation{Selected: true, Fields: map[string]processing.FieldValue{}}); !errors.Is(err, authz.ErrRevisionConflict) {

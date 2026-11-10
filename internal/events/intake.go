@@ -77,6 +77,11 @@ type IntakeData struct {
 	LateJoin       bool           `json:"lateJoin,omitempty"`
 	Absorbed       []uuid.UUID    `json:"absorbedMessageIds,omitempty"`
 	Targets        []IntakeTarget `json:"targets,omitempty"`
+	// MessageTime is the Message time after the change; set on the Message-related types.
+	MessageTime *time.Time `json:"messageTime,omitempty"`
+	// PreviousMessageTime is set on joined and merged facts when the change moved the Message
+	// time earlier.
+	PreviousMessageTime *time.Time `json:"previousMessageTime,omitempty"`
 }
 
 // IntakeFact is the producer input for an operational fact from transmission
@@ -102,6 +107,13 @@ type IntakeFact struct {
 	LateJoin       bool
 	Absorbed       []uuid.UUID
 	Targets        []IntakeTarget
+	// MessageTime is the Message time (first observation) after the change; required for
+	// message.created, message.transmission-joined, message.merged and assignment.changed.
+	MessageTime time.Time
+	// PreviousMessageTime is the latest Message time among the Messages the change replaced; set
+	// only on message.transmission-joined and message.merged, and only when strictly later than
+	// MessageTime.
+	PreviousMessageTime *time.Time
 }
 
 // IntakeAppender records intake facts through the caller's active platform
@@ -130,11 +142,15 @@ type IntakeEnvelope struct {
 // Envelope validates the fact for its Type and returns the envelope stamped
 // with recorded, deriving the aggregate and producer from the Type. The
 // envelope never carries the original transmission payload or credential
-// data. Absorbed IDs are sorted. It returns ErrInvalidFact for missing or
+// data. Absorbed IDs are sorted. Message-related types carry the Message time, and a join or
+// merge that moved it earlier also the previous one. It returns ErrInvalidFact for missing or
 // inconsistent fields or an unknown Type.
 func (f IntakeFact) Envelope(recorded time.Time) (IntakeEnvelope, error) {
 	if f.ID == uuid.Nil || f.Revision <= 0 || f.OccurredAt.IsZero() || recorded.IsZero() ||
 		f.OccurredAt.Nanosecond()%1000 != 0 || recorded.Nanosecond()%1000 != 0 {
+		return IntakeEnvelope{}, ErrInvalidFact
+	}
+	if !validMessageTimes(f.Type, f.MessageTime, f.PreviousMessageTime) {
 		return IntakeEnvelope{}, ErrInvalidFact
 	}
 	envelope := IntakeEnvelope{SchemaVersion: 1, DomainEventID: f.ID, Type: f.Type,
@@ -173,6 +189,7 @@ func (f IntakeFact) Envelope(recorded time.Time) (IntakeEnvelope, error) {
 		envelope.AggregateRef = EntityRef{Type: "message", ID: f.MessageID}
 		envelope.Data = IntakeData{MessageID: f.MessageID, TransmissionID: f.TransmissionID,
 			LateJoin: f.Type == MessageTransmissionJoined && f.LateJoin}
+		envelope.Data.MessageTime, envelope.Data.PreviousMessageTime = utcTimes(f.MessageTime, f.PreviousMessageTime)
 	case MessageMerged:
 		if f.MessageID == uuid.Nil || f.TransmissionID == uuid.Nil || len(f.Absorbed) == 0 {
 			return IntakeEnvelope{}, ErrInvalidFact
@@ -187,6 +204,7 @@ func (f IntakeFact) Envelope(recorded time.Time) (IntakeEnvelope, error) {
 		envelope.Producer = Producer{Domain: "grouping", Version: "message-grouping1.0"}
 		envelope.AggregateRef = EntityRef{Type: "message", ID: f.MessageID}
 		envelope.Data = IntakeData{MessageID: f.MessageID, TransmissionID: f.TransmissionID, Absorbed: absorbed}
+		envelope.Data.MessageTime, envelope.Data.PreviousMessageTime = utcTimes(f.MessageTime, f.PreviousMessageTime)
 	case AssignmentChanged:
 		if f.MessageID == uuid.Nil || f.TransmissionID == uuid.Nil || f.Reason != "created" ||
 			!validIntakeTargets(f.Targets) {
@@ -196,11 +214,42 @@ func (f IntakeFact) Envelope(recorded time.Time) (IntakeEnvelope, error) {
 		envelope.AggregateRef = EntityRef{Type: "message", ID: f.MessageID}
 		envelope.Data = IntakeData{MessageID: f.MessageID, TransmissionID: f.TransmissionID,
 			Reason: f.Reason, Targets: slices.Clone(f.Targets)}
+		envelope.Data.MessageTime, _ = utcTimes(f.MessageTime, nil)
 	default:
 		return IntakeEnvelope{}, errors.Join(ErrInvalidFact, errors.New("unknown intake fact type"))
 	}
 	envelope.AggregateRevision = f.Revision
 	return envelope, nil
+}
+
+// validMessageTimes reports whether the Message times fit the fact type: the Message time is
+// required on exactly the Message-related types, the previous one only on joined and merged
+// facts and only strictly later (the Message time never moves later). Times carry at most
+// microsecond precision like the other envelope times.
+func validMessageTimes(factType IntakeType, messageTime time.Time, previous *time.Time) bool {
+	switch factType {
+	case MessageCreated, AssignmentChanged:
+		return validMessageTime(messageTime) && previous == nil
+	case MessageTransmissionJoined, MessageMerged:
+		return validMessageTime(messageTime) &&
+			(previous == nil || validMessageTime(*previous) && previous.After(messageTime))
+	default:
+		return messageTime.IsZero() && previous == nil
+	}
+}
+
+func validMessageTime(value time.Time) bool {
+	return !value.IsZero() && value.Nanosecond()%1000 == 0
+}
+
+// utcTimes returns the Message time and the optional previous one normalized to UTC.
+func utcTimes(messageTime time.Time, previous *time.Time) (*time.Time, *time.Time) {
+	current := messageTime.UTC()
+	if previous == nil {
+		return &current, nil
+	}
+	earlier := previous.UTC()
+	return &current, &earlier
 }
 
 // validIntakeTargets reports whether targets is non-empty, strictly ascending from a non-negative

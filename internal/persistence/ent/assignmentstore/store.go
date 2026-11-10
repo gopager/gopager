@@ -84,7 +84,8 @@ func plan(authority authz.Authority, action string, now time.Time) (entql.P, err
 // ruleDTO constructs an owner DTO, never returning an Ent record across the boundary.
 func ruleDTO(row *ent.AddressRule) assignments.Rule {
 	return assignments.Rule{ID: row.ID, Revision: row.Revision, NetworkID: row.NetworkID, UnitID: row.UnitID,
-		Protocol: protocols.Protocol(row.Protocol), Selector: row.Selector, ValidFrom: row.ValidFrom, ValidUntil: row.ValidUntil, Enabled: row.Enabled}
+		Protocol: protocols.Protocol(row.Protocol), Selector: row.Selector, ValidFrom: row.ValidFrom, ValidUntil: row.ValidUntil, Enabled: row.Enabled,
+		Encrypted: row.Encrypted}
 }
 
 // LockRevision locks shared configuration before Assignment state, including current Unit context.
@@ -218,7 +219,7 @@ func (s *Store) SaveRule(ctx context.Context, tx platform.TransactionContext, au
 		}
 		return client.AddressRule.Create().SetID(value.ID).SetRevision(1).SetNetworkID(value.NetworkID).SetUnitID(value.UnitID).
 			SetProtocol(addressrule.Protocol(value.Protocol)).SetSelector(value.Selector).
-			SetNillableValidFrom(value.ValidFrom).SetNillableValidUntil(value.ValidUntil).SetEnabled(value.Enabled).Exec(scope)
+			SetNillableValidFrom(value.ValidFrom).SetNillableValidUntil(value.ValidUntil).SetEnabled(value.Enabled).SetEncrypted(value.Encrypted).Exec(scope)
 	}
 	predicate, err := plan(authority, "address-rule.update", now)
 	if err != nil {
@@ -230,7 +231,7 @@ func (s *Store) SaveRule(ctx context.Context, tx platform.TransactionContext, au
 		return err
 	}
 	update := client.AddressRule.Update().SetRevision(value.Revision).SetNetworkID(value.NetworkID).SetUnitID(value.UnitID).
-		SetProtocol(addressrule.Protocol(value.Protocol)).SetSelector(value.Selector).SetEnabled(value.Enabled)
+		SetProtocol(addressrule.Protocol(value.Protocol)).SetSelector(value.Selector).SetEnabled(value.Enabled).SetEncrypted(value.Encrypted)
 	if value.ValidFrom == nil {
 		update.ClearValidFrom()
 	} else {

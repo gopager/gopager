@@ -69,11 +69,14 @@ Flags use Go `flag` syntax (`--name=value` or `-name value`). Positional argumen
 | `--migration-mode` | `check` | — | `check`: start only if the schema is exactly current. `apply`: run pending migrations first. See [Database Migrations](#database-migrations). |
 | `--processing-concurrency` | `2` | — | Processing candidates evaluated in parallel per worker process. Must be > 0. |
 | `--processing-poll-interval` | `5s` | — | Fallback interval at which a worker looks for due work, as a Go duration (`500ms`, `5s`, `1m`). Must be > 0. New work normally starts immediately through a PostgreSQL notification (channel `gopager_processing_due`, sent by intake and by Processing readmission after a correction); the poll covers lost notifications and work that becomes due by time. |
+| `--event-poll-interval` | `5s` | — | Fallback interval at which event consumers in a worker look for new facts, as a Go duration. Must be > 0. New facts normally wake consumers immediately through a PostgreSQL notification (channel `gopager_domain_events`, sent with every fact); the poll covers lost notifications. |
 | `--processing-artifact-root` | — | — | Plugin directory. Must exist and be openable; leading/trailing whitespace and an explicitly empty value are rejected. |
 | `GOPAGER_PROCESSING_ARTIFACT_ROOT` (env) | — | — | Plugin directory, used only when `--processing-artifact-root` is not given. Same validation. |
 | `--login-attempts-per-account` | `10` | — | Login attempts per minute per normalized username. Must be > 0. |
 | `--login-attempts-per-source` | `30` | — | Login attempts per minute per client source, across all usernames. The source is the host part of the connection's remote address. Must be > 0. See [Security](#security). |
 | `--login-attempts-per-instance` | `300` | — | Login attempts per minute across the whole instance. Must be > 0. |
+| `--search-attempts-per-minute` | `60` | — | Message search requests (`GET /messages` pages) per minute per access key, per Principal (all its sessions) or, for the guest, per client source (the host part of the connection's remote address). Must be >= 1. Rejected requests are `429 RATE_LIMITED` and are not counted. The guest source bucket has the proxy caveat of the login source bucket (see [Security](#security)). |
+| `--live-replay-window` | `24h` | — | How old a position may be when a Message live stream resumes from it, as a Go duration. Must be > 0. An older position makes the stream answer `resync-required`. Domain events must be retained at least this long (see [Event Log Retention](#event-log-retention)); the stream relies on the log holding every fact after a client's last position. Streams use the same notification channel as event consumers, through one listener per process. |
 | `--gateway-heartbeat-interval` | `60s` | — | Interval in which Gateways are expected to send a heartbeat. Must be > 0. Used to validate the contact timeout. |
 | `--gateway-contact-timeout` | `180s` | — | Silence after which the worker sets an enabled `active` or `degraded` Gateway to `contact-lost`, compared on the database clock. Must be at least `--gateway-heartbeat-interval`. |
 | `--gateway-contact-scan-interval` | `15s` | — | Pause between the worker's contact-loss scans. Must be > 0 and at most `--gateway-contact-timeout`. Detection may lag the timeout by up to this interval. |
@@ -149,7 +152,7 @@ Rolling upgrades with mixed releases are not supported. Downgrading the binary a
 
 ## Event Log Retention
 
-`domain_events` (the sequenced fact log) and `consumer_offsets` (one read position per consumer) grow without bound until a retention job prunes them; no such job is implemented yet. Both tables belong in the planned retention configuration. The rule the job must follow: a `domain_events` row is prunable only when its `(tx_id, seq)` is at or below the lowest `(last_tx_id, last_seq)` of every registered consumer **and** it is older than the replay window, so no consumer can be left with a gap and late-registered consumers still find recent history. A `consumer_offsets` row is removed only when its consumer is decommissioned.
+`domain_events` (the sequenced fact log) and `consumer_offsets` (one read position per consumer) grow without bound until a retention job prunes them; no such job is implemented yet. Both tables belong in the planned retention configuration. The rule the job must follow: a `domain_events` row is prunable only when its `(tx_id, seq)` is at or below the lowest `(last_tx_id, last_seq)` of every registered consumer **and** it is older than the replay window, so no consumer can be left with a gap and late-registered consumers still find recent history. The replay window is at least `--live-replay-window`, because a live stream resumes from a position up to that old and reads every fact after it; pruning younger facts would silently drop Message updates for reconnecting clients. A `consumer_offsets` row is removed only when its consumer is decommissioned.
 
 ## First Start and Bootstrap
 
@@ -183,7 +186,7 @@ Bootstrap opens no listener, completes within 30 s, and can succeed only once pe
 | Accounts | `account.read`, `account.create`, `account.update`, `account.delete`, `account.delete-own`, `grant.manage`, `password.local`, `recovery.request`, `recovery.issue`, `recovery.consume`, `session.manage-own`, `key.create-own`, `key.manage-own`, `key.manage-technical` |
 | Subscriptions and delivery | `subscription.manage-own`, `subscription.manage-global`, `delivery.read`, `delivery.retry`, `delivery.redeliver` |
 | Processing | `workflow.read`, `workflow.create`, `workflow.update`, `workflow.delete`, `workflow.preview`, `workflow.activate`, `workflow.reprocess`, `presentation.manage`, `plugin.configure` |
-| Other | `notice.manage`, `operations.manage`, `audit.read` |
+| Other | `notice.manage`, `operations.manage`, `saved-view.manage-global`, `audit.read` |
 
 The `*` notation above is shorthand for this table only; `--actions` requires each action spelled out.
 

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: GoPager API
-  version: 1.3.0
+  version: 1.6.0
   description: |
     GoPager application API. Human guide: docs/http-api.md.
 
@@ -61,6 +61,13 @@ tags:
   description: Gateway lifecycle, diagnostics and state history (wrapped), Network assignments and credentials
     (unwrapped). A caller without any `gateway.*` right covering an existing Gateway gets 404; one with another
     right but not the requested one gets 403.
+- name: Messages
+  description: Authorized Message feed, detail and filter options. Rows are eligible per appearance (Unit or
+    Unit-less) under the caller's grants; field groups decide which properties are projected.
+- name: Saved views
+  description: Personal and global saved Message filter sets. A personal view is visible only to its owner (others
+    get 404); a global view is readable by every caller with any `message.read` grant and by its managers, and
+    maintained with `saved-view.manage-global`. Views write no domain event and no audit record.
 - name: Workflows
   description: Processing Workflows, versions, preview and candidates.
 - name: Processing instances
@@ -2417,6 +2424,555 @@ paths:
           $ref: '#/components/responses/InternalError'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /messages:
+    get:
+      operationId: listMessages
+      tags:
+      - Messages
+      summary: Page of Messages, newest first
+      description: |
+        One row per Message the caller may read through an eligible appearance, ordered by
+        `(messageTime, messageId)` descending. A caller without any `message.read` grant gets 403.
+        Filters that need an unreadable field group are 403, never dropped: `text` and `protocol`
+        need `payload`; `unit`, `organization`, `agency` and `withoutUnit` need `unit`; `network`
+        needs `gateway`; `derived` needs `derived`. Unknown or repeated scalar parameters, invalid
+        UTF-8, text over 1024 bytes, more than 100 values per dimension and a page token of other
+        filters or another caller are 400 `INVALID_INPUT`. Properties of a field group the caller
+        cannot read are omitted. Paging uses keyset tokens, not offsets; there is no `total`.
+        Each page is counted in a fixed one-minute window per access key, Principal or (guest) client
+        source, up to `--search-attempts-per-minute`; beyond it the response is 429 `RATE_LIMITED`
+        with `Retry-After` and the request is not counted.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      parameters:
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date-time
+        description: Inclusive lower bound of the Message time.
+      - name: until
+        in: query
+        schema:
+          type: string
+          format: date-time
+        description: Exclusive upper bound of the Message time.
+      - name: text
+        in: query
+        schema:
+          type: string
+          maxLength: 1024
+        description: Literal Unicode case-folded substring of the text or numeric Payload value. Empty means no filter.
+      - name: unit
+        in: query
+        explode: true
+        schema:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            format: uuid
+      - name: organization
+        in: query
+        explode: true
+        schema:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            format: uuid
+      - name: agency
+        in: query
+        explode: true
+        schema:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            format: uuid
+      - name: network
+        in: query
+        explode: true
+        schema:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            format: uuid
+      - name: protocol
+        in: query
+        explode: true
+        schema:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            enum:
+            - pocsag
+            - flex
+            - zvei
+            - eas
+      - name: derived
+        in: query
+        explode: true
+        schema:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+        description: '`<outputName>=<value>`; the value is compared as string, decimal number or boolean. Conditions of one name are alternatives.'
+      - name: withoutUnit
+        in: query
+        schema:
+          type: boolean
+        description: Adds Unit-less appearances as an alternative of the Unit dimension.
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 50
+      - name: pageToken
+        in: query
+        schema:
+          type: string
+        description: The `nextPageToken` of the previous page, valid only with the same filters and caller.
+      responses:
+        '200':
+          description: One page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessagePageResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /messages/stream:
+    get:
+      operationId: streamMessages
+      tags:
+      - Messages
+      summary: Live updates for a loaded range of the feed
+      description: |
+        Server-sent events (`text/event-stream; charset=utf-8`, `Cache-Control: no-store`) that keep
+        a feed view current. Take the feed filters with a required `from` and an optional `until`
+        (the range the client has loaded) and start at the `position` of the feed page: the stream
+        then delivers every change after that page's snapshot, so nothing between the page and the
+        stream is lost. The start position is the `Last-Event-ID` header when present (a reconnect
+        resumes after the last `id` the client saw) and otherwise the `position` parameter; one of
+        them is required. A request without `from`, without a start position, with an unknown
+        parameter or with filters that are invalid is 400 `INVALID_INPUT` before any event is sent;
+        a caller without a covering grant is 403, an unknown or expired credential 401. Each open
+        counts against the search limit of the feed (429 `RATE_LIMITED`).
+
+        Events (the `data` of every event is one JSON line):
+
+        - `upsert`: a feed item (`MessageFeedItem`) that matches the view's filters other than the
+          time range. The client places it by its `messageTime` or drops it when it lies outside the
+          loaded range.
+        - `remove`: `{"messageId"}`, the Message no longer belongs to the view.
+          A Message merge the caller can see is answered with `resync-required`, never with
+          removes of the absorbed Messages.
+        - `resync-required`: `{}`; the view cannot be continued. The client reloads the feed and
+          opens a new stream. The server closes the stream after it.
+        - `error`: `{"code"}` with `LOGIN_REQUIRED` (or the public code of another failure). The
+          authority of the caller ended; the server closes the stream after it and no further
+          Message data is sent.
+        - `heartbeat`: `{}` every 15 s when nothing else was sent, with the current position as `id`.
+
+        The `id` of an event is a signed position `<txId>-<seq>-<issuedUnixSeconds>.<mac>`; treat it
+        as opaque.
+        Frames of one change carry it on their last frame only. A position issued before the replay
+        window (`--live-replay-window`, default 24 h), a malformed one or one that the server never
+        issued (its signature does not verify) is answered with `resync-required` in a 200 response. A change of the caller's
+        access revision (grants, restrictions, field permissions) is `resync-required`, as is a
+        change of Units, Unit collections, Organizations or Agencies, a batch of more than 256
+        events or 1 MiB, and a fact of an unknown schema version.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      parameters:
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+        description: Inclusive lower bound of the loaded range.
+      - name: until
+        in: query
+        schema:
+          type: string
+          format: date-time
+        description: Exclusive upper bound of the loaded range.
+      - name: position
+        in: query
+        schema:
+          type: string
+        description: The `position` of the feed page. Ignored when `Last-Event-ID` is sent.
+      - name: Last-Event-ID
+        in: header
+        schema:
+          type: string
+        description: The `id` of the last event the client processed; takes precedence over `position`.
+      - name: text
+        in: query
+        schema:
+          type: string
+          maxLength: 1024
+      - name: unit
+        in: query
+        explode: true
+        schema:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            format: uuid
+      - name: organization
+        in: query
+        explode: true
+        schema:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            format: uuid
+      - name: agency
+        in: query
+        explode: true
+        schema:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            format: uuid
+      - name: network
+        in: query
+        explode: true
+        schema:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            format: uuid
+      - name: protocol
+        in: query
+        explode: true
+        schema:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            enum:
+            - pocsag
+            - flex
+            - zvei
+            - eas
+      - name: derived
+        in: query
+        explode: true
+        schema:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+      - name: withoutUnit
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The event stream.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /messages/filter-options:
+    get:
+      operationId: listMessageFilterOptions
+      tags:
+      - Messages
+      summary: Objects the caller may filter Messages by
+      description: |
+        Units, Organizations and Agencies (field group `unit`), Networks (`gateway`) and Protocols
+        (`payload`), each limited to objects the caller's `message.read` scopes reach. A family
+        whose field group is unreadable is omitted. No counts and no Message-derived values.
+        Takes no parameters.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      responses:
+        '200':
+          description: The options.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageFilterOptionsResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /messages/{id}:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    get:
+      operationId: readMessage
+      tags:
+      - Messages
+      summary: Message detail
+      description: |
+        Requires `message.detail` and `message.read` on the same appearance. A Message that is
+        absent, merged away or has no detail-eligible appearance is 404. Suppressed targets are
+        never shown; other targets appear when their own context is eligible.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      responses:
+        '200':
+          description: The detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageDetailResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /saved-views:
+    get:
+      operationId: listSavedViews
+      tags:
+      - Saved views
+      summary: List saved views
+      description: |
+        The caller's own personal views and, for a caller with any `message.read` grant, the global views,
+        ordered by name then ID. Offset paging; any other query parameter is 400. A caller without any
+        `message.read` grant gets an empty page. Each view carries `unavailableFilters`.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      parameters:
+      - $ref: '#/components/parameters/Offset'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Caller-visible page; `total` counts the views the caller may read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedViewPageResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    post:
+      operationId: createSavedView
+      tags:
+      - Saved views
+      summary: Create a saved view
+      description: |
+        A personal view needs a non-guest caller with a `message.read` grant; a global view needs
+        `saved-view.manage-global`. Either is 403 otherwise, as is a definition whose filters need a field group
+        the author cannot read (nothing is stored). Idempotent per (caller, `commandId`): an identical replay
+        returns the view as it is now (404 if deleted since); reusing the `commandId` with different input is
+        409 `IDEMPOTENCY_CONFLICT`.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSavedViewRequest'
+      responses:
+        '201':
+          description: The created view.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedViewResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /saved-views/{id}:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    get:
+      operationId: readSavedView
+      tags:
+      - Saved views
+      summary: Read a saved view
+      description: |
+        Own personal views and, with any `message.read` grant, global views. Every other view, including
+        another Principal's personal view, is 404.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      responses:
+        '200':
+          description: The view.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedViewResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    put:
+      operationId: updateSavedView
+      tags:
+      - Saved views
+      summary: Replace name and definition of a saved view
+      description: |
+        Own personal views, or global views with `saved-view.manage-global`. A reader of a global view
+        without that action gets 403; a caller who may neither see nor manage the view gets 404. Optimistic
+        concurrency via `expectedRevision`; a stale value is 409 `REVISION_CONFLICT`. A change that stores
+        the same name and definition keeps the revision. A definition that needs a field group the caller
+        cannot read is 403.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSavedViewRequest'
+      responses:
+        '200':
+          description: The view at its new revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedViewResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    delete:
+      operationId: deleteSavedView
+      tags:
+      - Saved views
+      summary: Delete a saved view
+      description: |
+        Same rights as the update. Optimistic concurrency via `expectedRevision`; a stale value is 409
+        `REVISION_CONFLICT`.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteRequest'
+      responses:
+        '200':
+          description: The deleted view's ID and the revision it reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /workflows:
     get:
       operationId: listWorkflows
@@ -3334,7 +3890,7 @@ components:
                   enum:
                   - RESOURCE_LIMIT
     RateLimited:
-      description: Login attempts throttled. `retryAfterSeconds` matches `Retry-After`.
+      description: Login attempts or Message searches throttled. `retryAfterSeconds` matches `Retry-After`.
       content:
         application/json:
           schema:
@@ -3348,7 +3904,7 @@ components:
                   - RATE_LIMITED
       headers:
         Retry-After:
-          description: Seconds until the next attempt.
+          description: Seconds until the next attempt (for a search, until its one-minute window ends).
           schema:
             type: integer
             minimum: 1
@@ -4826,6 +5382,7 @@ components:
       - validFrom
       - validUntil
       - enabled
+      - encrypted
       properties:
         id:
           type: string
@@ -4854,6 +5411,10 @@ components:
           description: Exclusive end; must be after `validFrom`. Null means unbounded.
         enabled:
           type: boolean
+        encrypted:
+          type: boolean
+          default: false
+          description: 'Label only: marks the assignment as encrypted; implies no decryption or Payload access.'
     AddressRuleResponse:
       type: object
       required:
@@ -4932,6 +5493,10 @@ components:
           description: Exclusive end; must be after `validFrom`. Null means unbounded.
         enabled:
           type: boolean
+        encrypted:
+          type: boolean
+          default: false
+          description: 'Label only: marks the assignment as encrypted; implies no decryption or Payload access.'
       additionalProperties: false
     UpdateAddressRuleRequest:
       type: object
@@ -4971,6 +5536,10 @@ components:
           description: Exclusive end; must be after `validFrom`. Null means unbounded.
         enabled:
           type: boolean
+        encrypted:
+          type: boolean
+          default: false
+          description: 'Label only: marks the assignment as encrypted; implies no decryption or Payload access.'
       additionalProperties: false
     PreviewAddressRuleRequest:
       type: object
@@ -5015,6 +5584,10 @@ components:
           description: Exclusive end; must be after `validFrom`. Null means unbounded.
         enabled:
           type: boolean
+        encrypted:
+          type: boolean
+          default: false
+          description: 'Label only: marks the assignment as encrypted; implies no decryption or Payload access.'
       additionalProperties: false
     Suppression:
       type: object
@@ -6687,6 +7260,551 @@ components:
         updatedAt:
           type: string
           format: date-time
+    MessageFeedItem:
+      type: object
+      required:
+      - messageId
+      - messageTime
+      - processingStatus
+      - correctionStatus
+      properties:
+        messageId:
+          type: string
+          format: uuid
+        messageTime:
+          type: string
+          format: date-time
+          description: The stored Message time (earliest observation), which may stem from a member the caller cannot see.
+        processingStatus:
+          type: string
+          enum:
+          - none
+          - pending
+          - completed
+          - failed
+          description: '`pending` if any supporting readable Transmission is pending, else `failed`, else `completed`, else `none`.'
+        correctionStatus:
+          type: string
+          enum:
+          - current
+          - correcting
+        payload:
+          description: Original Payload of the Representative Transmission. Field group `payload`.
+          type: object
+          additionalProperties: true
+        protocol:
+          type: string
+          enum:
+          - pocsag
+          - flex
+          - zvei
+          - eas
+          description: Field group `payload`.
+        incomplete:
+          type: boolean
+          description: Field group `payload`.
+        units:
+          type: array
+          description: Eligible Unit appearances. Field group `unit`.
+          items:
+            $ref: '#/components/schemas/MessageUnit'
+        withoutUnit:
+          type: boolean
+          description: An eligible Unit-less appearance exists. Field group `unit`.
+        derived:
+          type: array
+          description: Latest published result per Workflow, shown when the caller reads `derived` and every group the definition reads. Field group `derived`.
+          items:
+            $ref: '#/components/schemas/MessageDerived'
+        networkUnresolved:
+          type: boolean
+          description: Present (true) only where `network.read` reaches the Network's Agency.
+    MessageUnit:
+      type: object
+      required:
+      - unitId
+      - name
+      - agencyId
+      - encrypted
+      properties:
+        unitId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        agencyId:
+          type: string
+          format: uuid
+        organizationId:
+          type: string
+          format: uuid
+        encrypted:
+          type: boolean
+          description: An assigned target came from an encrypted Address rule. A label only; nothing claims decryption.
+        firstObservedAt:
+          type: string
+          format: date-time
+          description: Detail only.
+    MessageDerived:
+      type: object
+      required:
+      - workflowId
+      - resultId
+      properties:
+        workflowId:
+          type: string
+          format: uuid
+        resultId:
+          type: string
+          format: uuid
+        fields:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/MessageDerivedField'
+        targetResults:
+          type: array
+          description: Only for targets the caller may see.
+          items:
+            type: object
+            required:
+            - targetPosition
+            - fields
+            properties:
+              targetPosition:
+                type: integer
+                minimum: 0
+              fields:
+                type: object
+                additionalProperties:
+                  $ref: '#/components/schemas/MessageDerivedField'
+    MessageDerivedField:
+      type: object
+      required:
+      - state
+      properties:
+        state:
+          type: string
+          enum:
+          - present
+          - absent
+        value:
+          type: object
+          required:
+          - kind
+          - value
+          properties:
+            kind:
+              type: string
+            value: {}
+    SavedViewDefinition:
+      type: object
+      description: Feed filters of a saved view; unknown fields are 400.
+      required:
+      - schemaVersion
+      - filters
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        filters:
+          type: object
+          additionalProperties: false
+          properties:
+            text:
+              type: string
+              maxLength: 1024
+            units:
+              type: array
+              maxItems: 100
+              items:
+                type: string
+                format: uuid
+            withoutUnit:
+              type: boolean
+            agencies:
+              type: array
+              maxItems: 100
+              items:
+                type: string
+                format: uuid
+            organizations:
+              type: array
+              maxItems: 100
+              items:
+                type: string
+                format: uuid
+            networks:
+              type: array
+              maxItems: 100
+              items:
+                type: string
+                format: uuid
+            protocols:
+              type: array
+              maxItems: 100
+              items:
+                type: string
+                enum:
+                - pocsag
+                - flex
+                - zvei
+                - eas
+            derived:
+              type: array
+              maxItems: 100
+              items:
+                type: object
+                required:
+                - name
+                - value
+                additionalProperties: false
+                properties:
+                  name:
+                    type: string
+                  value:
+                    type: string
+        from:
+          type: string
+          format: date-time
+        until:
+          type: string
+          format: date-time
+      additionalProperties: false
+    SavedView:
+      type: object
+      required:
+      - id
+      - revision
+      - ownership
+      - name
+      - definition
+      - unavailableFilters
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        revision:
+          $ref: '#/components/schemas/Revision'
+        ownership:
+          type: string
+          enum:
+          - personal
+          - global
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+        definition:
+          $ref: '#/components/schemas/SavedViewDefinition'
+        unavailableFilters:
+          type: array
+          description: Sorted filter dimensions, named like the feed query parameters, whose field group the caller
+            cannot read now. Empty if none.
+          items:
+            type: string
+            enum:
+            - agency
+            - derived
+            - network
+            - organization
+            - protocol
+            - text
+            - unit
+            - withoutUnit
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    SavedViewResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          $ref: '#/components/schemas/SavedView'
+    SavedViewPageResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          type: object
+          required:
+          - items
+          - total
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/SavedView'
+            total:
+              type: integer
+              minimum: 0
+    CreateSavedViewRequest:
+      type: object
+      required:
+      - schemaVersion
+      - commandId
+      - ownership
+      - name
+      - definition
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        commandId:
+          type: string
+          format: uuid
+          description: Client-generated idempotency key (not the nil UUID).
+        ownership:
+          type: string
+          enum:
+          - personal
+          - global
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+        definition:
+          $ref: '#/components/schemas/SavedViewDefinition'
+      additionalProperties: false
+    UpdateSavedViewRequest:
+      type: object
+      required:
+      - schemaVersion
+      - expectedRevision
+      - name
+      - definition
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        expectedRevision:
+          $ref: '#/components/schemas/Revision'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+        definition:
+          $ref: '#/components/schemas/SavedViewDefinition'
+      additionalProperties: false
+    MessagePageResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          type: object
+          required:
+          - items
+          - position
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/MessageFeedItem'
+            nextPageToken:
+              type: string
+              description: Absent on the last page. Opaque, signed, bound to the filters and the caller; it does not expire.
+            position:
+              type: string
+              description: 'Opaque signed `<txId>-<seq>-<issuedUnixSeconds>.<mac>` cutoff of this page in the event order, for resuming live updates.'
+    MessageDetail:
+      allOf:
+      - $ref: '#/components/schemas/MessageFeedItem'
+      - type: object
+        required:
+        - transmissions
+        properties:
+          withoutUnitAppearances:
+            type: array
+            description: Eligible Unit-less appearances. Field group `unit`.
+            items:
+              type: object
+              required:
+              - agencyId
+              - firstObservedAt
+              properties:
+                agencyId:
+                  type: string
+                  format: uuid
+                firstObservedAt:
+                  type: string
+                  format: date-time
+          transmissions:
+            type: array
+            items:
+              $ref: '#/components/schemas/MessageTransmission'
+    MessageTransmission:
+      type: object
+      required:
+      - transmissionId
+      - acceptedAt
+      - processingStatus
+      - targets
+      properties:
+        transmissionId:
+          type: string
+          format: uuid
+        acceptedAt:
+          type: string
+          format: date-time
+        processingStatus:
+          type: string
+          enum:
+          - none
+          - pending
+          - completed
+          - failed
+        observedAt:
+          type: string
+          format: date-time
+          description: Field group `gateway`.
+        networkId:
+          type: string
+          format: uuid
+          description: Field group `gateway`.
+        networkName:
+          type: string
+          description: Field group `gateway`.
+        payload:
+          type: object
+          additionalProperties: true
+          description: Field group `payload`.
+        protocol:
+          type: string
+          description: Field group `payload`.
+        incomplete:
+          type: boolean
+          description: Field group `payload`.
+        qualityMetrics:
+          type: object
+          additionalProperties: true
+          description: Field group `quality`.
+        networkUnresolved:
+          type: boolean
+        targets:
+          type: array
+          items:
+            type: object
+            required:
+            - position
+            - resolution
+            properties:
+              position:
+                type: integer
+                minimum: 0
+              resolution:
+                type: string
+                enum:
+                - assigned
+                - unassigned
+                - pending
+                - failed
+                - unresolved
+                description: A failed attempt is distinct from no matching Unit.
+              unitId:
+                type: string
+                format: uuid
+                description: Field group `unit`.
+              encrypted:
+                type: boolean
+                description: Field group `unit`.
+              address:
+                description: Integer or string, as submitted. Field group `address`.
+                oneOf:
+                - type: integer
+                - type: string
+              function:
+                type: integer
+                minimum: 0
+                maximum: 255
+                description: Field group `address`.
+    MessageDetailResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          $ref: '#/components/schemas/MessageDetail'
+    MessageFilterOptions:
+      type: object
+      properties:
+        units:
+          type: array
+          items:
+            type: object
+            required:
+            - id
+            - name
+            - agencyId
+            properties:
+              id:
+                type: string
+                format: uuid
+              name:
+                type: string
+              agencyId:
+                type: string
+                format: uuid
+              organizationId:
+                type: string
+                format: uuid
+        organizations:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageNamedOption'
+        agencies:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageNamedOption'
+        networks:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageNamedOption'
+        protocols:
+          type: array
+          items:
+            type: string
+            enum:
+            - pocsag
+            - flex
+            - zvei
+            - eas
+    MessageNamedOption:
+      type: object
+      required:
+      - id
+      - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+    MessageFilterOptionsResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          $ref: '#/components/schemas/MessageFilterOptions'
     CandidateResponse:
       type: object
       required:
