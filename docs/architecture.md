@@ -9,7 +9,7 @@ GoPager is a single Go binary, `gopager` ([cmd/gopager](../cmd/gopager/)), backe
 | Role | Runs | Started from |
 | --- | --- | --- |
 | `api` | HTTP listener: gateway intake, login/session, management routes, health endpoints | `composeApplicationAPI` in [main.go](../cmd/gopager/main.go) |
-| `worker` | Processing dispatcher (workflow candidates) and correction runner (rematching, Processing readmission) | `composeProcessingWorker`, `composeCorrectionRunner` |
+| `worker` | Processing dispatcher (workflow candidates), correction runner (rematching, Processing readmission), Gateway contact-loss monitor, event consumers (Delivery fan-out) and the Delivery runner | `composeProcessingWorker`, `composeCorrectionRunner`, `composeEventsRuntime` |
 | `bootstrap` subcommand | One-shot local creation of the first account; no listener | [bootstrap.go](../cmd/gopager/bootstrap.go) |
 
 One process can run both roles (`--roles api,worker`), or the roles can run in separate processes against the same database. Role processes coordinate only through PostgreSQL (row locks, leases, fencing tokens). They do not talk to each other directly.
@@ -25,6 +25,7 @@ flowchart LR
     API <--> PG[(PostgreSQL)]
     Worker <--> PG
     Worker -- "go-plugin / gRPC" --> Plugins[Plugin processes]
+    Worker -- "Delivery target port" --> Targets[Delivery targets]
     API -- "go-plugin / gRPC (preview, instance inspection)" --> Plugins
 ```
 
@@ -33,6 +34,7 @@ flowchart LR
 | Gateway | Submits transmissions and state reports with a per-gateway bearer credential. See [http-api.md](http-api.md). |
 | Browser / API client | Authenticates with a session cookie (human accounts) or an access key, or acts as the guest account when anonymous. Manages master data, rules, gateways, workflows and instances. |
 | Plugin | Operator-provisioned executable, pinned by SHA-256 digest and verified again by go-plugin each time it is started. One long-lived child process per instance revision, pooled by the plugin host, called over gRPC one request at a time and stopped after an idle timeout, when its instance changes, or at shutdown. Previews call the same process with `mode: "preview"`. See [plugins.md](plugins.md). |
+| Delivery target | An external system that receives authorized, rendered Delivery input through the Core target port (`delivery.Targets`). Without a configured provider every target is unavailable. See [Delivery](#delivery-worker-role). |
 | PostgreSQL | The only store: domain state, domain events, outbox, work queues, migration ledger, and the clock used for domain time. See [operations.md](operations.md). |
 
 ## End-to-end data flow
@@ -54,6 +56,10 @@ flowchart TD
     S --> T[Correction runner: rematch, refresh message_units]
     T --> U[Re-admit candidates of changed transmissions]
     U --> J
+    G --> V[Domain events]
+    K --> V
+    V --> W[Delivery fan-out: authorized projection, filter, layout]
+    W --> X[Delivery runner: start check, provider attempt, outcome]
 ```
 
 ### Intake (one transaction)
@@ -136,6 +142,16 @@ Message reads (`GET /api/v1/messages`, `/messages/{id}`, `/messages/filter-optio
 
 **Live updates** (`GET /api/v1/messages/stream`) are not a durable consumer: they keep no offset and run in the api role only. A stream subscribes to the process-wide `events.WakeHub` (one database listener for all streams and consumers) and holds its own position. On every wake-up and every 15 s heartbeat it runs one `readmodel.LiveSession.Batch`: one transaction resolves the caller's authority (a changed access revision or a failure ends the stream), reads up to 256 facts after the position with `events.Log.ReadAfter`, drops facts whose Message-time span misses the loaded range, evaluates the affected Messages with the feed query minus its time filter (`Service.evaluate`), reads the current Unit and Network contexts only for the before basis of possible removals, and turns the result into `upsert`, `remove` or `resync-required` frames. The transaction commits before the HTTP layer writes the frames, each write under its own deadline (`http.ResponseController`), so a slow client never holds a transaction or connection from the pool. A fact is positioned by `(tx_id, seq)`: the feed page returns the cutoff of its own snapshot, so no fact falls between a page and its stream. Processing results are shown, and matched by the `derived` filter, only when the caller reads every field group stored with the result (`processing_results.field_groups`, always including `derived`); reads compare stored groups in SQL and never load, compile or classify Workflow definitions.
 
+### Delivery (worker role)
+
+Subscriptions select deliverable Domain event types for one subscriber (the owning User or, for a global Subscription, a technical account) and send to configured target instances; routes, fields, states and rights are in [HTTP API: Subscriptions](http-api.md#subscriptions), [Deliveries](http-api.md#deliveries) and [Layouts](http-api.md#layouts).
+
+- **Fan-out.** `delivery.FanOut` is the event consumer `delivery-fanout` on `events.Runner`. Before each batch it classifies new Workflow versions outside any transaction (`events.BatchPreparer`). For each deliverable fact of `replayMode` `normal` recorded at most 24 h before the database clock, it loads the active Subscriptions selecting the type that existed when the fact was recorded (share-locked), resolves the subscriber's current authority (`identity.Resolver.ResolvePrincipalAuthority`), projects the fact's Message through the read side under that authority (`readmodel.Service.ProjectForDelivery`; Gateway facts need `gateway.read` on one of the Gateway's Agencies), evaluates the Subscription filter on the projection, splits by Unit when configured, renders the resolved layout (`processing.LayoutResolver`, `processing.CompileLayout`), applies the target inputs and `integration_unit_parameters`, validates them against the target descriptor and inserts one `prepared` Delivery per Subscription, Domain event, target and split, with the bounded input, in the batch transaction. The unique Delivery identity makes a repeated fact a no-op. A subscriber without authority, an ineligible projection or a false filter create nothing; a parameter conflict or an invalid input create a visible `failed` Delivery.
+- **Runner.** `delivery.Runner` (worker role, woken by the fact hub and polling every 5 s) first ends `started` Deliveries whose lease expired as `uncertain` (`lease-lost`), then claims up to 10 due `prepared` or `retry-pending` Deliveries with `FOR UPDATE SKIP LOCKED`, a new fencing token and a 60 s lease. Per Delivery, one transaction re-checks expiry, the Subscription (state and revision), the subscriber's authority, the projection and filter (re-rendering the input when the access or instance revision changed), the target instance and descriptor, and sending admission, then records the attempt `started`. The provider is called outside SQL with a 30 s deadline while the lease is renewed every 20 s; a lost lease, or a subscriber who may no longer see the Delivery's data after an access change, cancels the call. The outcome is written under the same claim: `accepted`, `retry-pending` (at most five attempts, 30 s/2 min/10 min/30 min ±20 %, a later provider retry time wins), `failed`, or `uncertain` for an uncertain answer or any error after the call started. Uncertain Deliveries are never retried automatically.
+- **Sending admission.** One-minute windows in `delivery_admissions`, keyed by a hash of the subscriber and of the target instance (`--delivery-sends-per-minute`, `--delivery-target-sends-per-minute`). A background start over the limit is deferred to the next window without consuming an attempt; Subscription create and redelivery answer `RATE_LIMITED`.
+- **Targets.** `delivery.Targets` (`Describe`, `Attempt`) is the Core target port with the versioned `TargetDescriptor` and `AttemptInvocation`/`AttemptResult`. The process composes `delivery.UnavailableTargets` until a target provider is configured, so Subscription targets are rejected as unavailable and no Delivery starts.
+- **Layouts.** `processing/presentation` stores layout definitions with immutable versions (`layout_definitions`, `layout_definition_versions`) and resolves the Subscription's layout or the built-in default per output kind (`delivery.DefaultLayouts`).
+
 ### Address rule semantics
 
 - **Shape.** A rule belongs to exactly one Network (and so to one protocol) and names one Unit, a selector and a validity interval `[validFrom, validUntil)`; a missing bound is open. Validity is evaluated at the transmission's observation time, never at acceptance or Message time. Rule bounds use microsecond timestamps and unsupported precision is rejected, not truncated.
@@ -174,13 +190,15 @@ flowchart BT
     psyn[processing/synthetic] --> pmgmt & assignments & units
     stores[persistence/ent/*store] --> postgres & ingest & assignments & units & pworker & ppub & pmgmt & readmodel
     readmodel --> authz & identity & platform
-    httpapi --> identity & units & assignments & ingest & pmgmt & readmodel
+    delivery --> readmodel & processing & events & identity & commands & units
+    ppres[processing/presentation] --> processing & identity & commands & units
+    httpapi --> identity & units & assignments & ingest & pmgmt & readmodel & delivery & ppres
     cmd[cmd/gopager] --> stores & httpapi & ingest & pmgmt & psyn
 ```
 
 The layering rules that the code follows:
 
-- Domain and application packages (`authz`, `protocols`, `messages`, `commands`, `events`, `identity`, `units`, `assignments`, `ingest`, `readmodel`, `processing/...`) never import `platform/postgres`, Ent, or any store package. They declare small consumer interfaces (`Repository`, `Clock`, `Transactions`, owner ports) and receive `platform.TransactionContext`.
+- Domain and application packages (`authz`, `protocols`, `messages`, `commands`, `events`, `identity`, `units`, `assignments`, `ingest`, `readmodel`, `delivery`, `processing/...`) never import `platform/postgres`, Ent, or any store package. They declare small consumer interfaces (`Repository`, `Clock`, `Transactions`, owner ports) and receive `platform.TransactionContext`.
 - `authz`, `protocols`, `platform` and `pluginsdk` are leaves with no internal imports.
 - Store adapters under `internal/persistence/ent/` implement those interfaces and are the only importers of `platform/postgres` besides `cmd/gopager`.
 - `cmd/gopager` is the composition root. `composeCore` ([compose.go](../cmd/gopager/compose.go)) constructs every store and the shared services once per process; the API, worker and correction-runner compositions take that set instead of building their own.
@@ -202,6 +220,8 @@ The layering rules that the code follows:
 | `internal/events` | Domain event fact types, envelope construction and validation, appender interfaces |
 | `internal/protocols` | Protocol enum, address/target model and ranges, payload forms, payload identity |
 | `internal/messages` | Grouping decision type and the pure grouping function `Decide` |
+| `internal/delivery` | Subscriptions (management, save-time checks), the field catalog of filters and layouts, the `delivery-fanout` consumer, materialization, the Delivery runner (claims, start check, attempts, retry, uncertainty), sending admission, Delivery management (list, read, retry, redelivery), the Core target port and built-in layouts |
+| `internal/processing/presentation` | Layout definitions with immutable versions (`presentation.manage`) and the `LayoutResolver` used by Delivery |
 | `internal/readmodel` | Message read side: feed/detail/filter-option service, filter parsing and canonical encoding, page tokens and positions, field-group projection; ports for the store, token key and Workflow classification |
 | `internal/units` (package `units`) | Agencies, Units, Unit collections, Organizations with setting defaults, Unit templates, bulk Unit operations, setting inheritance |
 | `internal/assignments` | Address rules (selectors, validity intervals, conflict validation), target matching, suppressions, correction status/retry, `CorrectionRunner` |
@@ -222,6 +242,8 @@ The layering rules that the code follows:
 | `internal/persistence/ent/assignmentstore` | Address rules, assignment revision, pending scopes, suppressions, correction worker queries |
 | `internal/persistence/ent/ingeststore` | Gateways, Networks, credentials, transmission intake, grouping, the message_units cache, processing admission. `ProcessingSourceOwner` provides the source, reconciliation and publication readiness. Uses SQL directly through `postgres.Executor`. |
 | `internal/persistence/ent/processingstore` | Workflows, versions, scope references, instances, candidates, results, publication items |
+| `internal/persistence/ent/deliverystore` | SQL implementation of the Delivery store: Subscriptions and targets, Deliveries with fenced claims, attempts, admission windows, Unit parameters and the read helpers Delivery needs |
+| `internal/persistence/ent/layoutstore` | Layout definitions and versions |
 | `internal/persistence/ent/readstore` | SQL implementation of the `readmodel` store: eligibility, filters, text search, keyset paging, projection aggregates and the token key, one statement per request |
 | `internal/persistence/ent/commandstore` | Command receipt persistence |
 | `internal/persistence/ent/eventstore` | Appends domain events and their outbox references |
@@ -276,6 +298,25 @@ erDiagram
 
 Dotted relations are references stored inside JSON columns (workflow definition, instance configuration).
 
+### Subscriptions and Delivery
+
+```mermaid
+erDiagram
+    ACCOUNT ||--o{ SUBSCRIPTION : "subscriber"
+    SUBSCRIPTION ||--|{ SUBSCRIPTION_TARGET : "targets"
+    PROCESSING_INSTANCE ||--o{ SUBSCRIPTION_TARGET : "target instance"
+    LAYOUT_DEFINITION |o--o{ SUBSCRIPTION : "layout"
+    LAYOUT_DEFINITION ||--|{ LAYOUT_DEFINITION_VERSION : versions
+    PROCESSING_INSTANCE ||--o{ INTEGRATION_UNIT_PARAMETER : ""
+    UNIT ||--o{ INTEGRATION_UNIT_PARAMETER : ""
+    SUBSCRIPTION ||..o{ DELIVERY : "creates"
+    DOMAIN_EVENT ||..o{ DELIVERY : "triggers"
+    DELIVERY ||--o{ DELIVERY_ATTEMPT : attempts
+    DELIVERY |o--o| DELIVERY : "redelivery of"
+```
+
+Deliveries keep the Subscription, subscriber, Domain event and target IDs without foreign keys, so their history outlives a deleted Subscription. `delivery_admissions` holds the hashed sending-admission windows.
+
 ### Identity and cross-cutting records
 
 ```mermaid
@@ -299,6 +340,11 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 
 | Term | Code | Definition |
 | --- | --- | --- |
+| Subscription | `subscriptions`, `delivery.Subscription` | A subscriber's selection of deliverable Domain event types, with an optional filter, one to eight target instances, an optional layout, an optional split by Unit and an optional maximum age; `personal` (acts as its User) or `global` (acts as a technical account). |
+| Delivery | `deliveries`, `delivery.Delivery` | One job per Subscription, Domain event, target instance and split, with its bounded materialized input, attempts and outcome. |
+| Delivery target | `delivery.Targets`, `delivery.TargetDescriptor` | A configured processing instance offering the Delivery capability: output kinds, typed inputs, dependencies and an optional sending limit. |
+| Layout | `layout_definitions`, `processing.Layout` | A versioned, declarative arrangement of permitted fields for one output kind (`text`, `markdown`, `json`), rendered without a template engine. |
+| Unit parameter | `integration_unit_parameters` | A Unit-specific value of a target input for one instance; applied to Deliveries of that Unit. |
 | Gateway | `gateways`, `ingest` | Registered receiver instance with a name that submits transmissions under its own bearer credential. It can be disabled (credentials authenticate nothing) and soft-deleted. It has a state (`never-seen`, `active`, `degraded`, `stopped`, `contact-lost`), contact timestamps and a history retention marker. |
 | Gateway state history | `gateway_state_history` | One row per Gateway revision that changed the state: old and new state, cause (`report`, `submission`, `timeout`), times and the degraded reason. |
 | Gateway credential | `gateway_credentials` | Hashed bearer secret bound to one gateway. At most one active and one pending replacement per gateway. |
@@ -362,8 +408,8 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 - `domain_events` is a sequenced log. `seq` (`bigint GENERATED ALWAYS AS IDENTITY`, unique) is the human-facing event number; `tx_id` (`xid8`, default `pg_current_xact_id()`) records the writing transaction; `type` and `occurred_at` are stored generated columns from the envelope (index `(type, seq)` serves per-type reads, index `(tx_id, seq)` serves consumption). Sequence values are assigned at insert time but become visible in commit order, and the transaction ID is assigned at the transaction's first write, which can be earlier than the insert. A transaction with a higher `tx_id` can therefore hold a lower `seq`, so neither a plain `seq > last` read nor a `seq`-ordered read behind the xmin cut is safe.
 - `events.Log` (implemented by `eventstore.Store`) is the reader port. The read position is an `events.Position{TxID, Seq}`, ordered by `(tx_id, seq)`. `ReadAfter(tx, after, limit)` is gap-safe: it returns only rows with `(tx_id, seq) > (after.TxID, after.Seq)` and `tx_id < pg_snapshot_xmin(pg_current_snapshot())`, ordered by `(tx_id, seq)`, so no row at or below a returned position can still be uncommitted. A transaction does not read its own appends. `Offset` and `Advance` keep one durable position per named consumer in `consumer_offsets(consumer, last_tx_id, last_seq, updated_at)`; `Advance` never moves backwards in `(tx_id, seq)` order (a stale position is a no-op), and because both run in the caller's transaction a consumer commits its effect and its offset atomically.
 - The `NOTIFY` payload is only a wake-up hint (it can be lost, for example while a listener reconnects). A consumer combines `ReadAfter` with a listener on the channel or a periodic poll and always reads from its `Offset`. The store itself has no `LISTEN` capability; the live-delivery listener is a separate component.
-- `events.WakeHub` fans one `LISTEN` session on the channel out to any number of subscribers (size-1 coalescing signal per subscriber, an initial signal at subscription, non-blocking fan-out); the `api` and `worker` roles each run one. `events.Runner` drives one named `events.Consumer` (`Name`, `Supports(type, schemaVersion)`, `Handle`): on every wake-up or poll tick (`--event-poll-interval`, default 5 s) it repeats batches until one is empty, each batch in one primary transaction that reads `Offset`, reads up to 100 records, calls `Handle` for supported ones in order, advances the offset to the last processed record and commits, so the effect and the offset are atomic. A handler error rolls the whole batch back and is retried on the next tick. A record of an unsupported type is advanced over; a record of a supported type with an unknown `schemaVersion` blocks the consumer: records before it are committed, the blocker is never skipped, `Runner.Blocked()` reports it and `event consumer blocked` is logged at every tick. Delivery is at-least-once, so consumers deduplicate by domain event ID plus consumer name in their own effect. The worker role starts one runner per registered consumer (none registered yet; workers still find their work by querying their own tables).
-- **Envelope rules.** `schemaVersion` is 1. Adding an optional field is compatible; new meaning or a new required field needs a new schema version, and a consumer blocks visibly on a version it does not know instead of skipping it as handled. `data` is internal recorded context, never an already-authorized outbound payload. `replayMode` is `normal` or explicit historical reprocessing. Facts carry no username, profile snapshot, credential, proof, name, setting value or original payload. Ordering is per aggregate revision and causation, with no global provider order; the facts of one atomic change may share the final aggregate revision with no order among them. A merge transaction records one `message.merged` (survivor and sorted absorbed references) plus one `message.transmission-joined` for the new member and no `message.created`, so consumers deduplicate each fact and reconcile current authorized state instead of relying on merge-before-join delivery. A recorded type never grants a consumer an unprojected original payload.
+- `events.WakeHub` fans one `LISTEN` session on the channel out to any number of subscribers (size-1 coalescing signal per subscriber, an initial signal at subscription, non-blocking fan-out); the `api` and `worker` roles each run one. `events.Runner` drives one named `events.Consumer` (`Name`, `Supports(type, schemaVersion)`, `Handle`): on every wake-up or poll tick (`--event-poll-interval`, default 5 s) it repeats batches until one is empty, each batch in one primary transaction that reads `Offset`, reads up to 100 records, calls `Handle` for supported ones in order, advances the offset to the last processed record and commits, so the effect and the offset are atomic. A handler error rolls the whole batch back and is retried on the next tick. A record of an unsupported type is advanced over; a record of a supported type with an unknown `schemaVersion` blocks the consumer: records before it are committed, the blocker is never skipped, `Runner.Blocked()` reports it and `event consumer blocked` is logged at every tick. Delivery is at-least-once, so consumers deduplicate by domain event ID plus consumer name in their own effect. The worker role starts one runner per registered consumer (`delivery-fanout`); Processing and correction workers still find their work by querying their own tables. A consumer that implements `events.BatchPreparer` prepares outside any transaction before each batch, and a failing preparation skips the batch until the next tick.
+- **Envelope rules.** `schemaVersion` is 1. Adding an optional field is compatible; new meaning or a new required field needs a new schema version, and a consumer blocks visibly on a version it does not know instead of skipping it as handled. `data` is internal recorded context, never an already-authorized outbound payload. `replayMode` is `normal` or `reprocess` (explicit historical reprocessing); automatic Delivery fan-out acts only on `normal`. Facts carry no username, profile snapshot, credential, proof, name, setting value or original payload. Ordering is per aggregate revision and causation, with no global provider order; the facts of one atomic change may share the final aggregate revision with no order among them. A merge transaction records one `message.merged` (survivor and sorted absorbed references) plus one `message.transmission-joined` for the new member and no `message.created`, so consumers deduplicate each fact and reconcile current authorized state instead of relying on merge-before-join delivery. A recorded type never grants a consumer an unprojected original payload.
 - **Message time in facts.** Every fact that names a Message carries `data.messageTime`, the Message time (`messages.first_observed_at`) after the change: `message.*`, `assignment.changed` (intake and correction, including Network moves), `suppression.changed` (which also carries `messageId`) and `processing.completed`. `message.transmission-joined` and `message.merged` add `previousMessageTime`, the latest Message time among the Messages the change replaced, when it differs; the Message time never moves later, so `[messageTime, previousMessageTime]` covers the affected rows before and after. Live streams filter by it without reading the Message.
 - `producer.domain` names the producing domain:
 
@@ -375,6 +421,7 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 | `assignment` | Address rules, target resolution, suppression, historical correction | `assignment.*`, rule configuration and correction facts |
 | `identity` | Principals, credentials, sessions, grants | Identity facts |
 | `processing` | Workflows, processing instances, candidates, results | Processing facts |
+| `delivery` | Subscriptions | Subscription configuration facts; Delivery attempts record no facts |
 
 | Event type | Emitted when |
 | --- | --- |
@@ -383,7 +430,7 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 | `suppression.changed` | Suppression created or lifted |
 | `gateway.state-changed` | Effective gateway state change from a report, a Submission or the contact-loss monitor; one per Gateway revision, with a matching `gateway_state_history` row |
 | `operation.submission-rejected`, `operation.observation-time-implausible`, `operation.network-ambiguous` | Operational problems at intake; the ambiguity fact carries the chosen Network and the resolution `address-priority` |
-| `configuration.changed` | Account/group/grant, Unit/collection/Organization/template, rule, workflow or processing-instance configuration changed |
+| `configuration.changed` | Account/group/grant, Unit/collection/Organization/template, rule, workflow, processing-instance or Subscription configuration changed (Subscriptions: `created`, `updated`, `paused`, `deleted`) |
 | `principal.access-changed`, `principal.deleted` | Effective access of a principal changed or the account is being deleted |
 | `processing.completed` | A processing result was published |
 

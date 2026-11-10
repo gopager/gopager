@@ -64,7 +64,7 @@ func TestProcessingFactFactoriesClosedVocabularyAndDetachedEnvelope(t *testing.T
 		t.Fatal(err)
 	}
 	if published.AggregateRef.ID != completion.ResultID || published.AggregateRef.Type != "processingResult" ||
-		published.AggregateRevision != completion.ResultRevision || published.ReplayMode != "historical-reprocessing" ||
+		published.AggregateRevision != completion.ResultRevision || published.ReplayMode != ReplayReprocess ||
 		published.Type != "processing.completed" || !strings.Contains(string(encoded), `"groups":["payload"]`) ||
 		!strings.Contains(string(encoded), `"sourceRevision":"7"`) || !strings.Contains(string(encoded), `"status":"completed"`) {
 		t.Fatalf("publication lost source/replay/aggregate identity: %s", encoded)
