@@ -2,6 +2,7 @@ package deliverystore_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"os"
 	"strings"
@@ -278,6 +279,64 @@ func TestDeleteAccountDataRemovesTheSubscribersRows(t *testing.T) {
 			return errors.Join(err, errors.New("delivery kept"))
 		}
 		_, err := w.store.Subscription(tx.Context(), tx, other.ID, false)
+		return err
+	})
+}
+
+// TestTakeSendAttemptSweepsExpiredWindowsOfOtherBuckets proves that admitted sends delete
+// expired windows of buckets that never send again, a bounded number per send, and keep current
+// windows of other buckets.
+func TestTakeSendAttemptSweepsExpiredWindowsOfOtherBuckets(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	window := w.now().UTC().Truncate(time.Minute)
+	current := sha256.Sum256([]byte("current"))
+	w.within(func(tx platform.TransactionContext) error {
+		executor, err := w.primary.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		for i := range 150 {
+			bucket := sha256.Sum256([]byte{byte(i), byte(i >> 8)})
+			if _, err := executor.ExecContext(tx.Context(), `INSERT INTO delivery_admissions (bucket, window_start, count)
+				VALUES ($1, $2, 1)`, bucket[:], window.Add(-time.Hour)); err != nil {
+				return err
+			}
+		}
+		_, err = w.store.TakeSendAttempt(tx.Context(), tx, current, window, 10)
+		return err
+	})
+	count := func() int {
+		var expired int
+		w.within(func(tx platform.TransactionContext) error {
+			executor, err := w.primary.Resolve(tx)
+			if err != nil {
+				return err
+			}
+			return executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM delivery_admissions WHERE window_start < $1`,
+				window).Scan(&expired)
+		})
+		return expired
+	}
+	if expired := count(); expired != 50 {
+		t.Fatalf("after one admitted send %d expired windows remain, want 50", expired)
+	}
+	other := sha256.Sum256([]byte("other"))
+	w.within(func(tx platform.TransactionContext) error {
+		ok, err := w.store.TakeSendAttempt(tx.Context(), tx, other, window, 10)
+		if err == nil && !ok {
+			err = errors.New("send not admitted")
+		}
+		return err
+	})
+	if expired := count(); expired != 0 {
+		t.Fatalf("after two admitted sends %d expired windows remain", expired)
+	}
+	w.within(func(tx platform.TransactionContext) error {
+		ok, err := w.store.TakeSendAttempt(tx.Context(), tx, current, window, 2)
+		if err == nil && !ok {
+			err = errors.New("current window of the first bucket was swept")
+		}
 		return err
 	})
 }

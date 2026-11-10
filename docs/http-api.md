@@ -1073,7 +1073,7 @@ targets on behalf of a subscriber. Properties and limits are in the OpenAPI sche
   [sending admission](#delivery-sending-admission); over the limit it is `429 RATE_LIMITED`.
   Updates and deletes take none.
 - `POST` takes a `commandId` ([Command IDs](#command-ids-idempotent-creation)); an identical replay returns
-  the Subscription as it is now. `PUT` and `DELETE` take `expectedRevision`; a stale one is
+  the Subscription as it is now, or `404` when the caller may no longer see it. `PUT` and `DELETE` take `expectedRevision`; a stale one is
   `409 REVISION_CONFLICT`.
 - `GET /subscriptions` uses [offset paging](#pagination).
 - Every change records a configuration fact.
@@ -1149,7 +1149,7 @@ schemas `Delivery` and `DeliveryAttempt`.
   created, or the Subscription, the target, the Domain event or the readable data no longer exists. A target
   that is unavailable now is `503 AUTHORITY_UNAVAILABLE` ([Errors](#errors)). A redelivery takes one unit of the
   subscriber's [sending admission](#delivery-sending-admission). It takes a `commandId`; a replay returns the
-  redelivery as it is now.
+  redelivery as it is now, or `404` when the caller may no longer read it.
 - `GET /deliveries` uses [offset paging](#pagination).
 
 ### Layouts

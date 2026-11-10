@@ -130,6 +130,10 @@ type Store interface {
 	TakeSendAttempt(ctx context.Context, tx platform.TransactionContext, bucket [32]byte, window time.Time, limit int) (bool, error)
 	// ReleaseSendAttempt takes back one send counted in the bucket's window.
 	ReleaseSendAttempt(ctx context.Context, tx platform.TransactionContext, bucket [32]byte, window time.Time) error
+	// CurrentMessage returns the Message a fact refers to now: the named Message while it exists,
+	// otherwise the Message its Transmission belongs to after a merge absorbed it (transmission
+	// may be uuid.Nil). It fails with authz.ErrNotFound when neither exists any more.
+	CurrentMessage(ctx context.Context, tx platform.TransactionContext, message, transmission uuid.UUID) (uuid.UUID, error)
 	// MessageExists reports whether a Message is still stored.
 	MessageExists(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (bool, error)
 	// DeleteAccountData removes the Subscriptions, Deliveries and attempts of an account.

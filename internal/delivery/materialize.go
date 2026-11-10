@@ -111,7 +111,14 @@ func (s *subject) observeMessage(ctx context.Context, tx platform.TransactionCon
 	if s.event.Data.MessageID == uuid.Nil {
 		return nil, nil
 	}
-	projection, ok, err := deps.Projector.ProjectForDelivery(ctx, tx, s.authority, now, s.event.Data.MessageID)
+	message, err := deps.Store.CurrentMessage(ctx, tx, s.event.Data.MessageID, s.event.Data.TransmissionID)
+	if errors.Is(err, authz.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	projection, ok, err := deps.Projector.ProjectForDelivery(ctx, tx, s.authority, now, message)
 	if err != nil {
 		if absentAuthority(err) {
 			return nil, nil

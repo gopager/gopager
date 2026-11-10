@@ -168,7 +168,8 @@ func (d *Deliveries) Retry(ctx context.Context, proof identity.Proof, id uuid.UU
 
 // Redeliver deliberately sends a terminal Delivery again as a new Delivery, materialized from
 // the original Domain event under the subscriber's current authority and Subscription. The caller
-// must confirm the duplicate risk; the command is idempotent per caller and command ID. It fails
+// must confirm the duplicate risk; the command is idempotent per caller and command ID, and a
+// replay returns the new Delivery only while the caller may still read it. It fails
 // with ErrDependencyUnavailable when the original input ceiling has passed or the data is no
 // longer available to the subscriber, and takes one unit of the subscriber's sending admission.
 func (d *Deliveries) Redeliver(ctx context.Context, proof identity.Proof, id, command uuid.UUID, confirmDuplicateRisk bool,
@@ -194,7 +195,10 @@ func (d *Deliveries) Redeliver(ctx context.Context, proof identity.Proof, id, co
 			if err != nil {
 				return err
 			}
-			record, err := d.deps.Store.Delivery(tx.Context(), tx, stored.ID, false)
+			record, err := d.authorized(tx.Context(), tx, authority, now, stored.ID, ReadAction, false)
+			if errors.Is(err, authz.ErrForbidden) {
+				return authz.ErrNotFound
+			}
 			if err != nil {
 				return err
 			}

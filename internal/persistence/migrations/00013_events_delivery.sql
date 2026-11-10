@@ -132,6 +132,8 @@ CREATE TABLE delivery_admissions (
     count integer NOT NULL CHECK (count > 0),
     PRIMARY KEY (bucket, window_start)
 );
+-- Serves the bounded sweep of expired windows of buckets that do not come back.
+CREATE INDEX delivery_admissions_window_start ON delivery_admissions (window_start);
 
 -- +goose Down
 DROP TABLE delivery_admissions;
