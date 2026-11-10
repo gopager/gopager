@@ -203,7 +203,8 @@ type eventData struct {
 	Reason         string     `json:"reason"`
 }
 
-// parseEvent decodes the envelope fields Delivery needs from a stored record.
+// parseEvent decodes the envelope fields Delivery needs from a stored record; a Gateway fact's
+// Gateway comes from its aggregate reference.
 func parseEvent(id uuid.UUID, envelope json.RawMessage) (eventView, error) {
 	var decoded struct {
 		Type          string     `json:"type"`
@@ -212,10 +213,18 @@ func parseEvent(id uuid.UUID, envelope json.RawMessage) (eventView, error) {
 		ReplayMode    string     `json:"replayMode"`
 		CorrelationID *uuid.UUID `json:"correlationId"`
 		CausationID   *uuid.UUID `json:"causationId"`
-		Data          eventData  `json:"data"`
+		AggregateRef  struct {
+			Type string    `json:"type"`
+			ID   uuid.UUID `json:"id"`
+		} `json:"aggregateRef"`
+		Data eventData `json:"data"`
 	}
 	if err := json.Unmarshal(envelope, &decoded); err != nil {
 		return eventView{}, platform.NewFailure(platform.CodeInternalError, err)
+	}
+	// Gateway facts name their Gateway as the aggregate, not in data.
+	if decoded.AggregateRef.Type == "gateway" && decoded.Data.GatewayID == uuid.Nil {
+		decoded.Data.GatewayID = decoded.AggregateRef.ID
 	}
 	return eventView{ID: id, Type: decoded.Type, OccurredAt: decoded.OccurredAt.UTC(), RecordedAt: decoded.RecordedAt.UTC(),
 		ReplayMode: decoded.ReplayMode, CorrelationID: decoded.CorrelationID, CausationID: decoded.CausationID,

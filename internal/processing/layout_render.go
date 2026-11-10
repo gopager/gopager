@@ -26,14 +26,18 @@ type layoutItem struct {
 	children []layoutItem
 }
 
-// size estimates the item's share of the output: JSON output carries a field's typed value, text
-// and Markdown its formatted text, never both. The serializer checks the exact length.
+// size estimates the item's share of the output: JSON output carries a field's typed value and
+// the texts as given; text and Markdown carry the formatted texts without control characters,
+// never both. The serializer checks the exact length.
 func (i layoutItem) size(json bool) int {
-	size := len(i.label) + len(i.title) + len(i.url)
-	if json && i.value != nil {
-		return size + len(i.value.Value)
+	if json {
+		size := len(i.label) + len(i.title) + len(i.url)
+		if i.value != nil {
+			return size + len(i.value.Value)
+		}
+		return size + len(i.text)
 	}
-	return size + len(i.text)
+	return len(sanitizeLayoutText(i.label)) + len(sanitizeLayoutText(i.title)) + len(i.url) + len(sanitizeLayoutText(i.text))
 }
 
 // Render evaluates the layout against reader and returns the body for the program's output

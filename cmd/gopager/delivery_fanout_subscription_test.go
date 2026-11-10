@@ -526,7 +526,7 @@ func TestDeliveryExpiryCeilingIsOneDayAfterCreation(t *testing.T) {
 }
 
 // TestSubscriptionGatewayStateTriggerNeedsGatewayReadOnAnAgency proves that a gateway.state-changed
-// Subscription delivers the new state to a subscriber with gateway.read on one of the Gateway's
+// fact as the intake producer writes it (the Gateway in the aggregate reference) delivers the new state to a subscriber with gateway.read on one of the Gateway's
 // Agencies and nothing to one without.
 func TestSubscriptionGatewayStateTriggerNeedsGatewayReadOnAnAgency(t *testing.T) {
 	t.Parallel()
@@ -538,8 +538,13 @@ func TestSubscriptionGatewayStateTriggerNeedsGatewayReadOnAnAgency(t *testing.T)
 	for _, bearer := range []string{reader, outsider} {
 		f.subCreated(bearer, subInput(instance, map[string]any{"eventTypes": []string{"gateway.state-changed"}}))
 	}
-	f.fact("gateway.state-changed", map[string]any{"gatewayId": f.gateway, "oldState": "active", "newState": "contact-lost"},
-		factOptions{aggregate: "gateway"})
+	f.producedFact(func(now time.Time) (any, uuid.UUID, error) {
+		contact := now
+		fact := events.IntakeFact{ID: uuid.New(), Type: events.GatewayStateChanged, GatewayID: f.gateway, Revision: 2,
+			OccurredAt: now, OldState: "active", NewState: "contact-lost", ContactTime: &contact}
+		envelope, err := fact.Envelope(now)
+		return envelope, fact.ID, err
+	})
 
 	f.fanOutAll()
 	f.attempt()

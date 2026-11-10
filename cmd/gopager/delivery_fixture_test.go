@@ -221,6 +221,21 @@ func (f *deliveryFixture) fact(eventType string, data map[string]any, options fa
 	return id
 }
 
+// producedFact records the envelope a producer builds at the primary clock, exactly as encoded.
+func (f *deliveryFixture) producedFact(build func(now time.Time) (any, uuid.UUID, error)) uuid.UUID {
+	f.t.Helper()
+	envelope, id, err := build(f.now())
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	encoded, err := json.Marshal(envelope)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	f.exec(`INSERT INTO domain_events (id, envelope) VALUES ($1, $2::jsonb)`, id, string(encoded))
+	return id
+}
+
 // messageFact records a Message fact for the Message.
 func (f *deliveryFixture) messageFact(eventType string, message uuid.UUID, extra map[string]any) uuid.UUID {
 	data := map[string]any{"messageId": message, "messageTime": f.now().Format(time.RFC3339Nano)}

@@ -315,3 +315,19 @@ func TestLayoutFallbackSkipsAControlOnlyValue(t *testing.T) {
 		}
 	}
 }
+
+// TestLayoutBudgetChargesTextWithoutControlCharacters proves that text and Markdown are charged
+// with the text they emit after control characters are removed, so values padded with removed
+// characters do not fail a body that fits the bound.
+func TestLayoutBudgetChargesTextWithoutControlCharacters(t *testing.T) {
+	t.Parallel()
+	padded := strings.Repeat("x\r", 20000)
+	fixture := lfixture(t, map[string]any{"a": padded, "b": padded})
+	blocks := `[{"kind":"field","field":` + fa + `},{"kind":"field","field":` + fb + `}]`
+	for _, kind := range []string{"text", "markdown"} {
+		body, err := renderLayout(t, kind, blocks, fixture)
+		if err != nil || len(body) != 40001 {
+			t.Fatalf("%s: %d bytes, %v", kind, len(body), err)
+		}
+	}
+}
