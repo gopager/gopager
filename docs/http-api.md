@@ -1182,7 +1182,7 @@ data, not a template: it has no expressions, loops or markup. Schemas: `Layout`,
   items. The output kind is part of the definition and cannot change on update. Markdown escapes every
   interpolated value, including angle brackets, and no layout ever produces HTML. Interpolated text drops
   control characters. Absent fields render nothing. A link renders only when all its fields are present and the
-  result is an `http`, `https` or `mailto` URL; each value is path-escaped. A rendered body is limited to 64 KiB.
+  result is an `http`, `https` or `mailto` URL; each value is percent-encoded except for the unreserved characters (letters, digits, `-`, `.`, `_`, `~`) and `@`, so a value can never add a path segment, query parameter or fragment. A rendered body is limited to 64 KiB.
 - **Versions.** Every save appends an immutable version whose number is the layout's new revision (create is version 1).
   A Delivery records the layout and version it was rendered with. `{version}` is a positive decimal number; an
   unknown version is `404`.

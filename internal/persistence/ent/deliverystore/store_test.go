@@ -340,3 +340,41 @@ func TestTakeSendAttemptSweepsExpiredWindowsOfOtherBuckets(t *testing.T) {
 		return err
 	})
 }
+
+// TestReleaseSendAttemptTakesBackExactlyOneUnit proves that releasing a send takes back one unit
+// of the window and removes the row only with its last unit.
+func TestReleaseSendAttemptTakesBackExactlyOneUnit(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	window := w.now().UTC().Truncate(time.Minute)
+	bucket := sha256.Sum256([]byte("release"))
+	take := func() bool {
+		var ok bool
+		w.within(func(tx platform.TransactionContext) error {
+			var err error
+			ok, err = w.store.TakeSendAttempt(tx.Context(), tx, bucket, window, 2)
+			return err
+		})
+		return ok
+	}
+	release := func() {
+		w.within(func(tx platform.TransactionContext) error {
+			return w.store.ReleaseSendAttempt(tx.Context(), tx, bucket, window)
+		})
+	}
+	if first, second := take(), take(); !first || !second {
+		t.Fatal("two sends within the limit were refused")
+	}
+	release()
+	if !take() {
+		t.Fatal("a released unit was not available again")
+	}
+	if take() {
+		t.Fatal("releasing one unit erased the other admitted send")
+	}
+	release()
+	release()
+	if first, second, third := take(), take(), take(); !first || !second || third {
+		t.Fatal("releasing the last units did not restore exactly the limit")
+	}
+}

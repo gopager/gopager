@@ -32,18 +32,21 @@ type deliveryRedeliver struct {
 	ConfirmDuplicateRisk bool      `json:"confirmDuplicateRisk"`
 }
 
-// deliveryFilter parses the optional subscriptionId and state query parameters.
-func deliveryFilter(r *http.Request) (delivery.DeliveryFilter, error) {
-	query := r.URL.Query()
-	filter := delivery.DeliveryFilter{State: query.Get("state")}
-	if value := query.Get("subscriptionId"); value != "" {
+// deliveryListQuery parses offset, limit and the optional subscriptionId and state filters.
+func deliveryListQuery(r *http.Request) (delivery.DeliveryFilter, units.PageInput, error) {
+	page, values, err := managementPageWith(r, "subscriptionId", "state")
+	if err != nil {
+		return delivery.DeliveryFilter{}, units.PageInput{}, err
+	}
+	filter := delivery.DeliveryFilter{State: values["state"]}
+	if value, ok := values["subscriptionId"]; ok {
 		id, err := uuid.Parse(value)
 		if err != nil || id == uuid.Nil || id.String() != value {
-			return delivery.DeliveryFilter{}, authz.ErrInvalidInput
+			return delivery.DeliveryFilter{}, units.PageInput{}, authz.ErrInvalidInput
 		}
 		filter.SubscriptionID = &id
 	}
-	return filter, nil
+	return filter, page, nil
 }
 
 // RegisterDeliveryRoutes adds the Delivery result, retry and redelivery routes. The service
@@ -52,11 +55,7 @@ func RegisterDeliveryRoutes(mux *http.ServeMux, transport *identity.HTTPTranspor
 	deliveries DeliveryService) {
 	guard := routeGuard{transport: transport, authenticator: authenticator}
 	mux.HandleFunc("GET /api/v1/deliveries", guard.route(func(r *http.Request, proof identity.Proof, _ func(identity.Authentication) error) (any, error) {
-		page, err := managementPage(r)
-		if err != nil {
-			return nil, err
-		}
-		filter, err := deliveryFilter(r)
+		filter, page, err := deliveryListQuery(r)
 		if err != nil {
 			return nil, err
 		}

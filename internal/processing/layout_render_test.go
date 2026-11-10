@@ -149,6 +149,8 @@ func TestLayoutLinks(t *testing.T) {
 		{"javascript omitted", "javascript:alert(1)", "{0}", "", ""},
 		{"scheme ftp omitted", "x", "ftp://e.com/{0}", "", ""},
 		{"mailto kept", "a@b.c", "mailto:{0}", "L: mailto:a@b.c", "[L](mailto:a@b.c)"},
+		{"query delimiters", "alarm&recipient=other+x y#f", "https://e.com/s?q={0}",
+			"L: https://e.com/s?q=alarm%26recipient%3Dother%2Bx%20y%23f", "[L](https://e.com/s?q=alarm%26recipient%3Dother%2Bx%20y%23f)"},
 		{"parens encoded", "x", "https://e.com/(a)/{0}", "L: https://e.com/(a)/x", "[L](https://e.com/%28a%29/x)"},
 		{"http without host omitted", "x", "http:///{0}", "", ""},
 	} {
@@ -206,5 +208,26 @@ func TestLayoutFallbackSkipsEmptySection(t *testing.T) {
 		{"kind":"section","title":"T","blocks":[{"kind":"field","field":`+gone+`}]},{"kind":"text","text":"alt"}]}]`, fixture)
 	if err != nil || got != "alt" {
 		t.Errorf("got %q, %v", got, err)
+	}
+}
+
+// TestLayoutLargeFieldIsChargedOnceForItsOutputKind proves that a field is charged against the
+// output bound with the one representation its output kind emits, so a 40 KiB value fits in
+// every kind, while a value beyond the bound still fails.
+func TestLayoutLargeFieldIsChargedOnceForItsOutputKind(t *testing.T) {
+	t.Parallel()
+	large := strings.Repeat("x", 40<<10)
+	for _, kind := range []string{"text", "markdown", "json"} {
+		body, err := renderLayout(t, kind, `[{"kind":"field","field":`+fa+`}]`, lfixture(t, map[string]any{"a": large}))
+		if err != nil || !strings.Contains(body, large) {
+			t.Fatalf("%s: a 40 KiB field did not render: %v", kind, err)
+		}
+	}
+	tooLarge := strings.Repeat("x", 70<<10)
+	for _, kind := range []string{"text", "markdown", "json"} {
+		_, err := renderLayout(t, kind, `[{"kind":"field","field":`+fa+`}]`, lfixture(t, map[string]any{"a": tooLarge}))
+		if platform.FailureCode(err) != platform.CodeResourceLimit {
+			t.Fatalf("%s: a 70 KiB field: %v", kind, err)
+		}
 	}
 }
