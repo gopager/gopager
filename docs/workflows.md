@@ -603,7 +603,7 @@ All processing events use schema version 1 and producer version `processing-kern
 | `configuration.changed` | `processing-instance` (ID, revision) | `configuration` | `{"changeKind": "created" \| "updated"}`. Paths, configuration values and the principal are not included. |
 | `processing.completed` | `processingResult` (result ID, result revision) | `source-classified` | `transmissionId`, `messageId`, `workflowId`, `definitionVersionId`, `resultId`, `resultRevision`, `sourceRevision`, `contextRevision`, `status: "completed"`, `result` (the [result shape](#result-shape)). |
 
-`processing.completed` is emitted only for selected results, when the result is published. Not-selected outcomes and failures emit no event; a failure is visible as the transmission's `failed` processing status. Replay mode is `normal`, or `historical-reprocessing` for historical replays.
+`processing.completed` is emitted only for selected results, when the result is published. Not-selected outcomes and failures emit no event; a failure is visible as the transmission's `failed` processing status. Replay mode is `normal`, or `reprocess` for a historical Reprocess; Delivery fan-out ignores every fact whose replay mode is not `normal`.
 
 ### Status reads
 

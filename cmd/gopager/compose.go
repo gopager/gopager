@@ -44,6 +44,10 @@ type core struct {
 	// readSide is the Message read service and search admission shared by the query, saved-view
 	// and live routes, composed once so that they share one classification cache.
 	readSide *readSide
+	// deliveryConfig holds the Delivery settings; delivery is the Delivery side composed from
+	// them on first use.
+	deliveryConfig deliveryConfig
+	delivery       *deliveryRuntime
 }
 
 // composeCore builds every store and the services every role needs. Constructors report

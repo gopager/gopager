@@ -27,8 +27,19 @@ type FieldRef struct {
 	Path      []string `json:"path"`
 }
 
+// validate checks a Workflow field reference: a source, target or step namespace and a valid path.
 func (f FieldRef) validate() error {
-	if !slices.Contains([]string{"source", "target", "step"}, f.Namespace) || len(f.Path) == 0 || len(f.Path) > MaxDepth {
+	if !slices.Contains([]string{"source", "target", "step"}, f.Namespace) {
+		return invalid(errors.New("invalid field reference"))
+	}
+	return f.validateShape()
+}
+
+// validateShape checks a reference's structure without restricting its namespace: predicates
+// and layouts are compiled against an owner's Declarations, which decide what exists.
+func (f FieldRef) validateShape() error {
+	if f.Namespace == "" || !utf8.ValidString(f.Namespace) || strings.ContainsRune(f.Namespace, '\x00') ||
+		len(f.Path) == 0 || len(f.Path) > MaxDepth {
 		return invalid(errors.New("invalid field reference"))
 	}
 	for _, segment := range f.Path {
@@ -230,7 +241,7 @@ func CompilePredicate(ctx context.Context, predicate Predicate, declarations Dec
 		if p.Field == nil || len(p.Args) != 0 {
 			return "", invalid(errors.New("invalid field operands"))
 		}
-		if err := p.Field.validate(); err != nil {
+		if err := p.Field.validateShape(); err != nil {
 			return "", err
 		}
 		index, exists := fieldIndexes[p.Field.key()]
@@ -482,4 +493,17 @@ func byteComparisonCost(left, right any) uint64 {
 	default:
 		return 0
 	}
+}
+
+// Fields returns every field the predicate reads, in first-use order and without
+// duplicates. The result is a copy the caller may modify.
+func (p *PredicateProgram) Fields() []FieldRef {
+	if p == nil {
+		return nil
+	}
+	references := make([]FieldRef, len(p.fields))
+	for i, field := range p.fields {
+		references[i] = FieldRef{Namespace: field.reference.Namespace, Path: slices.Clone(field.reference.Path)}
+	}
+	return references
 }

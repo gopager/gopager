@@ -15,13 +15,19 @@ type eventsRuntime struct {
 	// hub fans the database wake-ups for new facts out to all subscribers.
 	hub *events.WakeHub
 	// runners are drained by the platform, which accepts runners only with the worker role: the
-	// hub followed by one runner per registered consumer. They are empty without that role.
+	// hub, one runner per registered consumer and the Delivery runner. They are empty without
+	// that role.
 	runners []platform.Runner
 }
 
-// registeredEventConsumers returns the durable event consumers the worker role runs.
-func registeredEventConsumers(*core) []events.Consumer {
-	return nil
+// registeredEventConsumers returns the durable event consumers the worker role runs: the
+// Delivery fan-out.
+func registeredEventConsumers(c *core) ([]events.Consumer, error) {
+	runtime, err := composeDelivery(c)
+	if err != nil {
+		return nil, err
+	}
+	return []events.Consumer{runtime.fanOut}, nil
 }
 
 // composeEventsRuntime builds the wake hub on the domain-event channel and, when withConsumers
@@ -36,13 +42,22 @@ func composeEventsRuntime(c *core, withConsumers bool, pollInterval time.Duratio
 		return runtime, nil
 	}
 	runtime.runners = append(runtime.runners, hub)
-	for _, consumer := range registeredEventConsumers(c) {
+	consumers, err := registeredEventConsumers(c)
+	if err != nil {
+		return nil, err
+	}
+	for _, consumer := range consumers {
 		runner, err := events.NewRunner(consumer, c.facts, c.store, hub, slog.Default(), pollInterval)
 		if err != nil {
 			return nil, err
 		}
 		runtime.runners = append(runtime.runners, runner)
 	}
+	deliveries, err := composeDeliveryRunner(c, hub)
+	if err != nil {
+		return nil, err
+	}
+	runtime.runners = append(runtime.runners, deliveries)
 	return runtime, nil
 }
 

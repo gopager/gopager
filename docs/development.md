@@ -37,6 +37,8 @@ One Go module, `github.com/gopager/gopager`.
 | `internal/ingest/` | Gateway transmission intake, Gateway/Network administration and credentials |
 | `internal/protocols/` | Protocol and transmission payload validation |
 | `internal/messages/` | Grouping of transmissions into messages |
+| `internal/delivery/` | Subscriptions, Delivery fan-out consumer, materialization, Delivery runner, sending admission, Delivery management, the Core target port and built-in layouts |
+| `internal/processing/presentation/` | Layout definitions with immutable versions and the layout resolver |
 | `internal/readmodel/` | Message feed, detail and filter-option service, filters, page tokens, projections and the ports they need |
 | `internal/commands/` | Administrative command receipts |
 | `internal/events/` | Domain fact types appended to the event store |
@@ -55,6 +57,8 @@ One Go module, `github.com/gopager/gopager`.
 | `internal/persistence/ent/permissions/` | Translation of authz decisions into Ent predicates |
 | `internal/persistence/ent/borrowed/` | Ent driver that runs inside an existing platform transaction; hosts most store integration tests |
 | `internal/persistence/ent/*store/` | Repository adapters per domain: `identitystore`, `unitstore`, `assignmentstore`, `ingeststore`, `processingstore`, `eventstore` (sequenced domain event log), `commandstore` |
+| `internal/persistence/ent/deliverystore/` | PostgreSQL implementation of the Delivery store in raw SQL: Subscriptions, Deliveries with fenced claims, attempts, admission windows and Unit parameters |
+| `internal/persistence/ent/layoutstore/` | Layout definitions and versions in raw SQL |
 | `internal/persistence/ent/readstore/` | PostgreSQL implementation of the `readmodel` store in raw SQL: eligibility, filters, text search, keyset paging and the page token key |
 | `internal/testutil/postgres/` | Test PostgreSQL lifecycle (`Run(m)`) |
 | `internal/testutil/pluginfixture/` | Builds plugin fixtures for tests (`Binary(t, name)`) |

@@ -39,7 +39,7 @@ While the process is not ready or is shutting down, every application route retu
 | Routes | Limit | Exceeded |
 | --- | --- | --- |
 | `POST /api/v1/auth/login` | 16 KiB | `413 RESOURCE_LIMIT` |
-| Master-data, assignment, correction and Gateway administration routes | 64 KiB | `413 RESOURCE_LIMIT` |
+| Master-data, assignment, correction, Gateway administration, Subscription, Delivery and layout routes | 64 KiB | `413 RESOURCE_LIMIT` |
 | Workflow, instance and preview routes | 1 MiB | `413 RESOURCE_LIMIT` |
 | `POST /api/v1/transmissions` | 1 MiB | `413 RESOURCE_LIMIT` |
 | `POST /api/v1/gateway/state` | 4 KiB | `413 RESOURCE_LIMIT` |
@@ -272,6 +272,9 @@ Scope evaluation per resource:
 | Gateway delegation | `gateway.diagnostics.read` and `gateway.credential.rotate` with a `gateway` scope reach exactly the listed Gateways; with `agency` scope they need every Agency of the Gateway. Diagnostics grant only the diagnostics and history routes; rotation grants only credential status, issue and revoke. Neither implies the other, any Message or Payload access, or Gateway administration. A grant on a deleted Gateway stops applying. |
 | Workflow | The workflow's own selection scope (`all`, `network` or `unit`), with each Network resolved to its Agency and each Unit to its Agency and collections. |
 | Processing instance | The global `plugin.configure` right. |
+| Subscription | `subscription.manage-own` on the caller's own account for personal Subscriptions; `subscription.manage-global` on the technical subscriber's account for global ones. See [Subscriptions](#subscriptions). |
+| Delivery | `delivery.read`, `delivery.retry` and `delivery.redeliver`, each matched against the subscriber's account, the Agencies and Units the Delivery concerns and their Unit collections, within the grant's maximum data age. See [Deliveries](#deliveries). |
+| Layout | Reads need `presentation.manage`, `subscription.manage-own` or `subscription.manage-global`; changes need `presentation.manage`. See [Layouts](#layouts). |
 
 ## Conventions
 
@@ -310,7 +313,10 @@ Every application error, except for unmatched routes, has this shape:
 - `textKey` is `error.<code>`, for client-side localization.
 - `fallback` is a redacted English message. It never contains internal causes, SQL or
   identifiers of hidden objects.
-- `parameters` is currently always `{}`.
+- `parameters` is `{}`, except for `AUTHORITY_UNAVAILABLE` on a Subscription target or a
+  redelivery whose instance is missing, disabled or without a provider: it then holds
+  `{"status":"unavailable","instanceId":"…"}`; `DEPENDENCY_UNAVAILABLE` carries `dependency` and
+  `EXTERNAL_UNCERTAIN` carries `deliveryId` (see the table below).
 - `requestId` is a fresh UUID per error response. The server logs the same `requestId` with the
   code and HTTP status (`API error response`), so an operator can correlate a client's report with
   the log; see [Operations](operations.md#exit-status-and-logging).
@@ -325,10 +331,12 @@ Every application error, except for unmatched routes, has this shape:
 | `REVISION_CONFLICT` | 409 | true | Stale `expectedRevision`, conflicting rule, already active suppression, or second pending Gateway credential. Reload the current state, then retry. A database serialization failure or deadlock is retried once by the server before it is reported with this code. A duplicate-key violation also reports `REVISION_CONFLICT` but with `retryable: false`: repeating the same request meets the same conflict. |
 | `IDEMPOTENCY_CONFLICT` | 409 | false | A `commandId` was reused by the same caller for a different operation or input, or a Gateway `submissionId` was reused with different content. Retrying the same request cannot succeed; send the original request again or use a new identifier. |
 | `INCOMPATIBLE_VERSION` | 409 | false | Incompatible version |
+| `DEPENDENCY_UNAVAILABLE` | 409 | false | A redelivery cannot be prepared because what it needs is gone or no longer readable for the subscriber ([Deliveries](#deliveries)); `parameters.dependency` is `input-ceiling` (24 hours since the original), `subscription` (deleted or no longer targeting the instance), `domain-event` (fact removed), `data` (not readable for the subscriber) or `input` (the input cannot be materialized). Fallback: `Required data or a required service is unavailable.` |
+| `EXTERNAL_UNCERTAIN` | 409 | false | A retry was requested for a Delivery whose external outcome is uncertain; only a confirmed redelivery may send it again. `parameters.deliveryId` names the Delivery. Fallback: `The external outcome is uncertain; send it again only deliberately.` |
 | `RESOURCE_LIMIT` | 413 | false | Body or collection size limit exceeded, or revision counter exhausted |
-| `RATE_LIMITED` | 429 | true | Login throttled ([Login rate limiting](#login-rate-limiting)) or a Message search over its limit ([Search rate limiting](#search-rate-limiting)); see `Retry-After` |
+| `RATE_LIMITED` | 429 | true | Login throttled ([Login rate limiting](#login-rate-limiting)), a Message search over its limit ([Search rate limiting](#search-rate-limiting)) or a Subscription create or redelivery over the subscriber's sending limit ([Delivery sending admission](#delivery-sending-admission)); see `Retry-After` |
 | `STORAGE_UNAVAILABLE` | 503 | true | Database unavailable |
-| `AUTHORITY_UNAVAILABLE` | 503 | true | Process not ready, or a required component is unavailable |
+| `AUTHORITY_UNAVAILABLE` | 503 | true | Process not ready, or a required component is unavailable. For a Subscription target or redelivery whose instance is unavailable it carries `parameters.status` and `parameters.instanceId` and is `retryable: false`: change the configuration instead of repeating the request. |
 | `COMMIT_UNCERTAIN` | 503 | false | The write may have committed. Re-send with the **same** command ID or `submissionId`, or read the resource, instead of creating a new operation. |
 | `INTERNAL_ERROR` | 500 | false | Unexpected failure |
 
@@ -348,6 +356,7 @@ Creating operations take a client-generated `commandId` (UUID, not nil). These a
 - `POST` gateway credentials and `DELETE` gateway credentials
 - `POST /workflows`, `POST /workflows/{id}/versions`
 - `POST /instances`, `PUT /instances/{id}`
+- `POST /subscriptions`, `POST /layouts`, `POST /deliveries/{id}/redeliver`
 
 Rules:
 
@@ -1004,3 +1013,195 @@ Definition format: [workflows](workflows.md).
 Artifacts are resolved under `-processing-artifact-root`. Without that directory,
 instance inspection returns `503 AUTHORITY_UNAVAILABLE`. Plugin and manifest details:
 [plugins](plugins.md).
+
+### Subscriptions
+
+| Method | Path | Right | Success | Purpose |
+| --- | --- | --- | --- | --- |
+| GET | `/subscriptions` | `subscription.manage-own`, `subscription.manage-global` | 200 | Own personal Subscriptions and the global ones the caller manages |
+| POST | `/subscriptions` | see below | 201 | Create (`commandId` and the writable properties) |
+| GET | `/subscriptions/{id}` | see below | 200 | Read |
+| PUT | `/subscriptions/{id}` | see below | 200 | Replace the writable properties at `expectedRevision` |
+| DELETE | `/subscriptions/{id}` | see below | 200 | Delete at `expectedRevision`; returns `{"id","revision"}` |
+
+A Subscription selects Domain event types and sends authorized, rendered input to delivery
+targets on behalf of a subscriber. Properties and limits are in the OpenAPI schemas
+`SubscriptionInput` and `Subscription`.
+
+- **Event types.** `eventTypes` holds 1 to 16 distinct types; they are stored sorted. Only
+  these types are deliverable: `message.created`, `message.transmission-joined`,
+  `message.merged`, `assignment.changed`, `suppression.changed`, `processing.completed` and
+  `gateway.state-changed`. Any other type is `400 INVALID_INPUT`. Only facts recorded in normal
+  operation create Deliveries; a historical Reprocess never does, and a fact older than 24 hours
+  at the time of fan-out creates none.
+- **Kinds and rights.** A `personal` Subscription acts as its owner and needs
+  `subscription.manage-own` on the caller's account; `subscriberId` must be absent. A `global`
+  Subscription acts as an active technical account named by `subscriberId` and needs
+  `subscription.manage-global` on that account. The guest cannot manage Subscriptions; its
+  state-changing requests are `401 LOGIN_REQUIRED` and its reads are empty or `404 NOT_FOUND`.
+  A personal Subscription is visible only to its owner, a global one only to its managers;
+  everything else is `404`. A caller who is not allowed to create the requested kind gets `403 FORBIDDEN`.
+- **What is sent is what the subscriber may read.** The filter, the layout and `splitByUnit` are
+  checked against the subscriber's field groups, not the caller's, and every Delivery is
+  materialized and re-checked under the subscriber's current authority just before it is sent.
+  A field group the subscriber cannot read is `400 INVALID_INPUT` on save (unlike
+  [saved views](#saved-views), which answer `403`).
+- **Filter.** `filter` is the same predicate tree as in [workflows](workflows.md), over the catalog
+  below.
+- **Targets.** 1 to 8 distinct instances with the Delivery capability. `revision` is 0 (or absent)
+  or the instance's current revision, and the response always shows the revision that was saved.
+  A different `revision` is `409 REVISION_CONFLICT`. `inputs` are typed constants for inputs
+  the target's descriptor declares; an undeclared input or a value of the wrong type is `400`. An instance
+  that is missing, disabled or without an available provider makes the request
+  `503 AUTHORITY_UNAVAILABLE` with `parameters.status` `unavailable` and `parameters.instanceId`
+  ([Errors](#errors)). If the Subscription has a layout, every target must support the layout's output kind.
+- **Layout.** `layoutId` names a [layout](#layouts); an unknown layout is `400`. Without one, the built-in layout of
+  the output kind is used: the event type, the Message text (else its numeric text or form), the Unit names, the
+  Gateway name and state, and the Message time; fields the subscriber cannot read are left out.
+- **Split by Unit.** With `splitByUnit` a Message creates one Delivery per relevant Unit instead of one per
+  target (`splitKey` is the Unit ID); a Message without a Unit, and Gateway facts, are never split. It needs the
+  `unit` field group.
+- **Maximum age.** `maxAgeSeconds` (1 to 86400) ends a Delivery's life that long after the Message's time
+  anchor; a Delivery never lives longer than 24 hours after it was created. A Delivery past its expiry becomes
+  `expired` instead of being sent.
+- **State and effects.** `state: "paused"` pauses a Subscription: it creates no Deliveries and none of its
+  unstarted Deliveries starts. Updating cancels the unstarted Deliveries of the old revision (outcome
+  `subscription-changed`, or `subscription-paused` when the update pauses an active Subscription);
+  deleting cancels them with `subscription-deleted` and keeps the Delivery history. Only unstarted Deliveries are
+  cancelled. `kind` and `subscriberId` cannot change.
+- **Sending admission on create.** Creating takes one unit of the subscriber's
+  [sending admission](#delivery-sending-admission); over the limit it is `429 RATE_LIMITED`.
+  Updates and deletes take none.
+- `POST` takes a `commandId` ([Command IDs](#command-ids-idempotent-creation)); an identical replay returns
+  the Subscription as it is now. `PUT` and `DELETE` take `expectedRevision`; a stale one is
+  `409 REVISION_CONFLICT`.
+- `GET /subscriptions` uses [offset paging](#pagination).
+- Every change records a configuration fact.
+
+Field catalog of filters and layouts. A reference is `{"namespace","path"}` (schema `DeliveryFieldRef`).
+Every field is optional, because not every event type supplies it. A field in a group the subscriber
+cannot read is absent when evaluated and rejected when saved.
+
+| Reference | Type | Field group |
+| --- | --- | --- |
+| `event.type`, `event.reason` | string | none |
+| `event.occurredAt` | timestamp | none |
+| `event.lateJoin` | boolean | none |
+| `message.id`, `message.processingStatus`, `message.correctionStatus` | string | none |
+| `message.time` | timestamp | none |
+| `message.protocol`, `message.form`, `message.text`, `message.numeric` | string | `payload` |
+| `message.unitIds`, `message.unitNames` | list of strings | `unit` |
+| `unit.id`, `unit.name` | string | `unit` |
+| `gateway.id`, `gateway.name`, `gateway.oldState`, `gateway.newState` | string | `gateway` |
+| `gateway.contactTime` | timestamp | `gateway` |
+| `result` with path `[workflowId, output]` | the output's declared type | `derived` |
+
+### Deliveries
+
+| Method | Path | Right | Success | Purpose |
+| --- | --- | --- | --- | --- |
+| GET | `/deliveries` | `delivery.read` | 200 | List, newest first; filters `subscriptionId` and `state` |
+| GET | `/deliveries/{id}` | `delivery.read` | 200 | Read with `attempts` |
+| POST | `/deliveries/{id}/retry` | `delivery.retry` | 200 | Make a transiently failed Delivery due again (`expectedRevision`) |
+| POST | `/deliveries/{id}/redeliver` | `delivery.redeliver` | 201 | Send again as a new Delivery (`commandId`, `confirmDuplicateRisk`) |
+
+A Delivery is the inspectable result of one send of one Domain event to one target of one Subscription (and, with
+split by Unit, one Unit). The rendered input and the authorization context are never part of it. Properties:
+schemas `Delivery` and `DeliveryAttempt`.
+
+- **Rights and visibility.** A grant matches a Delivery through the subscriber's account, an Agency, a Unit or a Unit
+  collection the Delivery concerns, and its maximum data age. A list without any `delivery.read` grant is
+  `403 FORBIDDEN`; otherwise it holds the matching Deliveries. For a single Delivery, `retry` and `redeliver`
+  answer `403` when the caller may read it but not run the command, and `404 NOT_FOUND` when it may not read it.
+  The guest can only read.
+- **States.** `prepared`, `started` and `retry-pending` are open; `accepted`, `failed`, `uncertain`, `expired` and
+  `cancelled` are terminal. `GET /deliveries` rejects any other `state` with `400`.
+- **`accepted` means the target provider accepted the input.** It says nothing about the content being read or
+  acted on, and an accepted Delivery cannot be recalled.
+- **Outcome codes.** `outcomeCode` explains the state of the Delivery and of each attempt:
+
+| Code | Meaning |
+| --- | --- |
+| `accepted` | The provider accepted the input. |
+| `transient` | The provider did not perform the effect; a later attempt may succeed. While a Delivery is `retry-pending` or `failed` it is the reason of the last attempt. |
+| `permanent` | The provider did not perform the effect and never will (`failed`). |
+| `retry-exhausted` | Attempts were used up (`failed`). |
+| `uncertain` | The effect may or may not have happened (`uncertain`). |
+| `lease-lost` | The worker lost its claim during an attempt. |
+| `expired` | The Delivery's expiry passed before it was accepted. |
+| `subscription-paused`, `subscription-changed`, `subscription-deleted` | The Subscription was paused, replaced or deleted before the Delivery started (`cancelled`). |
+| `authority-revoked` | The subscriber lost the right to the content or the Delivery before it started (`cancelled`). |
+| `no-longer-matching` | The data no longer matches the Subscription's filter or is no longer visible (`cancelled`). |
+| `parameter-conflict`, `input-invalid`, `render-limit` | The target inputs conflict, the content cannot be built for the target, or the rendering exceeds 64 KiB (`failed`). |
+| `rate-limited` | Deferred to the next [sending admission](#delivery-sending-admission) window (`retry-pending`). |
+| `dependency-unavailable` | Data or the target was unavailable; the start is deferred by 60 seconds. |
+
+- **Retry.** `POST .../retry` makes a `failed` Delivery with outcome `transient` or `retry-exhausted` due again,
+  before its expiry, at the `expectedRevision`. A stale revision, any other state or outcome, or a Delivery past its
+  expiry is `409 REVISION_CONFLICT`. An `uncertain` Delivery is `409 EXTERNAL_UNCERTAIN`: its effect may have
+  happened, so only a redelivery may send it. The retry takes no `commandId` and no sending admission.
+- **Redelivery.** `POST .../redeliver` creates a new Delivery (`origin: "redelivery"`, `redeliveryOf` set,
+  state `prepared`) for the original's Subscription, Domain event, target and split. It is rendered from the
+  Subscription's current content under the subscriber's current authority, so it may differ from the original.
+  `confirmDuplicateRisk` must be `true`, otherwise `400`: the recipient may receive the content twice, and an
+  acceptance cannot be recalled. The original must be terminal and its Subscription active, otherwise
+  `409 REVISION_CONFLICT`. It is `409 DEPENDENCY_UNAVAILABLE` when more than 24 hours passed since the original was
+  created, or the Subscription, the target, the Domain event or the readable data no longer exists. A target
+  that is unavailable now is `503 AUTHORITY_UNAVAILABLE` ([Errors](#errors)). A redelivery takes one unit of the
+  subscriber's [sending admission](#delivery-sending-admission). It takes a `commandId`; a replay returns the
+  redelivery as it is now.
+- `GET /deliveries` uses [offset paging](#pagination).
+
+### Layouts
+
+| Method | Path | Right | Success | Purpose |
+| --- | --- | --- | --- | --- |
+| GET | `/layouts` | see below | 200 | List, ordered by name, then ID |
+| POST | `/layouts` | `presentation.manage` | 201 | Create (`commandId`, `name`, `definition`) |
+| GET | `/layouts/{id}` | see below | 200 | Read at the current version |
+| PUT | `/layouts/{id}` | `presentation.manage` | 200 | Replace `name` and `definition` at `expectedRevision`; appends a version |
+| DELETE | `/layouts/{id}` | `presentation.manage` | 200 | Delete at `expectedRevision`; returns `{"id","revision"}` |
+| GET | `/layouts/{id}/versions/{version}` | see below | 200 | Read one immutable version |
+
+A layout is a named, versioned arrangement of catalog fields that a Subscription renders a Domain event with. It is
+data, not a template: it has no expressions, loops or markup. Schemas: `Layout`, `LayoutDefinition`, `LayoutBlock`.
+
+- **Rights.** Reads need `presentation.manage`, `subscription.manage-own` or `subscription.manage-global`, so
+  Subscription authors can pick a layout; a caller with none of them gets `403 FORBIDDEN`. Changes need
+  `presentation.manage`. Layouts are not scoped to an owner.
+- **Definition.** `{"schemaVersion":1,"outputKind","blocks":[…]}` with at least one block. Block kinds:
+  `text` (literal `text`), `field` and `chip` (a catalog `field` and an optional `label`), `link` (a `label` and a
+  `url` built from a template with the placeholders `{0}` to `{9}` over up to 10 `fields`), `section` (an optional
+  `title` and nested `blocks`), `conditional` (a `when` predicate, `then` blocks and optional `else` blocks) and
+  `fallback` (2 to 8 alternative `blocks`; the first one that renders something is used). A property that does
+  not belong to the block kind is `400`. Fields use the [catalog](#subscriptions); an unknown field is `400`. A
+  definition may hold at most 256 blocks, nested at most 8 levels; text is limited to 4096 bytes and labels
+  and titles to 256 bytes. Exceeding such a limit is `413 RESOURCE_LIMIT`. A name is 1 to 256 bytes, valid UTF-8 and
+  not blank (`400` otherwise).
+- **Output kinds.** `text` renders plain lines, `markdown` renders Markdown and `json` renders a JSON array of typed
+  items. The output kind is part of the definition and cannot change on update. Markdown escapes every
+  interpolated value, including angle brackets, and no layout ever produces HTML. Interpolated text drops
+  control characters. Absent fields render nothing. A link renders only when all its fields are present and the
+  result is an `http`, `https` or `mailto` URL; each value is path-escaped. A rendered body is limited to 64 KiB.
+- **Versions.** Every save appends an immutable version whose number is the layout's new revision (create is version 1).
+  A Delivery records the layout and version it was rendered with. `{version}` is a positive decimal number; an
+  unknown version is `404`.
+- **Delete.** A layout that a Subscription still references is `409 REVISION_CONFLICT`, like a stale revision. The
+  conflict does not say which. Change the Subscription first.
+- `POST` takes a `commandId`; an identical replay returns the layout as it is now, or `404` if it was deleted
+  since. `GET /layouts` uses [offset paging](#pagination).
+- Layouts write no domain event.
+
+### Delivery sending admission
+
+Every send to a target is admitted against fixed one-minute windows, so that one subscriber or one target cannot
+flood a provider. The buckets are the subscriber account and the target instance, never a network location.
+
+- Per subscriber: `-delivery-sends-per-minute` (default 60, at least 1). It counts the background sends of that
+  subscriber's Deliveries and the send requests that create work: a Subscription create and a redelivery.
+- Per target instance: `-delivery-target-sends-per-minute` (default 600, at least 1). A smaller limit in the
+  target's descriptor lowers it.
+- A Subscription create or redelivery over the subscriber's limit is `429 RATE_LIMITED` with `Retry-After` and
+  `retryAfterSeconds` set to the seconds until the window ends. A background send over either limit is not
+  counted and does not use an attempt: the Delivery becomes `retry-pending` with outcome `rate-limited` and
+  starts in the next window.

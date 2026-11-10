@@ -35,6 +35,13 @@ type Consumer interface {
 	Handle(ctx context.Context, tx platform.TransactionContext, record Record) error
 }
 
+// BatchPreparer is optionally implemented by a Consumer that must load something outside any
+// transaction before it handles records, such as a cache that needs its own connection. The
+// Runner calls Prepare before every batch; an error skips the batch until the next tick.
+type BatchPreparer interface {
+	Prepare(ctx context.Context) error
+}
+
 // SchemaVersion returns the envelope's schemaVersion, or 0 when the envelope has none or is
 // malformed (0 is never a supported version).
 func SchemaVersion(record Record) int {

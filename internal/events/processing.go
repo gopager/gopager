@@ -171,7 +171,7 @@ func (f ProcessingCompletionFact) Envelope(recorded time.Time) (ProcessingEnvelo
 	envelope.Type, envelope.Classification = "processing.completed", "source-classified"
 	envelope.AggregateRef.Type = "processingResult"
 	if f.Historical {
-		envelope.ReplayMode = "historical-reprocessing"
+		envelope.ReplayMode = ReplayReprocess
 	}
 	envelope.Data, err = json.Marshal(struct {
 		TransmissionID      uuid.UUID             `json:"transmissionId"`

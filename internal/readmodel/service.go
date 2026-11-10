@@ -95,28 +95,39 @@ func (s *Service) run(ctx context.Context, proof identity.Proof,
 	remember := func(value identity.Authentication) error { authentication = value; return nil }
 	return identity.WithAuthority(ctx, s.transactions, s.clock, s.resolver, proof, false, remember,
 		func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-			rows, err := authz.NewMessageAccess(authority, now)
+			current, err := newAccess(authority, now)
 			if err != nil {
 				return err
 			}
-			if !rows.Read.Granted() {
+			if !current.rows.Read.Granted() {
 				return authz.ErrForbidden
 			}
-			groups, err := authz.ReadableFieldGroups(authority)
-			if err != nil {
-				return err
-			}
-			reach, err := authz.ReachableAgencies(authority, "network.read", now)
-			if err != nil {
-				reach = authz.AgencyReach{}
-			}
-			current := access{caller: NewCaller(authentication), revision: authority.Revision, rows: rows,
-				viewer: viewer{groups: make(map[string]bool, len(groups)), networkReach: reach}}
-			for _, group := range groups {
-				current.viewer.groups[group] = true
-			}
+			current.caller = NewCaller(authentication)
 			return operation(tx, current, now)
 		})
+}
+
+// newAccess derives row eligibility, readable field groups and Network reach from an already
+// resolved authority. It does not require message.read; callers decide what a missing grant means.
+func newAccess(authority authz.Authority, now time.Time) (access, error) {
+	rows, err := authz.NewMessageAccess(authority, now)
+	if err != nil {
+		return access{}, err
+	}
+	groups, err := authz.ReadableFieldGroups(authority)
+	if err != nil {
+		return access{}, err
+	}
+	reach, err := authz.ReachableAgencies(authority, "network.read", now)
+	if err != nil {
+		reach = authz.AgencyReach{}
+	}
+	current := access{revision: authority.Revision, rows: rows,
+		viewer: viewer{groups: make(map[string]bool, len(groups)), networkReach: reach}}
+	for _, group := range groups {
+		current.viewer.groups[group] = true
+	}
+	return current, nil
 }
 
 // requireGroups fails with authz.ErrForbidden when a needed field group is unreadable.
