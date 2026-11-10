@@ -54,6 +54,12 @@ func (_c *ProcessingResultCreate) SetEvaluation(v processing.Evaluation) *Proces
 	return _c
 }
 
+// SetFieldGroups sets the "field_groups" field.
+func (_c *ProcessingResultCreate) SetFieldGroups(v []string) *ProcessingResultCreate {
+	_c.mutation.SetFieldGroups(v)
+	return _c
+}
+
 // SetCompletedAt sets the "completed_at" field.
 func (_c *ProcessingResultCreate) SetCompletedAt(v time.Time) *ProcessingResultCreate {
 	_c.mutation.SetCompletedAt(v)
@@ -177,6 +183,9 @@ func (_c *ProcessingResultCreate) check() error {
 	if _, ok := _c.mutation.Evaluation(); !ok {
 		return &ValidationError{Name: "evaluation", err: errors.New(`ent: missing required field "ProcessingResult.evaluation"`)}
 	}
+	if _, ok := _c.mutation.FieldGroups(); !ok {
+		return &ValidationError{Name: "field_groups", err: errors.New(`ent: missing required field "ProcessingResult.field_groups"`)}
+	}
 	if _, ok := _c.mutation.CompletedAt(); !ok {
 		return &ValidationError{Name: "completed_at", err: errors.New(`ent: missing required field "ProcessingResult.completed_at"`)}
 	}
@@ -230,6 +239,10 @@ func (_c *ProcessingResultCreate) createSpec() (*ProcessingResult, *sqlgraph.Cre
 	if value, ok := _c.mutation.Evaluation(); ok {
 		_spec.SetField(processingresult.FieldEvaluation, field.TypeJSON, value)
 		_node.Evaluation = value
+	}
+	if value, ok := _c.mutation.FieldGroups(); ok {
+		_spec.SetField(processingresult.FieldFieldGroups, field.TypeJSON, value)
+		_node.FieldGroups = value
 	}
 	if value, ok := _c.mutation.CompletedAt(); ok {
 		_spec.SetField(processingresult.FieldCompletedAt, field.TypeTime, value)

@@ -42,7 +42,7 @@ type core struct {
 	// exists only when the process composed an event runtime and set it.
 	live *liveConfig
 	// readSide is the Message read service and search admission shared by the query, saved-view
-	// and live routes, composed once so that they share one classification cache.
+	// and live routes, composed once.
 	readSide *readSide
 }
 

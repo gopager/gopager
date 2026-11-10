@@ -279,10 +279,21 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 <a id="d-147"></a>
 ## D-147 Workflow classification without installed-step preparation
 
-- **Status:** accepted
+- **Status:** superseded by [D-148](#d-148)
 - **Date:** 2026-11-10
 - **Decision:** A Copilot review of PR #2 showed that the Message query classified a Workflow definition version by compiling it with the execution preparer, which prepares every installed step through its instance: a disabled instance, a superseded pinned revision, an unresolvable execution Principal or a missing artifact made the classification fail. Published results then disappeared, and a `derived` filter stopped matching them, in processes with a cold classification cache, while processes with a warm cache still showed them. The user approved a reference-only compile in `internal/processing`: `processing.DefinitionSourceReferences(ctx, definition, declarations, regex)` returns the same source references as a full compile, recording installed-step inputs from the definition without preparing the instance, so classification depends only on the immutable definition and the source declarations. Execution compiles are unchanged. Classifying inside `cmd/gopager` from stored instance manifests (still failing without the artifact, duplicating preparation) and leaving the defect open were considered and rejected by the user.
 - **Scope (AP-10 write scope extension):** `internal/processing/workflow.go` (`DefinitionSourceReferences`, the reference-only installed-step branch) and its tests.
 - **Consequences:** The [AP-06 record](../execution/ap-06.md) gets a follow-up with the Processing tests rerun; [Workflows: Classification](../../docs/workflows.md#classification) describes the function.
+- **Owner detail:** [C-11](../contracts/c-11-processing-presentation.md), [AP-10 record](../execution/ap-10.md)
+
+<a id="d-148"></a>
+## D-148 Result classification stored at result write
+
+- **Status:** accepted
+- **Date:** 2026-11-10
+- **Supersedes:** [D-147](#d-147)
+- **Decision:** Message reads must not compile, classify or scan Workflow definitions: Processing runs on write events, and reads only read its results. A further Copilot review of PR #2 showed that every feed or detail read and every live batch listed all Workflow definition versions to classify them, and the user rejected classifying at read time altogether. A result's classification (`derived` plus the field groups of every source field its definition version reads, `processing.Evaluation.FieldGroups`) is now stored on its `processing_results` row as `field_groups` when the worker writes the result; Message reads show a result, and let the `derived` filter match it, only when the caller can read all of its stored groups. The read-time classification port, its cache and the D-147 reference-only compile are removed. Keeping read-time classification with fewer scans, and removing Processing results from Message reads (against the AP-10 done criteria and D-142), were considered and rejected by the user.
+- **Scope (AP-10 write scope extension):** `internal/processing/` (`Evaluation.FieldGroups`, removal of `DefinitionSourceReferences`), `internal/persistence/ent/processingstore/result.go`, the Ent schema of `processing_results`, generated Ent code, `00006_processing_kernel.sql` (edited in place under [D-128](01-platform-and-storage.md#d-128)), and the tests and fixtures that insert results.
+- **Consequences:** The [AP-06 record](../execution/ap-06.md) gets a follow-up with the Processing tests rerun; [Workflows: Classification](../../docs/workflows.md#classification), [Architecture: Query](../../docs/architecture.md#query-api-role) and [HTTP API: Messages: query and detail](../../docs/http-api.md#messages-query-and-detail) describe the stored classification.
 - **Owner detail:** [C-11](../contracts/c-11-processing-presentation.md), [AP-10 record](../execution/ap-10.md)
 

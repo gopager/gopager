@@ -604,6 +604,7 @@ var schemaGraph = func() *sqlgraph.Schema {
 			processingresult.FieldCandidateID:    {Type: field.TypeUUID, Column: processingresult.FieldCandidateID},
 			processingresult.FieldProducingFence: {Type: field.TypeInt64, Column: processingresult.FieldProducingFence},
 			processingresult.FieldEvaluation:     {Type: field.TypeJSON, Column: processingresult.FieldEvaluation},
+			processingresult.FieldFieldGroups:    {Type: field.TypeJSON, Column: processingresult.FieldFieldGroups},
 			processingresult.FieldCompletedAt:    {Type: field.TypeTime, Column: processingresult.FieldCompletedAt},
 			processingresult.FieldPublishedAt:    {Type: field.TypeTime, Column: processingresult.FieldPublishedAt},
 			processingresult.FieldMessageID:      {Type: field.TypeUUID, Column: processingresult.FieldMessageID},
@@ -3207,6 +3208,11 @@ func (f *ProcessingResultFilter) WhereProducingFence(p entql.Int64P) {
 // WhereEvaluation applies the entql json.RawMessage predicate on the evaluation field.
 func (f *ProcessingResultFilter) WhereEvaluation(p entql.BytesP) {
 	f.Where(p.Field(processingresult.FieldEvaluation))
+}
+
+// WhereFieldGroups applies the entql json.RawMessage predicate on the field_groups field.
+func (f *ProcessingResultFilter) WhereFieldGroups(p entql.BytesP) {
+	f.Where(p.Field(processingresult.FieldFieldGroups))
 }
 
 // WhereCompletedAt applies the entql time.Time predicate on the completed_at field.

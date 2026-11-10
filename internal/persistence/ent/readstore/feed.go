@@ -42,20 +42,24 @@ func textMatch(term string) string {
 
 // feedBuilder renders the single statement of a feed page or of a detail.
 type feedBuilder struct {
-	params   *params
-	elig     *eligibility
-	query    readmodel.FeedQuery
-	detail   bool
-	versions string
+	params *params
+	elig   *eligibility
+	query  readmodel.FeedQuery
+	detail bool
+	groups string
 }
 
-// versionsParam registers the readable Workflow versions on first use, so that an unused
-// parameter never leaves a gap in the numbering.
-func (b *feedBuilder) versionsParam() string {
-	if b.versions == "" {
-		b.versions = b.params.uuids(b.query.ReadableVersions)
+// groupsParam registers the caller's readable field groups on first use as a jsonb array, so
+// that an unused parameter never leaves a gap in the numbering.
+func (b *feedBuilder) groupsParam() string {
+	if b.groups == "" {
+		encoded, err := json.Marshal(append([]string{}, b.query.DerivedGroups...))
+		if err != nil {
+			encoded = []byte("[]")
+		}
+		b.groups = b.params.add(string(encoded)) + "::jsonb"
 	}
-	return b.versions
+	return b.groups
 }
 
 // appearanceColumns are the columns of the message_units alias mu.
@@ -141,7 +145,7 @@ func (b *feedBuilder) targetVisibility(appearance func(condition string) string,
 // latestDerived renders the latest published result of each Workflow among the Transmissions
 // that support an eligible appearance of the Message m.id, looked up without the page CTEs.
 func (b *feedBuilder) latestDerived() string {
-	return `SELECT DISTINCT ON (c.workflow_id) c.workflow_id, c.definition_version_id AS version_id, r.evaluation,
+	return `SELECT DISTINCT ON (c.workflow_id) c.workflow_id, r.field_groups, r.evaluation,
 			dt.id AS transmission_id, dn.agency_id AS network_agency, dt.observed_at, dt.accepted_at, dt.message_id
 		FROM message_units mu JOIN transmissions dt ON dt.message_id = mu.message_id
 		JOIN networks dn ON dn.id = dt.network_id
@@ -177,7 +181,7 @@ func (b *feedBuilder) derivedFilters() string {
 		}
 		visible := b.targetVisibility(appearance, "l.network_agency", "l.observed_at", "l.accepted_at")
 		rendered = append(rendered, `EXISTS (SELECT 1 FROM (`+b.latestDerived()+`) l
-			WHERE l.version_id = ANY(`+b.versionsParam()+`) AND (
+			WHERE l.field_groups <@ `+b.groupsParam()+` AND (
 				`+strings.Join(topLevel, " OR ")+`
 				OR EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(l.evaluation->'targetResults') = 'array'
 						THEN l.evaluation->'targetResults' ELSE '[]'::jsonb END) tr
@@ -224,9 +228,10 @@ func (b *feedBuilder) pageCTE() string {
 	ORDER BY m.first_observed_at DESC, m.id DESC` + limit + `)`
 }
 
-// derivedColumn renders the latest readable-version result per Workflow of the page Message p.
+// derivedColumn renders, for the page Message p, the latest result per Workflow if its stored
+// field groups are all readable.
 func (b *feedBuilder) derivedColumn() string {
-	if len(b.query.ReadableVersions) == 0 {
+	if len(b.query.DerivedGroups) == 0 {
 		return `'[]'::jsonb`
 	}
 	appearance := func(condition string) string {
@@ -234,16 +239,16 @@ func (b *feedBuilder) derivedColumn() string {
 	}
 	visible := b.targetVisibility(appearance, "l.network_agency", "l.observed_at", "l.accepted_at")
 	return `COALESCE((SELECT jsonb_agg(jsonb_build_object('workflowId', l.workflow_id, 'resultId', l.result_id,
-			'versionId', l.version_id, 'evaluation', l.evaluation, 'visible', ARRAY(
+			'evaluation', l.evaluation, 'visible', ARRAY(
 				SELECT tt.position FROM transmission_targets tt WHERE tt.transmission_id = l.transmission_id AND ` + visible + `))
 			ORDER BY l.workflow_id, l.result_id)
-		FROM (SELECT DISTINCT ON (c.workflow_id) c.workflow_id, r.id AS result_id, c.definition_version_id AS version_id,
+		FROM (SELECT DISTINCT ON (c.workflow_id) c.workflow_id, r.id AS result_id, r.field_groups,
 				r.evaluation, s.id AS transmission_id, s.message_id, s.network_agency, s.observed_at, s.accepted_at
 			FROM sup s JOIN processing_candidates c ON c.transmission_id = s.id
 			JOIN processing_results r ON r.candidate_id = c.id AND r.published_at IS NOT NULL AND r.message_id = s.message_id
 			WHERE s.message_id = p.id
 			ORDER BY c.workflow_id, r.published_at DESC, r.id DESC) l
-		WHERE l.version_id = ANY(` + b.versionsParam() + `)), '[]'::jsonb)`
+		WHERE l.field_groups <@ ` + b.groupsParam() + `), '[]'::jsonb)`
 }
 
 // transmissionsColumn renders the supporting Transmissions of a detail with their targets.
@@ -328,7 +333,7 @@ func (s *Store) Feed(ctx context.Context, tx platform.TransactionContext, query 
 // Detail implements readmodel.Store.
 func (s *Store) Detail(ctx context.Context, tx platform.TransactionContext, query readmodel.DetailQuery) (readmodel.DetailRecord, error) {
 	result, details, err := s.run(ctx, tx, readmodel.FeedQuery{Access: query.Access, IDs: []uuid.UUID{query.MessageID},
-		ReadableVersions: query.ReadableVersions}, true)
+		DerivedGroups: query.DerivedGroups}, true)
 	if err != nil {
 		return readmodel.DetailRecord{}, err
 	}
@@ -425,7 +430,6 @@ func (r feedRow) record() (readmodel.FeedRecord, []readmodel.TransmissionRecord,
 	var derived []struct {
 		WorkflowID uuid.UUID       `json:"workflowId"`
 		ResultID   uuid.UUID       `json:"resultId"`
-		VersionID  uuid.UUID       `json:"versionId"`
 		Evaluation json.RawMessage `json:"evaluation"`
 		Visible    []int           `json:"visible"`
 	}
@@ -447,7 +451,7 @@ func (r feedRow) record() (readmodel.FeedRecord, []readmodel.TransmissionRecord,
 	}
 	for _, entry := range derived {
 		record.Derived = append(record.Derived, readmodel.DerivedRecord{WorkflowID: entry.WorkflowID, ResultID: entry.ResultID,
-			VersionID: entry.VersionID, Evaluation: entry.Evaluation, VisibleTargets: entry.Visible})
+			Evaluation: entry.Evaluation, VisibleTargets: entry.Visible})
 	}
 	transmissions, err := decodeTransmissions(r.transmissions)
 	return record, transmissions, err

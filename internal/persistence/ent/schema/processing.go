@@ -251,6 +251,9 @@ func (ProcessingResult) Fields() []ent.Field {
 		field.UUID("candidate_id", uuid.UUID{}),
 		field.Int64("producing_fence").Positive(),
 		field.JSON("evaluation", processing.Evaluation{}).Sensitive(),
+		// field_groups is the definition-level classification of the evaluation (always including
+		// `derived`), stored so that readers decide visibility without compiling the definition.
+		field.Strings("field_groups").Immutable(),
 		field.Time("completed_at"),
 		field.Time("published_at").Optional().Nillable(),
 		field.UUID("message_id", uuid.UUID{}).Optional().Nillable(),

@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/platform"
 )
 
@@ -222,50 +223,6 @@ func CompileWorkflow(ctx context.Context, definition Definition, source Declarat
 	return compileWorkflow(ctx, definition, source, regex, nil)
 }
 
-// DefinitionSourceReferences returns the source and target fields a definition reads, with their
-// declared field groups, exactly as WorkflowProgram.SourceReferences does after a full compile.
-// Installed steps are not prepared: their inputs are recorded from the definition alone, so the
-// result depends neither on the instance being enabled, current or resolvable nor on its
-// artifact. The returned references serve classification only; nothing is compiled for
-// execution.
-func DefinitionSourceReferences(ctx context.Context, definition Definition, source Declarations, regex RegexEvaluator) ([]SourceReference, error) {
-	program, err := compileWorkflow(ctx, definition, source, regex, referenceOnlyArtifacts{})
-	if err != nil {
-		return nil, err
-	}
-	return program.SourceReferences(), nil
-}
-
-// referenceOnlyArtifacts marks a compile that only collects references; installed steps are
-// never prepared through it.
-type referenceOnlyArtifacts struct{}
-
-// PrepareInstalled is never called for a reference-only compile.
-func (referenceOnlyArtifacts) PrepareInstalled(context.Context, uuid.UUID, int64) (*InstalledArtifact, error) {
-	return nil, capabilityUnavailable(errors.New("reference-only compile prepares no artifact"))
-}
-
-// recordInputReferences records the fields an installed step's inputs read, in a stable order,
-// without checking them against the instance's input schema.
-func recordInputReferences(inputs map[string]Assignment, declarations Declarations) error {
-	for _, name := range sortedNames(inputs) {
-		assignment := inputs[name]
-		if (assignment.Field == nil) == (assignment.Literal == nil) {
-			return invalid(errors.New("assignment requires exactly one input"))
-		}
-		if assignment.Field == nil {
-			continue
-		}
-		if err := assignment.Field.validate(); err != nil {
-			return err
-		}
-		if _, err := declarations.FieldSchema(*assignment.Field); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // CompileWorkflowInstalled additionally prepares declared artifacts through their trusted instance owner.
 func CompileWorkflowInstalled(ctx context.Context, definition Definition, source Declarations, regex RegexEvaluator, artifacts InstalledArtifacts) (*WorkflowProgram, error) {
 	if artifacts == nil {
@@ -423,12 +380,6 @@ func compileWorkflow(ctx context.Context, definition Definition, source Declarat
 				if artifacts == nil {
 					return nil, capabilityUnavailable(errors.New("installed artifact owner unavailable"))
 				}
-				if _, classify := artifacts.(referenceOnlyArtifacts); classify {
-					if err := recordInputReferences(step.Installed.Input, current); err != nil {
-						return nil, err
-					}
-					break
-				}
 				item.installed, err = artifacts.PrepareInstalled(ctx, step.Installed.InstanceID, step.Installed.ConfigurationRevision)
 				if err != nil {
 					return nil, err
@@ -531,6 +482,28 @@ func (e Evaluation) Dependencies() ([]Dependency, error) {
 		}
 	}
 	return UnionDependencies(dependencies)
+}
+
+// FieldGroups returns the definition-level classification of the result's outputs: the
+// `derived` group plus the groups of every source field in Dependencies, sorted and without
+// duplicates. It is stored with the result so that readers never compile the definition.
+func (e Evaluation) FieldGroups() ([]string, error) {
+	dependencies, err := e.Dependencies()
+	if err != nil {
+		return nil, err
+	}
+	groups := []string{"derived"}
+	for _, dependency := range dependencies {
+		groups = append(groups, dependency.Groups...)
+	}
+	slices.Sort(groups)
+	groups = slices.Compact(groups)
+	for _, group := range groups {
+		if !authz.ValidField(group) {
+			return nil, invalid(errors.New("invalid field group"))
+		}
+	}
+	return groups, nil
 }
 
 // MarshalJSON preserves an explicitly empty successful field map as a result container.

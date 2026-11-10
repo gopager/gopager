@@ -53,28 +53,23 @@ func ParseFeedRequest(values url.Values) (FeedRequest, error) {
 // Service answers Message reads for an authenticated caller, the guest included. Create it
 // with NewService; it is safe for concurrent use.
 type Service struct {
-	transactions   identity.Transactions
-	resolver       identity.AuthorityResolver
-	clock          platform.Clock
-	store          Store
-	keys           TokenKeys
-	classification Classification
+	transactions identity.Transactions
+	resolver     identity.AuthorityResolver
+	clock        platform.Clock
+	store        Store
+	keys         TokenKeys
 
 	mu       sync.Mutex
 	tokenKey []byte
-	// groups caches the immutable classification of each Workflow definition version; a nil
-	// entry records a version whose classification is unavailable.
-	groups map[uuid.UUID][]string
 }
 
 // NewService composes the read side. It fails with authz.ErrInvalidInput on a missing dependency.
 func NewService(transactions identity.Transactions, resolver identity.AuthorityResolver, clock platform.Clock,
-	store Store, keys TokenKeys, classification Classification) (*Service, error) {
-	if transactions == nil || resolver == nil || clock == nil || store == nil || keys == nil || classification == nil {
+	store Store, keys TokenKeys) (*Service, error) {
+	if transactions == nil || resolver == nil || clock == nil || store == nil || keys == nil {
 		return nil, authz.ErrInvalidInput
 	}
-	return &Service{transactions: transactions, resolver: resolver, clock: clock, store: store, keys: keys,
-		classification: classification, groups: make(map[uuid.UUID][]string)}, nil
+	return &Service{transactions: transactions, resolver: resolver, clock: clock, store: store, keys: keys}, nil
 }
 
 // access is everything one read needs to know about its caller.
@@ -85,7 +80,6 @@ type access struct {
 	revision int64
 	rows     authz.MessageAccess
 	viewer   viewer
-	version  []uuid.UUID
 }
 
 // run resolves the caller's authority and runs operation in the same transaction.
@@ -129,70 +123,18 @@ func (a access) requireGroups(groups []string) error {
 	return nil
 }
 
-// readableVersions resolves which Workflow definition versions the caller may read results of:
-// those whose classification groups are all readable. It is a no-op without the derived group.
-func (s *Service) readableVersions(ctx context.Context, tx platform.TransactionContext, current *access) error {
-	if !current.viewer.can("derived") {
+// derivedGroups returns the field groups the caller may read results of, or nil when the caller
+// cannot read derived results at all. The store shows a result only when all of its stored
+// groups are among them.
+func (a access) derivedGroups() []string {
+	if !a.viewer.can("derived") {
 		return nil
 	}
-	versions, err := s.store.WorkflowVersions(tx.Context(), tx)
-	if err != nil {
-		return err
+	groups := make([]string, 0, len(a.viewer.groups))
+	for group := range a.viewer.groups {
+		groups = append(groups, group)
 	}
-	current.viewer.versions = make(map[uuid.UUID]bool, len(versions))
-	for _, version := range versions {
-		groups := s.cachedClassification(version)
-		if groups != nil && !slices.ContainsFunc(groups, func(group string) bool { return !current.viewer.can(group) }) {
-			current.viewer.versions[version] = true
-			current.version = append(current.version, version)
-		}
-	}
-	return nil
-}
-
-// warmClassifications classifies every Workflow definition version that is not cached yet. It
-// runs before the caller's authority transaction, because compiling a version takes its own
-// connection and must not wait for the pool while that transaction holds one. A version created
-// after the warm-up stays unclassified, and therefore hidden, for the current request only.
-func (s *Service) warmClassifications(ctx context.Context) error {
-	var versions []uuid.UUID
-	err := s.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-		var err error
-		versions, err = s.store.WorkflowVersions(tx.Context(), tx)
-		return err
-	})
-	if err != nil {
-		return err
-	}
-	for _, version := range versions {
-		s.classify(ctx, version)
-	}
-	return nil
-}
-
-// cachedClassification returns the classification already cached for a version, or nil.
-func (s *Service) cachedClassification(version uuid.UUID) []string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.groups[version]
-}
-
-// classify returns the cached classification of a version, or nil when it is unavailable. A
-// failure is not cached, so a later request retries it.
-func (s *Service) classify(ctx context.Context, version uuid.UUID) []string {
-	s.mu.Lock()
-	groups, known := s.groups[version]
-	s.mu.Unlock()
-	if known {
-		return groups
-	}
-	groups, err := s.classification.ClassificationGroups(ctx, version)
-	if err != nil || len(groups) == 0 {
-		return nil
-	}
-	s.mu.Lock()
-	s.groups[version] = groups
-	s.mu.Unlock()
+	slices.Sort(groups)
 	return groups
 }
 
@@ -226,9 +168,6 @@ func (s *Service) key(ctx context.Context) ([]byte, error) {
 // field group the caller cannot read fail with authz.ErrForbidden; a page token of other
 // filters, another caller or a tampered one fails with authz.ErrInvalidInput.
 func (s *Service) Feed(ctx context.Context, proof identity.Proof, request FeedRequest) (FeedPage, error) {
-	if err := s.warmClassifications(ctx); err != nil {
-		return FeedPage{}, err
-	}
 	key, err := s.key(ctx)
 	if err != nil {
 		return FeedPage{}, err
@@ -246,11 +185,8 @@ func (s *Service) Feed(ctx context.Context, proof identity.Proof, request FeedRe
 			}
 			after = &cursor
 		}
-		if err := s.readableVersions(ctx, tx, &current); err != nil {
-			return err
-		}
 		result, err := s.store.Feed(tx.Context(), tx, FeedQuery{Access: current.rows, Filters: request.Filters,
-			After: after, Limit: request.PageSize, ReadableVersions: current.version})
+			After: after, Limit: request.PageSize, DerivedGroups: current.derivedGroups()})
 		if err != nil {
 			return err
 		}
@@ -272,9 +208,6 @@ func (s *Service) Feed(ctx context.Context, proof identity.Proof, request FeedRe
 // are applied without their time bounds, in feed order. It serves live updates: the client
 // places a returned item in its range, and a listed Message that is absent no longer matches.
 func (s *Service) Evaluate(ctx context.Context, proof identity.Proof, filters Filters, ids []uuid.UUID) ([]FeedItem, error) {
-	if err := s.warmClassifications(ctx); err != nil {
-		return nil, err
-	}
 	var items []FeedItem
 	err := s.run(ctx, proof, func(tx platform.TransactionContext, current access, _ time.Time) error {
 		var err error
@@ -295,11 +228,8 @@ func (s *Service) evaluate(ctx context.Context, tx platform.TransactionContext, 
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	if err := s.readableVersions(ctx, tx, &current); err != nil {
-		return nil, err
-	}
 	result, err := s.store.Feed(tx.Context(), tx, FeedQuery{Access: current.rows, Filters: filters,
-		IDs: slices.Clone(ids), ReadableVersions: current.version})
+		IDs: slices.Clone(ids), DerivedGroups: current.derivedGroups()})
 	if err != nil {
 		return nil, err
 	}
@@ -328,19 +258,13 @@ func (s *Service) EligibleMessages(ctx context.Context, proof identity.Proof, id
 // Detail returns one Message with its supporting Transmissions. A Message without an
 // appearance that is eligible for detail is authz.ErrNotFound.
 func (s *Service) Detail(ctx context.Context, proof identity.Proof, id uuid.UUID) (DetailItem, error) {
-	if err := s.warmClassifications(ctx); err != nil {
-		return DetailItem{}, err
-	}
 	var item DetailItem
 	err := s.run(ctx, proof, func(tx platform.TransactionContext, current access, _ time.Time) error {
 		if !current.rows.Detail.Granted() {
 			return authz.ErrForbidden
 		}
-		if err := s.readableVersions(ctx, tx, &current); err != nil {
-			return err
-		}
 		record, err := s.store.Detail(tx.Context(), tx, DetailQuery{Access: current.rows, MessageID: id,
-			ReadableVersions: current.version})
+			DerivedGroups: current.derivedGroups()})
 		if err != nil {
 			return err
 		}

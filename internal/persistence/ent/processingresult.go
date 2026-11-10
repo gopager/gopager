@@ -28,6 +28,8 @@ type ProcessingResult struct {
 	ProducingFence int64 `json:"producing_fence,omitempty"`
 	// Evaluation holds the value of the "evaluation" field.
 	Evaluation processing.Evaluation `json:"-"`
+	// FieldGroups holds the value of the "field_groups" field.
+	FieldGroups []string `json:"field_groups,omitempty"`
 	// CompletedAt holds the value of the "completed_at" field.
 	CompletedAt time.Time `json:"completed_at,omitempty"`
 	// PublishedAt holds the value of the "published_at" field.
@@ -44,7 +46,7 @@ func (*ProcessingResult) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case processingresult.FieldMessageID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
-		case processingresult.FieldEvaluation:
+		case processingresult.FieldEvaluation, processingresult.FieldFieldGroups:
 			values[i] = new([]byte)
 		case processingresult.FieldRevision, processingresult.FieldProducingFence:
 			values[i] = new(sql.NullInt64)
@@ -97,6 +99,14 @@ func (_m *ProcessingResult) assignValues(columns []string, values []any) error {
 			} else if value != nil && len(*value) > 0 {
 				if err := json.Unmarshal(*value, &_m.Evaluation); err != nil {
 					return fmt.Errorf("unmarshal field evaluation: %w", err)
+				}
+			}
+		case processingresult.FieldFieldGroups:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field field_groups", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.FieldGroups); err != nil {
+					return fmt.Errorf("unmarshal field field_groups: %w", err)
 				}
 			}
 		case processingresult.FieldCompletedAt:
@@ -165,6 +175,9 @@ func (_m *ProcessingResult) String() string {
 	builder.WriteString(fmt.Sprintf("%v", _m.ProducingFence))
 	builder.WriteString(", ")
 	builder.WriteString("evaluation=<sensitive>")
+	builder.WriteString(", ")
+	builder.WriteString("field_groups=")
+	builder.WriteString(fmt.Sprintf("%v", _m.FieldGroups))
 	builder.WriteString(", ")
 	builder.WriteString("completed_at=")
 	builder.WriteString(_m.CompletedAt.Format(time.ANSIC))

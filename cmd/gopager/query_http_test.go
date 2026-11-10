@@ -366,8 +366,8 @@ func TestMessagePageTokensOverHTTP(t *testing.T) {
 	}
 }
 
-// TestMessageDerivedClassificationOverHTTP stores a real Workflow definition version and shows that
-// its result needs the derived group and every group the definition reads.
+// TestMessageDerivedClassificationOverHTTP stores a Workflow definition version and a result with
+// its field groups and shows that the result needs the derived group and every stored group.
 func TestMessageDerivedClassificationOverHTTP(t *testing.T) {
 	t.Parallel()
 	f := newQueryFixture(t)
@@ -377,14 +377,8 @@ func TestMessageDerivedClassificationOverHTTP(t *testing.T) {
 	protocol := processing.FieldRef{Namespace: "source", Path: []string{"protocol"}}
 	name := processing.FieldRef{Namespace: "source", Path: []string{"network", "name"}}
 	pocsag := processing.Value{Kind: processing.StringValue, Value: json.RawMessage(`"pocsag"`)}
-	// The installed step's instance does not exist: classification must come from the definition
-	// alone, as it would for a disabled or superseded instance whose results stay published.
 	definition, err := json.Marshal(processing.Definition{SchemaVersion: 1,
-		Selector: processing.Predicate{Op: "eq", Field: &protocol, Value: &pocsag},
-		Steps: []processing.Step{{ID: "plugin", Kind: "installed",
-			OutputSchema: map[string]processing.FieldSchema{"tag": {Kind: processing.StringValue, Optional: true}},
-			Installed: &processing.InstalledStep{InstanceID: uuid.New(), ConfigurationRevision: 1,
-				Input: map[string]processing.Assignment{"text": {Field: &name}}}}},
+		Selector:     processing.Predicate{Op: "eq", Field: &protocol, Value: &pocsag},
 		OutputSchema: map[string]processing.FieldSchema{"network": {Kind: processing.StringValue}},
 		Outputs:      map[string]processing.Assignment{"network": {Field: &name}}})
 	if err != nil {
@@ -398,8 +392,8 @@ func TestMessageDerivedClassificationOverHTTP(t *testing.T) {
 		source_revision, context_revision, state, selected, due_at, created_at, updated_at)
 		SELECT $1, t.id, $2, $3, 1, 1, 1, 1, 'completed', true, now(), now(), now() FROM transmissions t WHERE t.message_id = $4`,
 		candidate, workflow, version, message)
-	f.exec(`INSERT INTO processing_results (id, candidate_id, producing_fence, evaluation, completed_at, published_at, message_id)
-		VALUES ($1, $2, 1, $3::jsonb, now(), now(), $4)`, uuid.New(), candidate,
+	f.exec(`INSERT INTO processing_results (id, candidate_id, producing_fence, evaluation, field_groups, completed_at, published_at, message_id)
+		VALUES ($1, $2, 1, $3::jsonb, '["derived","gateway","payload"]'::jsonb, now(), now(), $4)`, uuid.New(), candidate,
 		`{"selected":true,"fields":{"network":{"state":"present","value":{"kind":"string","value":"Net"}}}}`, message)
 	read := []string{"message.read"}
 	everything := authz.Scope{Kind: "all"}
@@ -447,11 +441,7 @@ func TestMessageLiveHelpersReuseTheFeedRules(t *testing.T) {
 	elsewhere := f.message(base.Add(time.Minute), "two", b)
 	bearer, _ := f.caller([]string{"message.read"}, authz.Scope{Kind: "unit", References: []string{a.String()}}, []string{"payload", "unit"})
 	core := mustComposeCore(t, f.store)
-	classification, err := defaultClassification(core)
-	if err != nil {
-		t.Fatal(err)
-	}
-	service, err := readmodel.NewService(core.store, core.resolver, core.store, core.reads, core.reads, classification)
+	service, err := readmodel.NewService(core.store, core.resolver, core.store, core.reads, core.reads)
 	if err != nil {
 		t.Fatal(err)
 	}

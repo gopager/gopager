@@ -268,7 +268,7 @@ func (w *world) filtered(authority authz.Authority, now time.Time, filters readm
 	return w.feed(authority, now, readmodel.FeedQuery{Filters: validated})
 }
 
-func (w *world) detail(authority authz.Authority, now time.Time, id uuid.UUID, versions ...uuid.UUID) (readmodel.DetailRecord, error) {
+func (w *world) detail(authority authz.Authority, now time.Time, id uuid.UUID, groups ...string) (readmodel.DetailRecord, error) {
 	w.t.Helper()
 	access, err := authz.NewMessageAccess(authority, now)
 	if err != nil {
@@ -277,7 +277,7 @@ func (w *world) detail(authority authz.Authority, now time.Time, id uuid.UUID, v
 	var record readmodel.DetailRecord
 	var failure error
 	w.within(func(ctx context.Context, tx platform.TransactionContext) {
-		record, failure = w.reads.Detail(ctx, tx, readmodel.DetailQuery{Access: access, MessageID: id, ReadableVersions: versions})
+		record, failure = w.reads.Detail(ctx, tx, readmodel.DetailQuery{Access: access, MessageID: id, DerivedGroups: groups})
 	})
 	return record, failure
 }

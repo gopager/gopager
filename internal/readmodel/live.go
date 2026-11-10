@@ -103,9 +103,6 @@ func (l *Live) Open(filters Filters, position string) (*LiveSession, error) {
 // stream with the matching public code.
 func (s *LiveSession) Batch(ctx context.Context, proof identity.Proof) (LiveBatch, error) {
 	service := s.live.service
-	if err := service.warmClassifications(ctx); err != nil {
-		return LiveBatch{}, err
-	}
 	key, err := service.key(ctx)
 	if err != nil {
 		return LiveBatch{}, err

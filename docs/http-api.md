@@ -594,9 +594,9 @@ readable supporting Transmission that is not `incomplete`, then the earliest acc
 lowest ID. `derived` lists, per Workflow, the latest published result among the supporting
 readable Transmissions (`workflowId`, `resultId`, `fields` with each output's `state` and `value`;
 `targetResults` only for visible targets). A result appears only if the caller reads `derived` and
-every field group the Workflow definition version reads. That classification comes from the
-immutable definition and the source declarations only, so a result stays visible when a plugin
-instance it used is later disabled, updated or removed; an unreadable definition hides it.
+every field group stored with the result: the groups its Workflow definition version reads,
+recorded when the worker wrote the result. Reads never evaluate Workflows, and a result stays
+visible when a plugin instance it used is later disabled, updated or removed.
 
 **Detail (`GET /messages/{id}`).** A Message that is absent, merged away or without a
 detail-eligible appearance is `404 NOT_FOUND`. The feed item is extended by `firstObservedAt` on

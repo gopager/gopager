@@ -62,18 +62,16 @@ func TestNetworkUnresolvedNeedsNetworkReach(t *testing.T) {
 	}
 }
 
-func TestDerivedHiddenWithoutClassificationAndTargetsFiltered(t *testing.T) {
+func TestDerivedTargetsFiltered(t *testing.T) {
 	t.Parallel()
-	readable, hidden := uuid.New(), uuid.New()
 	record := sampleRecord()
 	evaluation := json.RawMessage(`{"selected":true,"targetResults":[
 		{"targetPosition":0,"fields":{"a":{"state":"present","value":{"kind":"string","value":"x"}}}},
 		{"targetPosition":1,"fields":{"a":{"state":"present","value":{"kind":"string","value":"y"}}}}]}`)
 	record.Derived = []DerivedRecord{
-		{WorkflowID: uuid.New(), ResultID: uuid.New(), VersionID: readable, Evaluation: evaluation, VisibleTargets: []int{1}},
-		{WorkflowID: uuid.New(), ResultID: uuid.New(), VersionID: hidden, Evaluation: evaluation, VisibleTargets: []int{0, 1}},
+		{WorkflowID: uuid.New(), ResultID: uuid.New(), Evaluation: evaluation, VisibleTargets: []int{1}},
 	}
-	v := viewer{groups: map[string]bool{"derived": true}, versions: map[uuid.UUID]bool{readable: true}}
+	v := viewer{groups: map[string]bool{"derived": true}}
 	item := v.feedItem(record, false)
 	if item.Derived == nil || len(*item.Derived) != 1 {
 		t.Fatalf("derived = %+v", item.Derived)
@@ -82,7 +80,7 @@ func TestDerivedHiddenWithoutClassificationAndTargetsFiltered(t *testing.T) {
 	if len(results) != 1 || results[0].TargetPosition != 1 {
 		t.Fatalf("target results = %+v", results)
 	}
-	if (viewer{groups: map[string]bool{}, versions: map[uuid.UUID]bool{readable: true}}).feedItem(record, false).Derived != nil {
+	if (viewer{groups: map[string]bool{}}).feedItem(record, false).Derived != nil {
 		t.Fatal("derived group must gate the property")
 	}
 }

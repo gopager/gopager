@@ -659,6 +659,7 @@ var (
 		{Name: "candidate_id", Type: field.TypeUUID},
 		{Name: "producing_fence", Type: field.TypeInt64},
 		{Name: "evaluation", Type: field.TypeJSON},
+		{Name: "field_groups", Type: field.TypeJSON},
 		{Name: "completed_at", Type: field.TypeTime},
 		{Name: "published_at", Type: field.TypeTime, Nullable: true},
 		{Name: "message_id", Type: field.TypeUUID, Nullable: true},

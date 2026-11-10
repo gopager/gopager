@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"reflect"
-	"slices"
 	"testing"
 	"time"
 
@@ -268,39 +266,5 @@ func TestInstalledWorkflowRechecksEveryTargetAndRejectsInputSubstitution(t *test
 	}
 	if _, err := program.Evaluate(context.Background(), source); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
 		t.Fatalf("installed Workflow invoked without current owner: %v", err)
-	}
-}
-
-// unavailableInstanceOwner stands for a disabled, superseded or removed instance.
-type unavailableInstanceOwner struct{}
-
-func (unavailableInstanceOwner) PrepareInstalled(context.Context, uuid.UUID, int64) (*InstalledArtifact, error) {
-	return nil, capabilityUnavailable(errors.New("instance disabled"))
-}
-
-func TestDefinitionSourceReferencesNeedNoInstalledArtifact(t *testing.T) {
-	t.Parallel()
-	owner := newInstalledOwnerFixture(t)
-	_, source := sourceFixture(t)
-	input := FieldRef{Namespace: "source", Path: []string{"text"}}
-	definition := installedDefinition(owner, "ok", input)
-	program, err := CompileWorkflowInstalled(t.Context(), definition, source, nil, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	references, err := DefinitionSourceReferences(t.Context(), definition, source, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(references, program.SourceReferences()) {
-		t.Errorf("references %+v, want the full compile's %+v", references, program.SourceReferences())
-	}
-	if !slices.ContainsFunc(references, func(reference SourceReference) bool { return reference.Field.String() == input.String() }) {
-		t.Errorf("the installed step's input %s is missing from %+v", input, references)
-	}
-	// The same definition cannot be compiled for execution once its instance is unavailable,
-	// while its references above were collected without any instance owner.
-	if _, err := CompileWorkflowInstalled(t.Context(), definition, source, nil, unavailableInstanceOwner{}); err == nil {
-		t.Fatal("a full compile must fail for an unavailable instance")
 	}
 }

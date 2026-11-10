@@ -135,8 +135,6 @@ type FeedPage struct {
 type viewer struct {
 	groups       map[string]bool
 	networkReach authz.AgencyReach
-	// versions are the Workflow definition versions the caller may read results of.
-	versions map[uuid.UUID]bool
 }
 
 func (v viewer) can(group string) bool { return v.groups[group] }
@@ -174,13 +172,11 @@ func (v viewer) feedItem(record FeedRecord, detail bool) FeedItem {
 	return item
 }
 
-// derivedItems shows the results whose definition version classification the caller may read.
+// derivedItems shapes the derived results the store already limited to the caller's readable
+// field groups, keeping only the targets the caller may see.
 func (v viewer) derivedItems(records []DerivedRecord) []DerivedItem {
 	items := make([]DerivedItem, 0, len(records))
 	for _, record := range records {
-		if !v.versions[record.VersionID] {
-			continue
-		}
 		var evaluation struct {
 			Fields        map[string]DerivedField `json:"fields"`
 			TargetResults []DerivedTargetResult   `json:"targetResults"`

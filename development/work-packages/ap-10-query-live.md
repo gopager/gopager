@@ -30,7 +30,7 @@
   - [D-144](../decisions/05-events-and-delivery.md#d-144): Message times in the Grouping, assignment, suppression and `processing.completed` facts (`internal/events/`, `internal/persistence/ent/ingeststore/`, `internal/processing/`, `internal/assignments/`, `internal/persistence/ent/assignmentstore/`, their tests and `internal/persistence/ent/borrowed/` fixtures).
   - [D-145](../decisions/03-assignment-and-correction.md#d-145): the Address-rule `encrypted` marker (`internal/assignments/`, `internal/persistence/ent/assignmentstore/`, Ent schema and `00004_current_assignments.sql`, rule HTTP adapter and OpenAPI, their tests and fixtures).
   - [D-146](../decisions/06-identity-and-authorization.md#d-146): `identity.ClientSource` and `RateLimited.Seconds()` (`internal/identity/source.go`, the `RATE_LIMITED` branch of `internal/identity/handler.go`).
-  - [D-147](../decisions/04-processing-and-plugins.md#d-147): `processing.DefinitionSourceReferences` (`internal/processing/workflow.go` and its tests).
+  - [D-147](../decisions/04-processing-and-plugins.md#d-147), superseded by [D-148](../decisions/04-processing-and-plugins.md#d-148): result classification stored at result write (`internal/processing/`, `internal/persistence/ent/processingstore/result.go`, the `processing_results` Ent schema and generated code, `00006_processing_kernel.sql`, tests and fixtures that insert results).
 - **Compatibility context:** [AP-11](ap-11-events-delivery.md), [AP-13](ap-13-processing-presentation-integration.md), [AP-14](ap-14-identity-lifecycle.md), [AP-15](ap-15-frontend.md), [AP-17](ap-17-integration-evidence.md) (not prerequisites).
 
 ## Open User Decisions

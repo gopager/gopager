@@ -185,6 +185,20 @@ func TestInstalledWorkflowRunsOnProductionWiring(t *testing.T) {
 	if state != "completed" || status != "completed" || published != 1 {
 		t.Fatalf("candidate=%s transmission=%s published results=%d; want completed/completed/1", state, status, published)
 	}
+	var groups string
+	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		return executor.QueryRowContext(tx.Context(), `SELECT field_groups::text FROM processing_results WHERE candidate_id=$1`,
+			due[0].ID).Scan(&groups)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if groups != `["derived", "payload"]` {
+		t.Fatalf("stored field groups = %s, want the definition-level classification", groups)
+	}
 }
 
 // causeChain renders every wrapped layer of err, including joined errors, so a classified
