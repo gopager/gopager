@@ -9,13 +9,15 @@ import (
 	"github.com/gopager/gopager/internal/processing"
 )
 
-// selectionFilter renders the compiled predicate as a condition on the Message m, ANDed with
-// the other dimensions. It is empty without a predicate.
-func (b *feedBuilder) selectionFilter() string {
+// selectionFilter renders the compiled predicate as two conditions on the Message m: its indexed
+// prefilter (empty when none can be derived) and the exact check. Both are empty without a
+// predicate.
+func (b *feedBuilder) selectionFilter() (narrowing, exact string) {
 	if b.query.Selection == nil {
-		return ""
+		return "", ""
 	}
-	return " AND " + b.predicate(b.query.Selection.Root())
+	root := b.query.Selection.Root()
+	return b.prefilter(root), b.predicate(root)
 }
 
 // predicate renders one node as a definite boolean: every leaf is an EXISTS over the candidate

@@ -19,6 +19,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/identity"
+	"github.com/gopager/gopager/internal/persistence/ent/processingstore"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
 	"github.com/gopager/gopager/internal/processing"
@@ -426,6 +427,7 @@ func TestMessageDerivedClassificationOverHTTP(t *testing.T) {
 	f.exec(`INSERT INTO processing_results (id, candidate_id, producing_fence, evaluation, field_groups, completed_at, published_at, message_id)
 		VALUES ($1, $2, 1, $3::jsonb, '["derived","gateway","payload"]'::jsonb, now(), now(), $4)`, result, candidate,
 		evaluation, message)
+	f.exec(processingstore.ProjectAttributeValuesSQL, []uuid.UUID{result})
 	read := []string{"message.read"}
 	everything := authz.Scope{Kind: "all"}
 	complete, _ := f.caller(read, everything, []string{"payload", "gateway", "derived"})

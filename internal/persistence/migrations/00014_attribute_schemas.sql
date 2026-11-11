@@ -30,7 +30,38 @@ CREATE TABLE attribute_schema_agencies (
 );
 CREATE INDEX attribute_schema_agencies_agency ON attribute_schema_agencies (agency_id);
 
+-- The typed projection of the values of published Processing results: one row per scalar path
+-- of a field (a list yields a row per element, an object its scalar descendants) and target
+-- position. It holds every published value, not the effective one, because what is effective
+-- depends on what the reader may see; the read side uses it only as an indexed prefilter before
+-- the exact check. It is written in the publication transaction and removed with the result.
+CREATE TABLE message_attribute_values (
+    result_id uuid NOT NULL REFERENCES processing_results(id) ON DELETE CASCADE,
+    transmission_id uuid NOT NULL,
+    schema_key varchar(64) NOT NULL,
+    path text NOT NULL,
+    target_position integer,
+    text_value text,
+    integer_value bigint,
+    number_value double precision,
+    time_value timestamptz,
+    boolean_value boolean,
+    CHECK (num_nonnulls(text_value, integer_value, number_value, time_value, boolean_value) <= 1)
+);
+CREATE INDEX message_attribute_values_result ON message_attribute_values (result_id);
+CREATE INDEX message_attribute_values_text ON message_attribute_values (schema_key, path, text_value)
+    WHERE text_value IS NOT NULL;
+CREATE INDEX message_attribute_values_integer ON message_attribute_values (schema_key, path, integer_value)
+    WHERE integer_value IS NOT NULL;
+CREATE INDEX message_attribute_values_number ON message_attribute_values (schema_key, path, number_value)
+    WHERE number_value IS NOT NULL;
+CREATE INDEX message_attribute_values_time ON message_attribute_values (schema_key, path, time_value)
+    WHERE time_value IS NOT NULL;
+CREATE INDEX message_attribute_values_boolean ON message_attribute_values (schema_key, path, boolean_value)
+    WHERE boolean_value IS NOT NULL;
+
 -- +goose Down
+DROP TABLE message_attribute_values;
 DROP TABLE attribute_schema_agencies;
 DROP TABLE attribute_schemas;
 DROP TABLE attribute_catalog;

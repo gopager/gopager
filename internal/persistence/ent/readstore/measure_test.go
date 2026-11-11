@@ -13,6 +13,7 @@ import (
 	"github.com/gopager/gopager/internal/attributes"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/fields"
+	"github.com/gopager/gopager/internal/persistence/ent/processingstore"
 	"github.com/gopager/gopager/internal/persistence/ent/readstore"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
@@ -136,6 +137,8 @@ func seedMeasured(w *world) (agencyA, agencyB uuid.UUID) {
 				'["derived","payload"]'::jsonb, {base} - i * interval '10 seconds' + interval '45 seconds',
 				{base} - i * interval '10 seconds' + interval '45 seconds', md5('m' || i)::uuid
 			FROM generate_series(1, {count}) i WHERE i % 5 IN (1, 2)`,
+		// The projection of every published result, derived by the statement that publication runs.
+		strings.ReplaceAll(processingstore.ProjectAttributeValuesSQL, "r.id = ANY($1::uuid[])", "true"),
 	}
 	// The values are fixed literals and UUIDs of the fixture, never request input.
 	replacer := strings.NewReplacer("{base}", "'"+base.Format(time.RFC3339)+"'::timestamptz", "{count}", fmt.Sprint(measureMessages),
