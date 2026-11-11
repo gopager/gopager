@@ -133,7 +133,7 @@ func (s Schema) Validate() error {
 		return invalid("Attribute schema declares no field")
 	}
 	if len(s.Fields) > processing.MaxCollection {
-		return platform.NewFailure(platform.CodeResourceLimit, errors.New("Attribute-schema field boundary"))
+		return platform.NewFailure(platform.CodeResourceLimit, errors.New("attribute-schema field boundary"))
 	}
 	for name, field := range s.Fields {
 		if err := validateField(name, field, true); err != nil {

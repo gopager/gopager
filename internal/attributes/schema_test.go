@@ -32,6 +32,7 @@ func code(err error) platform.ErrorCode {
 }
 
 func TestValidKeyAndName(t *testing.T) {
+	t.Parallel()
 	for _, key := range []string{"a", "alarm", "alarm-2", strings.Repeat("a", MaxKeyLength)} {
 		if !ValidKey(key) {
 			t.Errorf("ValidKey(%q) = false", key)
@@ -55,6 +56,7 @@ func TestValidKeyAndName(t *testing.T) {
 }
 
 func TestValidate(t *testing.T) {
+	t.Parallel()
 	if err := alarmSchema().Validate(); err != nil {
 		t.Fatalf("valid schema: %v", err)
 	}
@@ -90,6 +92,7 @@ func TestValidate(t *testing.T) {
 }
 
 func TestResolve(t *testing.T) {
+	t.Parallel()
 	schema := alarmSchema()
 	field, typ, deprecated, ok := schema.Resolve([]string{"location", "street"})
 	if !ok || deprecated || field.Kind != processing.StringValue || !typ.Optional {
@@ -117,6 +120,7 @@ func TestResolve(t *testing.T) {
 }
 
 func TestCheckChange(t *testing.T) {
+	t.Parallel()
 	allowed := map[string]func(*Schema){
 		"display metadata": func(s *Schema) {
 			s.Label, s.Description = "Alert", "Parsed alarm"
