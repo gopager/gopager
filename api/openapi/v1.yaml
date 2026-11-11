@@ -377,7 +377,9 @@ paths:
       - Agencies
       summary: Delete an Agency
       description: Requires `agency.delete` (scope `all`). Optimistic concurrency via `expectedRevision`; a stale
-        value, or an Agency that still owns Units or Networks, is 409 `REVISION_CONFLICT`.
+        value, or an Agency that still owns Units or Networks or is the only Agency of an undeleted
+        Workflow, a Layout or an Attribute schema, is 409 `REVISION_CONFLICT`. Assignments of other
+        definitions to the Agency are removed with it.
       security:
       - sessionCookie: []
         csrfToken: []

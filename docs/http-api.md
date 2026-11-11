@@ -447,7 +447,7 @@ mutating routes reached via session also require Origin + `X-CSRF-Token`.
 | POST | `/agencies` | `agency.create` (`all`) | 201 | Create (`commandId`, `name`) |
 | GET | `/agencies/{id}` | `agency.read` | 200 | Read |
 | PUT | `/agencies/{id}` | `agency.update` | 200 | Rename |
-| DELETE | `/agencies/{id}` | `agency.delete` (`all`) | 200 | Delete; `409 REVISION_CONFLICT` while Units or Networks still belong to it |
+| DELETE | `/agencies/{id}` | `agency.delete` (`all`) | 200 | Delete; `409 REVISION_CONFLICT` while Units or Networks still belong to it or while it is the only Agency of an undeleted Workflow, a Layout or an Attribute schema; other definitions lose the assignment |
 | GET | `/organizations` | `organization.read` | 200 | List |
 | POST | `/organizations` | `organization.create` | 201 | Create (`commandId`, `name`, `defaults`) |
 | GET | `/organizations/{id}` | `organization.read` | 200 | Read |

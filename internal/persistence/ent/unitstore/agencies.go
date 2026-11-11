@@ -117,7 +117,9 @@ func (s *Store) SaveAgency(ctx context.Context, tx platform.TransactionContext, 
 }
 
 // DeleteAgency removes an Agency at its current revision; one that still owns Units (deleted Units
-// included, since their history references it) or Radio networks fails with units.ErrAgencyInUse.
+// included, since their history references it) or Radio networks, or that is the only Agency of an
+// undeleted Workflow, a Layout or an Attribute schema, fails with units.ErrAgencyInUse. The
+// assignments of other definitions to the Agency are removed with it.
 func (s *Store) DeleteAgency(ctx context.Context, tx platform.TransactionContext, authority authz.Authority, value units.Agency, now time.Time) error {
 	predicate, err := agencyPlan(authority, "agency.delete", now)
 	if err != nil {
@@ -147,6 +149,11 @@ func (s *Store) DeleteAgency(ctx context.Context, tx platform.TransactionContext
 		if inUse {
 			return units.ErrAgencyInUse
 		}
+	}
+	if last, err := s.lastAgencyOfDefinition(ctx, tx, value.ID); err != nil {
+		return err
+	} else if last {
+		return units.ErrAgencyInUse
 	}
 	deleted, err := client.Agency.Delete().Where(agency.ID(value.ID), agency.Revision(value.Revision)).Exec(scope)
 	if err != nil {

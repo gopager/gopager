@@ -103,13 +103,23 @@ func (s *Service) scopeTargets(ctx context.Context, tx platform.TransactionConte
 		}
 		return targets, nil
 	}
-	targets := make([]authz.Target, len(scope.Narrowing.References))
-	for i, reference := range scope.Narrowing.References {
+	targets := make([]authz.Target, 0, len(scope.Narrowing.References))
+	drifted := false
+	for _, reference := range scope.Narrowing.References {
 		target, err := s.scopeTarget(ctx, tx, scope.Narrowing.Kind, reference)
 		if err != nil {
 			return nil, err
 		}
-		targets[i] = target
+		drifted = drifted || !slices.Contains(scope.Agencies, target.AgencyID)
+		targets = append(targets, target)
+	}
+	// A referenced Unit may have moved to another Agency since the scope was stored. Its new
+	// Agency's grants must not be enough to manage a Workflow assigned elsewhere, so the
+	// assigned Agencies themselves are then required as well.
+	if drifted {
+		for _, agency := range scope.Agencies {
+			targets = append(targets, authz.Target{AgencyID: agency})
+		}
 	}
 	return targets, nil
 }

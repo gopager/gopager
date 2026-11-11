@@ -143,6 +143,22 @@ func TestProcessingWorkflowScopeAuthorizationAndVisibility(t *testing.T) {
 		processingMetadataFixture("agency wide", f.agencyScope()), checkedMutation); !errors.Is(err, authz.ErrForbidden) {
 		t.Fatalf("Unit grant created an Agency-wide Workflow: %v", err)
 	}
+	// A narrowed Unit that moved to another Agency no longer lets its Unit grants manage the
+	// Workflow: the assigned Agency is then required as well.
+	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := f.store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		_, err = executor.ExecContext(tx.Context(), `UPDATE units SET agency_id = $2 WHERE id = $1`, unit.ID, f.agencies[1])
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.UpdateWorkflow(t.Context(), f.proof, narrowed.ID, 2,
+		processingMetadataFixture("drifted", narrowedScope("unit", []uuid.UUID{f.agencies[0]}, unit.ID)), checkedMutation); !errors.Is(err, authz.ErrForbidden) {
+		t.Fatalf("Unit grant managed a Workflow whose Unit moved to another Agency: %v", err)
+	}
 }
 
 func TestAdmissionSelectsWorkflowsOfTheNetworkAgencyAndNarrowing(t *testing.T) {
