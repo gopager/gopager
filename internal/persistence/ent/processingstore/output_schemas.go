@@ -77,7 +77,34 @@ func (s *Store) requireVersionOutputSchemas(ctx context.Context, tx platform.Tra
 	if err != nil {
 		return err
 	}
-	return s.requireOutputSchemas(ctx, tx, keys)
+	if err := s.requireOutputSchemas(ctx, tx, keys); err != nil {
+		return err
+	}
+	// The version was compiled against the schemas of its save time. A schema created after it
+	// replaced a deleted one of the same key, possibly with other field types, so the version
+	// must be saved again against the current schema before it can run.
+	var recreated string
+	if err := executor.QueryRowContext(ctx, `SELECT coalesce(min(a.key), '') FROM attribute_schemas a
+		JOIN processing_workflow_versions v ON v.id = $1
+		WHERE a.key = ANY($2::text[]) AND a.created_at > v.created_at`, version, keys).Scan(&recreated); err != nil {
+		return err
+	}
+	if recreated != "" {
+		return platform.NewFailure(platform.CodeInvalidInput,
+			fmt.Errorf("attribute schema %q was re-created after the version was saved", recreated))
+	}
+	return nil
+}
+
+// LockedCatalogRevision implements processing.ConfigurationRepository.
+func (s *Store) LockedCatalogRevision(ctx context.Context, tx platform.TransactionContext) (int64, error) {
+	executor, err := s.primary.Resolve(tx)
+	if err != nil {
+		return 0, err
+	}
+	var revision int64
+	err = executor.QueryRowContext(ctx, `SELECT revision FROM attribute_catalog WHERE id = 1 FOR SHARE`).Scan(&revision)
+	return revision, err
 }
 
 // lockCatalog locks the schema catalog row FOR SHARE, which a schema deletion's update conflicts

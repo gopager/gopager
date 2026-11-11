@@ -542,7 +542,7 @@ func (s *Service) SaveVersion(ctx context.Context, proof identity.Proof, command
 	}
 	var result commands.Result
 	var replay bool
-	var preparationRevision int64
+	var preparationRevision, catalogRevision int64
 	err = s.within(ctx, proof, true, check, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
 		current, err := s.repository.ReadWorkflow(tx.Context(), tx, authority, "workflow.update", parent, now)
 		if err != nil {
@@ -565,6 +565,9 @@ func (s *Service) SaveVersion(ctx context.Context, proof identity.Proof, command
 			return err
 		}
 		preparationRevision = authority.Revision
+		if catalogRevision, err = s.repository.LockedCatalogRevision(tx.Context(), tx); err != nil {
+			return err
+		}
 		_, err = commands.NextRevision(current.Revision, expected)
 		return err
 	})
@@ -599,6 +602,13 @@ func (s *Service) SaveVersion(ctx context.Context, proof identity.Proof, command
 			return err
 		}
 		if authority.Revision != preparationRevision {
+			return authz.ErrRevisionConflict
+		}
+		// The definition was prepared against the schemas of catalogRevision outside this
+		// transaction; a schema change since then could have changed an output's type.
+		if revision, err := s.repository.LockedCatalogRevision(tx.Context(), tx); err != nil {
+			return err
+		} else if revision != catalogRevision {
 			return authz.ErrRevisionConflict
 		}
 		if err := authorizeReferences(authority, references); err != nil {

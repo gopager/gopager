@@ -71,6 +71,11 @@ type ConfigurationRepository interface {
 	ListVersions(context.Context, platform.TransactionContext, authz.Authority, uuid.UUID, PageInput, time.Time) (Page[Version], error)
 	SaveWorkflow(context.Context, platform.TransactionContext, authz.Authority, string, WorkflowConfiguration, int64, time.Time) error
 	SaveVersion(context.Context, platform.TransactionContext, Version) error
+	// LockedCatalogRevision locks the Attribute-schema catalog for the rest of tx, shared with
+	// other writers, and returns its revision. A save compares the revision seen before it
+	// prepared a definition with the one under this lock, so a schema changed in between is
+	// noticed.
+	LockedCatalogRevision(ctx context.Context, tx platform.TransactionContext) (int64, error)
 	// NewOutputSchemaAgencies returns, for the Attribute schema keys among keys that no version
 	// of the Workflow references yet and that exist, the Agencies each schema is assigned to. It
 	// holds the schema catalog against deletion for the rest of the transaction.

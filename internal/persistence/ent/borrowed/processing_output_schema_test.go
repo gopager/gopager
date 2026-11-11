@@ -233,3 +233,76 @@ func TestProcessingActivationOfAVersionOfARecreatedSchemaIsAuthorized(t *testing
 		t.Fatalf("activating a version of a re-created schema of Agency B only: %v, want FORBIDDEN", err)
 	}
 }
+
+// TestProcessingVersionOfASchemaRecreatedAfterItsSaveCannotBeActivated expects activation to
+// refuse a version whose output schema was deleted and created again after the version was
+// saved, even for an author who may use the new schema: the version was compiled against the
+// earlier schema of that key, whose field types may differ.
+func TestProcessingVersionOfASchemaRecreatedAfterItsSaveCannotBeActivated(t *testing.T) {
+	t.Parallel()
+	f := newMatcherFixture(t)
+	service, _ := newProcessingManagementFixture(t, f, &processingPreparationFixture{}, f.facts)
+	fields := map[string]attributes.Field{"out": {Kind: processing.BooleanValue}}
+	attributeschemas.Insert(t, f.store, "test", fields)
+	created, err := service.CreateWorkflow(t.Context(), f.proof, uuid.New(),
+		processingMetadataFixture("activation-after-recreation", f.agencyScope()), checkedMutation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	truth, err := processing.Literal(processing.BooleanValue, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writing := preparedProcessingDefinition(t)
+	writing.Outputs = map[string]map[string]processing.Assignment{"test": {"out": {Literal: &truth}}}
+	saved, err := service.SaveVersion(t.Context(), f.proof, uuid.New(), created.ID, 1, writing, checkedMutation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := f.store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		_, err = executor.ExecContext(tx.Context(), `DELETE FROM attribute_schemas WHERE key = 'test'`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	attributeschemas.Insert(t, f.store, "test", map[string]attributes.Field{"out": {Kind: processing.StringValue}})
+	if _, err := service.ActivateVersion(t.Context(), f.proof, created.ID, saved.ID, saved.Revision, checkedMutation); platform.FailureCode(err) != platform.CodeInvalidInput {
+		t.Fatalf("activating a version saved before its schema was re-created: %v, want INVALID_INPUT", err)
+	}
+}
+
+// TestProcessingVersionSaveNoticesASchemaChangeDuringPreparation expects a version save to fail
+// with a revision conflict when the schema catalog changes between the preparation of the
+// definition and the saving transaction, because the definition was typed by the earlier schemas.
+func TestProcessingVersionSaveNoticesASchemaChangeDuringPreparation(t *testing.T) {
+	t.Parallel()
+	f := newMatcherFixture(t)
+	preparation := &processingPreparationFixture{}
+	service, _ := newProcessingManagementFixture(t, f, preparation, f.facts)
+	attributeschemas.Insert(t, f.store, "test", map[string]attributes.Field{"out": {Kind: processing.BooleanValue}})
+	created, err := service.CreateWorkflow(t.Context(), f.proof, uuid.New(),
+		processingMetadataFixture("save-during-change", f.agencyScope()), checkedMutation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	truth, err := processing.Literal(processing.BooleanValue, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writing := preparedProcessingDefinition(t)
+	writing.Outputs = map[string]map[string]processing.Assignment{"test": {"out": {Literal: &truth}}}
+	preparation.before = func() {
+		attributeschemas.Insert(t, f.store, "other", map[string]attributes.Field{"x": {Kind: processing.StringValue}})
+	}
+	if _, err := service.SaveVersion(t.Context(), f.proof, uuid.New(), created.ID, 1, writing, checkedMutation); !errors.Is(err, authz.ErrRevisionConflict) {
+		t.Fatalf("save across a catalog change: %v, want REVISION_CONFLICT", err)
+	}
+	preparation.before = nil
+	if _, err := service.SaveVersion(t.Context(), f.proof, uuid.New(), created.ID, 1, writing, checkedMutation); err != nil {
+		t.Fatalf("retried save: %v", err)
+	}
+}
