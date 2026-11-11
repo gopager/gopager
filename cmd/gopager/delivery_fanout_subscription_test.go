@@ -118,7 +118,7 @@ func (f *deliveryFixture) publishLevelClassified(workflow, message uuid.UUID, le
 		FROM transmissions t, processing_workflows w WHERE t.message_id = $3 AND w.id = $2`, candidate, workflow, message)
 	f.exec(`INSERT INTO processing_results (id, candidate_id, producing_fence, evaluation, field_groups, completed_at, published_at, message_id)
 		VALUES ($1, $2, 1, $3::jsonb, $5::jsonb, now(), now(), $4)`, result, candidate,
-		`{"selected":true,"fields":{"level":{"state":"present","value":{"kind":"integer","value":"`+level+`"}}}}`, message, groups)
+		`{"selected":true,"fields":{"incident":{"level":{"state":"present","value":{"kind":"integer","value":"`+level+`"}}}}}`, message, groups)
 	return result
 }
 

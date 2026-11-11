@@ -1,29 +1,32 @@
 package readmodel
 
 import (
+	"cmp"
 	"encoding/json"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
+	"github.com/gopager/gopager/internal/processing"
 )
 
 // FeedItem is the feed projection of a Message. The identifying metadata is always present;
 // every other property appears only when the caller may read its field group, so an
 // unreadable group is absent rather than empty.
 type FeedItem struct {
-	MessageID         uuid.UUID       `json:"messageId"`
-	MessageTime       time.Time       `json:"messageTime"`
-	ProcessingStatus  string          `json:"processingStatus"`
-	CorrectionStatus  string          `json:"correctionStatus"`
-	Payload           json.RawMessage `json:"payload,omitempty"`
-	Protocol          *string         `json:"protocol,omitempty"`
-	Incomplete        *bool           `json:"incomplete,omitempty"`
-	Units             *[]UnitItem     `json:"units,omitempty"`
-	WithoutUnit       *bool           `json:"withoutUnit,omitempty"`
-	Derived           *[]DerivedItem  `json:"derived,omitempty"`
-	NetworkUnresolved *bool           `json:"networkUnresolved,omitempty"`
+	MessageID         uuid.UUID         `json:"messageId"`
+	MessageTime       time.Time         `json:"messageTime"`
+	ProcessingStatus  string            `json:"processingStatus"`
+	CorrectionStatus  string            `json:"correctionStatus"`
+	Payload           json.RawMessage   `json:"payload,omitempty"`
+	Protocol          *string           `json:"protocol,omitempty"`
+	Incomplete        *bool             `json:"incomplete,omitempty"`
+	Units             *[]UnitItem       `json:"units,omitempty"`
+	WithoutUnit       *bool             `json:"withoutUnit,omitempty"`
+	Attributes        *[]AttributeValue `json:"attributes,omitempty"`
+	NetworkUnresolved *bool             `json:"networkUnresolved,omitempty"`
 }
 
 // UnitItem is an eligible Unit appearance. FirstObservedAt appears in details only.
@@ -42,26 +45,20 @@ type WithoutUnitItem struct {
 	FirstObservedAt time.Time `json:"firstObservedAt"`
 }
 
-// DerivedItem is the latest published Processing result of one Workflow. Fields are the
-// outputs of a Transmission-level Workflow, TargetResults those of a target-level one,
-// limited to the targets the caller may see.
-type DerivedItem struct {
-	WorkflowID    uuid.UUID               `json:"workflowId"`
-	ResultID      uuid.UUID               `json:"resultId"`
-	Fields        map[string]DerivedField `json:"fields,omitempty"`
-	TargetResults []DerivedTargetResult   `json:"targetResults,omitempty"`
-}
-
-// DerivedField is one output: its state and typed value.
-type DerivedField struct {
-	State string          `json:"state"`
-	Value json.RawMessage `json:"value,omitempty"`
-}
-
-// DerivedTargetResult is the outputs for one original target position.
-type DerivedTargetResult struct {
-	TargetPosition int                     `json:"targetPosition"`
-	Fields         map[string]DerivedField `json:"fields"`
+// AttributeValue is the effective value of one Message attribute field with its provenance:
+// the published result it comes from.
+type AttributeValue struct {
+	SchemaKey string `json:"schemaKey"`
+	Field     string `json:"field"`
+	// TargetPosition is the original target position of a target-level value.
+	TargetPosition *int `json:"targetPosition,omitempty"`
+	// UnitID is the Unit the target is assigned to, shown when the caller may see Units.
+	UnitID              *uuid.UUID       `json:"unitId,omitempty"`
+	Value               processing.Value `json:"value"`
+	WorkflowID          uuid.UUID        `json:"workflowId"`
+	DefinitionVersionID uuid.UUID        `json:"definitionVersionId"`
+	ResultID            uuid.UUID        `json:"resultId"`
+	PublishedAt         time.Time        `json:"publishedAt"`
 }
 
 // DetailItem is the detail projection: the feed item plus per-appearance first times, the
@@ -162,8 +159,8 @@ func (v viewer) feedItem(record FeedRecord, detail bool) FeedItem {
 		item.Units, item.WithoutUnit = &units, &withoutUnit
 	}
 	if v.can("derived") {
-		derived := v.derivedItems(record.Derived)
-		item.Derived = &derived
+		attributes := v.attributeValues(record.Attributes)
+		item.Attributes = &attributes
 	}
 	if slices.ContainsFunc(record.UnresolvedAgencies, v.networkReach.Contains) {
 		unresolved := true
@@ -172,27 +169,42 @@ func (v viewer) feedItem(record FeedRecord, detail bool) FeedItem {
 	return item
 }
 
-// derivedItems shapes the derived results the store already limited to the caller's readable
-// field groups, keeping only the targets the caller may see.
-func (v viewer) derivedItems(records []DerivedRecord) []DerivedItem {
-	items := make([]DerivedItem, 0, len(records))
+// attributeValues shapes the effective attribute values the store already limited to the
+// caller's readable field groups and visible targets, ordered by schema key, field and position
+// with the Transmission-level value first. The Unit of a target is shown with the unit group.
+func (v viewer) attributeValues(records []AttributeRecord) []AttributeValue {
+	values := make([]AttributeValue, 0, len(records))
 	for _, record := range records {
-		var evaluation struct {
-			Fields        map[string]DerivedField `json:"fields"`
-			TargetResults []DerivedTargetResult   `json:"targetResults"`
-		}
-		if json.Unmarshal(record.Evaluation, &evaluation) != nil {
+		var value processing.Value
+		if json.Unmarshal(record.Value, &value) != nil {
 			continue
 		}
-		item := DerivedItem{WorkflowID: record.WorkflowID, ResultID: record.ResultID, Fields: evaluation.Fields}
-		for _, target := range evaluation.TargetResults {
-			if slices.Contains(record.VisibleTargets, target.TargetPosition) {
-				item.TargetResults = append(item.TargetResults, target)
-			}
+		entry := AttributeValue{SchemaKey: record.SchemaKey, Field: record.Field, TargetPosition: record.TargetPosition,
+			Value: value, WorkflowID: record.WorkflowID, DefinitionVersionID: record.DefinitionVersionID,
+			ResultID: record.ResultID, PublishedAt: record.PublishedAt.UTC()}
+		if v.can("unit") {
+			entry.UnitID = record.UnitID
 		}
-		items = append(items, item)
+		values = append(values, entry)
 	}
-	return items
+	slices.SortFunc(values, compareAttributes)
+	return values
+}
+
+// compareAttributes orders by schema key, field and position, the position-less value first.
+func compareAttributes(a, b AttributeValue) int {
+	if order := cmp.Or(strings.Compare(a.SchemaKey, b.SchemaKey), strings.Compare(a.Field, b.Field)); order != 0 {
+		return order
+	}
+	switch {
+	case a.TargetPosition == nil && b.TargetPosition == nil:
+		return 0
+	case a.TargetPosition == nil:
+		return -1
+	case b.TargetPosition == nil:
+		return 1
+	}
+	return cmp.Compare(*a.TargetPosition, *b.TargetPosition)
 }
 
 // detailItem applies the caller's field groups to a detail record.

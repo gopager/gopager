@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -217,10 +218,36 @@ func TestMessageQueryHTTP(t *testing.T) {
 	t.Run("S network filter needs gateway", func(t *testing.T) {
 		t.Parallel()
 		f.feed(s, "?network="+f.network.String(), http.StatusForbidden)
-		f.feed(s, "?derived=x%3D1", http.StatusForbidden)
 		got := f.feed(s, "?organization="+organization.String(), http.StatusOK)
 		if ids := itemIDs(got.Data.Items); len(ids) != 1 || ids[0] != m4.String() {
 			t.Fatalf("organization filter = %v", ids)
+		}
+	})
+	t.Run("S filters Messages by a predicate", func(t *testing.T) {
+		t.Parallel()
+		got := f.feed(s, "?filter="+url.QueryEscape(textFilter("eq", "m4")), http.StatusOK)
+		if ids := itemIDs(got.Data.Items); len(ids) != 1 || ids[0] != m4.String() {
+			t.Fatalf("filter = %v", ids)
+		}
+		if got := f.feed(s, "?filter="+url.QueryEscape(textFilter("eq", "other")), http.StatusOK); len(got.Data.Items) != 0 {
+			t.Fatalf("non-matching filter = %v", itemIDs(got.Data.Items))
+		}
+		unit := `{"op":"eq","field":{"namespace":"message","path":["unitNames"]},"value":{"kind":"string","value":"C"}}`
+		if got := f.feed(s, "?filter="+url.QueryEscape(unit), http.StatusOK); len(got.Data.Items) != 0 {
+			t.Fatalf("a Unit the caller cannot see must not match: %v", itemIDs(got.Data.Items))
+		}
+	})
+	t.Run("filter errors", func(t *testing.T) {
+		t.Parallel()
+		for name, query := range map[string]string{
+			"unknown attribute": "?filter=" + url.QueryEscape(`{"op":"present","field":{"namespace":"attributes","path":["nope","x"]},"value":{"kind":"boolean","value":true}}`),
+			"workflow field":    "?filter=" + url.QueryEscape(`{"op":"present","field":{"namespace":"source","path":["protocol"]},"value":{"kind":"boolean","value":true}}`),
+			"not JSON":          "?filter=nope",
+			"twice":             "?filter=" + url.QueryEscape(textFilter("eq", "a")) + "&filter=" + url.QueryEscape(textFilter("eq", "a")),
+		} {
+			if got := f.feed(s, query, http.StatusBadRequest); got.Code != "INVALID_INPUT" {
+				t.Errorf("%s: code %q", name, got.Code)
+			}
 		}
 	})
 	t.Run("S options", func(t *testing.T) {
@@ -253,13 +280,15 @@ func TestMessageQueryHTTP(t *testing.T) {
 			if item["payload"] == nil || item["messageTime"] == nil {
 				t.Fatalf("item lacks payload or time: %v", item)
 			}
-			for _, property := range []string{"units", "withoutUnit", "derived"} {
+			for _, property := range []string{"units", "withoutUnit", "attributes"} {
 				if _, present := item[property]; present {
 					t.Fatalf("item exposes %s: %v", property, item)
 				}
 			}
 		}
-		for _, query := range []string{"?unit=" + a.String(), "?organization=" + organization.String(), "?agency=" + f.agency.String(), "?withoutUnit=true"} {
+		unitFilter := `{"op":"present","field":{"namespace":"message","path":["unitNames"]},"value":{"kind":"boolean","value":true}}`
+		for _, query := range []string{"?unit=" + a.String(), "?organization=" + organization.String(), "?agency=" + f.agency.String(), "?withoutUnit=true",
+			"?filter=" + url.QueryEscape(unitFilter)} {
 			f.feed(w, query, http.StatusForbidden)
 		}
 		f.feed(w, "?text=m4", http.StatusOK)
@@ -384,6 +413,7 @@ func TestMessageDerivedClassificationOverHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	const evaluation = `{"selected":true,"fields":{"incident":{"network":{"state":"present","value":{"kind":"string","value":"Net"}}}}}`
 	workflow, version, candidate := uuid.New(), uuid.New(), uuid.New()
 	f.exec(`INSERT INTO processing_workflows (id, name, created_at, updated_at) VALUES ($1, 'w', now(), now())`, workflow)
 	f.exec(`INSERT INTO processing_workflow_agencies(workflow_id,agency_id) SELECT $1, id FROM agencies`, workflow)
@@ -393,42 +423,50 @@ func TestMessageDerivedClassificationOverHTTP(t *testing.T) {
 		source_revision, context_revision, state, selected, due_at, created_at, updated_at)
 		SELECT $1, t.id, $2, $3, 1, 1, 1, 1, 'completed', true, now(), now(), now() FROM transmissions t WHERE t.message_id = $4`,
 		candidate, workflow, version, message)
+	result := uuid.New()
 	f.exec(`INSERT INTO processing_results (id, candidate_id, producing_fence, evaluation, field_groups, completed_at, published_at, message_id)
-		VALUES ($1, $2, 1, $3::jsonb, '["derived","gateway","payload"]'::jsonb, now(), now(), $4)`, uuid.New(), candidate,
-		`{"selected":true,"fields":{"network":{"state":"present","value":{"kind":"string","value":"Net"}}}}`, message)
+		VALUES ($1, $2, 1, $3::jsonb, '["derived","gateway","payload"]'::jsonb, now(), now(), $4)`, result, candidate,
+		evaluation, message)
 	read := []string{"message.read"}
 	everything := authz.Scope{Kind: "all"}
 	complete, _ := f.caller(read, everything, []string{"payload", "gateway", "derived"})
 	missingGateway, _ := f.caller(read, everything, []string{"payload", "derived"})
 	noDerived, _ := f.caller(read, everything, []string{"payload", "gateway"})
-	derived := func(bearer, query string) []any {
-		page := f.feed(bearer, query, http.StatusOK)
+	noPayload, _ := f.caller(read, everything, []string{"gateway", "derived"})
+	attributes := func(bearer string) []any {
+		page := f.feed(bearer, "", http.StatusOK)
 		if len(page.Data.Items) == 0 {
 			return nil
 		}
-		value, _ := page.Data.Items[0]["derived"].([]any)
+		value, _ := page.Data.Items[0]["attributes"].([]any)
 		return value
 	}
-	if got := derived(complete, ""); len(got) != 1 {
-		t.Fatalf("complete caller derived = %v", got)
+	got := attributes(complete)
+	if len(got) != 1 {
+		t.Fatalf("complete caller attributes = %v", got)
 	}
-	if got := derived(missingGateway, ""); len(got) != 0 {
+	attribute := got[0].(map[string]any)
+	if attribute["schemaKey"] != "incident" || attribute["field"] != "network" || attribute["workflowId"] != workflow.String() ||
+		attribute["definitionVersionId"] != version.String() || attribute["resultId"] != result.String() ||
+		attribute["publishedAt"] == nil || !strings.Contains(fmt.Sprint(attribute["value"]), "Net") {
+		t.Fatalf("attribute = %v", attribute)
+	}
+	if got := attributes(missingGateway); len(got) != 0 {
 		t.Fatalf("a result reading gateway fields must be hidden without that group: %v", got)
 	}
 	page := f.feed(noDerived, "", http.StatusOK)
-	if _, present := page.Data.Items[0]["derived"]; present {
-		t.Fatalf("derived appears without the derived group: %v", page.Data.Items[0])
+	if _, present := page.Data.Items[0]["attributes"]; present {
+		t.Fatalf("attributes appear without the derived group: %v", page.Data.Items[0])
 	}
-	if got := f.feed(complete, "?derived=network%3DNet", http.StatusOK); len(got.Data.Items) != 1 {
-		t.Fatalf("derived filter = %v", itemIDs(got.Data.Items))
+	if got := f.feed(complete, "?filter="+url.QueryEscape(textFilter("eq", "alarm")), http.StatusOK); len(got.Data.Items) != 1 {
+		t.Fatalf("filter = %v", itemIDs(got.Data.Items))
 	}
-	if got := f.feed(complete, "?derived=network%3DOther", http.StatusOK); len(got.Data.Items) != 0 {
-		t.Fatalf("derived filter mismatch = %v", itemIDs(got.Data.Items))
-	}
-	if got := f.feed(missingGateway, "?derived=network%3DNet", http.StatusOK); len(got.Data.Items) != 0 {
-		t.Fatalf("a hidden classification must not match filters: %v", itemIDs(got.Data.Items))
-	}
-	f.feed(noDerived, "?derived=network%3DNet", http.StatusForbidden)
+	f.feed(noPayload, "?filter="+url.QueryEscape(textFilter("eq", "alarm")), http.StatusForbidden)
+}
+
+// textFilter is a predicate comparing the text of a Message.
+func textFilter(op, text string) string {
+	return `{"op":"` + op + `","field":{"namespace":"message","path":["text"]},"value":{"kind":"string","value":"` + text + `"}}`
 }
 
 // TestMessageLiveHelpersReuseTheFeedRules checks the service entry points the live stream builds
@@ -442,7 +480,7 @@ func TestMessageLiveHelpersReuseTheFeedRules(t *testing.T) {
 	elsewhere := f.message(base.Add(time.Minute), "two", b)
 	bearer, _ := f.caller([]string{"message.read"}, authz.Scope{Kind: "unit", References: []string{a.String()}}, []string{"payload", "unit"})
 	core := mustComposeCore(t, f.store)
-	service, err := readmodel.NewService(core.store, core.resolver, core.store, core.reads, core.reads)
+	service, err := readmodel.NewService(core.store, core.resolver, core.store, core.reads, core.reads, core.fields)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -460,6 +498,16 @@ func TestMessageLiveHelpersReuseTheFeedRules(t *testing.T) {
 	filters.Units = []uuid.UUID{b}
 	if items, err = service.Evaluate(t.Context(), proof, filters, []uuid.UUID{visible}); err != nil || len(items) != 0 {
 		t.Fatalf("non-matching filter: %+v, %v", items, err)
+	}
+	for text, want := range map[string]int{"one": 1, "other": 0} {
+		var predicate processing.Predicate
+		if err := processing.Decode([]byte(textFilter("eq", text)), &predicate); err != nil {
+			t.Fatal(err)
+		}
+		items, err := service.Evaluate(t.Context(), proof, readmodel.Filters{Filter: &predicate}, []uuid.UUID{visible, elsewhere})
+		if err != nil || len(items) != want {
+			t.Fatalf("predicate on %q: %+v, %v", text, items, err)
+		}
 	}
 	if _, err = service.Evaluate(t.Context(), proof, readmodel.Filters{Networks: []uuid.UUID{f.network}}, []uuid.UUID{visible}); !errors.Is(err, authz.ErrForbidden) {
 		t.Fatalf("filter without its group: %v", err)

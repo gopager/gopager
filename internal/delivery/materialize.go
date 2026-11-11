@@ -177,10 +177,10 @@ func (s *subject) observeGateway(ctx context.Context, tx platform.TransactionCon
 
 // resultVisible reports whether the published result is part of the projection.
 func resultVisible(projection readmodel.DeliveryProjection, result uuid.UUID) bool {
-	if result == uuid.Nil || projection.Item.Derived == nil {
+	if result == uuid.Nil || projection.Item.Attributes == nil {
 		return false
 	}
-	return slices.ContainsFunc(*projection.Item.Derived, func(item readmodel.DerivedItem) bool { return item.ResultID == result })
+	return slices.ContainsFunc(*projection.Item.Attributes, func(item readmodel.AttributeValue) bool { return item.ResultID == result })
 }
 
 func appendUnique(ids []uuid.UUID, id uuid.UUID) []uuid.UUID {

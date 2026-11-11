@@ -6,26 +6,16 @@ import (
 	"github.com/gopager/gopager/internal/attributes"
 	"github.com/gopager/gopager/internal/httpapi"
 	"github.com/gopager/gopager/internal/identity"
-	"github.com/gopager/gopager/internal/persistence/ent/attributestore"
 )
 
-// composeAttributeSchemas builds the Attribute-schema service and the store that also serves
-// the catalog to the field registry.
-func composeAttributeSchemas(c *core) (*attributes.Service, *attributestore.Store, error) {
-	store, err := attributestore.New(c.store)
-	if err != nil {
-		return nil, nil, err
-	}
-	service, err := attributes.NewService(c.store, c.resolver, c.store, store, c.receipts)
-	if err != nil {
-		return nil, nil, err
-	}
-	return service, store, nil
+// composeAttributeSchemas builds the Attribute-schema service over the core's catalog store.
+func composeAttributeSchemas(c *core) (*attributes.Service, error) {
+	return attributes.NewService(c.store, c.resolver, c.store, c.attributes, c.receipts)
 }
 
 // registerAttributeRoutes binds the Attribute-schema routes.
 func registerAttributeRoutes(mux *http.ServeMux, transport *identity.HTTPTransport, authenticator httpapi.Authenticator, c *core) error {
-	service, _, err := composeAttributeSchemas(c)
+	service, err := composeAttributeSchemas(c)
 	if err != nil {
 		return err
 	}

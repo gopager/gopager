@@ -257,25 +257,18 @@ func (v *view) LookupField(_ context.Context, ref processing.FieldRef) (processi
 		return processing.FieldValue{State: processing.FieldPresent, Value: &value}, nil
 	}
 	workflow, output, ok := resultRef(ref)
-	if !ok || !v.groups[resultGroup] || v.message == nil || v.message.Item.Derived == nil {
+	if !ok || !v.groups[resultGroup] || v.message == nil || v.message.Item.Attributes == nil {
 		return absent, nil
 	}
 	schema, ok := v.fields.schemaFor(ref)
 	if !ok {
 		return absent, nil
 	}
-	for _, item := range *v.message.Item.Derived {
-		if item.WorkflowID != workflow {
+	for _, item := range *v.message.Item.Attributes {
+		if item.WorkflowID != workflow || item.Field != output || item.TargetPosition != nil {
 			continue
 		}
-		field, ok := item.Fields[output]
-		if !ok || field.State != string(processing.FieldPresent) || len(field.Value) == 0 {
-			return absent, nil
-		}
-		var value processing.Value
-		if json.Unmarshal(field.Value, &value) != nil {
-			return absent, nil
-		}
+		value := item.Value
 		if _, err := value.Native(schema); err != nil {
 			return absent, nil
 		}

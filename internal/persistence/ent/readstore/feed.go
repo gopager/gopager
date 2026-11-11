@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -112,23 +111,6 @@ func (b *feedBuilder) appearanceFilters() string {
 	return " AND " + strings.Join(conditions, " AND ")
 }
 
-// valueMatch renders when the typed value expression (an object with kind and value) equals the
-// condition as a string, a decimal number or a boolean.
-func (b *feedBuilder) valueMatch(value string, condition readmodel.DerivedCondition) string {
-	matcher := condition.Matcher()
-	alternatives := []string{"(" + value + "->>'kind' IN ('string', 'timestamp') AND " + value + "->'value' = to_jsonb(" +
-		b.params.add(matcher.Text) + "::text))"}
-	if matcher.Number != "" {
-		alternatives = append(alternatives, "(CASE WHEN "+value+"->>'kind' IN ('integer', 'number') THEN ("+value+
-			"->>'value')::numeric = "+b.params.add(matcher.Number)+"::numeric ELSE false END)")
-	}
-	if matcher.Boolean != "" {
-		alternatives = append(alternatives, "("+value+"->>'kind' = 'boolean' AND "+value+"->'value' = "+
-			b.params.add(matcher.Boolean)+"::jsonb)")
-	}
-	return "(" + strings.Join(alternatives, " OR ") + ")"
-}
-
 // targetVisibility renders when target tt of a Transmission is visible: assigned through an
 // eligible Unit appearance, unassigned through an eligible Unit-less appearance, any other
 // status through message.read and message.detail on the Network's Agency. appearance renders an
@@ -140,59 +122,6 @@ func (b *feedBuilder) targetVisibility(appearance func(condition string) string,
 		(tt.resolution_status = 'assigned' AND ` + appearance("v.unit_id = tt.unit_id") + `)
 		OR (tt.resolution_status = 'unassigned' AND ` + appearance("v.unit_id IS NULL AND v.agency_id = "+agency) + `)
 		OR (tt.resolution_status IN ('pending', 'failed', 'unresolved') AND ` + context + `)))`
-}
-
-// latestDerived renders the latest published result of each Workflow among the Transmissions
-// that support an eligible appearance of the Message m.id, looked up without the page CTEs.
-func (b *feedBuilder) latestDerived() string {
-	return `SELECT DISTINCT ON (c.workflow_id) c.workflow_id, r.field_groups, r.evaluation,
-			dt.id AS transmission_id, dn.agency_id AS network_agency, dt.observed_at, dt.accepted_at, dt.message_id
-		FROM message_units mu JOIN transmissions dt ON dt.message_id = mu.message_id
-		JOIN networks dn ON dn.id = dt.network_id
-		JOIN processing_candidates c ON c.transmission_id = dt.id
-		JOIN processing_results r ON r.candidate_id = c.id AND r.published_at IS NOT NULL AND r.message_id = dt.message_id
-		WHERE mu.message_id = m.id AND ` + b.eligible("mu") + ` AND ` + supports("dt", "dn", "mu") + `
-		ORDER BY c.workflow_id, r.published_at DESC, r.id DESC`
-}
-
-// derivedFilters renders one condition per output name: some visible derived result of the
-// Message has an output of that name equal to one of the names' values.
-func (b *feedBuilder) derivedFilters() string {
-	byName := make(map[string][]readmodel.DerivedCondition)
-	var names []string
-	for _, condition := range b.query.Filters.Derived {
-		if _, seen := byName[condition.Name]; !seen {
-			names = append(names, condition.Name)
-		}
-		byName[condition.Name] = append(byName[condition.Name], condition)
-	}
-	slices.Sort(names)
-	var rendered []string
-	for _, name := range names {
-		parameter := b.params.add(name) + "::text"
-		var topLevel, targeted []string
-		for _, condition := range byName[name] {
-			topLevel = append(topLevel, b.valueMatch("(l.evaluation->'fields'->"+parameter+"->'value')", condition))
-			targeted = append(targeted, b.valueMatch("(tr->'fields'->"+parameter+"->'value')", condition))
-		}
-		appearance := func(condition string) string {
-			return "EXISTS (SELECT 1 FROM message_units v WHERE v.message_id = l.message_id AND " + condition +
-				" AND " + b.eligible("v") + ")"
-		}
-		visible := b.targetVisibility(appearance, "l.network_agency", "l.observed_at", "l.accepted_at")
-		rendered = append(rendered, `EXISTS (SELECT 1 FROM (`+b.latestDerived()+`) l
-			WHERE l.field_groups <@ `+b.groupsParam()+` AND (
-				`+strings.Join(topLevel, " OR ")+`
-				OR EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(l.evaluation->'targetResults') = 'array'
-						THEN l.evaluation->'targetResults' ELSE '[]'::jsonb END) tr
-					WHERE (`+strings.Join(targeted, " OR ")+`)
-					AND (tr->>'targetPosition')::int IN (SELECT tt.position FROM transmission_targets tt
-						WHERE tt.transmission_id = l.transmission_id AND `+visible+`))))`)
-	}
-	if len(rendered) == 0 {
-		return ""
-	}
-	return " AND " + strings.Join(rendered, " AND ")
 }
 
 // pageCTE renders the selection of the page's Messages.
@@ -221,34 +150,11 @@ func (b *feedBuilder) pageCTE() string {
 	}
 	conditions = append(conditions, `EXISTS (SELECT 1 FROM message_units mu LEFT JOIN units u ON u.id = mu.unit_id
 		WHERE mu.message_id = m.id AND `+b.eligible("mu")+b.appearanceFilters()+`)`)
-	where := strings.Join(conditions, "\n\t\tAND ") + b.derivedFilters()
+	where := strings.Join(conditions, "\n\t\tAND ") + b.selectionFilter()
 	return `page AS (
 	SELECT m.id, m.first_observed_at FROM messages m
 	WHERE ` + where + `
 	ORDER BY m.first_observed_at DESC, m.id DESC` + limit + `)`
-}
-
-// derivedColumn renders, for the page Message p, the latest result per Workflow if its stored
-// field groups are all readable.
-func (b *feedBuilder) derivedColumn() string {
-	if len(b.query.DerivedGroups) == 0 {
-		return `'[]'::jsonb`
-	}
-	appearance := func(condition string) string {
-		return "EXISTS (SELECT 1 FROM app v WHERE v.message_id = l.message_id AND " + condition + ")"
-	}
-	visible := b.targetVisibility(appearance, "l.network_agency", "l.observed_at", "l.accepted_at")
-	return `COALESCE((SELECT jsonb_agg(jsonb_build_object('workflowId', l.workflow_id, 'resultId', l.result_id,
-			'evaluation', l.evaluation, 'visible', ARRAY(
-				SELECT tt.position FROM transmission_targets tt WHERE tt.transmission_id = l.transmission_id AND ` + visible + `))
-			ORDER BY l.workflow_id, l.result_id)
-		FROM (SELECT DISTINCT ON (c.workflow_id) c.workflow_id, r.id AS result_id, r.field_groups,
-				r.evaluation, s.id AS transmission_id, s.message_id, s.network_agency, s.observed_at, s.accepted_at
-			FROM sup s JOIN processing_candidates c ON c.transmission_id = s.id
-			JOIN processing_results r ON r.candidate_id = c.id AND r.published_at IS NOT NULL AND r.message_id = s.message_id
-			WHERE s.message_id = p.id
-			ORDER BY c.workflow_id, r.published_at DESC, r.id DESC) l
-		WHERE l.field_groups <@ ` + b.groupsParam() + `), '[]'::jsonb)`
 }
 
 // transmissionsColumn renders the supporting Transmissions of a detail with their targets.
@@ -314,12 +220,12 @@ result_rows AS (
 			FROM app a WHERE a.message_id = p.id AND a.unit_id IS NULL), '[]'::jsonb) AS without_unit,
 		COALESCE((SELECT jsonb_agg(DISTINCT s.network_agency) FROM sup s
 			WHERE s.message_id = p.id AND s.network_unresolved), '[]'::jsonb) AS unresolved,
-		` + b.derivedColumn() + ` AS derived,
+		` + b.attributesColumn() + ` AS attributes,
 		` + b.transmissionsColumn() + ` AS transmissions
 	FROM page p LEFT JOIN LATERAL (SELECT s.payload, s.protocol, s.incomplete FROM sup s WHERE s.message_id = p.id
 		ORDER BY s.incomplete, s.accepted_at, s.id LIMIT 1) r ON true)
 SELECT s.tx_id, s.seq, r.id, r.first_observed_at, r.processing_status, r.correcting, r.payload, r.protocol, r.incomplete,
-	r.units, r.without_unit, r.unresolved, r.derived, r.transmissions
+	r.units, r.without_unit, r.unresolved, r.attributes, r.transmissions
 FROM snapshot s LEFT JOIN result_rows r ON true
 ORDER BY r.first_observed_at DESC NULLS LAST, r.id DESC`
 }
@@ -350,6 +256,11 @@ func (s *Store) run(ctx context.Context, tx platform.TransactionContext, query r
 	if err != nil {
 		return readmodel.FeedResult{}, nil, err
 	}
+	// The statement has many correlated subqueries, whose estimated cost can pass the JIT
+	// threshold while the work is small; compiling it then costs seconds per request.
+	if _, err := executor.ExecContext(ctx, "SET LOCAL jit = off"); err != nil {
+		return readmodel.FeedResult{}, nil, err
+	}
 	p := &params{}
 	builder := &feedBuilder{params: p, elig: newEligibility(p, query.Access), query: query, detail: detail}
 	rows, err := executor.QueryContext(ctx, builder.statement(), p.values...)
@@ -362,7 +273,7 @@ func (s *Store) run(ctx context.Context, tx platform.TransactionContext, query r
 	for rows.Next() {
 		var row feedRow
 		if err := rows.Scan(&result.TxID, &result.Seq, &row.id, &row.time, &row.processing, &row.correcting, &row.payload,
-			&row.protocol, &row.incomplete, &row.units, &row.withoutUnit, &row.unresolved, &row.derived,
+			&row.protocol, &row.incomplete, &row.units, &row.withoutUnit, &row.unresolved, &row.attributes,
 			&row.transmissions); err != nil {
 			return readmodel.FeedResult{}, nil, err
 		}
@@ -398,7 +309,7 @@ type feedRow struct {
 	units         []byte
 	withoutUnit   []byte
 	unresolved    []byte
-	derived       []byte
+	attributes    []byte
 	transmissions []byte
 }
 
@@ -427,16 +338,21 @@ func (r feedRow) record() (readmodel.FeedRecord, []readmodel.TransmissionRecord,
 		AgencyID        uuid.UUID `json:"agencyId"`
 		FirstObservedAt time.Time `json:"firstObservedAt"`
 	}
-	var derived []struct {
-		WorkflowID uuid.UUID       `json:"workflowId"`
-		ResultID   uuid.UUID       `json:"resultId"`
-		Evaluation json.RawMessage `json:"evaluation"`
-		Visible    []int           `json:"visible"`
+	var attributes []struct {
+		SchemaKey           string          `json:"schemaKey"`
+		Field               string          `json:"field"`
+		TargetPosition      *int            `json:"targetPosition"`
+		UnitID              *uuid.UUID      `json:"unitId"`
+		Value               json.RawMessage `json:"value"`
+		WorkflowID          uuid.UUID       `json:"workflowId"`
+		DefinitionVersionID uuid.UUID       `json:"definitionVersionId"`
+		ResultID            uuid.UUID       `json:"resultId"`
+		PublishedAt         time.Time       `json:"publishedAt"`
 	}
 	for _, decode := range []struct {
 		data   []byte
 		target any
-	}{{r.units, &units}, {r.withoutUnit, &withoutUnit}, {r.unresolved, &record.UnresolvedAgencies}, {r.derived, &derived}} {
+	}{{r.units, &units}, {r.withoutUnit, &withoutUnit}, {r.unresolved, &record.UnresolvedAgencies}, {r.attributes, &attributes}} {
 		if err := json.Unmarshal(decode.data, decode.target); err != nil {
 			return readmodel.FeedRecord{}, nil, err
 		}
@@ -449,9 +365,10 @@ func (r feedRow) record() (readmodel.FeedRecord, []readmodel.TransmissionRecord,
 		record.WithoutUnit = append(record.WithoutUnit, readmodel.WithoutUnitRecord{AgencyID: entry.AgencyID,
 			FirstObservedAt: entry.FirstObservedAt.UTC()})
 	}
-	for _, entry := range derived {
-		record.Derived = append(record.Derived, readmodel.DerivedRecord{WorkflowID: entry.WorkflowID, ResultID: entry.ResultID,
-			Evaluation: entry.Evaluation, VisibleTargets: entry.Visible})
+	for _, entry := range attributes {
+		record.Attributes = append(record.Attributes, readmodel.AttributeRecord{SchemaKey: entry.SchemaKey, Field: entry.Field,
+			TargetPosition: entry.TargetPosition, UnitID: entry.UnitID, Value: entry.Value, WorkflowID: entry.WorkflowID,
+			DefinitionVersionID: entry.DefinitionVersionID, ResultID: entry.ResultID, PublishedAt: entry.PublishedAt.UTC()})
 	}
 	transmissions, err := decodeTransmissions(r.transmissions)
 	return record, transmissions, err

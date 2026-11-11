@@ -26,8 +26,8 @@ type DeliveryProjection struct {
 
 // ProjectForDelivery returns the Message as the holder of authority may read it, inside the
 // caller's transaction, in which authority was resolved at now. The boolean is false when the
-// authority holds no message.read grant or no appearance of the Message is eligible. Derived
-// results appear only when the holder may read all of their stored field groups, as in the feed.
+// authority holds no message.read grant or no appearance of the Message is eligible. Attribute
+// values appear only when the holder may read all of the stored field groups of their results, as in the feed.
 func (s *Service) ProjectForDelivery(ctx context.Context, tx platform.TransactionContext, authority authz.Authority,
 	now time.Time, messageID uuid.UUID) (DeliveryProjection, bool, error) {
 	if messageID == uuid.Nil {

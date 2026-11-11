@@ -2447,9 +2447,11 @@ paths:
         `(messageTime, messageId)` descending. A caller without any `message.read` grant gets 403.
         Filters that need an unreadable field group are 403, never dropped: `text` and `protocol`
         need `payload`; `unit`, `organization`, `agency` and `withoutUnit` need `unit`; `network`
-        needs `gateway`; `derived` needs `derived`. Unknown or repeated scalar parameters, invalid
-        UTF-8, text over 1024 bytes, more than 100 values per dimension and a page token of other
-        filters or another caller are 400 `INVALID_INPUT`. Properties of a field group the caller
+        needs `gateway`; a `filter` needs the field groups of the fields it reads (`payload`, `unit`,
+        `derived`). Unknown or repeated scalar parameters, invalid UTF-8, text over 1024 bytes, more
+        than 100 values per dimension, a `filter` that is malformed, over 32 KiB or reads an unknown,
+        deprecated or non-filterable field, and a page token of other filters or another caller are
+        400 `INVALID_INPUT`. Properties of a field group the caller
         cannot read are omitted. Paging uses keyset tokens, not offsets; there is no `total`.
         Each page is counted in a fixed one-minute window per access key, Principal or (guest) client
         source, up to `--search-attempts-per-minute`; beyond it the response is 429 `RATE_LIMITED`
@@ -2526,15 +2528,15 @@ paths:
             - flex
             - zvei
             - eas
-      - name: derived
+      - name: filter
         in: query
-        explode: true
         schema:
-          type: array
-          maxItems: 100
-          items:
-            type: string
-        description: '`<outputName>=<value>`; the value is compared as string, decimal number or boolean. Conditions of one name are alternatives.'
+          type: string
+          maxLength: 32768
+        description: JSON-encoded `MessagePredicate`, at most once. It combines with the other parameters by AND. A
+          field reference resolves to candidate values (an attribute to the effective value of every position the
+          caller may see, a list to its elements); a comparison holds when one candidate satisfies it, `present`
+          when there is a candidate. See docs/http-api.md (Messages).
       - name: withoutUnit
         in: query
         schema:
@@ -2694,14 +2696,15 @@ paths:
             - flex
             - zvei
             - eas
-      - name: derived
+      - name: filter
         in: query
-        explode: true
         schema:
-          type: array
-          maxItems: 100
-          items:
-            type: string
+          type: string
+          maxLength: 32768
+        description: JSON-encoded `MessagePredicate`, at most once. It combines with the other parameters by AND. A
+          field reference resolves to candidate values (an attribute to the effective value of every position the
+          caller may see, a list to its elements); a comparison holds when one candidate satisfies it, `present`
+          when there is a candidate. See docs/http-api.md (Messages).
       - name: withoutUnit
         in: query
         schema:
@@ -8196,11 +8199,13 @@ components:
         withoutUnit:
           type: boolean
           description: An eligible Unit-less appearance exists. Field group `unit`.
-        derived:
+        attributes:
           type: array
-          description: Latest published result per Workflow, shown when the caller reads `derived` and every group the definition reads. Field group `derived`.
+          description: Effective Message attribute values with their provenance, sorted by schema key, field and
+            position (the Transmission-level value first). Shown when the caller reads `derived`; a value comes from
+            a result only if the caller may read every field group stored with it. Field group `derived`.
           items:
-            $ref: '#/components/schemas/MessageDerived'
+            $ref: '#/components/schemas/MessageAttribute'
         networkUnresolved:
           type: boolean
           description: Present (true) only where `network.read` reaches the Network's Agency.
@@ -8230,57 +8235,105 @@ components:
           type: string
           format: date-time
           description: Detail only.
-    MessageDerived:
+    MessageAttribute:
       type: object
+      description: The effective value of one attribute field at one position, the present value of the latest
+        published result.
       required:
+      - schemaKey
+      - field
+      - value
       - workflowId
+      - definitionVersionId
       - resultId
+      - publishedAt
       properties:
+        schemaKey:
+          type: string
+        field:
+          type: string
+        targetPosition:
+          type: integer
+          minimum: 0
+          description: Original target position of a target-level value, only for targets the caller may see.
+        unitId:
+          type: string
+          format: uuid
+          description: The Unit the target is assigned to. Field group `unit`.
+        value:
+          $ref: '#/components/schemas/TypedValue'
         workflowId:
+          type: string
+          format: uuid
+        definitionVersionId:
           type: string
           format: uuid
         resultId:
           type: string
           format: uuid
-        fields:
-          type: object
-          additionalProperties:
-            $ref: '#/components/schemas/MessageDerivedField'
-        targetResults:
-          type: array
-          description: Only for targets the caller may see.
-          items:
-            type: object
-            required:
-            - targetPosition
-            - fields
-            properties:
-              targetPosition:
-                type: integer
-                minimum: 0
-              fields:
-                type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/MessageDerivedField'
-    MessageDerivedField:
+        publishedAt:
+          type: string
+          format: date-time
+    MessageFieldRef:
       type: object
+      description: Reference to a Message field. `message` takes one path element (`id`, `time`, `processingStatus`,
+        `correctionStatus`, `protocol`, `form`, `text`, `numeric`, `unitIds`, `unitNames`); `attributes` takes the
+        schema key, the field name and optionally object property names.
       required:
-      - state
+      - namespace
+      - path
       properties:
-        state:
+        namespace:
           type: string
           enum:
+          - message
+          - attributes
+        path:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items:
+            type: string
+            minLength: 1
+      additionalProperties: false
+    MessagePredicate:
+      type: object
+      description: Same shape and operators as `Predicate`, over Message fields. Nests at most 32 levels. Only
+        scalars and lists of scalars can be compared; `contains` is a case-sensitive substring test.
+      required:
+      - op
+      properties:
+        op:
+          type: string
+          enum:
+          - and
+          - or
+          - not
           - present
-          - absent
+          - eq
+          - in
+          - lt
+          - lte
+          - gt
+          - gte
+          - contains
+        field:
+          $ref: '#/components/schemas/MessageFieldRef'
         value:
-          type: object
-          required:
-          - kind
-          - value
-          properties:
-            kind:
-              type: string
-            value: {}
+          $ref: '#/components/schemas/TypedValue'
+        values:
+          type: array
+          minItems: 1
+          maxItems: 1024
+          items:
+            $ref: '#/components/schemas/TypedValue'
+        args:
+          type: array
+          minItems: 1
+          maxItems: 1024
+          items:
+            $ref: '#/components/schemas/MessagePredicate'
+      additionalProperties: false
     SavedViewDefinition:
       type: object
       description: Feed filters of a saved view; unknown fields are 400.
@@ -8333,20 +8386,8 @@ components:
                 - flex
                 - zvei
                 - eas
-            derived:
-              type: array
-              maxItems: 100
-              items:
-                type: object
-                required:
-                - name
-                - value
-                additionalProperties: false
-                properties:
-                  name:
-                    type: string
-                  value:
-                    type: string
+            filter:
+              $ref: '#/components/schemas/MessagePredicate'
         from:
           type: string
           format: date-time
@@ -8390,7 +8431,7 @@ components:
             type: string
             enum:
             - agency
-            - derived
+            - filter
             - network
             - organization
             - protocol

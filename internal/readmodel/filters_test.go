@@ -7,8 +7,20 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/attributes"
 	"github.com/gopager/gopager/internal/authz"
+	"github.com/gopager/gopager/internal/fields"
+	"github.com/gopager/gopager/internal/processing"
 )
+
+// levelFilter selects Messages whose attribute incident.level is 7.
+const levelFilter = `{"op":"eq","field":{"namespace":"attributes","path":["incident","level"]},"value":{"kind":"integer","value":"7"}}`
+
+// testRegistry holds the built-in fields and the attribute schema the filter tests address.
+func testRegistry() *fields.Registry {
+	return fields.New(fields.Builtin(), attributes.NewProvider([]attributes.Schema{{Key: "incident",
+		Subject: attributes.SubjectMessage, Fields: map[string]attributes.Field{"level": {Kind: processing.IntegerValue}}}}, 1))
+}
 
 func parse(t *testing.T, query string) (Filters, error) {
 	t.Helper()
@@ -23,15 +35,19 @@ func TestParseFiltersAcceptsTheVocabulary(t *testing.T) {
 	t.Parallel()
 	unit, network := uuid.New(), uuid.New()
 	filters, err := parse(t, "from=2026-11-08T12:00:00%2B01:00&until=2026-11-08T13:00:00Z&text=Stra%C3%9Fe&unit="+unit.String()+
-		"&unit="+unit.String()+"&network="+network.String()+"&protocol=pocsag&protocol=flex&derived=level%3D7&derived=level%3D8&withoutUnit=true")
+		"&unit="+unit.String()+"&network="+network.String()+"&protocol=pocsag&protocol=flex&filter="+url.QueryEscape(levelFilter)+"&withoutUnit=true")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if filters.From.UTC().Hour() != 11 || filters.Text != "Straße" || len(filters.Units) != 1 || len(filters.Derived) != 2 ||
+	if filters.From.UTC().Hour() != 11 || filters.Text != "Straße" || len(filters.Units) != 1 || filters.Filter == nil ||
 		!filters.WithoutUnit || len(filters.Protocols) != 2 {
 		t.Fatalf("unexpected filters %+v", filters)
 	}
-	if got := filters.RequiredFieldGroups(); strings.Join(got, ",") != "payload,unit,gateway,derived" {
+	selection, err := CompileSelection(testRegistry(), filters.Filter, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := filters.RequiredFieldGroups(selection); strings.Join(got, ",") != "payload,unit,gateway,derived" {
 		t.Fatalf("required groups %v", got)
 	}
 }
@@ -55,8 +71,12 @@ func TestParseFiltersRejectsInvalidInput(t *testing.T) {
 		"text over 1024 bytes":  "text=" + strings.Repeat("a", 1025),
 		"101 values":            strings.Join(hundredOne, "&"),
 		"unknown protocol":      "protocol=tetra",
-		"derived without equal": "derived=level",
-		"derived empty name":    "derived=%3D7",
+		"derived parameter":     "derived=level%3D7",
+		"filter twice":          "filter=" + url.QueryEscape(levelFilter) + "&filter=" + url.QueryEscape(levelFilter),
+		"filter empty":          "filter=",
+		"filter not JSON":       "filter=nope",
+		"filter unknown member": "filter=" + url.QueryEscape(`{"op":"and","args":[],"extra":1}`),
+		"filter over 32 KiB":    "filter=" + url.QueryEscape(strings.Repeat(" ", MaxFilterBytes+1)+levelFilter),
 		"bad withoutUnit":       "withoutUnit=yes",
 		"repeated withoutUnit":  "withoutUnit=true&withoutUnit=true",
 	} {
@@ -87,7 +107,7 @@ func TestEmptyTextIsNoFilterAndCanonicalFormIgnoresOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(first.RequiredFieldGroups()) != 1 || first.Hash() != second.Hash() {
+	if len(first.RequiredFieldGroups(nil)) != 1 || first.Hash() != second.Hash() {
 		t.Fatal("equal filter sets must share one canonical encoding, and empty text must need no group")
 	}
 	third, _ := parse(t, "unit="+a.String())
@@ -96,15 +116,48 @@ func TestEmptyTextIsNoFilterAndCanonicalFormIgnoresOrder(t *testing.T) {
 	}
 }
 
-func TestDerivedMatcherInterpretations(t *testing.T) {
+func TestCanonicalFormBindsThePredicate(t *testing.T) {
 	t.Parallel()
-	for value, want := range map[string]DerivedMatcher{
-		"true": {Text: "true", Boolean: "true"}, "12": {Text: "12", Number: "12"}, "-1.5": {Text: "-1.5", Number: "-1.5"},
-		"007": {Text: "007"}, "abc": {Text: "abc"}, "": {Text: ""},
+	spaced := `{ "op" : "eq", "field": {"namespace":"attributes","path":["incident","level"]},
+		"value": {"kind":"integer","value":"7"} }`
+	first, err := parse(t, "filter="+url.QueryEscape(levelFilter))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := parse(t, "filter="+url.QueryEscape(spaced))
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := parse(t, "filter="+url.QueryEscape(strings.Replace(levelFilter, `"7"`, `"8"`, 1)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Hash() != second.Hash() || first.Hash() == other.Hash() || first.Hash() == (Filters{}).Hash() {
+		t.Fatal("the canonical form must ignore the layout of the predicate and nothing else")
+	}
+	if !strings.HasPrefix(string(first.Canonical()), `{"v":2,`) {
+		t.Fatalf("canonical = %s", first.Canonical())
+	}
+}
+
+func TestCompileSelectionChecksTheRegistry(t *testing.T) {
+	t.Parallel()
+	for name, predicate := range map[string]string{
+		"unknown field":  strings.Replace(levelFilter, `"level"`, `"missing"`, 1),
+		"unknown schema": strings.Replace(levelFilter, `"incident"`, `"other"`, 1),
+		"wrong operand":  strings.Replace(levelFilter, `"integer"`, `"string"`, 1),
+		"workflow field": `{"op":"eq","field":{"namespace":"source","path":["protocol"]},"value":{"kind":"string","value":"x"}}`,
 	} {
-		if got := (DerivedCondition{Name: "x", Value: value}).Matcher(); got != want {
-			t.Errorf("%q: %+v, want %+v", value, got, want)
+		filters, err := parse(t, "filter="+url.QueryEscape(predicate))
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
 		}
+		if _, err := CompileSelection(testRegistry(), filters.Filter, true); err == nil {
+			t.Errorf("%s: want a failure", name)
+		}
+	}
+	if selection, err := CompileSelection(testRegistry(), nil, true); selection != nil || err != nil {
+		t.Errorf("no predicate: %v, %v", selection, err)
 	}
 }
 

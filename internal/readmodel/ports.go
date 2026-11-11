@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
+	"github.com/gopager/gopager/internal/fields"
 	"github.com/gopager/gopager/internal/platform"
 )
 
@@ -36,6 +37,8 @@ type TokenKeys interface {
 type FeedQuery struct {
 	Access  authz.MessageAccess
 	Filters Filters
+	// Selection is the compiled predicate of Filters.Filter, or nil without one.
+	Selection *fields.Filter
 	// After is the keyset cursor; nil starts at the newest Message.
 	After *Cursor
 	// Limit is the page size; the store reads one more row to learn whether another page exists.
@@ -44,8 +47,8 @@ type FeedQuery struct {
 	// feed order without paging or a position.
 	IDs []uuid.UUID
 	// DerivedGroups are the field groups the caller may read, or nil when the caller cannot read
-	// derived results. A derived result is shown and matched by derived filters only when all of
-	// its stored field groups are among them.
+	// derived results. A result contributes attributes, shown or matched by the predicate, only
+	// when all of its stored field groups are among them.
 	DerivedGroups []string
 }
 
@@ -97,13 +100,22 @@ type WithoutUnitRecord struct {
 	FirstObservedAt time.Time
 }
 
-// DerivedRecord is the latest published result of one Workflow among the supporting readable
-// Transmissions. VisibleTargets are the original target positions the caller may see.
-type DerivedRecord struct {
-	WorkflowID     uuid.UUID
-	ResultID       uuid.UUID
-	Evaluation     json.RawMessage
-	VisibleTargets []int
+// AttributeRecord is the effective value of one attribute field: the present value of the
+// latest published result, among the readable results of the supporting Transmissions, for the
+// schema key, the field and the target position (nil for a Transmission-level result).
+type AttributeRecord struct {
+	SchemaKey string
+	Field     string
+	// TargetPosition is the original target position of a target-level result.
+	TargetPosition *int
+	// UnitID is the Unit the target is assigned to.
+	UnitID *uuid.UUID
+	// Value is the typed value as stored.
+	Value               json.RawMessage
+	WorkflowID          uuid.UUID
+	DefinitionVersionID uuid.UUID
+	ResultID            uuid.UUID
+	PublishedAt         time.Time
 }
 
 // FeedRecord is everything the feed knows about one Message before field groups are applied.
@@ -119,7 +131,8 @@ type FeedRecord struct {
 	// UnresolvedAgencies are the Agencies of the Networks of supporting readable Transmissions
 	// whose Network could not be resolved.
 	UnresolvedAgencies []uuid.UUID
-	Derived            []DerivedRecord
+	// Attributes are the effective attribute values the caller's readable field groups allow.
+	Attributes []AttributeRecord
 }
 
 // TargetRecord is a visible, unsuppressed target of a Transmission.
