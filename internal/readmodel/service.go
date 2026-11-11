@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
+	"github.com/gopager/gopager/internal/fields"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/platform"
 )
@@ -58,6 +59,7 @@ type Service struct {
 	clock        platform.Clock
 	store        Store
 	keys         TokenKeys
+	registry     FieldRegistry
 
 	mu       sync.Mutex
 	tokenKey []byte
@@ -65,11 +67,12 @@ type Service struct {
 
 // NewService composes the read side. It fails with authz.ErrInvalidInput on a missing dependency.
 func NewService(transactions identity.Transactions, resolver identity.AuthorityResolver, clock platform.Clock,
-	store Store, keys TokenKeys) (*Service, error) {
-	if transactions == nil || resolver == nil || clock == nil || store == nil || keys == nil {
+	store Store, keys TokenKeys, registry FieldRegistry) (*Service, error) {
+	if transactions == nil || resolver == nil || clock == nil || store == nil || keys == nil || registry == nil {
 		return nil, authz.ErrInvalidInput
 	}
-	return &Service{transactions: transactions, resolver: resolver, clock: clock, store: store, keys: keys}, nil
+	return &Service{transactions: transactions, resolver: resolver, clock: clock, store: store, keys: keys,
+		registry: registry}, nil
 }
 
 // access is everything one read needs to know about its caller.
@@ -185,7 +188,8 @@ func (s *Service) Feed(ctx context.Context, proof identity.Proof, request FeedRe
 	}
 	var page FeedPage
 	err = s.run(ctx, proof, func(tx platform.TransactionContext, current access, now time.Time) error {
-		if err := current.requireGroups(request.Filters.RequiredFieldGroups()); err != nil {
+		selection, err := s.prepare(tx.Context(), tx, current, request.Filters)
+		if err != nil {
 			return err
 		}
 		var after *Cursor
@@ -197,7 +201,7 @@ func (s *Service) Feed(ctx context.Context, proof identity.Proof, request FeedRe
 			after = &cursor
 		}
 		result, err := s.store.Feed(tx.Context(), tx, FeedQuery{Access: current.rows, Filters: request.Filters,
-			After: after, Limit: request.PageSize, DerivedGroups: current.derivedGroups()})
+			Selection: selection, After: after, Limit: request.PageSize, DerivedGroups: current.derivedGroups()})
 		if err != nil {
 			return err
 		}
@@ -221,26 +225,26 @@ func (s *Service) Feed(ctx context.Context, proof identity.Proof, request FeedRe
 func (s *Service) Evaluate(ctx context.Context, proof identity.Proof, filters Filters, ids []uuid.UUID) ([]FeedItem, error) {
 	var items []FeedItem
 	err := s.run(ctx, proof, func(tx platform.TransactionContext, current access, _ time.Time) error {
-		var err error
-		items, err = s.evaluate(ctx, tx, current, filters, ids)
+		selection, err := s.prepare(ctx, tx, current, filters.WithoutTime())
+		if err != nil {
+			return err
+		}
+		items, err = s.evaluate(ctx, tx, current, filters, selection, ids)
 		return err
 	})
 	return items, err
 }
 
 // evaluate returns the feed items of the listed Messages that match the filters without their
-// time bounds, in feed order, within the caller's transaction.
+// time bounds, in feed order, within the caller's transaction. selection is the compiled
+// predicate of the filters.
 func (s *Service) evaluate(ctx context.Context, tx platform.TransactionContext, current access, filters Filters,
-	ids []uuid.UUID) ([]FeedItem, error) {
-	filters = filters.WithoutTime()
-	if err := current.requireGroups(filters.RequiredFieldGroups()); err != nil {
-		return nil, err
-	}
+	selection *fields.Filter, ids []uuid.UUID) ([]FeedItem, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	result, err := s.store.Feed(tx.Context(), tx, FeedQuery{Access: current.rows, Filters: filters,
-		IDs: slices.Clone(ids), DerivedGroups: current.derivedGroups()})
+	result, err := s.store.Feed(tx.Context(), tx, FeedQuery{Access: current.rows, Filters: filters.WithoutTime(),
+		Selection: selection, IDs: slices.Clone(ids), DerivedGroups: current.derivedGroups()})
 	if err != nil {
 		return nil, err
 	}

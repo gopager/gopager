@@ -10,6 +10,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
+	"github.com/gopager/gopager/internal/fields"
+	"github.com/gopager/gopager/internal/processing"
 )
 
 // Saved view ownership values.
@@ -26,23 +28,18 @@ const maxViewNameRunes = 256
 // DefinitionVersion is the only supported schemaVersion of a saved view definition.
 const DefinitionVersion = 1
 
-// DerivedDefinition is one derived condition of a saved view definition.
-type DerivedDefinition struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
-}
-
 // DefinitionFilters are the feed filter dimensions of a saved view, as arrays (Text as a string,
 // WithoutUnit as a boolean). Their limits are those of the feed filters.
 type DefinitionFilters struct {
-	Text          string              `json:"text,omitempty"`
-	Units         []uuid.UUID         `json:"units,omitempty"`
-	WithoutUnit   bool                `json:"withoutUnit,omitempty"`
-	Agencies      []uuid.UUID         `json:"agencies,omitempty"`
-	Organizations []uuid.UUID         `json:"organizations,omitempty"`
-	Networks      []uuid.UUID         `json:"networks,omitempty"`
-	Protocols     []string            `json:"protocols,omitempty"`
-	Derived       []DerivedDefinition `json:"derived,omitempty"`
+	Text          string      `json:"text,omitempty"`
+	Units         []uuid.UUID `json:"units,omitempty"`
+	WithoutUnit   bool        `json:"withoutUnit,omitempty"`
+	Agencies      []uuid.UUID `json:"agencies,omitempty"`
+	Organizations []uuid.UUID `json:"organizations,omitempty"`
+	Networks      []uuid.UUID `json:"networks,omitempty"`
+	Protocols     []string    `json:"protocols,omitempty"`
+	// Filter is the typed predicate over Message fields.
+	Filter *processing.Predicate `json:"filter,omitempty"`
 }
 
 // Definition is the stored filter set of a saved view: the feed filters plus an optional
@@ -75,9 +72,7 @@ func (d Definition) FeedFilters() Filters {
 	filters := Filters{From: d.From, Until: d.Until, Text: d.Filters.Text, Units: d.Filters.Units,
 		Organizations: d.Filters.Organizations, Agencies: d.Filters.Agencies, Networks: d.Filters.Networks,
 		Protocols: d.Filters.Protocols, WithoutUnit: d.Filters.WithoutUnit}
-	for _, condition := range d.Filters.Derived {
-		filters.Derived = append(filters.Derived, DerivedCondition(condition))
-	}
+	filters.Filter = d.Filters.Filter
 	return filters
 }
 
@@ -100,10 +95,7 @@ func definitionOf(filters Filters) Definition {
 	definition := Definition{SchemaVersion: DefinitionVersion, From: filters.From, Until: filters.Until,
 		Filters: DefinitionFilters{Text: filters.Text, Units: filters.Units, WithoutUnit: filters.WithoutUnit,
 			Agencies: filters.Agencies, Organizations: filters.Organizations, Networks: filters.Networks,
-			Protocols: filters.Protocols}}
-	for _, condition := range filters.Derived {
-		definition.Filters.Derived = append(definition.Filters.Derived, DerivedDefinition(condition))
-	}
+			Protocols: filters.Protocols, Filter: filters.Filter}}
 	return definition
 }
 
@@ -120,15 +112,17 @@ func ValidateViewName(name string) error {
 // dimensionGroups maps each filter dimension (named like its feed query parameter) to the field
 // group that must be readable to use it.
 var dimensionGroups = []struct{ dimension, group string }{
-	{"agency", "unit"}, {"derived", "derived"}, {"network", "gateway"}, {"organization", "unit"},
+	{"agency", "unit"}, {"network", "gateway"}, {"organization", "unit"},
 	{"protocol", "payload"}, {"text", "payload"}, {"unit", "unit"}, {"withoutUnit", "unit"},
 }
 
 // UnavailableDimensions lists, sorted, the filter dimensions in use whose field group
-// the can predicate reports as unreadable. A client marks such a saved view unavailable instead of dropping the
-// dimensions.
-func (f Filters) UnavailableDimensions(can func(group string) bool) []string {
-	used := map[string]bool{"agency": len(f.Agencies) > 0, "derived": len(f.Derived) > 0,
+// the can predicate reports as unreadable. A client marks such a saved view unavailable instead
+// of dropping the dimensions. The `filter` dimension is unavailable when any field group of the
+// compiled predicate is unreadable; selection is nil when the predicate does not compile now,
+// which makes the dimension unavailable too.
+func (f Filters) UnavailableDimensions(can func(group string) bool, selection *fields.Filter) []string {
+	used := map[string]bool{"agency": len(f.Agencies) > 0,
 		"network": len(f.Networks) > 0, "organization": len(f.Organizations) > 0,
 		"protocol": len(f.Protocols) > 0, "text": f.Text != "", "unit": len(f.Units) > 0,
 		"withoutUnit": f.WithoutUnit}
@@ -137,6 +131,9 @@ func (f Filters) UnavailableDimensions(can func(group string) bool) []string {
 		if used[entry.dimension] && !can(entry.group) {
 			unavailable = append(unavailable, entry.dimension)
 		}
+	}
+	if f.Filter != nil && (selection == nil || slices.ContainsFunc(selection.Groups(), func(group string) bool { return !can(group) })) {
+		unavailable = append(unavailable, "filter")
 	}
 	slices.Sort(unavailable)
 	return unavailable

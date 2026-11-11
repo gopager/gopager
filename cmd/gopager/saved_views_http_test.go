@@ -545,3 +545,35 @@ func TestSearchAdmission(t *testing.T) {
 		t.Fatalf("buckets = %d, want P1, P2, key and guest", got)
 	}
 }
+
+// TestSavedViewsStoreTheFilterPredicate checks that a predicate is compiled when saved, that its
+// field groups make the view unavailable for readers without them, and that it round-trips.
+func TestSavedViewsStoreTheFilterPredicate(t *testing.T) {
+	t.Parallel()
+	f := newSavedViewFixture(t, 0)
+	all := authz.Scope{Kind: "all"}
+	reader, _ := f.keyCaller([]string{"message.read"}, all, []string{"payload"})
+	noPayload, _ := f.keyCaller([]string{"message.read"}, all, []string{"gateway"})
+	author, _ := f.keyCaller([]string{"saved-view.manage-global"}, all, []string{"payload"})
+
+	predicate := `{"op":"eq","field":{"namespace":"message","path":["protocol"]},"value":{"kind":"string","value":"pocsag"}}`
+	definition := `{"schemaVersion":1,"filters":{"filter":` + predicate + `}}`
+	created := f.view(author, http.MethodPost, "/api/v1/saved-views", createBody(uuid.New(), "global", "G", definition), http.StatusCreated)
+	path := "/api/v1/saved-views/" + created.Data.ID.String()
+	if got := f.view(reader, http.MethodGet, path, "", http.StatusOK); len(got.Data.UnavailableFilters) != 0 {
+		t.Fatalf("reader unavailable = %v", got.Data.UnavailableFilters)
+	}
+	got := f.view(noPayload, http.MethodGet, path, "", http.StatusOK)
+	if len(got.Data.UnavailableFilters) != 1 || got.Data.UnavailableFilters[0] != "filter" {
+		t.Fatalf("noPayload unavailable = %v", got.Data.UnavailableFilters)
+	}
+	if !strings.Contains(string(got.Data.Definition), `"filter":{"op":"eq"`) {
+		t.Fatalf("definition = %s", got.Data.Definition)
+	}
+	unknown := `{"schemaVersion":1,"filters":{"filter":{"op":"present","field":{"namespace":"attributes","path":["nope","x"]},"value":{"kind":"boolean","value":true}}}}`
+	if bad := f.view(author, http.MethodPost, "/api/v1/saved-views", createBody(uuid.New(), "global", "Bad", unknown), http.StatusBadRequest); bad.Code != "INVALID_INPUT" {
+		t.Fatalf("code = %q", bad.Code)
+	}
+	needsUnit := `{"schemaVersion":1,"filters":{"filter":{"op":"present","field":{"namespace":"message","path":["unitNames"]},"value":{"kind":"boolean","value":true}}}}`
+	f.view(author, http.MethodPost, "/api/v1/saved-views", createBody(uuid.New(), "global", "Forbidden", needsUnit), http.StatusForbidden)
+}

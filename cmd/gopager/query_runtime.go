@@ -19,7 +19,7 @@ func composeReadSide(c *core) (*readSide, error) {
 	if c.readSide != nil {
 		return c.readSide, nil
 	}
-	service, err := readmodel.NewService(c.store, c.resolver, c.store, c.reads, c.reads)
+	service, err := readmodel.NewService(c.store, c.resolver, c.store, c.reads, c.reads, newBuiltinRegistry())
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +41,7 @@ func registerQueryRoutes(mux *http.ServeMux, transport *identity.HTTPTransport, 
 	if err != nil {
 		return err
 	}
-	views, err := readmodel.NewSavedViews(c.store, c.resolver, c.store, c.reads, c.receipts)
+	views, err := readmodel.NewSavedViews(c.store, c.resolver, c.store, c.reads, c.receipts, newBuiltinRegistry())
 	if err != nil {
 		return err
 	}

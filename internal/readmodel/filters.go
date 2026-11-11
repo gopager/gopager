@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"net/url"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -15,6 +14,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
+	"github.com/gopager/gopager/internal/fields"
+	"github.com/gopager/gopager/internal/processing"
 )
 
 // Limits of the filter vocabulary.
@@ -23,19 +24,12 @@ const (
 	MaxFilterValues = 100
 	// MaxTextBytes bounds the text search term in bytes.
 	MaxTextBytes = 1024
-	// maxDerivedBytes bounds one derived condition (output name and value) in bytes.
-	maxDerivedBytes = 1024
+	// MaxFilterBytes bounds the encoded `filter` predicate in bytes.
+	MaxFilterBytes = 32 * 1024
 )
 
 // protocols are the Protocols a Network can carry.
 var protocols = []string{"pocsag", "flex", "zvei", "eas"}
-
-// DerivedCondition is one `derived=<outputName>=<value>` filter: a published derived output
-// named Name whose value equals Value as a string, a decimal number or a boolean.
-type DerivedCondition struct {
-	Name  string
-	Value string
-}
 
 // Filters are the Message feed filters shared by the feed, the live stream and saved views.
 // Values of one dimension are alternatives; the dimensions combine with AND. The zero value
@@ -50,17 +44,19 @@ type Filters struct {
 	Agencies      []uuid.UUID
 	Networks      []uuid.UUID
 	Protocols     []string
-	Derived       []DerivedCondition
+	// Filter is the typed predicate over field-registry fields; it combines with the other
+	// dimensions by AND. It is checked against a registry by CompileSelection.
+	Filter *processing.Predicate
 	// WithoutUnit adds Unit-less appearances as an alternative of the Unit dimension.
 	WithoutUnit bool
 }
 
 // filterParameters are the query parameters that carry filters.
 var filterParameters = []string{"from", "until", "text", "unit", "organization", "agency", "network",
-	"protocol", "derived", "withoutUnit"}
+	"protocol", "filter", "withoutUnit"}
 
 // scalarParameters may appear at most once.
-var scalarParameters = []string{"from", "until", "text", "withoutUnit", "pageSize", "pageToken"}
+var scalarParameters = []string{"from", "until", "text", "filter", "withoutUnit", "pageSize", "pageToken"}
 
 // ParseFilters reads the filter parameters of a query. Any parameter outside the filter
 // vocabulary and the names in extra is rejected, as is a repeated scalar. Failures are
@@ -101,14 +97,25 @@ func ParseFilters(values url.Values, extra ...string) (Filters, error) {
 		}
 	}
 	filters.Protocols = values["protocol"]
-	for _, entry := range values["derived"] {
-		name, value, found := strings.Cut(entry, "=")
-		if !found {
-			return Filters{}, authz.ErrInvalidInput
+	if values.Has("filter") {
+		if filters.Filter, err = parsePredicate(values.Get("filter")); err != nil {
+			return Filters{}, err
 		}
-		filters.Derived = append(filters.Derived, DerivedCondition{Name: name, Value: value})
 	}
 	return filters.Validate()
+}
+
+// parsePredicate decodes the syntax of a `filter` parameter. Which fields exist and how they
+// compare is decided later, against a registry.
+func parsePredicate(encoded string) (*processing.Predicate, error) {
+	if len(encoded) > MaxFilterBytes {
+		return nil, authz.ErrInvalidInput
+	}
+	var predicate processing.Predicate
+	if err := processing.Decode([]byte(encoded), &predicate); err != nil {
+		return nil, authz.ErrInvalidInput
+	}
+	return &predicate, nil
 }
 
 // parseTime reads an optional RFC 3339 instant.
@@ -152,7 +159,7 @@ func (f Filters) Validate() (Filters, error) {
 	if out.Networks, err = canonicalIDs(f.Networks); err != nil {
 		return Filters{}, err
 	}
-	if len(f.Protocols) > MaxFilterValues || len(f.Derived) > MaxFilterValues {
+	if len(f.Protocols) > MaxFilterValues {
 		return Filters{}, authz.ErrInvalidInput
 	}
 	out.Protocols = slices.Clone(f.Protocols)
@@ -163,18 +170,12 @@ func (f Filters) Validate() (Filters, error) {
 			return Filters{}, authz.ErrInvalidInput
 		}
 	}
-	out.Derived = slices.Clone(f.Derived)
-	for _, condition := range out.Derived {
-		if condition.Name == "" || len(condition.Name)+len(condition.Value) > maxDerivedBytes ||
-			!utf8.ValidString(condition.Name) || !utf8.ValidString(condition.Value) ||
-			strings.ContainsRune(condition.Name, 0) || strings.ContainsRune(condition.Value, 0) {
+	if f.Filter != nil {
+		encoded, err := json.Marshal(f.Filter)
+		if err != nil || len(encoded) > MaxFilterBytes {
 			return Filters{}, authz.ErrInvalidInput
 		}
 	}
-	slices.SortFunc(out.Derived, func(a, b DerivedCondition) int {
-		return strings.Compare(a.Name+"\x00"+a.Value, b.Name+"\x00"+b.Value)
-	})
-	out.Derived = slices.Compact(out.Derived)
 	return out, nil
 }
 
@@ -202,22 +203,22 @@ func (f Filters) WithoutTime() Filters {
 
 // canonicalFilters is the stable encoding that page tokens and saved views bind to.
 type canonicalFilters struct {
-	Version       int         `json:"v"`
-	From          string      `json:"from,omitempty"`
-	Until         string      `json:"until,omitempty"`
-	Text          string      `json:"text,omitempty"`
-	Units         []string    `json:"unit,omitempty"`
-	Organizations []string    `json:"organization,omitempty"`
-	Agencies      []string    `json:"agency,omitempty"`
-	Networks      []string    `json:"network,omitempty"`
-	Protocols     []string    `json:"protocol,omitempty"`
-	Derived       [][2]string `json:"derived,omitempty"`
-	WithoutUnit   bool        `json:"withoutUnit,omitempty"`
+	Version       int             `json:"v"`
+	From          string          `json:"from,omitempty"`
+	Until         string          `json:"until,omitempty"`
+	Text          string          `json:"text,omitempty"`
+	Units         []string        `json:"unit,omitempty"`
+	Organizations []string        `json:"organization,omitempty"`
+	Agencies      []string        `json:"agency,omitempty"`
+	Networks      []string        `json:"network,omitempty"`
+	Protocols     []string        `json:"protocol,omitempty"`
+	Filter        json.RawMessage `json:"filter,omitempty"`
+	WithoutUnit   bool            `json:"withoutUnit,omitempty"`
 }
 
 // Canonical returns the deterministic encoding of validated filters.
 func (f Filters) Canonical() []byte {
-	canonical := canonicalFilters{Version: 1, Text: f.Text, Protocols: f.Protocols, WithoutUnit: f.WithoutUnit,
+	canonical := canonicalFilters{Version: 2, Text: f.Text, Protocols: f.Protocols, WithoutUnit: f.WithoutUnit,
 		Units: idStrings(f.Units), Organizations: idStrings(f.Organizations),
 		Agencies: idStrings(f.Agencies), Networks: idStrings(f.Networks)}
 	if f.From != nil {
@@ -226,8 +227,8 @@ func (f Filters) Canonical() []byte {
 	if f.Until != nil {
 		canonical.Until = f.Until.UTC().Format(time.RFC3339Nano)
 	}
-	for _, condition := range f.Derived {
-		canonical.Derived = append(canonical.Derived, [2]string{condition.Name, condition.Value})
+	if f.Filter != nil {
+		canonical.Filter, _ = json.Marshal(f.Filter)
 	}
 	encoded, _ := json.Marshal(canonical)
 	return encoded
@@ -246,8 +247,8 @@ func idStrings(ids []uuid.UUID) []string {
 
 // RequiredFieldGroups lists the field groups a caller must be able to read to use the filters:
 // text and Protocol need payload, Unit, Organization, Agency and Unit-less need unit, Network
-// needs gateway and derived conditions need derived.
-func (f Filters) RequiredFieldGroups() []string {
+// needs gateway, and the compiled predicate (nil without one) needs the groups of its fields.
+func (f Filters) RequiredFieldGroups(selection *fields.Filter) []string {
 	var groups []string
 	add := func(needed bool, group string) {
 		if needed {
@@ -257,30 +258,8 @@ func (f Filters) RequiredFieldGroups() []string {
 	add(f.Text != "" || len(f.Protocols) > 0, "payload")
 	add(len(f.Units) > 0 || len(f.Organizations) > 0 || len(f.Agencies) > 0 || f.WithoutUnit, "unit")
 	add(len(f.Networks) > 0, "gateway")
-	add(len(f.Derived) > 0, "derived")
+	if selection != nil {
+		groups = append(groups, selection.Groups()...)
+	}
 	return groups
-}
-
-// DerivedMatcher is the interpretation of a derived condition's value: it may be compared as
-// text, as a decimal number and as a boolean.
-type DerivedMatcher struct {
-	Text string
-	// Number is the decimal literal when the value is one, else empty.
-	Number string
-	// Boolean is "true" or "false" when the value is one, else empty.
-	Boolean string
-}
-
-var decimalPattern = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]+)?$`)
-
-// Matcher interprets the condition value.
-func (c DerivedCondition) Matcher() DerivedMatcher {
-	matcher := DerivedMatcher{Text: c.Value}
-	if decimalPattern.MatchString(c.Value) {
-		matcher.Number = c.Value
-	}
-	if c.Value == "true" || c.Value == "false" {
-		matcher.Boolean = c.Value
-	}
-	return matcher
 }

@@ -2,6 +2,8 @@ package readmodel
 
 import (
 	"encoding/json"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -62,25 +64,42 @@ func TestNetworkUnresolvedNeedsNetworkReach(t *testing.T) {
 	}
 }
 
-func TestDerivedTargetsFiltered(t *testing.T) {
+func TestAttributesAreOrderedAndGated(t *testing.T) {
 	t.Parallel()
 	record := sampleRecord()
-	evaluation := json.RawMessage(`{"selected":true,"targetResults":[
-		{"targetPosition":0,"fields":{"a":{"state":"present","value":{"kind":"string","value":"x"}}}},
-		{"targetPosition":1,"fields":{"a":{"state":"present","value":{"kind":"string","value":"y"}}}}]}`)
-	record.Derived = []DerivedRecord{
-		{WorkflowID: uuid.New(), ResultID: uuid.New(), Evaluation: evaluation, VisibleTargets: []int{1}},
+	zero, one, unit := 0, 1, uuid.New()
+	value := json.RawMessage(`{"kind":"string","value":"x"}`)
+	record.Attributes = []AttributeRecord{
+		{SchemaKey: "b", Field: "f", Value: value},
+		{SchemaKey: "a", Field: "g", Value: value},
+		{SchemaKey: "a", Field: "f", TargetPosition: &one, UnitID: &unit, Value: value},
+		{SchemaKey: "a", Field: "f", TargetPosition: &zero, Value: value},
+		{SchemaKey: "a", Field: "f", Value: value},
+		{SchemaKey: "a", Field: "broken", Value: json.RawMessage(`{`)},
 	}
-	v := viewer{groups: map[string]bool{"derived": true}}
-	item := v.feedItem(record, false)
-	if item.Derived == nil || len(*item.Derived) != 1 {
-		t.Fatalf("derived = %+v", item.Derived)
+	item := viewer{groups: map[string]bool{"derived": true}}.feedItem(record, false)
+	if item.Attributes == nil || len(*item.Attributes) != 5 {
+		t.Fatalf("attributes = %+v", item.Attributes)
 	}
-	results := (*item.Derived)[0].TargetResults
-	if len(results) != 1 || results[0].TargetPosition != 1 {
-		t.Fatalf("target results = %+v", results)
+	var order []string
+	for _, attribute := range *item.Attributes {
+		position := "-"
+		if attribute.TargetPosition != nil {
+			position = strconv.Itoa(*attribute.TargetPosition)
+		}
+		if attribute.UnitID != nil {
+			t.Error("the Unit of a target needs the unit group")
+		}
+		order = append(order, attribute.SchemaKey+"."+attribute.Field+"@"+position)
 	}
-	if (viewer{groups: map[string]bool{}}).feedItem(record, false).Derived != nil {
+	if want := []string{"a.f@-", "a.f@0", "a.f@1", "a.g@-", "b.f@-"}; !slices.Equal(order, want) {
+		t.Fatalf("order = %v, want %v", order, want)
+	}
+	withUnits := viewer{groups: map[string]bool{"derived": true, "unit": true}}.feedItem(record, false)
+	if got := (*withUnits.Attributes)[2].UnitID; got == nil || *got != unit {
+		t.Fatalf("unit = %v", got)
+	}
+	if (viewer{groups: map[string]bool{}}).feedItem(record, false).Attributes != nil {
 		t.Fatal("derived group must gate the property")
 	}
 }

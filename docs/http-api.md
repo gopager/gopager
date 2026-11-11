@@ -545,12 +545,12 @@ reads its group:
 
 | Group | Projection | Filters |
 | --- | --- | --- |
-| `payload` | `payload`, `protocol`, `incomplete` | `text`, `protocol` |
-| `unit` | `units` (`unitId`, `name`, `agencyId`, `organizationId`, `encrypted`), `withoutUnit`, targets' `unitId` and `encrypted`, Unit, Organization and Agency options | `unit`, `organization`, `agency`, `withoutUnit` |
+| `payload` | `payload`, `protocol`, `incomplete` | `text`, `protocol`, `filter` fields `message.protocol`, `message.form`, `message.text`, `message.numeric` |
+| `unit` | `units` (`unitId`, `name`, `agencyId`, `organizationId`, `encrypted`), `withoutUnit`, targets' `unitId` and `encrypted`, Unit, Organization and Agency options | `unit`, `organization`, `agency`, `withoutUnit`, `filter` fields `message.unitIds`, `message.unitNames` |
 | `address` | targets' `address` and `function` | none |
 | `gateway` | Transmissions' `observedAt`, `networkId`, `networkName`, Network options | `network` |
 | `quality` | `qualityMetrics` | none |
-| `derived` | `derived` | `derived` |
+| `derived` | `attributes` | `filter` fields in the `attributes` namespace |
 
 A filter that needs an unreadable group is `403 FORBIDDEN`; it is never dropped or widened.
 `networkUnresolved: true` appears only where the caller's `network.read` reaches the Network's Agency.
@@ -564,7 +564,7 @@ A filter that needs an unreadable group is `403 FORBIDDEN`; it is never dropped 
 | `text` | literal substring of the text or numeric Payload value; empty means no filter; invalid UTF-8 or more than 1024 bytes is `INVALID_INPUT` |
 | `unit`, `organization`, `agency`, `network` | repeatable UUIDs |
 | `protocol` | repeatable `pocsag`, `flex`, `zvei`, `eas` |
-| `derived` | repeatable `<outputName>=<value>` |
+| `filter` | at most once: a typed predicate as JSON, at most 32 KiB (see below) |
 | `withoutUnit` | `true` adds Unit-less appearances as an alternative of the Unit dimension |
 | `pageSize` | 1–200, default 50 |
 | `pageToken` | the previous `nextPageToken` |
@@ -573,9 +573,39 @@ At most 100 values per dimension. Values of one dimension are alternatives; dime
 with AND on the same eligible appearance: Unit, Organization and Agency on the appearance itself,
 Network and Protocol through a Transmission that supports that appearance (an unsuppressed
 assigned target of that Unit, or for a Unit-less row a targetless or unassigned Transmission of a
-Network of that Agency). `derived` matches an output of the latest published result of a
-Workflow, among the supporting readable Transmissions, that equals the value as a string, a
-decimal number or `true`/`false`; conditions with the same name are alternatives.
+Network of that Agency). The `filter` combines with the other parameters by AND on the Message.
+
+**Selection predicate (`filter`).** The value is the [typed predicate](workflows.md#predicates) of
+the Subscription filters (`and`, `or`, `not`, `present`, `eq`, `in`, `lt`, `lte`, `gt`, `gte`,
+`contains`; schema `MessagePredicate`) over these fields:
+
+| Field | Type | Group | Source |
+| --- | --- | --- | --- |
+| `message.id`, `message.time` | string, timestamp | none | the Message |
+| `message.processingStatus`, `message.correctionStatus` | string | none | as in the feed item |
+| `message.protocol`, `message.form` | string | `payload` | the Representative Transmission |
+| `message.text`, `message.numeric` | string | `payload` | its Payload value, when its form is `text` or `numeric` |
+| `message.unitIds`, `message.unitNames` | list of string | `unit` | the caller's eligible Unit appearances |
+| `attributes.<schemaKey>.<field>[.<property>…]` | the declared type | `derived` | effective attribute values (below) |
+
+Each field reference resolves to a set of candidate scalars: an absent value contributes nothing, a
+list its elements, an attribute the effective value of every position the caller may see. A
+comparison holds when one candidate satisfies it; `present: true` holds when there is a candidate
+and `present: false` when there is none; `and`, `or` and `not` are two-valued, so `not` of a
+comparison also holds for a Message without the field. `contains` is a case-sensitive substring
+test (`text` stays case-insensitive). Only scalars and lists of scalars can be compared, and
+a candidate of another type than declared is ignored. A malformed predicate, an unknown,
+deprecated or non-filterable field, a mistyped operand or an exceeded bound is `400 INVALID_INPUT`
+(`RESOURCE_LIMIT` for bounds); a predicate that reads a field group the caller cannot read is
+`403 FORBIDDEN`. The Query side compiles the predicate to SQL; the same rules run in Go for
+Subscription filters, and one test checks both.
+
+**Effective attribute values.** The candidates of an attribute are the published results of the
+Message's supporting readable Transmissions whose stored field groups the caller can read all of.
+For each schema field and position (a Transmission-level result, or an original target position of
+a target the caller may see) the effective value is the present value of the latest result, by
+publication time and then result ID, whichever Workflow wrote it. A property path descends into
+object values.
 
 Text search is evaluated in PostgreSQL: both sides are normalized to NFC, case-folded with full
 Unicode case folding (`casefold` with the `pg_unicode_fast` collation) and normalized again, then
@@ -600,12 +630,14 @@ Transmission is pending, else `failed`, else `completed`, else `none`), `correct
 (`correcting` if an eligible appearance is correcting, else `current`), and per group the
 properties above. `payload` is the original Payload of the Representative Transmission: the
 readable supporting Transmission that is not `incomplete`, then the earliest acceptance, then the
-lowest ID. `derived` lists, per Workflow, the latest published result among the supporting
-readable Transmissions (`workflowId`, `resultId`, `fields` with each output's `state` and `value`;
-`targetResults` only for visible targets). A result appears only if the caller reads `derived` and
-every field group stored with the result: the groups its Workflow definition version reads,
-recorded when the worker wrote the result. Reads never evaluate Workflows, and a result stays
-visible when a plugin instance it used is later disabled, updated or removed.
+lowest ID. `attributes` lists the effective attribute values with their provenance:
+`schemaKey`, `field`, `targetPosition` (target-level values only), `unitId` (the Unit the target
+is assigned to, with the `unit` group), the typed `value`, and `workflowId`,
+`definitionVersionId`, `resultId` and `publishedAt` of the result it comes from, sorted by schema
+key, field and position (the Transmission-level value first). A value appears only if the caller
+reads `derived` and every field group stored with its result: the groups its Workflow definition
+version reads, recorded when the worker wrote the result. Reads never evaluate Workflows, and a
+result stays visible when a plugin instance it used is later disabled, updated or removed.
 
 **Detail (`GET /messages/{id}`).** A Message that is absent, merged away or without a
 detail-eligible appearance is `404 NOT_FOUND`. The feed item is extended by `firstObservedAt` on
@@ -711,7 +743,8 @@ A view is `{"id","revision","ownership":"personal"|"global","name","definition",
 in the data envelope. `name` is 1–256 Unicode scalars, valid UTF-8 and not blank. The
 `definition` is `{"schemaVersion":1,"filters":{…},"from"?,"until"?}`; `filters` takes the feed
 dimensions as arrays `units`, `agencies`, `organizations`, `networks`, `protocols` and
-`derived` (`[{"name","value"}]`), the string `text` and the boolean `withoutUnit`, with the
+the predicate `filter` (the [selection predicate](#messages-query-and-detail)), the string `text`
+and the boolean `withoutUnit`, with the
 limits of the [feed filters](#messages-query-and-detail). Unknown fields are `400 INVALID_INPUT`.
 A view stores no Message and no snapshot; opening it runs its filters through `GET /messages`.
 
@@ -724,9 +757,11 @@ A view stores no Message and no snapshot; opening it runs its filters through `G
   `saved-view.manage-global`, who could not maintain them otherwise; reading a definition grants
   no Message access.
 - **Field groups.** A save whose filters need a field group the author cannot read is
-  `403 FORBIDDEN` and stores nothing. `unavailableFilters` lists, sorted, the filter dimensions
+  `403 FORBIDDEN` and stores nothing; a `filter` that does not compile against the author's
+  field registry (unknown or deprecated field, mistyped operand) is `400 INVALID_INPUT`.
+  `unavailableFilters` lists, sorted, the filter dimensions
   (named like the feed parameters: `text`, `unit`, `organization`, `agency`, `network`,
-  `protocol`, `derived`, `withoutUnit`) whose field group the *caller* cannot read now, `[]`
+  `protocol`, `filter`, `withoutUnit`) whose field group the *caller* cannot read now, `[]`
   if none, so a client marks the view unavailable instead of dropping them. Running such a
   view through `GET /messages` is `403`; filters of readable groups work alone.
 - `POST` takes a `commandId` ([Command IDs](#command-ids-idempotent-creation)); an identical
