@@ -6,11 +6,11 @@ Contribution and documentation rules: [CONTRIBUTING.md](../CONTRIBUTING.md). Run
 
 | Tool | Needed for |
 | --- | --- |
-| Go, version from [go.mod](../go.mod) (`go 1.27.3`) | everything |
+| Go, version from [go.mod](../go.mod) (`go 1.27.4`) | everything |
 | Make | all `make` targets below |
 | Network access | the first run of a tool downloads its pinned module; `make vuln` also queries the vulnerability database |
-| Docker (running daemon, pull access to `postgres:18.0-alpine`) | integration tests, unless an external test database is supplied |
-| Node.js ≥ 22.12 with npm | the commit message hook: run `npm ci` once per clone |
+| Docker (running daemon, pull access to `postgres:18.6-alpine`) | integration tests, unless an external test database is supplied |
+| Node.js ≥ 26.13.1 with npm | the commit message hook: run `npm ci` once per clone |
 
 `npm ci` installs the repository tooling pinned in [package.json](../package.json) and [package-lock.json](../package-lock.json): [commitlint](https://commitlint.js.org/) and [lefthook](https://lefthook.dev/), whose install step registers the git hooks from [lefthook.yml](../lefthook.yml) (it skips that when `CI` is set). The `commit-msg` hook rejects messages that break the [commit message rules](../CONTRIBUTING.md#commit-messages). Git worktrees below the clone, such as `.claude/worktrees/`, share the hooks and find the tooling in the clone's `node_modules`.
 
@@ -102,7 +102,7 @@ make vuln               # govulncheck ./... (pinned version, needs network)
 
 `make generate-check` compares only the Ent output (`internal/persistence/ent`, not its hand-written `schema/`) with git, so commit or stage regenerated files before expecting it to pass locally; it also fails on generated files that git does not track.
 
-`make vuln` reports no vulnerability reachable from the code (Go 1.27.3, `klauspost/compress` v1.20.2, `moby/go-archive` v0.3.0) and is a required CI check. golangci-lint v1 cannot read Go 1.27 export data, which is why the pin is v2.
+`make vuln` reports no vulnerability in the code (Go 1.27.4, the latest module versions) and is a required CI check. golangci-lint v1 cannot read Go 1.27 export data, which is why the pin is v2.
 
 ### Continuous integration
 
