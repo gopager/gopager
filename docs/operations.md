@@ -105,7 +105,7 @@ Fixed values (not configurable):
 | `GOPAGER_DATABASE_URL` (env) | — | yes | As in server mode. |
 | `--username` | — | yes | Initial account name: 1–128 characters, no leading/trailing whitespace, no control characters. |
 | `--actions` | — | yes | Comma-separated actions granted with scope `all`. Each must be a catalog action; no wildcards. |
-| `--fields` | — | — | Comma-separated readable fields: `payload`, `address`, `unit`, `gateway`, `quality`, `derived`, or `extension.<namespace>.<name>`. |
+| `--fields` | — | — | Comma-separated readable fields: `payload`, `address`, `unit`, `gateway`, `quality` or `derived`. |
 | `--delegable` | `false` | — | Allow the account to delegate the granted actions. |
 | `--migration-mode` | `check` | — | `check` or `apply`, as in server mode. |
 | `--allow-insecure-db` | `false` | — | As in server mode. |

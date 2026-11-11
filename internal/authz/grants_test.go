@@ -67,3 +67,17 @@ func TestGrantValidationRejectsMalformedOrImplicitAuthority(t *testing.T) {
 		})
 	}
 }
+
+func TestValidFieldAcceptsTheFixedGroups(t *testing.T) {
+	t.Parallel()
+	for _, group := range authz.MessageFieldGroups {
+		if !authz.ValidField(group) {
+			t.Errorf("ValidField(%q) = false", group)
+		}
+	}
+	for _, field := range []string{"", "Payload", "derived.x", "attributes"} {
+		if authz.ValidField(field) {
+			t.Errorf("ValidField(%q) = true", field)
+		}
+	}
+}

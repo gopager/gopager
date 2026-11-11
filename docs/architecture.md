@@ -379,7 +379,7 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 | User group | `identity_user_groups` | Set of accounts used as a grant subject |
 | Credential | `identity_credentials` | Hashed `session`, `accessKey` or `recovery` secret of an account. Access keys carry restrictions. |
 | Grant | `identity_grants`, `authz.Grant` | Actions on a scope (`all`, `agency`, `unit`, `unitCollection`, `account`) for a principal or group, with optional maximum data age and delegability |
-| Field permission | `identity_field_permissions` | Global permission to read field groups (`payload`, `address`, `unit`, `gateway`, `quality`, `derived`, `extension.<ns>.<name>`), independent of scope |
+| Field permission | `identity_field_permissions` | Global permission to read field groups (`payload`, `address`, `unit`, `gateway`, `quality`, `derived`), independent of scope |
 | Access key restrictions | `authz.Restrictions` | Subset of actions, scopes, fields and age that limits an access key below its owner's grants |
 | Authority | `authz.Authority` | Current grants, field permissions and key restrictions of a principal, loaded once per transaction |
 | Saved view | `saved_views`, `readmodel.SavedViews` | Named feed filter set (`definition` jsonb: filter dimensions plus optional time range) with a revision. A personal view is personal data keyed by `owner_principal_id` and visible only to that Principal; a global view has no owner and is maintained with `saved-view.manage-global`. Writes no domain event and no audit record. |

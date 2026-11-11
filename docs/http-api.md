@@ -212,7 +212,8 @@ What callers can do depends on these concepts:
   grant can carry a maximum data age. Grants from the account and from its user groups
   add up.
 - **Field permissions** are global (unscoped) and cover the field groups `payload`,
-  `address`, `unit`, `gateway`, `quality`, `derived` and `extension.<plugin>.<field>`.
+  `address`, `unit`, `gateway`, `quality` and `derived`; the set is closed (Message attributes
+  belong to `derived`).
   They make no rows readable on their own. Reads of Units, Organizations and Unit
   collections also require the `unit` field group. Address-rule reads require both
   `address` and `unit`.
