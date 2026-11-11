@@ -34,9 +34,13 @@ func TestEvaluationValidationRejectsNamespacesAndOriginalPositionSubstitution(t 
 	if err := ValidateEvaluation(result, schema, binding); err == nil {
 		t.Fatal("accepted repeated original position")
 	}
-	value, err := Literal(BooleanValue, true)
+	value, err := Literal(StringValue, "x")
 	if err != nil {
 		t.Fatal(err)
+	}
+	valid := map[string]map[string]FieldValue{testOutputSchemaKey: {"text": {State: FieldPresent, Value: &value}}}
+	if err := ValidateEvaluation(Evaluation{Selected: true, Fields: valid}, testOutputs, binding); err != nil {
+		t.Fatalf("the fixture without the dependency is not valid, so the next check proves nothing: %v", err)
 	}
 	position := uint32(2)
 	fields := map[string]map[string]FieldValue{testOutputSchemaKey: {"text": {State: FieldPresent, Value: &value, Dependencies: []Dependency{{
