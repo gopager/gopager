@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/commands"
+	"github.com/gopager/gopager/internal/fields"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
@@ -40,13 +41,19 @@ type Service struct {
 	clock        platform.Clock
 	store        Store
 	receipts     commands.Repository
-	fields       processing.Declarations
+	fields       FieldRegistry
 }
 
-// NewService composes the layout service. fields resolves the field references of a layout
-// definition when it is saved. It fails with authz.ErrInvalidInput on a missing dependency.
+// FieldRegistry supplies the field registry visible in a transaction.
+type FieldRegistry interface {
+	Registry(ctx context.Context, tx platform.TransactionContext) (*fields.Registry, error)
+}
+
+// NewService composes the layout service. fields supplies the registry whose Delivery fields a
+// layout definition may reference when it is saved. It fails with authz.ErrInvalidInput on a
+// missing dependency.
 func NewService(transactions identity.Transactions, resolver identity.AuthorityResolver, clock platform.Clock,
-	store Store, receipts commands.Repository, fields processing.Declarations) (*Service, error) {
+	store Store, receipts commands.Repository, fields FieldRegistry) (*Service, error) {
 	if transactions == nil || resolver == nil || clock == nil || store == nil || receipts == nil || fields == nil {
 		return nil, authz.ErrInvalidInput
 	}
@@ -102,23 +109,32 @@ func validateName(name string) error {
 	return nil
 }
 
-// canonical validates a definition structurally and returns its canonical JSON.
-func (s *Service) canonical(ctx context.Context, name string, definition processing.Layout) ([]byte, error) {
+// canonical validates a definition structurally and returns its canonical JSON and the decoded
+// layout.
+func canonical(name string, definition processing.Layout) ([]byte, processing.Layout, error) {
 	if err := validateName(name); err != nil {
-		return nil, err
+		return nil, processing.Layout{}, err
 	}
 	encoded, err := encode(definition)
 	if err != nil {
-		return nil, authz.ErrInvalidInput
+		return nil, processing.Layout{}, authz.ErrInvalidInput
 	}
 	layout, err := processing.DecodeLayout(encoded)
 	if err != nil {
-		return nil, err
+		return nil, processing.Layout{}, err
 	}
-	if _, err := processing.CompileLayout(ctx, layout, s.fields); err != nil {
-		return nil, err
+	return encoded, layout, nil
+}
+
+// checkFields requires every field a layout references to exist in the current registry's
+// Delivery scope and not to be deprecated.
+func (s *Service) checkFields(ctx context.Context, tx platform.TransactionContext, layout processing.Layout) error {
+	registry, err := s.fields.Registry(ctx, tx)
+	if err != nil {
+		return err
 	}
-	return encoded, nil
+	_, err = processing.CompileLayout(ctx, layout, registry.Declarations(fields.ScopeDelivery, true))
+	return err
 }
 
 // view builds the response of a stored layout.
@@ -214,7 +230,7 @@ func (s *Service) Create(ctx context.Context, proof identity.Proof, command uuid
 	if err := validateAgencies(input.Agencies); err != nil {
 		return Layout{}, err
 	}
-	encoded, err := s.canonical(ctx, input.Name, input.Definition)
+	encoded, layout, err := canonical(input.Name, input.Definition)
 	if err != nil {
 		return Layout{}, err
 	}
@@ -248,6 +264,9 @@ func (s *Service) Create(ctx context.Context, proof identity.Proof, command uuid
 			result, err = view(record)
 			return err
 		}
+		if err := s.checkFields(tx.Context(), tx, layout); err != nil {
+			return err
+		}
 		record := Record{ID: uuid.New(), Revision: 1, Name: input.Name, OutputKind: input.Definition.OutputKind,
 			Definition: encoded, Agencies: agencies, CreatedBy: who.principal, CreatedAt: now, UpdatedAt: now}
 		if err := s.store.Insert(tx.Context(), tx, record); err != nil {
@@ -274,7 +293,7 @@ func (s *Service) Update(ctx context.Context, proof identity.Proof, id uuid.UUID
 	if err := validateAgencies(input.Agencies); err != nil {
 		return Layout{}, err
 	}
-	encoded, err := s.canonical(ctx, input.Name, input.Definition)
+	encoded, layout, err := canonical(input.Name, input.Definition)
 	if err != nil {
 		return Layout{}, err
 	}
@@ -286,6 +305,9 @@ func (s *Service) Update(ctx context.Context, proof identity.Proof, id uuid.UUID
 			return err
 		}
 		if err := requireManage(who.authority, now, record.Agencies, agencies); err != nil {
+			return err
+		}
+		if err := s.checkFields(tx.Context(), tx, layout); err != nil {
 			return err
 		}
 		next, err := commands.NextRevision(record.Revision, expected)

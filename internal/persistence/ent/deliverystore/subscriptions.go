@@ -16,7 +16,7 @@ import (
 
 const subscriptionColumns = `s.id, s.revision, s.kind, s.subscriber_id, s.created_by, s.state,
 	array_to_json(s.event_types)::text, s.filter::text, s.layout_id, s.split_by_unit, s.max_age_seconds,
-	s.created_at, s.updated_at`
+	s.health, s.health_reason, s.health_changed_at, s.created_at, s.updated_at`
 
 // scanSubscription reads one row of subscriptionColumns.
 func scanSubscription(row interface{ Scan(...any) error }) (delivery.Subscription, error) {
@@ -25,9 +25,11 @@ func scanSubscription(row interface{ Scan(...any) error }) (delivery.Subscriptio
 	var filter sql.NullString
 	var layout uuid.NullUUID
 	var maxAge sql.NullInt64
+	var reason sql.NullString
+	var changed sql.NullTime
 	if err := row.Scan(&subscription.ID, &subscription.Revision, &subscription.Kind, &subscription.SubscriberID,
 		&subscription.CreatedBy, &subscription.State, &types, &filter, &layout, &subscription.SplitByUnit, &maxAge,
-		&subscription.CreatedAt, &subscription.UpdatedAt); err != nil {
+		&subscription.Health, &reason, &changed, &subscription.CreatedAt, &subscription.UpdatedAt); err != nil {
 		return delivery.Subscription{}, err
 	}
 	if err := json.Unmarshal([]byte(types), &subscription.EventTypes); err != nil {
@@ -47,6 +49,13 @@ func scanSubscription(row interface{ Scan(...any) error }) (delivery.Subscriptio
 	if maxAge.Valid {
 		seconds := int(maxAge.Int64)
 		subscription.MaxAgeSeconds = &seconds
+	}
+	if reason.Valid {
+		subscription.HealthReason = &reason.String
+	}
+	if changed.Valid {
+		at := changed.Time.UTC()
+		subscription.HealthChangedAt = &at
 	}
 	subscription.CreatedAt, subscription.UpdatedAt = subscription.CreatedAt.UTC(), subscription.UpdatedAt.UTC()
 	return subscription, nil
@@ -218,7 +227,9 @@ func (s *Store) UpdateSubscription(ctx context.Context, tx platform.TransactionC
 		return err
 	}
 	result, err := executor.ExecContext(ctx, `UPDATE subscriptions SET revision = $2, state = $3, event_types = $4, filter = $5,
-		layout_id = $6, split_by_unit = $7, max_age_seconds = $8, updated_at = $9 WHERE id = $1 AND revision = $10`,
+		layout_id = $6, split_by_unit = $7, max_age_seconds = $8, updated_at = $9, health = 'valid', health_reason = NULL,
+		health_changed_at = CASE WHEN health = 'valid' THEN health_changed_at ELSE $9 END
+		WHERE id = $1 AND revision = $10`,
 		subscription.ID, subscription.Revision, subscription.State, subscription.EventTypes, filter, layout,
 		subscription.SplitByUnit, maxAge, subscription.UpdatedAt.UTC(), expected)
 	if err != nil {
@@ -263,7 +274,7 @@ func (s *Store) ActiveSubscriptions(ctx context.Context, tx platform.Transaction
 		return nil, err
 	}
 	rows, err := executor.QueryContext(ctx, `SELECT `+subscriptionColumns+` FROM subscriptions s
-		WHERE s.state = 'active' AND s.event_types @> ARRAY[$1]::text[] AND s.created_at <= $2
+		WHERE s.state = 'active' AND s.health = 'valid' AND s.event_types @> ARRAY[$1]::text[] AND s.created_at <= $2
 		ORDER BY s.id FOR SHARE`, eventType, recordedAt.UTC())
 	if err != nil {
 		return nil, err
@@ -282,4 +293,20 @@ func (s *Store) ActiveSubscriptions(ctx context.Context, tx platform.Transaction
 	}
 	rows.Close()
 	return items, withTargets(ctx, executor, items)
+}
+
+// SetSubscriptionHealth implements delivery.Store.
+func (s *Store) SetSubscriptionHealth(ctx context.Context, tx platform.TransactionContext, id uuid.UUID, health, reason string,
+	now time.Time) (bool, error) {
+	executor, err := s.executor(tx)
+	if err != nil {
+		return false, err
+	}
+	result, err := executor.ExecContext(ctx, `UPDATE subscriptions SET health = $2, health_reason = NULLIF($3, ''), health_changed_at = $4
+		WHERE id = $1 AND (health <> $2 OR health_reason IS DISTINCT FROM NULLIF($3, ''))`, id, health, reason, now.UTC())
+	if err != nil {
+		return false, err
+	}
+	changed, err := result.RowsAffected()
+	return changed == 1, err
 }

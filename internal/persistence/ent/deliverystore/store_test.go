@@ -403,3 +403,65 @@ func TestSubscriptionWithAVanishedLayoutIsInvalidInput(t *testing.T) {
 		t.Fatalf("update with a vanished layout: %v", err)
 	}
 }
+
+// TestSubscriptionHealthIsRecordedWithoutARevisionAndHidesTheSubscriptionFromFanOut proves that
+// marking a Subscription invalid keeps its revision, reports a change only once, removes it from
+// the active listing, and that a save makes it valid again.
+func TestSubscriptionHealthIsRecordedWithoutARevisionAndHidesTheSubscriptionFromFanOut(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	now := w.now()
+	var changed, repeated, other bool
+	w.within(func(tx platform.TransactionContext) error {
+		var err error
+		if changed, err = w.store.SetSubscriptionHealth(tx.Context(), tx, w.subscription.ID, delivery.HealthInvalid,
+			delivery.ReasonFieldUnavailable, now); err != nil {
+			return err
+		}
+		if repeated, err = w.store.SetSubscriptionHealth(tx.Context(), tx, w.subscription.ID, delivery.HealthInvalid,
+			delivery.ReasonFieldUnavailable, now); err != nil {
+			return err
+		}
+		other, err = w.store.SetSubscriptionHealth(tx.Context(), tx, w.subscription.ID, delivery.HealthInvalid,
+			delivery.ReasonLayoutInvalid, now)
+		return err
+	})
+	if !changed || repeated || !other {
+		t.Fatalf("changed = %v, repeated = %v, other reason = %v", changed, repeated, other)
+	}
+	w.within(func(tx platform.TransactionContext) error {
+		stored, err := w.store.Subscription(tx.Context(), tx, w.subscription.ID, delivery.NoLock)
+		if err != nil {
+			return err
+		}
+		if stored.Revision != 1 || stored.Health != delivery.HealthInvalid || stored.HealthReason == nil ||
+			*stored.HealthReason != delivery.ReasonLayoutInvalid || stored.HealthChangedAt == nil {
+			t.Errorf("stored = %+v", stored)
+		}
+		active, err := w.store.ActiveSubscriptions(tx.Context(), tx, "message.created", now.Add(time.Hour))
+		if err != nil || len(active) != 0 {
+			t.Errorf("active = %+v, %v", active, err)
+		}
+		return nil
+	})
+
+	saved := w.subscription
+	saved.Revision, saved.UpdatedAt = 2, now
+	w.within(func(tx platform.TransactionContext) error {
+		return w.store.UpdateSubscription(tx.Context(), tx, saved, 1)
+	})
+	w.within(func(tx platform.TransactionContext) error {
+		stored, err := w.store.Subscription(tx.Context(), tx, w.subscription.ID, delivery.NoLock)
+		if err != nil {
+			return err
+		}
+		if stored.Health != delivery.HealthValid || stored.HealthReason != nil {
+			t.Errorf("stored after save = %+v", stored)
+		}
+		active, err := w.store.ActiveSubscriptions(tx.Context(), tx, "message.created", now.Add(time.Hour))
+		if err != nil || len(active) != 1 {
+			t.Errorf("active after save = %+v, %v", active, err)
+		}
+		return nil
+	})
+}

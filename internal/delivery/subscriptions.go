@@ -31,7 +31,6 @@ type Subscriptions struct {
 	resolver     identity.AuthorityResolver
 	clock        platform.Clock
 	receipts     commands.Repository
-	facts        events.SubscriptionAppender
 	accounts     Accounts
 	admission    admission
 }
@@ -39,14 +38,14 @@ type Subscriptions struct {
 // NewSubscriptions composes the Subscription service. It fails with authz.ErrInvalidInput on a
 // missing dependency.
 func NewSubscriptions(deps Dependencies, transactions identity.Transactions, resolver identity.AuthorityResolver,
-	clock platform.Clock, receipts commands.Repository, facts events.SubscriptionAppender, accounts Accounts,
+	clock platform.Clock, receipts commands.Repository, accounts Accounts,
 	limits AdmissionLimits) (*Subscriptions, error) {
 	if err := deps.validate(); err != nil || transactions == nil || resolver == nil || clock == nil ||
-		receipts == nil || facts == nil || accounts == nil {
+		receipts == nil || accounts == nil {
 		return nil, authz.ErrInvalidInput
 	}
 	return &Subscriptions{deps: deps, transactions: transactions, resolver: resolver, clock: clock, receipts: receipts,
-		facts: facts, accounts: accounts, admission: admission{store: deps.Store, limits: limits.normalized()}}, nil
+		accounts: accounts, admission: admission{store: deps.Store, limits: limits.normalized()}}, nil
 }
 
 // manager is what one Subscription operation knows about its caller.
@@ -205,7 +204,8 @@ func (s *Subscriptions) Create(ctx context.Context, proof identity.Proof, comman
 			}
 			return err
 		}
-		subscription := Subscription{ID: uuid.New(), Revision: 1, CreatedAt: who.now, UpdatedAt: who.now, CreatedBy: who.principal}
+		subscription := Subscription{ID: uuid.New(), Revision: 1, Health: HealthValid, CreatedAt: who.now,
+			UpdatedAt: who.now, CreatedBy: who.principal}
 		if err := s.apply(tx.Context(), tx, who, &subscription, input); err != nil {
 			return err
 		}
@@ -270,7 +270,13 @@ func (s *Subscriptions) Update(ctx context.Context, proof identity.Proof, id uui
 			return err
 		}
 		result = updated
-		return s.fact(tx.Context(), tx, id, next, change, who.now)
+		if err := s.fact(tx.Context(), tx, id, next, change, who.now); err != nil {
+			return err
+		}
+		if current.Health != HealthInvalid {
+			return nil
+		}
+		return appendHealthFact(tx.Context(), tx, s.deps, updated, HealthValid, "", who.now)
 	})
 	return result, err
 }
@@ -310,7 +316,7 @@ func (s *Subscriptions) Delete(ctx context.Context, proof identity.Proof, id uui
 // fact appends the configuration.changed fact of a Subscription change.
 func (s *Subscriptions) fact(ctx context.Context, tx platform.TransactionContext, id uuid.UUID, revision int64,
 	change string, now time.Time) error {
-	_, err := s.facts.AppendSubscriptionFact(ctx, tx, events.SubscriptionFact{ID: uuid.New(), Subscription: id,
+	_, err := s.deps.Facts.AppendSubscriptionFact(ctx, tx, events.SubscriptionFact{ID: uuid.New(), Subscription: id,
 		Revision: revision, OccurredAt: now, ChangeKind: change})
 	return err
 }
@@ -413,40 +419,29 @@ func (s *Subscriptions) apply(ctx context.Context, tx platform.TransactionContex
 	if err != nil {
 		return err
 	}
-	fields := newFieldSet(ctx, tx, s.deps.Results)
-	var referenced []processing.FieldRef
-	if input.Filter != nil {
-		program, err := processing.CompilePredicate(ctx, *input.Filter, fields)
-		if err != nil {
-			return err
-		}
-		referenced = append(referenced, program.Fields()...)
-	}
-	layoutKind := ""
 	if input.LayoutID != nil {
-		resolved, err := s.deps.Layouts.ResolveLayout(ctx, tx, processing.LayoutRequest{LayoutID: input.LayoutID})
-		if errors.Is(err, authz.ErrNotFound) {
-			return authz.ErrInvalidInput
-		}
-		if err != nil {
+		// The author chooses the Layout; for a global Subscription that is the manager, not the
+		// technical account that is only the subscriber.
+		if err := s.deps.Layouts.CheckUse(ctx, tx, who.authority, *input.LayoutID, who.now); err != nil {
 			return err
 		}
-		program, err := processing.CompileLayout(ctx, resolved.Layout, fields)
-		if err != nil {
-			return err
-		}
-		referenced = append(referenced, program.Fields()...)
-		layoutKind = resolved.Layout.OutputKind
 	}
-	needed := fieldGroups(referenced)
-	if input.SplitByUnit {
-		needed = append(needed, "unit")
+	check, err := compileSelection(ctx, tx, s.deps, selection{filter: input.Filter, layoutID: input.LayoutID,
+		splitByUnit: input.SplitByUnit})
+	var failure *fault
+	if errors.As(err, &failure) {
+		return failure.err
 	}
-	for _, group := range needed {
-		if !slices.Contains(readable, group) {
-			return authz.ErrInvalidInput
-		}
+	if err != nil {
+		return err
 	}
+	if input.LayoutID != nil && check.layoutKind == "" {
+		return authz.ErrInvalidInput
+	}
+	if check.unreadable(groupSet(readable)) {
+		return authz.ErrInvalidInput
+	}
+	layoutKind := check.layoutKind
 	targets, err := s.checkTargets(ctx, tx, input.Targets, layoutKind)
 	if err != nil {
 		return err
@@ -454,6 +449,7 @@ func (s *Subscriptions) apply(ctx context.Context, tx platform.TransactionContex
 	subscription.Kind, subscription.SubscriberID, subscription.State = input.Kind, subscriber, input.State
 	subscription.EventTypes, subscription.Filter, subscription.Targets = input.EventTypes, input.Filter, targets
 	subscription.LayoutID, subscription.SplitByUnit, subscription.MaxAgeSeconds = input.LayoutID, input.SplitByUnit, input.MaxAgeSeconds
+	subscription.Health, subscription.HealthReason = HealthValid, nil
 	return nil
 }
 
@@ -496,4 +492,13 @@ func (s *Subscriptions) checkTargets(ctx context.Context, tx platform.Transactio
 		checked = append(checked, target)
 	}
 	return checked, nil
+}
+
+// groupSet returns the field groups as a set.
+func groupSet(groups []string) map[string]bool {
+	set := make(map[string]bool, len(groups))
+	for _, group := range groups {
+		set[group] = true
+	}
+	return set
 }

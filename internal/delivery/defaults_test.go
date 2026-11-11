@@ -5,14 +5,15 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/gopager/gopager/internal/fields"
 	"github.com/gopager/gopager/internal/processing"
 )
 
-func TestDefaultLayoutsCompileAgainstTheCatalog(t *testing.T) {
+func TestDefaultLayoutsCompileAgainstTheRegistry(t *testing.T) {
 	t.Parallel()
-	fields := newFieldSet(context.Background(), nil, nil)
+	declarations := fields.New(fields.Builtin()).Declarations(fields.ScopeDelivery, true)
 	for kind, layout := range DefaultLayouts() {
-		program, err := processing.CompileLayout(context.Background(), layout, fields)
+		program, err := processing.CompileLayout(context.Background(), layout, declarations)
 		if err != nil {
 			t.Fatalf("%s: %v (%v)", kind, err, errors.Unwrap(err))
 		}

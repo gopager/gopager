@@ -40,8 +40,14 @@ CREATE TABLE subscriptions (
     layout_id uuid REFERENCES layout_definitions(id),
     split_by_unit boolean NOT NULL,
     max_age_seconds integer CHECK (max_age_seconds BETWEEN 1 AND 86400),
+    -- A Subscription whose filter or Layout no longer compiles is invalid and creates no Deliveries
+    -- until a save that compiles; health changes never change the revision.
+    health varchar NOT NULL DEFAULT 'valid' CHECK (health IN ('valid', 'invalid')),
+    health_reason varchar CHECK (health_reason IN ('filter-invalid', 'field-unavailable', 'layout-invalid', 'resource-limit')),
+    health_changed_at timestamptz,
     created_at timestamptz NOT NULL,
-    updated_at timestamptz NOT NULL
+    updated_at timestamptz NOT NULL,
+    CHECK ((health = 'valid') = (health_reason IS NULL))
 );
 CREATE INDEX subscriptions_subscriber ON subscriptions (subscriber_id);
 CREATE INDEX subscriptions_active_types ON subscriptions USING gin (event_types) WHERE state = 'active';

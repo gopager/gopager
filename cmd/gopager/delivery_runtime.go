@@ -62,9 +62,9 @@ func composeDelivery(c *core) (*deliveryRuntime, error) {
 		targets = delivery.UnavailableTargets{}
 	}
 	deps := delivery.Dependencies{Store: store, Instances: c.processing, Targets: targets, Layouts: resolver,
-		Projector: side.service, Results: store, Authority: c.resolver}
+		Projector: side.service, Fields: c.fields, Facts: c.facts, Authority: c.resolver}
 	runtime := &deliveryRuntime{deps: deps}
-	if runtime.subscriptions, err = delivery.NewSubscriptions(deps, c.store, c.resolver, c.store, c.receipts, c.facts,
+	if runtime.subscriptions, err = delivery.NewSubscriptions(deps, c.store, c.resolver, c.store, c.receipts,
 		c.identity, c.deliveryConfig.limits); err != nil {
 		return nil, err
 	}
@@ -72,11 +72,7 @@ func composeDelivery(c *core) (*deliveryRuntime, error) {
 		c.deliveryConfig.limits); err != nil {
 		return nil, err
 	}
-	catalog, err := delivery.NewCatalog(c.store, store)
-	if err != nil {
-		return nil, err
-	}
-	if runtime.layouts, err = presentation.NewService(c.store, c.resolver, c.store, layouts, c.receipts, catalog); err != nil {
+	if runtime.layouts, err = presentation.NewService(c.store, c.resolver, c.store, layouts, c.receipts, c.fields); err != nil {
 		return nil, err
 	}
 	if runtime.fanOut, err = delivery.NewFanOut(deps, c.store); err != nil {

@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/commands"
+	"github.com/gopager/gopager/internal/fields"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
@@ -133,10 +134,11 @@ func (m *memoryStore) Delete(_ context.Context, _ platform.TransactionContext, i
 	return nil
 }
 
-type failingFields struct{}
+// builtinRegistry serves the built-in field registry.
+type builtinRegistry struct{}
 
-func (failingFields) FieldSchema(processing.FieldRef) (processing.FieldSchema, error) {
-	return processing.FieldSchema{}, errors.New("unknown field")
+func (builtinRegistry) Registry(context.Context, platform.TransactionContext) (*fields.Registry, error) {
+	return fields.New(fields.Builtin()), nil
 }
 
 func textLayout(kind string) processing.Layout {
@@ -165,7 +167,7 @@ func serviceWithScope(t *testing.T, kind identity.ProofKind, scope authz.Scope, 
 			Actions: actions, Scope: scope}}
 	}
 	service, err := NewService(fakeTransactions{}, fakeResolver{identity.Authentication{Authority: authority, Kind: kind}},
-		fakeClock{}, store, &fakeReceipts{stored: map[[2]uuid.UUID]commands.Receipt{}}, failingFields{})
+		fakeClock{}, store, &fakeReceipts{stored: map[[2]uuid.UUID]commands.Receipt{}}, builtinRegistry{})
 	if err != nil {
 		t.Fatal(err)
 	}

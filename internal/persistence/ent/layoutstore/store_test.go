@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/commands"
+	"github.com/gopager/gopager/internal/fields"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/persistence/ent/commandstore"
 	"github.com/gopager/gopager/internal/persistence/ent/layoutstore"
@@ -49,10 +50,10 @@ func (r staticResolver) Resolve(context.Context, platform.TransactionContext, id
 	return r.authentication, nil
 }
 
-type noFields struct{}
+type builtinFields struct{}
 
-func (noFields) FieldSchema(processing.FieldRef) (processing.FieldSchema, error) {
-	return processing.FieldSchema{}, errors.New("no fields")
+func (builtinFields) Registry(context.Context, platform.TransactionContext) (*fields.Registry, error) {
+	return fields.New(fields.Builtin()), nil
 }
 
 type world struct {
@@ -81,7 +82,7 @@ func serviceWithScope(t *testing.T, store *postgres.Store, layouts *layoutstore.
 		ID: uuid.NewString(), SubjectID: principal, SubjectKind: "principal", Actions: []string{action},
 		Scope: scope}}}
 	service, err := presentation.NewService(store, staticResolver{identity.Authentication{Authority: authority,
-		Kind: identity.SessionProof}}, fixedClock{}, layouts, receipts, noFields{})
+		Kind: identity.SessionProof}}, fixedClock{}, layouts, receipts, builtinFields{})
 	if err != nil {
 		t.Fatal(err)
 	}

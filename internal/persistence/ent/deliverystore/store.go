@@ -4,7 +4,6 @@
 package deliverystore
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -14,7 +13,6 @@ import (
 	"github.com/gopager/gopager/internal/delivery"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
-	"github.com/gopager/gopager/internal/processing"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -30,8 +28,7 @@ func New(primary *postgres.Store) (*Store, error) {
 }
 
 var (
-	_ delivery.Store         = (*Store)(nil)
-	_ delivery.ResultSchemas = (*Store)(nil)
+	_ delivery.Store = (*Store)(nil)
 )
 
 // executor resolves the caller's transaction.
@@ -67,10 +64,4 @@ func notFound(err error) error {
 		return authz.ErrNotFound
 	}
 	return err
-}
-
-// ResultFieldSchema implements delivery.ResultSchemas. Workflow outputs are Message attributes
-// declared by Attribute schemas, so a Workflow has no result schema of its own to reference.
-func (s *Store) ResultFieldSchema(context.Context, platform.TransactionContext, uuid.UUID, string) (processing.FieldSchema, error) {
-	return processing.FieldSchema{}, authz.ErrNotFound
 }

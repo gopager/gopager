@@ -190,6 +190,8 @@ func (r *Runner) start(ctx context.Context, tx platform.TransactionContext, clai
 		return nil, err
 	case subscription.State != StateActive:
 		return end(Cancelled, CodeSubscriptionPaused)
+	case subscription.Health == HealthInvalid:
+		return end(Cancelled, CodeNoLongerMatching)
 	case subscription.Revision != record.SubscriptionRevision:
 		return end(Cancelled, CodeSubscriptionChanged)
 	}
@@ -257,13 +259,27 @@ func (r *Runner) current(ctx context.Context, tx platform.TransactionContext, no
 		return currentState{}, "", err
 	}
 	var subject *subject
+	var check *compiled
 	if !missing {
 		event, err := parseEvent(record.DomainEventID, envelope)
 		if err != nil {
 			return currentState{}, "", err
 		}
-		if subject, err = observe(ctx, tx, r.deps, now, subscription, event); err != nil {
+		resolved, err := resolveSubject(ctx, tx, r.deps, event, subscription.SubscriberID)
+		if err != nil {
 			return currentState{}, "", err
+		}
+		if resolved != nil {
+			var reason string
+			if check, reason, err = healthCheck(ctx, tx, r.deps, subscription, resolved.groups); err != nil {
+				return currentState{}, "", err
+			}
+			if reason != "" {
+				return currentState{}, CodeNoLongerMatching, markInvalid(ctx, tx, r.deps, subscription, reason, now)
+			}
+			if subject, err = resolved.project(ctx, tx, r.deps, now, subscription); err != nil {
+				return currentState{}, "", err
+			}
 		}
 	}
 	authority, err := r.deps.Authority.ResolvePrincipalAuthority(ctx, tx, record.SubscriberID)
@@ -304,16 +320,8 @@ func (r *Runner) current(ctx context.Context, tx platform.TransactionContext, no
 	if index < 0 {
 		return currentState{}, CodeNoLongerMatching, nil
 	}
-	fields := newFieldSet(ctx, tx, r.deps.Results)
-	filter, err := compileFilter(ctx, subscription, fields)
-	if err != nil {
-		if code := platform.FailureCode(err); code == platform.CodeInvalidInput || code == platform.CodeResourceLimit {
-			return currentState{}, CodeNoLongerMatching, nil
-		}
-		return currentState{}, "", err
-	}
-	partView := subject.view(subject.splits[index], fields)
-	if !matches(ctx, filter, partView) {
+	partView := subject.view(subject.splits[index], check.declarations)
+	if !matches(check.filter, partView) {
 		return currentState{}, CodeNoLongerMatching, nil
 	}
 	if record.Input != nil && authority.Revision == record.AccessRevision && record.InstanceRevision == instance.Revision {

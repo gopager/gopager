@@ -74,11 +74,23 @@ func (s *Service) visibleRecord(ctx context.Context, tx platform.TransactionCont
 // calls it in its own transaction. The time is the decision time of the caller's transaction.
 func (s *Service) CheckUse(ctx context.Context, tx platform.TransactionContext, authority authz.Authority,
 	layoutID uuid.UUID, _ time.Time) error {
+	return checkUse(ctx, tx, s.store, authority, layoutID)
+}
+
+// CheckUse reports, as authz.ErrInvalidInput, that the layout does not exist or that the
+// authority may not use it, like Service.CheckUse.
+func (r *Resolver) CheckUse(ctx context.Context, tx platform.TransactionContext, authority authz.Authority,
+	layoutID uuid.UUID, _ time.Time) error {
+	return checkUse(ctx, tx, r.store, authority, layoutID)
+}
+
+func checkUse(ctx context.Context, tx platform.TransactionContext, store Store, authority authz.Authority,
+	layoutID uuid.UUID) error {
 	visibility, err := authz.VisibleAgencies(authority, readerActions, false)
 	if err != nil {
 		return authz.ErrInvalidInput
 	}
-	visible, err := s.store.Visible(ctx, tx, layoutID, visibility)
+	visible, err := store.Visible(ctx, tx, layoutID, visibility)
 	if err != nil {
 		return err
 	}
