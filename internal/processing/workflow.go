@@ -143,11 +143,40 @@ func validLocalName(name string) bool {
 	return name != "" && utf8.ValidString(name) && !strings.ContainsRune(name, '\x00')
 }
 
+// schemaCompatible reports whether every value valid for the from schema is also valid for the
+// to schema, so that an assignment needs no conversion. Exact equality would reject a Workflow
+// after its target Attribute schema gained an optional property, a permitted change.
+//
+// The top-level Optional flag is ignored, since it only says whether a field may be omitted. The
+// kinds must be equal. A nullable source needs a nullable target; a non-nullable source fits a
+// nullable target, as null is simply never produced. Every property of an object source must be
+// declared by the target with a compatible schema, and a property that may be absent in the
+// source must be optional in the target. A target property missing in the source must be
+// optional. List elements are compatible when their schemas are.
 func schemaCompatible(from, to FieldSchema) bool {
-	from.Optional, to.Optional = false, false
-	left, leftErr := json.Marshal(from)
-	right, rightErr := json.Marshal(to)
-	return leftErr == nil && rightErr == nil && string(left) == string(right)
+	if from.Kind != to.Kind || (from.Nullable && !to.Nullable) {
+		return false
+	}
+	switch from.Kind {
+	case ObjectValue:
+		for name, source := range from.Properties {
+			target, ok := to.Properties[name]
+			if !ok || (source.Optional && !target.Optional) || !schemaCompatible(source, target) {
+				return false
+			}
+		}
+		for name, target := range to.Properties {
+			if _, ok := from.Properties[name]; !ok && !target.Optional {
+				return false
+			}
+		}
+	case ListValue:
+		if from.Element == nil || to.Element == nil {
+			return from.Element == to.Element
+		}
+		return schemaCompatible(*from.Element, *to.Element)
+	}
+	return true
 }
 
 func validateAssignment(assignment Assignment, schema FieldSchema, declarations Declarations) error {
