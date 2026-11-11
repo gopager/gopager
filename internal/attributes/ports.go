@@ -38,4 +38,6 @@ type Store interface {
 // filtered by Agency; callers cache it by revision.
 type CatalogSource interface {
 	Catalog(ctx context.Context, tx platform.TransactionContext) ([]Schema, int64, error)
+	// CatalogRevision returns the current catalog revision without loading the schemas.
+	CatalogRevision(ctx context.Context, tx platform.TransactionContext) (int64, error)
 }

@@ -252,6 +252,18 @@ func (s *Store) Catalog(ctx context.Context, tx platform.TransactionContext) ([]
 	return schemas, revision, rows.Err()
 }
 
+// CatalogRevision returns the catalog revision alone, so that a cached registry can be reused
+// without loading every schema.
+func (s *Store) CatalogRevision(ctx context.Context, tx platform.TransactionContext) (int64, error) {
+	executor, err := s.primary.Resolve(tx)
+	if err != nil {
+		return 0, err
+	}
+	var revision int64
+	err = executor.QueryRowContext(ctx, `SELECT revision FROM attribute_catalog WHERE id = 1`).Scan(&revision)
+	return revision, err
+}
+
 // requireOneRow reports a statement that matched no row as a revision conflict.
 func requireOneRow(result sql.Result, err error) error {
 	if err != nil {
