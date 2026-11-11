@@ -41,9 +41,11 @@ func (Agency) Fields() []ent.Field {
 	return []ent.Field{field.String("name").NotEmpty().MaxRuneLen(256)}
 }
 
-// Edges returns the relations of the Agency schema: the Units and Radio networks it owns.
+// Edges returns the relations of the Agency schema: the Units and Radio networks it owns and the
+// Workflows assigned to it.
 func (Agency) Edges() []ent.Edge {
-	return []ent.Edge{edge.To("units", Unit.Type), edge.To("networks", Network.Type)}
+	return []ent.Edge{edge.To("units", Unit.Type), edge.To("networks", Network.Type),
+		edge.From("workflows", Workflow.Type).Ref("agencies").Through("workflow_agencies", WorkflowAgency.Type)}
 }
 
 // Unit defines the units table: a logical recipient that Addresses resolve to, owned by one Agency.

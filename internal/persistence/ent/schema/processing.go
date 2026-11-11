@@ -79,8 +79,8 @@ func (ProcessingControl) Fields() []ent.Field {
 	return []ent.Field{field.Int("id"), field.Int64("revision").Default(1).Positive()}
 }
 
-// Workflow defines the processing_workflows table: a Workflow with its scope kind, enablement
-// and active version; soft-deleted via the deleted flag.
+// Workflow defines the processing_workflows table: a Workflow with its optional narrowing kind,
+// enablement and active version; soft-deleted via the deleted flag.
 type Workflow struct{ ent.Schema }
 
 // Policy returns the privacy policy that guards queries and mutations of the Workflow schema.
@@ -98,7 +98,7 @@ func (Workflow) Annotations() []schema.Annotation {
 func (Workflow) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("name").NotEmpty(),
-		field.Enum("scope_kind").Values("all", "network", "unit"),
+		field.Enum("narrowing_kind").Values("network", "unit").Optional().Nillable(),
 		field.Bool("enabled").Default(false),
 		field.Bool("deleted").Default(false),
 		field.UUID("active_version_id", uuid.UUID{}).Optional().Nillable(),
@@ -109,7 +109,39 @@ func (Workflow) Fields() []ent.Field {
 
 // Edges returns the relations of the Workflow schema.
 func (Workflow) Edges() []ent.Edge {
-	return []ent.Edge{edge.To("versions", WorkflowVersion.Type), edge.To("scope_references", WorkflowScopeReference.Type)}
+	return []ent.Edge{
+		edge.To("versions", WorkflowVersion.Type),
+		edge.To("scope_references", WorkflowScopeReference.Type),
+		edge.To("agencies", Agency.Type).Through("workflow_agencies", WorkflowAgency.Type),
+	}
+}
+
+// WorkflowAgency defines the processing_workflow_agencies table: an Agency a Workflow is
+// assigned to. A Workflow reaches no Agency implicitly, so admission and visibility start here.
+type WorkflowAgency struct{ ent.Schema }
+
+// Policy returns the privacy policy that guards queries and mutations of the WorkflowAgency schema.
+func (WorkflowAgency) Policy() ent.Policy { return guard.Policy("WorkflowAgency") }
+
+// Annotations returns the table name and the composite key of the WorkflowAgency schema.
+func (WorkflowAgency) Annotations() []schema.Annotation {
+	return []schema.Annotation{
+		entsql.Annotation{Table: "processing_workflow_agencies"},
+		field.ID("workflow_id", "agency_id"),
+	}
+}
+
+// Fields returns the columns of the WorkflowAgency schema.
+func (WorkflowAgency) Fields() []ent.Field {
+	return []ent.Field{field.UUID("workflow_id", uuid.UUID{}), field.UUID("agency_id", uuid.UUID{})}
+}
+
+// Edges returns the relations of the WorkflowAgency schema.
+func (WorkflowAgency) Edges() []ent.Edge {
+	return []ent.Edge{
+		edge.To("workflow", Workflow.Type).Field("workflow_id").Unique().Required(),
+		edge.To("agency", Agency.Type).Field("agency_id").Unique().Required(),
+	}
 }
 
 // WorkflowScopeReference defines the processing_workflow_scope_references table: a Network or

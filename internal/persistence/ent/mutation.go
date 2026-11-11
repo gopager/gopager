@@ -54,6 +54,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/unittemplate"
 	"github.com/gopager/gopager/internal/persistence/ent/usergroup"
 	"github.com/gopager/gopager/internal/persistence/ent/workflow"
+	"github.com/gopager/gopager/internal/persistence/ent/workflowagency"
 	"github.com/gopager/gopager/internal/persistence/ent/workflowscopereference"
 	"github.com/gopager/gopager/internal/persistence/ent/workflowversion"
 	"github.com/gopager/gopager/internal/processing"
@@ -106,6 +107,7 @@ const (
 	TypeUnitTemplate              = "UnitTemplate"
 	TypeUserGroup                 = "UserGroup"
 	TypeWorkflow                  = "Workflow"
+	TypeWorkflowAgency            = "WorkflowAgency"
 	TypeWorkflowScopeReference    = "WorkflowScopeReference"
 	TypeWorkflowVersion           = "WorkflowVersion"
 )
@@ -1933,22 +1935,25 @@ func (m *AddressRuleMutation) ResetEdge(name string) error {
 // AgencyMutation represents an operation that mutates the Agency nodes in the graph.
 type AgencyMutation struct {
 	config
-	op              Op
-	typ             string
-	id              *uuid.UUID
-	revision        *int64
-	addrevision     *int64
-	name            *string
-	clearedFields   map[string]struct{}
-	units           map[uuid.UUID]struct{}
-	removedunits    map[uuid.UUID]struct{}
-	clearedunits    bool
-	networks        map[uuid.UUID]struct{}
-	removednetworks map[uuid.UUID]struct{}
-	clearednetworks bool
-	done            bool
-	oldValue        func(context.Context) (*Agency, error)
-	predicates      []predicate.Agency
+	op               Op
+	typ              string
+	id               *uuid.UUID
+	revision         *int64
+	addrevision      *int64
+	name             *string
+	clearedFields    map[string]struct{}
+	units            map[uuid.UUID]struct{}
+	removedunits     map[uuid.UUID]struct{}
+	clearedunits     bool
+	networks         map[uuid.UUID]struct{}
+	removednetworks  map[uuid.UUID]struct{}
+	clearednetworks  bool
+	workflows        map[uuid.UUID]struct{}
+	removedworkflows map[uuid.UUID]struct{}
+	clearedworkflows bool
+	done             bool
+	oldValue         func(context.Context) (*Agency, error)
+	predicates       []predicate.Agency
 }
 
 var _ ent.Mutation = (*AgencyMutation)(nil)
@@ -2255,6 +2260,60 @@ func (m *AgencyMutation) ResetNetworks() {
 	m.removednetworks = nil
 }
 
+// AddWorkflowIDs adds the "workflows" edge to the Workflow entity by ids.
+func (m *AgencyMutation) AddWorkflowIDs(ids ...uuid.UUID) {
+	if m.workflows == nil {
+		m.workflows = make(map[uuid.UUID]struct{})
+	}
+	for i := range ids {
+		m.workflows[ids[i]] = struct{}{}
+	}
+}
+
+// ClearWorkflows clears the "workflows" edge to the Workflow entity.
+func (m *AgencyMutation) ClearWorkflows() {
+	m.clearedworkflows = true
+}
+
+// WorkflowsCleared reports if the "workflows" edge to the Workflow entity was cleared.
+func (m *AgencyMutation) WorkflowsCleared() bool {
+	return m.clearedworkflows
+}
+
+// RemoveWorkflowIDs removes the "workflows" edge to the Workflow entity by IDs.
+func (m *AgencyMutation) RemoveWorkflowIDs(ids ...uuid.UUID) {
+	if m.removedworkflows == nil {
+		m.removedworkflows = make(map[uuid.UUID]struct{})
+	}
+	for i := range ids {
+		delete(m.workflows, ids[i])
+		m.removedworkflows[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedWorkflows returns the removed IDs of the "workflows" edge to the Workflow entity.
+func (m *AgencyMutation) RemovedWorkflowsIDs() (ids []uuid.UUID) {
+	for id := range m.removedworkflows {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// WorkflowsIDs returns the "workflows" edge IDs in the mutation.
+func (m *AgencyMutation) WorkflowsIDs() (ids []uuid.UUID) {
+	for id := range m.workflows {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetWorkflows resets all changes to the "workflows" edge.
+func (m *AgencyMutation) ResetWorkflows() {
+	m.workflows = nil
+	m.clearedworkflows = false
+	m.removedworkflows = nil
+}
+
 // Where appends a list predicates to the AgencyMutation builder.
 func (m *AgencyMutation) Where(ps ...predicate.Agency) {
 	m.predicates = append(m.predicates, ps...)
@@ -2420,12 +2479,15 @@ func (m *AgencyMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *AgencyMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.units != nil {
 		edges = append(edges, agency.EdgeUnits)
 	}
 	if m.networks != nil {
 		edges = append(edges, agency.EdgeNetworks)
+	}
+	if m.workflows != nil {
+		edges = append(edges, agency.EdgeWorkflows)
 	}
 	return edges
 }
@@ -2446,18 +2508,27 @@ func (m *AgencyMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case agency.EdgeWorkflows:
+		ids := make([]ent.Value, 0, len(m.workflows))
+		for id := range m.workflows {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *AgencyMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.removedunits != nil {
 		edges = append(edges, agency.EdgeUnits)
 	}
 	if m.removednetworks != nil {
 		edges = append(edges, agency.EdgeNetworks)
+	}
+	if m.removedworkflows != nil {
+		edges = append(edges, agency.EdgeWorkflows)
 	}
 	return edges
 }
@@ -2478,18 +2549,27 @@ func (m *AgencyMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case agency.EdgeWorkflows:
+		ids := make([]ent.Value, 0, len(m.removedworkflows))
+		for id := range m.removedworkflows {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *AgencyMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.clearedunits {
 		edges = append(edges, agency.EdgeUnits)
 	}
 	if m.clearednetworks {
 		edges = append(edges, agency.EdgeNetworks)
+	}
+	if m.clearedworkflows {
+		edges = append(edges, agency.EdgeWorkflows)
 	}
 	return edges
 }
@@ -2502,6 +2582,8 @@ func (m *AgencyMutation) EdgeCleared(name string) bool {
 		return m.clearedunits
 	case agency.EdgeNetworks:
 		return m.clearednetworks
+	case agency.EdgeWorkflows:
+		return m.clearedworkflows
 	}
 	return false
 }
@@ -2523,6 +2605,9 @@ func (m *AgencyMutation) ResetEdge(name string) error {
 		return nil
 	case agency.EdgeNetworks:
 		m.ResetNetworks()
+		return nil
+	case agency.EdgeWorkflows:
+		m.ResetWorkflows()
 		return nil
 	}
 	return fmt.Errorf("unknown Agency edge %s", name)
@@ -26983,7 +27068,7 @@ type WorkflowMutation struct {
 	revision                *int64
 	addrevision             *int64
 	name                    *string
-	scope_kind              *workflow.ScopeKind
+	narrowing_kind          *workflow.NarrowingKind
 	enabled                 *bool
 	deleted                 *bool
 	active_version_id       *uuid.UUID
@@ -26996,6 +27081,9 @@ type WorkflowMutation struct {
 	scope_references        map[uuid.UUID]struct{}
 	removedscope_references map[uuid.UUID]struct{}
 	clearedscope_references bool
+	agencies                map[uuid.UUID]struct{}
+	removedagencies         map[uuid.UUID]struct{}
+	clearedagencies         bool
 	done                    bool
 	oldValue                func(context.Context) (*Workflow, error)
 	predicates              []predicate.Workflow
@@ -27197,40 +27285,53 @@ func (m *WorkflowMutation) ResetName() {
 	m.name = nil
 }
 
-// SetScopeKind sets the "scope_kind" field.
-func (m *WorkflowMutation) SetScopeKind(wk workflow.ScopeKind) {
-	m.scope_kind = &wk
+// SetNarrowingKind sets the "narrowing_kind" field.
+func (m *WorkflowMutation) SetNarrowingKind(wk workflow.NarrowingKind) {
+	m.narrowing_kind = &wk
 }
 
-// ScopeKind returns the value of the "scope_kind" field in the mutation.
-func (m *WorkflowMutation) ScopeKind() (r workflow.ScopeKind, exists bool) {
-	v := m.scope_kind
+// NarrowingKind returns the value of the "narrowing_kind" field in the mutation.
+func (m *WorkflowMutation) NarrowingKind() (r workflow.NarrowingKind, exists bool) {
+	v := m.narrowing_kind
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldScopeKind returns the old "scope_kind" field's value of the Workflow entity.
+// OldNarrowingKind returns the old "narrowing_kind" field's value of the Workflow entity.
 // If the Workflow object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WorkflowMutation) OldScopeKind(ctx context.Context) (v workflow.ScopeKind, err error) {
+func (m *WorkflowMutation) OldNarrowingKind(ctx context.Context) (v *workflow.NarrowingKind, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldScopeKind is only allowed on UpdateOne operations")
+		return v, errors.New("OldNarrowingKind is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldScopeKind requires an ID field in the mutation")
+		return v, errors.New("OldNarrowingKind requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldScopeKind: %w", err)
+		return v, fmt.Errorf("querying old value for OldNarrowingKind: %w", err)
 	}
-	return oldValue.ScopeKind, nil
+	return oldValue.NarrowingKind, nil
 }
 
-// ResetScopeKind resets all changes to the "scope_kind" field.
-func (m *WorkflowMutation) ResetScopeKind() {
-	m.scope_kind = nil
+// ClearNarrowingKind clears the value of the "narrowing_kind" field.
+func (m *WorkflowMutation) ClearNarrowingKind() {
+	m.narrowing_kind = nil
+	m.clearedFields[workflow.FieldNarrowingKind] = struct{}{}
+}
+
+// NarrowingKindCleared returns if the "narrowing_kind" field was cleared in this mutation.
+func (m *WorkflowMutation) NarrowingKindCleared() bool {
+	_, ok := m.clearedFields[workflow.FieldNarrowingKind]
+	return ok
+}
+
+// ResetNarrowingKind resets all changes to the "narrowing_kind" field.
+func (m *WorkflowMutation) ResetNarrowingKind() {
+	m.narrowing_kind = nil
+	delete(m.clearedFields, workflow.FieldNarrowingKind)
 }
 
 // SetEnabled sets the "enabled" field.
@@ -27534,6 +27635,60 @@ func (m *WorkflowMutation) ResetScopeReferences() {
 	m.removedscope_references = nil
 }
 
+// AddAgencyIDs adds the "agencies" edge to the Agency entity by ids.
+func (m *WorkflowMutation) AddAgencyIDs(ids ...uuid.UUID) {
+	if m.agencies == nil {
+		m.agencies = make(map[uuid.UUID]struct{})
+	}
+	for i := range ids {
+		m.agencies[ids[i]] = struct{}{}
+	}
+}
+
+// ClearAgencies clears the "agencies" edge to the Agency entity.
+func (m *WorkflowMutation) ClearAgencies() {
+	m.clearedagencies = true
+}
+
+// AgenciesCleared reports if the "agencies" edge to the Agency entity was cleared.
+func (m *WorkflowMutation) AgenciesCleared() bool {
+	return m.clearedagencies
+}
+
+// RemoveAgencyIDs removes the "agencies" edge to the Agency entity by IDs.
+func (m *WorkflowMutation) RemoveAgencyIDs(ids ...uuid.UUID) {
+	if m.removedagencies == nil {
+		m.removedagencies = make(map[uuid.UUID]struct{})
+	}
+	for i := range ids {
+		delete(m.agencies, ids[i])
+		m.removedagencies[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedAgencies returns the removed IDs of the "agencies" edge to the Agency entity.
+func (m *WorkflowMutation) RemovedAgenciesIDs() (ids []uuid.UUID) {
+	for id := range m.removedagencies {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// AgenciesIDs returns the "agencies" edge IDs in the mutation.
+func (m *WorkflowMutation) AgenciesIDs() (ids []uuid.UUID) {
+	for id := range m.agencies {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetAgencies resets all changes to the "agencies" edge.
+func (m *WorkflowMutation) ResetAgencies() {
+	m.agencies = nil
+	m.clearedagencies = false
+	m.removedagencies = nil
+}
+
 // Where appends a list predicates to the WorkflowMutation builder.
 func (m *WorkflowMutation) Where(ps ...predicate.Workflow) {
 	m.predicates = append(m.predicates, ps...)
@@ -27575,8 +27730,8 @@ func (m *WorkflowMutation) Fields() []string {
 	if m.name != nil {
 		fields = append(fields, workflow.FieldName)
 	}
-	if m.scope_kind != nil {
-		fields = append(fields, workflow.FieldScopeKind)
+	if m.narrowing_kind != nil {
+		fields = append(fields, workflow.FieldNarrowingKind)
 	}
 	if m.enabled != nil {
 		fields = append(fields, workflow.FieldEnabled)
@@ -27605,8 +27760,8 @@ func (m *WorkflowMutation) Field(name string) (ent.Value, bool) {
 		return m.Revision()
 	case workflow.FieldName:
 		return m.Name()
-	case workflow.FieldScopeKind:
-		return m.ScopeKind()
+	case workflow.FieldNarrowingKind:
+		return m.NarrowingKind()
 	case workflow.FieldEnabled:
 		return m.Enabled()
 	case workflow.FieldDeleted:
@@ -27630,8 +27785,8 @@ func (m *WorkflowMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldRevision(ctx)
 	case workflow.FieldName:
 		return m.OldName(ctx)
-	case workflow.FieldScopeKind:
-		return m.OldScopeKind(ctx)
+	case workflow.FieldNarrowingKind:
+		return m.OldNarrowingKind(ctx)
 	case workflow.FieldEnabled:
 		return m.OldEnabled(ctx)
 	case workflow.FieldDeleted:
@@ -27665,12 +27820,12 @@ func (m *WorkflowMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetName(v)
 		return nil
-	case workflow.FieldScopeKind:
-		v, ok := value.(workflow.ScopeKind)
+	case workflow.FieldNarrowingKind:
+		v, ok := value.(workflow.NarrowingKind)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetScopeKind(v)
+		m.SetNarrowingKind(v)
 		return nil
 	case workflow.FieldEnabled:
 		v, ok := value.(bool)
@@ -27752,6 +27907,9 @@ func (m *WorkflowMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *WorkflowMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(workflow.FieldNarrowingKind) {
+		fields = append(fields, workflow.FieldNarrowingKind)
+	}
 	if m.FieldCleared(workflow.FieldActiveVersionID) {
 		fields = append(fields, workflow.FieldActiveVersionID)
 	}
@@ -27769,6 +27927,9 @@ func (m *WorkflowMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *WorkflowMutation) ClearField(name string) error {
 	switch name {
+	case workflow.FieldNarrowingKind:
+		m.ClearNarrowingKind()
+		return nil
 	case workflow.FieldActiveVersionID:
 		m.ClearActiveVersionID()
 		return nil
@@ -27786,8 +27947,8 @@ func (m *WorkflowMutation) ResetField(name string) error {
 	case workflow.FieldName:
 		m.ResetName()
 		return nil
-	case workflow.FieldScopeKind:
-		m.ResetScopeKind()
+	case workflow.FieldNarrowingKind:
+		m.ResetNarrowingKind()
 		return nil
 	case workflow.FieldEnabled:
 		m.ResetEnabled()
@@ -27810,12 +27971,15 @@ func (m *WorkflowMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *WorkflowMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.versions != nil {
 		edges = append(edges, workflow.EdgeVersions)
 	}
 	if m.scope_references != nil {
 		edges = append(edges, workflow.EdgeScopeReferences)
+	}
+	if m.agencies != nil {
+		edges = append(edges, workflow.EdgeAgencies)
 	}
 	return edges
 }
@@ -27836,18 +28000,27 @@ func (m *WorkflowMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case workflow.EdgeAgencies:
+		ids := make([]ent.Value, 0, len(m.agencies))
+		for id := range m.agencies {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *WorkflowMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.removedversions != nil {
 		edges = append(edges, workflow.EdgeVersions)
 	}
 	if m.removedscope_references != nil {
 		edges = append(edges, workflow.EdgeScopeReferences)
+	}
+	if m.removedagencies != nil {
+		edges = append(edges, workflow.EdgeAgencies)
 	}
 	return edges
 }
@@ -27868,18 +28041,27 @@ func (m *WorkflowMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case workflow.EdgeAgencies:
+		ids := make([]ent.Value, 0, len(m.removedagencies))
+		for id := range m.removedagencies {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *WorkflowMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.clearedversions {
 		edges = append(edges, workflow.EdgeVersions)
 	}
 	if m.clearedscope_references {
 		edges = append(edges, workflow.EdgeScopeReferences)
+	}
+	if m.clearedagencies {
+		edges = append(edges, workflow.EdgeAgencies)
 	}
 	return edges
 }
@@ -27892,6 +28074,8 @@ func (m *WorkflowMutation) EdgeCleared(name string) bool {
 		return m.clearedversions
 	case workflow.EdgeScopeReferences:
 		return m.clearedscope_references
+	case workflow.EdgeAgencies:
+		return m.clearedagencies
 	}
 	return false
 }
@@ -27914,8 +28098,390 @@ func (m *WorkflowMutation) ResetEdge(name string) error {
 	case workflow.EdgeScopeReferences:
 		m.ResetScopeReferences()
 		return nil
+	case workflow.EdgeAgencies:
+		m.ResetAgencies()
+		return nil
 	}
 	return fmt.Errorf("unknown Workflow edge %s", name)
+}
+
+// WorkflowAgencyMutation represents an operation that mutates the WorkflowAgency nodes in the graph.
+type WorkflowAgencyMutation struct {
+	config
+	op              Op
+	typ             string
+	clearedFields   map[string]struct{}
+	workflow        *uuid.UUID
+	clearedworkflow bool
+	agency          *uuid.UUID
+	clearedagency   bool
+	done            bool
+	oldValue        func(context.Context) (*WorkflowAgency, error)
+	predicates      []predicate.WorkflowAgency
+}
+
+var _ ent.Mutation = (*WorkflowAgencyMutation)(nil)
+
+// workflowagencyOption allows management of the mutation configuration using functional options.
+type workflowagencyOption func(*WorkflowAgencyMutation)
+
+// newWorkflowAgencyMutation creates new mutation for the WorkflowAgency entity.
+func newWorkflowAgencyMutation(c config, op Op, opts ...workflowagencyOption) *WorkflowAgencyMutation {
+	m := &WorkflowAgencyMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeWorkflowAgency,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m WorkflowAgencyMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m WorkflowAgencyMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetWorkflowID sets the "workflow_id" field.
+func (m *WorkflowAgencyMutation) SetWorkflowID(u uuid.UUID) {
+	m.workflow = &u
+}
+
+// WorkflowID returns the value of the "workflow_id" field in the mutation.
+func (m *WorkflowAgencyMutation) WorkflowID() (r uuid.UUID, exists bool) {
+	v := m.workflow
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetWorkflowID resets all changes to the "workflow_id" field.
+func (m *WorkflowAgencyMutation) ResetWorkflowID() {
+	m.workflow = nil
+}
+
+// SetAgencyID sets the "agency_id" field.
+func (m *WorkflowAgencyMutation) SetAgencyID(u uuid.UUID) {
+	m.agency = &u
+}
+
+// AgencyID returns the value of the "agency_id" field in the mutation.
+func (m *WorkflowAgencyMutation) AgencyID() (r uuid.UUID, exists bool) {
+	v := m.agency
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAgencyID resets all changes to the "agency_id" field.
+func (m *WorkflowAgencyMutation) ResetAgencyID() {
+	m.agency = nil
+}
+
+// ClearWorkflow clears the "workflow" edge to the Workflow entity.
+func (m *WorkflowAgencyMutation) ClearWorkflow() {
+	m.clearedworkflow = true
+	m.clearedFields[workflowagency.FieldWorkflowID] = struct{}{}
+}
+
+// WorkflowCleared reports if the "workflow" edge to the Workflow entity was cleared.
+func (m *WorkflowAgencyMutation) WorkflowCleared() bool {
+	return m.clearedworkflow
+}
+
+// WorkflowIDs returns the "workflow" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// WorkflowID instead. It exists only for internal usage by the builders.
+func (m *WorkflowAgencyMutation) WorkflowIDs() (ids []uuid.UUID) {
+	if id := m.workflow; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetWorkflow resets all changes to the "workflow" edge.
+func (m *WorkflowAgencyMutation) ResetWorkflow() {
+	m.workflow = nil
+	m.clearedworkflow = false
+}
+
+// ClearAgency clears the "agency" edge to the Agency entity.
+func (m *WorkflowAgencyMutation) ClearAgency() {
+	m.clearedagency = true
+	m.clearedFields[workflowagency.FieldAgencyID] = struct{}{}
+}
+
+// AgencyCleared reports if the "agency" edge to the Agency entity was cleared.
+func (m *WorkflowAgencyMutation) AgencyCleared() bool {
+	return m.clearedagency
+}
+
+// AgencyIDs returns the "agency" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// AgencyID instead. It exists only for internal usage by the builders.
+func (m *WorkflowAgencyMutation) AgencyIDs() (ids []uuid.UUID) {
+	if id := m.agency; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetAgency resets all changes to the "agency" edge.
+func (m *WorkflowAgencyMutation) ResetAgency() {
+	m.agency = nil
+	m.clearedagency = false
+}
+
+// Where appends a list predicates to the WorkflowAgencyMutation builder.
+func (m *WorkflowAgencyMutation) Where(ps ...predicate.WorkflowAgency) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the WorkflowAgencyMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *WorkflowAgencyMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.WorkflowAgency, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *WorkflowAgencyMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *WorkflowAgencyMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (WorkflowAgency).
+func (m *WorkflowAgencyMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *WorkflowAgencyMutation) Fields() []string {
+	fields := make([]string, 0, 2)
+	if m.workflow != nil {
+		fields = append(fields, workflowagency.FieldWorkflowID)
+	}
+	if m.agency != nil {
+		fields = append(fields, workflowagency.FieldAgencyID)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *WorkflowAgencyMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case workflowagency.FieldWorkflowID:
+		return m.WorkflowID()
+	case workflowagency.FieldAgencyID:
+		return m.AgencyID()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *WorkflowAgencyMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	return nil, errors.New("edge schema WorkflowAgency does not support getting old values")
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *WorkflowAgencyMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case workflowagency.FieldWorkflowID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWorkflowID(v)
+		return nil
+	case workflowagency.FieldAgencyID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAgencyID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown WorkflowAgency field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *WorkflowAgencyMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *WorkflowAgencyMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *WorkflowAgencyMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown WorkflowAgency numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *WorkflowAgencyMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *WorkflowAgencyMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *WorkflowAgencyMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown WorkflowAgency nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *WorkflowAgencyMutation) ResetField(name string) error {
+	switch name {
+	case workflowagency.FieldWorkflowID:
+		m.ResetWorkflowID()
+		return nil
+	case workflowagency.FieldAgencyID:
+		m.ResetAgencyID()
+		return nil
+	}
+	return fmt.Errorf("unknown WorkflowAgency field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *WorkflowAgencyMutation) AddedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.workflow != nil {
+		edges = append(edges, workflowagency.EdgeWorkflow)
+	}
+	if m.agency != nil {
+		edges = append(edges, workflowagency.EdgeAgency)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *WorkflowAgencyMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case workflowagency.EdgeWorkflow:
+		if id := m.workflow; id != nil {
+			return []ent.Value{*id}
+		}
+	case workflowagency.EdgeAgency:
+		if id := m.agency; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *WorkflowAgencyMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 2)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *WorkflowAgencyMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *WorkflowAgencyMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.clearedworkflow {
+		edges = append(edges, workflowagency.EdgeWorkflow)
+	}
+	if m.clearedagency {
+		edges = append(edges, workflowagency.EdgeAgency)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *WorkflowAgencyMutation) EdgeCleared(name string) bool {
+	switch name {
+	case workflowagency.EdgeWorkflow:
+		return m.clearedworkflow
+	case workflowagency.EdgeAgency:
+		return m.clearedagency
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *WorkflowAgencyMutation) ClearEdge(name string) error {
+	switch name {
+	case workflowagency.EdgeWorkflow:
+		m.ClearWorkflow()
+		return nil
+	case workflowagency.EdgeAgency:
+		m.ClearAgency()
+		return nil
+	}
+	return fmt.Errorf("unknown WorkflowAgency unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *WorkflowAgencyMutation) ResetEdge(name string) error {
+	switch name {
+	case workflowagency.EdgeWorkflow:
+		m.ResetWorkflow()
+		return nil
+	case workflowagency.EdgeAgency:
+		m.ResetAgency()
+		return nil
+	}
+	return fmt.Errorf("unknown WorkflowAgency edge %s", name)
 }
 
 // WorkflowScopeReferenceMutation represents an operation that mutates the WorkflowScopeReference nodes in the graph.

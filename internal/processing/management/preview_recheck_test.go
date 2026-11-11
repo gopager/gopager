@@ -37,6 +37,11 @@ func (previewScopes) ReadUnitContext(_ context.Context, _ platform.TransactionCo
 	return units.Context{ID: id, Revision: 1, CollectionIDs: []uuid.UUID{}}, nil
 }
 
+// LockAgency accepts every Agency of the fixture.
+func (previewScopes) LockAgency(context.Context, platform.TransactionContext, uuid.UUID) error {
+	return nil
+}
+
 type previewRecheckSource struct {
 	PreviewSourceOwner
 	calls int
@@ -60,7 +65,8 @@ func TestPreviewFinalFenceRechecksSourceAndRejectsChangedWorkflowOrAuthority(t *
 	authority := authz.Authority{PrincipalID: principal, Revision: 1, Active: true,
 		Grants: []authz.Grant{{ID: uuid.NewString(), SubjectID: principal, SubjectKind: "principal",
 			Actions: []string{"workflow.preview"}, Scope: authz.Scope{Kind: "all"}}}}
-	workflow := processing.WorkflowConfiguration{ID: uuid.New(), Revision: 1, Scope: authz.Scope{Kind: "all"}}
+	workflow := processing.WorkflowConfiguration{ID: uuid.New(), Revision: 1,
+		Scope: processing.WorkflowScope{Agencies: []uuid.UUID{uuid.New()}}}
 	repository := &previewRecheckRepository{workflow: workflow}
 	source := &previewRecheckSource{}
 	service := &PreviewService{management: &Service{repository: repository, scopes: previewScopes{}}, sourceOwner: source}

@@ -85,7 +85,7 @@ func TestProcessingWorkerPrivateEvaluationAndCurrentSourceRecheck(t *testing.T) 
 			actor := uuid.New()
 			authority := processingAuthorityFixture(actor, authz.Scope{Kind: "all"})
 			configuration := processing.WorkflowConfiguration{ID: uuid.New(), Revision: 1, Name: "worker",
-				Scope: authz.Scope{Kind: "all"}, Enabled: true}
+				Scope: seedAgencyScope(t, primary), Enabled: true}
 			version := processing.Version{ID: uuid.New(), WorkflowID: configuration.ID,
 				CreatedBy: actor, Definition: preparedProcessingDefinition(t)}
 			if err := primary.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {

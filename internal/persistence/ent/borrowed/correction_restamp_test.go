@@ -121,8 +121,9 @@ func (f *restampFixture) seedWorkflow(t *testing.T, definition processing.Defini
 		t.Fatal(err)
 	}
 	workflowID, versionID, now := uuid.New(), uuid.New(), time.Now().UTC().Truncate(time.Microsecond)
-	f.exec(t, `INSERT INTO processing_workflows(id,name,scope_kind,enabled,created_at,updated_at)
-		VALUES($1,'restamp','all',true,$2,$2)`, workflowID, now)
+	f.exec(t, `INSERT INTO processing_workflows(id,name,enabled,created_at,updated_at)
+		VALUES($1,'restamp',true,$2,$2)`, workflowID, now)
+	f.exec(t, `INSERT INTO processing_workflow_agencies(workflow_id,agency_id) SELECT $1, id FROM agencies`, workflowID)
 	f.exec(t, `INSERT INTO processing_workflow_versions(id,workflow_id,definition,created_at,created_by)
 		VALUES($1,$2,$3,$4,$5)`, versionID, workflowID, encoded, now, uuid.New())
 	f.exec(t, `UPDATE processing_workflows SET active_version_id=$2 WHERE id=$1`, workflowID, versionID)

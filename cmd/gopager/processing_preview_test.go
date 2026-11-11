@@ -29,6 +29,7 @@ func TestProcessingSyntheticPreviewHTTPUsesCurrentFixtureNetworks(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	agency := seedAgency(t, store)
 	networks := previewFixtureNetworks{
 		values: make(map[uuid.UUID]synthetic.Network), identity: identityRepository, units: unitRepository,
 	}
@@ -36,7 +37,7 @@ func TestProcessingSyntheticPreviewHTTPUsesCurrentFixtureNetworks(t *testing.T) 
 		protocols.POCSAG, protocols.FLEX, protocols.ZVEI, protocols.EAS,
 	} {
 		id := uuid.New()
-		networks.values[id] = synthetic.Network{ID: id, Name: "Standalone " + string(protocol), Protocol: protocol}
+		networks.values[id] = synthetic.Network{ID: id, Name: "Standalone " + string(protocol), Protocol: protocol, AgencyID: agency}
 	}
 	shared := mustComposeCore(t, store)
 	runtime, err := composeProcessingAPIRuntime(t.Context(), shared, "", networks)
@@ -68,7 +69,7 @@ func TestProcessingSyntheticPreviewHTTPUsesCurrentFixtureNetworks(t *testing.T) 
 	login := managementRequest(t, client, origin, http.MethodPost, "/api/v1/auth/login",
 		`{"schemaVersion":1,"username":"operator","password":"initial-password"}`, "", "", http.StatusOK)
 	workflow := managementRequest(t, client, origin, http.MethodPost, "/api/v1/workflows",
-		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Synthetic Preview","scope":{"kind":"all"},"enabled":true}`,
+		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Synthetic Preview","scope":`+workflowScopeJSON(agency)+`,"enabled":true}`,
 		login.CSRFToken, "", http.StatusCreated)
 	workflowID, _ := managementResultID(t, workflow)
 	definition := sourceProtocolPreviewDefinition(t)
@@ -183,9 +184,10 @@ func TestProcessingSyntheticPreviewHonorsCurrentUnitScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	networkID := uuid.New()
+	agency := seedAgency(t, store)
 	networks := previewFixtureNetworks{
 		values: map[uuid.UUID]synthetic.Network{
-			networkID: {ID: networkID, Name: "Standalone POCSAG", Protocol: protocols.POCSAG},
+			networkID: {ID: networkID, Name: "Standalone POCSAG", Protocol: protocols.POCSAG, AgencyID: agency},
 		},
 		identity: identityRepository,
 		units:    unitRepository,
@@ -219,7 +221,7 @@ func TestProcessingSyntheticPreviewHonorsCurrentUnitScope(t *testing.T) {
 	login := managementRequest(t, client, origin, http.MethodPost, "/api/v1/auth/login",
 		`{"schemaVersion":1,"username":"operator","password":"initial-password"}`, "", "", http.StatusOK)
 	unitResponse := managementRequest(t, client, origin, http.MethodPost, "/api/v1/units",
-		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","agencyId":"`+seedAgency(t, store).String()+
+		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","agencyId":"`+agency.String()+
 			`","name":"Matched Unit","collectionIds":[],"organizationId":null,"settings":{}}`,
 		login.CSRFToken, "", http.StatusCreated)
 	unitID, _ := managementResultID(t, unitResponse)
@@ -230,7 +232,8 @@ func TestProcessingSyntheticPreviewHonorsCurrentUnitScope(t *testing.T) {
 		login.CSRFToken, "", http.StatusCreated)
 	workflowResponse := managementRequest(t, client, origin, http.MethodPost, "/api/v1/workflows",
 		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Unit Preview",`+
-			`"scope":{"kind":"unit","references":["`+unitID.String()+`"]},"enabled":true}`,
+			`"scope":{"agencies":["`+agency.String()+`"],"narrowing":{"kind":"unit","references":["`+
+			unitID.String()+`"]}},"enabled":true}`,
 		login.CSRFToken, "", http.StatusCreated)
 	workflowID, _ := managementResultID(t, workflowResponse)
 	definition := unitTargetPreviewDefinition(t, unitID)

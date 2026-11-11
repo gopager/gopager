@@ -162,6 +162,7 @@ func revokeReadReviewer(t *testing.T, store *postgres.Store, principalID uuid.UU
 func TestProcessingStatusHTTPFiltersWorkflowPagesAndHidesPrivateEvidence(t *testing.T) {
 	t.Parallel()
 	store := newManagementStore(t)
+	agency := seedAgency(t, store)
 	shared := mustComposeCore(t, store)
 	runtime, err := composeProcessingAPIRuntime(t.Context(), shared, "")
 	if err != nil {
@@ -193,7 +194,7 @@ func TestProcessingStatusHTTPFiltersWorkflowPagesAndHidesPrivateEvidence(t *test
 	createWorkflow := func(name, commandID string) uuid.UUID {
 		t.Helper()
 		body := `{"schemaVersion":1,"commandId":"` + commandID +
-			`","name":"` + name + `","scope":{"kind":"all"},"enabled":true}`
+			`","name":"` + name + `","scope":` + workflowScopeJSON(agency) + `,"enabled":true}`
 		result := managementRequest(t, client, origin, http.MethodPost, "/api/v1/workflows",
 			body, login.CSRFToken, "", http.StatusCreated)
 		id, _ := managementResultID(t, result)

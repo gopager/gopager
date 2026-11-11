@@ -121,8 +121,9 @@ func TestCorrectionReadmitsProcessingForChangedTargets(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC().Truncate(time.Microsecond)
-	exec(`INSERT INTO processing_workflows(id,name,scope_kind,enabled,created_at,updated_at)
-		VALUES($1,'correction readmission','all',true,$2,$2)`, workflowID, now)
+	exec(`INSERT INTO processing_workflows(id,name,enabled,created_at,updated_at)
+		VALUES($1,'correction readmission',true,$2,$2)`, workflowID, now)
+	exec(`INSERT INTO processing_workflow_agencies(workflow_id,agency_id) SELECT $1, id FROM agencies`, workflowID)
 	exec(`INSERT INTO processing_workflow_versions(id,workflow_id,definition,created_at,created_by)
 		VALUES($1,$2,$3,$4,$5)`, versionID, workflowID, definition, now, uuid.New())
 	exec(`UPDATE processing_workflows SET active_version_id=$2 WHERE id=$1`, workflowID, versionID)

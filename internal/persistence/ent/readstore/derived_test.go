@@ -13,7 +13,8 @@ import (
 // workflow inserts a Workflow with one definition version and returns both IDs.
 func (w *world) workflow() (workflow, version uuid.UUID) {
 	workflow, version = uuid.New(), uuid.New()
-	w.exec(`INSERT INTO processing_workflows (id, name, scope_kind, created_at, updated_at) VALUES ($1, 'w', 'all', $2, $2)`, workflow, base)
+	w.exec(`INSERT INTO processing_workflows (id, name, created_at, updated_at) VALUES ($1, 'w', $2, $2)`, workflow, base)
+	w.exec(`INSERT INTO processing_workflow_agencies(workflow_id,agency_id) SELECT $1, id FROM agencies`, workflow)
 	w.exec(`INSERT INTO processing_workflow_versions (id, workflow_id, definition, created_at, created_by) VALUES ($1, $2, '{}', $3, $4)`,
 		version, workflow, base, uuid.New())
 	return workflow, version

@@ -8,7 +8,7 @@ CREATE TABLE processing_workflows (
     id uuid PRIMARY KEY,
     revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
     name text NOT NULL CHECK (name <> ''),
-    scope_kind varchar NOT NULL CHECK (scope_kind IN ('all', 'network', 'unit')),
+    narrowing_kind varchar CHECK (narrowing_kind IN ('network', 'unit')),
     enabled boolean NOT NULL DEFAULT false,
     deleted boolean NOT NULL DEFAULT false,
     active_version_id uuid,
@@ -16,6 +16,12 @@ CREATE TABLE processing_workflows (
     updated_at timestamptz NOT NULL,
     CHECK (NOT deleted OR (NOT enabled AND active_version_id IS NULL))
 );
+CREATE TABLE processing_workflow_agencies (
+    workflow_id uuid NOT NULL REFERENCES processing_workflows(id) ON DELETE CASCADE,
+    agency_id uuid NOT NULL REFERENCES agencies(id) ON DELETE CASCADE,
+    PRIMARY KEY (workflow_id, agency_id)
+);
+CREATE INDEX processing_workflow_agencies_agency ON processing_workflow_agencies (agency_id);
 CREATE TABLE processing_workflow_scope_references (
     id uuid PRIMARY KEY,
     workflow_id uuid NOT NULL REFERENCES processing_workflows(id),
@@ -90,5 +96,6 @@ DROP TABLE processing_candidates;
 ALTER TABLE processing_workflows DROP CONSTRAINT processing_active_version_owner;
 DROP TABLE processing_workflow_versions;
 DROP TABLE processing_workflow_scope_references;
+DROP TABLE processing_workflow_agencies;
 DROP TABLE processing_workflows;
 DROP TABLE processing_control;

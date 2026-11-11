@@ -22,6 +22,10 @@ const (
 	EdgeUnits = "units"
 	// EdgeNetworks holds the string denoting the networks edge name in mutations.
 	EdgeNetworks = "networks"
+	// EdgeWorkflows holds the string denoting the workflows edge name in mutations.
+	EdgeWorkflows = "workflows"
+	// EdgeWorkflowAgencies holds the string denoting the workflow_agencies edge name in mutations.
+	EdgeWorkflowAgencies = "workflow_agencies"
 	// Table holds the table name of the agency in the database.
 	Table = "agencies"
 	// UnitsTable is the table that holds the units relation/edge.
@@ -38,6 +42,18 @@ const (
 	NetworksInverseTable = "networks"
 	// NetworksColumn is the table column denoting the networks relation/edge.
 	NetworksColumn = "agency_id"
+	// WorkflowsTable is the table that holds the workflows relation/edge. The primary key declared below.
+	WorkflowsTable = "processing_workflow_agencies"
+	// WorkflowsInverseTable is the table name for the Workflow entity.
+	// It exists in this package in order to avoid circular dependency with the "workflow" package.
+	WorkflowsInverseTable = "processing_workflows"
+	// WorkflowAgenciesTable is the table that holds the workflow_agencies relation/edge.
+	WorkflowAgenciesTable = "processing_workflow_agencies"
+	// WorkflowAgenciesInverseTable is the table name for the WorkflowAgency entity.
+	// It exists in this package in order to avoid circular dependency with the "workflowagency" package.
+	WorkflowAgenciesInverseTable = "processing_workflow_agencies"
+	// WorkflowAgenciesColumn is the table column denoting the workflow_agencies relation/edge.
+	WorkflowAgenciesColumn = "agency_id"
 )
 
 // Columns holds all SQL columns for agency fields.
@@ -46,6 +62,12 @@ var Columns = []string{
 	FieldRevision,
 	FieldName,
 }
+
+var (
+	// WorkflowsPrimaryKey and WorkflowsColumn2 are the table columns denoting the
+	// primary key for the workflows relation (M2M).
+	WorkflowsPrimaryKey = []string{"workflow_id", "agency_id"}
+)
 
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
@@ -120,6 +142,34 @@ func ByNetworks(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newNetworksStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByWorkflowsCount orders the results by workflows count.
+func ByWorkflowsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newWorkflowsStep(), opts...)
+	}
+}
+
+// ByWorkflows orders the results by workflows terms.
+func ByWorkflows(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newWorkflowsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByWorkflowAgenciesCount orders the results by workflow_agencies count.
+func ByWorkflowAgenciesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newWorkflowAgenciesStep(), opts...)
+	}
+}
+
+// ByWorkflowAgencies orders the results by workflow_agencies terms.
+func ByWorkflowAgencies(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newWorkflowAgenciesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newUnitsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -132,5 +182,19 @@ func newNetworksStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(NetworksInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, NetworksTable, NetworksColumn),
+	)
+}
+func newWorkflowsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(WorkflowsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2M, true, WorkflowsTable, WorkflowsPrimaryKey...),
+	)
+}
+func newWorkflowAgenciesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(WorkflowAgenciesInverseTable, WorkflowAgenciesColumn),
+		sqlgraph.Edge(sqlgraph.O2M, true, WorkflowAgenciesTable, WorkflowAgenciesColumn),
 	)
 }

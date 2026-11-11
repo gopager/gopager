@@ -68,7 +68,8 @@ type selectedWorkflow struct {
 	id       uuid.UUID
 	version  uuid.UUID
 	revision int64
-	scope    string
+	// narrowing is the Workflow's narrowing kind, empty without narrowing.
+	narrowing string
 }
 
 type sourceCandidate struct {
@@ -667,38 +668,7 @@ func (o *ProcessingSourceOwner) selectWorkflows(ctx context.Context, tx platform
 	if err != nil {
 		return nil, err
 	}
-	rows, err := executor.QueryContext(ctx, `SELECT w.id,w.active_version_id::text,w.revision,w.scope_kind
-		FROM processing_workflows w
-		WHERE w.enabled=true AND w.deleted=false AND w.active_version_id IS NOT NULL AND (
-			w.scope_kind='all' OR
-			(w.scope_kind='network' AND EXISTS (
-				SELECT 1 FROM processing_workflow_scope_references r
-				WHERE r.workflow_id=w.id AND r.network_id=$1
-			)) OR
-			(w.scope_kind='unit' AND EXISTS (
-				SELECT 1 FROM processing_workflow_scope_references r
-				WHERE r.workflow_id=w.id AND r.unit_id=ANY($2::uuid[])
-			))
-		)
-		ORDER BY w.id FOR SHARE OF w`, snapshot.network, unitIDs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var workflows []selectedWorkflow
-	for rows.Next() {
-		var workflow selectedWorkflow
-		var version string
-		if err := rows.Scan(&workflow.id, &version, &workflow.revision, &workflow.scope); err != nil {
-			return nil, err
-		}
-		workflow.version, err = uuid.Parse(version)
-		if err != nil || workflow.version == uuid.Nil || workflow.revision <= 0 {
-			return nil, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("invalid active Workflow reference"))
-		}
-		workflows = append(workflows, workflow)
-	}
-	return workflows, rows.Err()
+	return selectWorkflows(ctx, executor, snapshot.network, unitIDs)
 }
 
 func (o *ProcessingSourceOwner) readDefinition(ctx context.Context, tx platform.TransactionContext,
@@ -726,7 +696,7 @@ func (o *ProcessingSourceOwner) readDefinition(ctx context.Context, tx platform.
 func (o *ProcessingSourceOwner) evaluationScope(ctx context.Context, tx platform.TransactionContext,
 	workflow selectedWorkflow, snapshot sourceSnapshot,
 ) (processing.EvaluationScope, error) {
-	if workflow.scope != "unit" {
+	if workflow.narrowing != "unit" {
 		positions := make([]uint32, 0, len(snapshot.targets))
 		for i := range snapshot.targets {
 			if !snapshot.suppressed[i] {

@@ -35,7 +35,8 @@ func TestProcessingSaveAndDraftPreviewRejectUnreadableFieldGroups(t *testing.T) 
 		values: make(map[uuid.UUID]synthetic.Network), identity: identityRepository, units: unitRepository,
 	}
 	networkID := uuid.New()
-	networks.values[networkID] = synthetic.Network{ID: networkID, Name: "Standalone", Protocol: protocols.POCSAG}
+	agency := seedAgency(t, store)
+	networks.values[networkID] = synthetic.Network{ID: networkID, Name: "Standalone", Protocol: protocols.POCSAG, AgencyID: agency}
 	shared := mustComposeCore(t, store)
 	runtime, err := composeProcessingAPIRuntime(t.Context(), shared, "", networks)
 	if err != nil {
@@ -64,7 +65,7 @@ func TestProcessingSaveAndDraftPreviewRejectUnreadableFieldGroups(t *testing.T) 
 	login := managementRequest(t, client, origin, http.MethodPost, "/api/v1/auth/login",
 		`{"schemaVersion":1,"username":"operator","password":"initial-password"}`, "", "", http.StatusOK)
 	workflow := managementRequest(t, client, origin, http.MethodPost, "/api/v1/workflows",
-		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Field Validation","scope":{"kind":"all"},"enabled":true}`,
+		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Field Validation","scope":`+workflowScopeJSON(agency)+`,"enabled":true}`,
 		login.CSRFToken, "", http.StatusCreated)
 	workflowID, _ := managementResultID(t, workflow)
 

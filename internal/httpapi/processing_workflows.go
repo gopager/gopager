@@ -11,12 +11,12 @@ import (
 )
 
 type workflowMutation struct {
-	SchemaVersion    int         `json:"schemaVersion"`
-	CommandID        uuid.UUID   `json:"commandId"`
-	ExpectedRevision int64       `json:"expectedRevision,string"`
-	Name             string      `json:"name"`
-	Scope            authz.Scope `json:"scope"`
-	Enabled          *bool       `json:"enabled"`
+	SchemaVersion    int                      `json:"schemaVersion"`
+	CommandID        uuid.UUID                `json:"commandId"`
+	ExpectedRevision int64                    `json:"expectedRevision,string"`
+	Name             string                   `json:"name"`
+	Scope            processing.WorkflowScope `json:"scope"`
+	Enabled          *bool                    `json:"enabled"`
 }
 
 type workflowVersionMutation struct {

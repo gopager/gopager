@@ -117,6 +117,9 @@ type UserGroup func(*sql.Selector)
 // Workflow is the predicate function for workflow builders.
 type Workflow func(*sql.Selector)
 
+// WorkflowAgency is the predicate function for workflowagency builders.
+type WorkflowAgency func(*sql.Selector)
+
 // WorkflowScopeReference is the predicate function for workflowscopereference builders.
 type WorkflowScopeReference func(*sql.Selector)
 

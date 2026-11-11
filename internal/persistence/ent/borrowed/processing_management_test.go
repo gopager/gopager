@@ -74,7 +74,7 @@ func newProcessingManagementFixture(t *testing.T, f matcherFixture, preparer *pr
 	return service, capture
 }
 
-func processingMetadataFixture(name string, scope authz.Scope) management.MetadataInput {
+func processingMetadataFixture(name string, scope processing.WorkflowScope) management.MetadataInput {
 	enabled := true
 	return management.MetadataInput{Name: name, Scope: scope, Enabled: &enabled}
 }
@@ -89,7 +89,7 @@ func TestProcessingManagementVersionsActivationOnlyAndRetainedHistory(t *testing
 			t.Fatal("Workflow compiler retained a live primary transaction")
 		}
 	}
-	input := processingMetadataFixture(strings.Repeat("n", 300), authz.Scope{Kind: "all"})
+	input := processingMetadataFixture(strings.Repeat("n", 300), f.agencyScope())
 	command := uuid.New()
 	created, err := service.CreateWorkflow(t.Context(), f.proof, command, input, checkedMutation)
 	if err != nil {
@@ -180,7 +180,7 @@ func TestProcessingManagementRechecksAuthorityAfterPreparationAndRejectsInvalidF
 	preparer := &processingPreparationFixture{}
 	service, _ := newProcessingManagementFixture(t, f, preparer, f.facts)
 	created, err := service.CreateWorkflow(t.Context(), f.proof, uuid.New(),
-		processingMetadataFixture("protected", authz.Scope{Kind: "all"}), checkedMutation)
+		processingMetadataFixture("protected", f.agencyScope()), checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestProcessingManagementRechecksAuthorityAfterPreparationAndRejectsInvalidF
 	preparer.before = nil
 	failing, _ := newProcessingManagementFixture(t, f, preparer, invalidProcessingFactFixture{f.facts})
 	if _, err := failing.UpdateWorkflow(t.Context(), f.proof, created.ID, 1,
-		processingMetadataFixture("must roll back", authz.Scope{Kind: "all"}), checkedMutation); err == nil {
+		processingMetadataFixture("must roll back", f.agencyScope()), checkedMutation); err == nil {
 		t.Fatal("invalid final append was accepted")
 	}
 	metadata, err := service.ReadWorkflow(t.Context(), f.proof, created.ID)
@@ -230,7 +230,7 @@ func TestProcessingManagementPreparationRejectsChangedConfigurationSubstitutionA
 	f := newMatcherFixture(t)
 	preparer := &processingPreparationFixture{}
 	service, _ := newProcessingManagementFixture(t, f, preparer, f.facts)
-	input := processingMetadataFixture("checked", authz.Scope{Kind: "all"})
+	input := processingMetadataFixture("checked", f.agencyScope())
 	created, err := service.CreateWorkflow(t.Context(), f.proof, uuid.New(), input, checkedMutation)
 	if err != nil {
 		t.Fatal(err)
@@ -238,7 +238,7 @@ func TestProcessingManagementPreparationRejectsChangedConfigurationSubstitutionA
 	definition := preparedProcessingDefinition(t)
 	preparer.before = func() {
 		if _, err := service.CreateWorkflow(t.Context(), f.proof, uuid.New(),
-			processingMetadataFixture("concurrent configuration", authz.Scope{Kind: "all"}), checkedMutation); err != nil {
+			processingMetadataFixture("concurrent configuration", f.agencyScope()), checkedMutation); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -281,11 +281,13 @@ func TestProcessingManagementUnitScopeFollowsTheUnitAgencyAndExplicitInput(t *te
 	}
 	replaceManagementGrants(t, f, []authz.Grant{{Actions: []string{"workflow.create"},
 		Scope: authz.Scope{Kind: "agency", References: []string{f.agencies[0].String()}}}})
-	input := processingMetadataFixture("shared unit workflow", authz.Scope{Kind: "unit", References: []string{unit.ID.String()}})
+	input := processingMetadataFixture("shared unit workflow", processing.WorkflowScope{
+		Agencies:  []uuid.UUID{f.agencies[1]},
+		Narrowing: &processing.WorkflowNarrowing{Kind: "unit", References: []uuid.UUID{unit.ID}}})
 	if _, err := service.CreateWorkflow(t.Context(), f.proof, uuid.New(), input, checkedMutation); !errors.Is(err, authz.ErrForbidden) {
 		t.Fatalf("a rule on an own-Agency Network authorized a foreign-Agency Unit scope: %v", err)
 	}
-	input.Scope = authz.Scope{Kind: "network", References: []string{f.networks[0].String()}}
+	input.Scope = workflowNetworkScope(f, f.networks[0])
 	if _, err := service.CreateWorkflow(t.Context(), f.proof, uuid.New(), input, checkedMutation); err != nil {
 		t.Fatal(err)
 	}
@@ -293,11 +295,11 @@ func TestProcessingManagementUnitScopeFollowsTheUnitAgencyAndExplicitInput(t *te
 	if _, err := service.CreateWorkflow(t.Context(), f.proof, uuid.New(), input, checkedMutation); !errors.Is(err, authz.ErrInvalidInput) {
 		t.Fatalf("missing enabled received an implicit default: %v", err)
 	}
-	input = processingMetadataFixture("missing network", authz.Scope{Kind: "network", References: []string{uuid.NewString()}})
+	input = processingMetadataFixture("missing network", workflowNetworkScope(f, uuid.New()))
 	if _, err := service.CreateWorkflow(t.Context(), f.proof, uuid.New(), input, checkedMutation); !errors.Is(err, authz.ErrInvalidInput) {
 		t.Fatalf("missing scope became installation scope: %v", err)
 	}
-	input = processingMetadataFixture("transport", authz.Scope{Kind: "network", References: []string{f.networks[0].String()}})
+	input = processingMetadataFixture("transport", workflowNetworkScope(f, f.networks[0]))
 	if _, err := service.CreateWorkflow(t.Context(), f.proof, uuid.New(), input, nil); !errors.Is(err, authz.ErrInvalidInput) {
 		t.Fatalf("mutation omitted Origin/CSRF participant: %v", err)
 	}

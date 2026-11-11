@@ -165,7 +165,7 @@ func (o *Owner) CaptureSyntheticPreview(ctx context.Context, tx platform.Transac
 	if err != nil {
 		return management.PreviewCapture{}, err
 	}
-	scope, eligibleUnits, err := evaluateScope(workflow, network.ID, input.Targets, matched)
+	scope, eligibleUnits, err := evaluateScope(workflow, network, input.Targets, matched)
 	if err != nil {
 		return management.PreviewCapture{}, err
 	}
@@ -251,7 +251,7 @@ func (o *Owner) CheckInstalledSource(ctx context.Context, tx platform.Transactio
 		return err
 	}
 	unitIDs := record.eligibleUnits
-	if record.workflow.Scope.Kind != "unit" {
+	if record.workflow.Scope.Narrowing == nil || record.workflow.Scope.Narrowing.Kind != "unit" {
 		unitIDs = []uuid.UUID{uuid.Nil}
 	}
 	for _, unitID := range unitIDs {
@@ -706,24 +706,29 @@ func addPayloadFields(projection *processing.SourceProjection, input Input,
 	return nil
 }
 
-func evaluateScope(workflow processing.WorkflowConfiguration, networkID uuid.UUID, targets []protocols.Target,
+func evaluateScope(workflow processing.WorkflowConfiguration, network Network, targets []protocols.Target,
 	match assignments.MatchResult) (processing.EvaluationScope, []uuid.UUID, error) {
 	scope := workflow.Scope
-	switch scope.Kind {
-	case "all":
-		return processing.EvaluationScope{SourceEligible: true, TargetPositions: allPositions(len(targets))}, nil, nil
+	if !slices.Contains(scope.Agencies, network.AgencyID) {
+		return processing.EvaluationScope{}, nil, authz.ErrForbidden
+	}
+	everything := processing.EvaluationScope{SourceEligible: true, TargetPositions: allPositions(len(targets))}
+	if scope.Narrowing == nil {
+		return everything, nil, nil
+	}
+	switch scope.Narrowing.Kind {
 	case "network":
-		if !containsUUID(scope.References, networkID) {
+		if !slices.Contains(scope.Narrowing.References, network.ID) {
 			return processing.EvaluationScope{}, nil, authz.ErrForbidden
 		}
-		return processing.EvaluationScope{SourceEligible: true, TargetPositions: allPositions(len(targets))}, nil, nil
+		return everything, nil, nil
 	case "unit":
 		positions := make([]uint32, 0)
 		units := make([]uuid.UUID, 0)
 		seen := make(map[uuid.UUID]bool)
 		for _, resolution := range match.Resolutions {
 			if resolution.TargetPosition < 0 || resolution.TargetPosition >= len(targets) ||
-				resolution.UnitID == nil || !containsUUID(scope.References, *resolution.UnitID) {
+				resolution.UnitID == nil || !slices.Contains(scope.Narrowing.References, *resolution.UnitID) {
 				continue
 			}
 			position := uint32(resolution.TargetPosition)
@@ -745,15 +750,6 @@ func allPositions(count int) []uint32 {
 		positions[i] = uint32(i)
 	}
 	return positions
-}
-
-func containsUUID(references []string, id uuid.UUID) bool {
-	for _, reference := range references {
-		if reference == id.String() {
-			return true
-		}
-	}
-	return false
 }
 
 func cloneUnits(values map[uuid.UUID]units.Context) map[uuid.UUID]units.Context {

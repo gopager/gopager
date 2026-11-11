@@ -999,6 +999,30 @@ func (f WorkflowMutationRuleFunc) EvalMutation(ctx context.Context, m ent.Mutati
 	return Denyf("ent/privacy: unexpected mutation type %T, expect *ent.WorkflowMutation", m)
 }
 
+// The WorkflowAgencyQueryRuleFunc type is an adapter to allow the use of ordinary
+// functions as a query rule.
+type WorkflowAgencyQueryRuleFunc func(context.Context, *ent.WorkflowAgencyQuery) error
+
+// EvalQuery return f(ctx, q).
+func (f WorkflowAgencyQueryRuleFunc) EvalQuery(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.WorkflowAgencyQuery); ok {
+		return f(ctx, q)
+	}
+	return Denyf("ent/privacy: unexpected query type %T, expect *ent.WorkflowAgencyQuery", q)
+}
+
+// The WorkflowAgencyMutationRuleFunc type is an adapter to allow the use of ordinary
+// functions as a mutation rule.
+type WorkflowAgencyMutationRuleFunc func(context.Context, *ent.WorkflowAgencyMutation) error
+
+// EvalMutation calls f(ctx, m).
+func (f WorkflowAgencyMutationRuleFunc) EvalMutation(ctx context.Context, m ent.Mutation) error {
+	if m, ok := m.(*ent.WorkflowAgencyMutation); ok {
+		return f(ctx, m)
+	}
+	return Denyf("ent/privacy: unexpected mutation type %T, expect *ent.WorkflowAgencyMutation", m)
+}
+
 // The WorkflowScopeReferenceQueryRuleFunc type is an adapter to allow the use of ordinary
 // functions as a query rule.
 type WorkflowScopeReferenceQueryRuleFunc func(context.Context, *ent.WorkflowScopeReferenceQuery) error
@@ -1156,6 +1180,8 @@ func queryFilter(q ent.Query) (Filter, error) {
 		return q.Filter(), nil
 	case *ent.WorkflowQuery:
 		return q.Filter(), nil
+	case *ent.WorkflowAgencyQuery:
+		return q.Filter(), nil
 	case *ent.WorkflowScopeReferenceQuery:
 		return q.Filter(), nil
 	case *ent.WorkflowVersionQuery:
@@ -1240,6 +1266,8 @@ func mutationFilter(m ent.Mutation) (Filter, error) {
 	case *ent.UserGroupMutation:
 		return m.Filter(), nil
 	case *ent.WorkflowMutation:
+		return m.Filter(), nil
+	case *ent.WorkflowAgencyMutation:
 		return m.Filter(), nil
 	case *ent.WorkflowScopeReferenceMutation:
 		return m.Filter(), nil

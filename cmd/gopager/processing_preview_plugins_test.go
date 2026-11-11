@@ -23,14 +23,14 @@ func TestProcessingSyntheticPreviewUsesProductionNetworkOwner(t *testing.T) {
 	t.Parallel()
 	store := newManagementStoreWithFields(t,
 		[]string{"unit", "address", "payload", "gateway", "derived"})
-	live, deleted := uuid.New(), uuid.New()
+	live, deleted, agency := uuid.New(), uuid.New(), uuid.New()
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		executor, err := store.Resolve(tx)
 		if err != nil {
 			return err
 		}
-		_, err = executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id)
-			INSERT INTO networks(id,name,protocol,deleted,agency_id) SELECT v.id,v.name,v.protocol,v.deleted,a.id FROM (VALUES ($1::uuid,'Live POCSAG','pocsag',false),($2::uuid,'Deleted POCSAG','pocsag',true)) AS v(id,name,protocol,deleted), a`, live, deleted)
+		_, err = executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES($3,'Fixture agency') RETURNING id)
+			INSERT INTO networks(id,name,protocol,deleted,agency_id) SELECT v.id,v.name,v.protocol,v.deleted,a.id FROM (VALUES ($1::uuid,'Live POCSAG','pocsag',false),($2::uuid,'Deleted POCSAG','pocsag',true)) AS v(id,name,protocol,deleted), a`, live, deleted, agency)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -64,7 +64,7 @@ func TestProcessingSyntheticPreviewUsesProductionNetworkOwner(t *testing.T) {
 		`{"schemaVersion":1,"username":"operator","password":"initial-password"}`, "", "", http.StatusOK)
 	workflowResponse := managementRequest(t, client, origin, http.MethodPost, "/api/v1/workflows",
 		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Production Network",`+
-			`"scope":{"kind":"all"},"enabled":true}`,
+			`"scope":`+workflowScopeJSON(agency)+`,"enabled":true}`,
 		login.CSRFToken, "", http.StatusCreated)
 	workflowID, _ := managementResultID(t, workflowResponse)
 	versionInput, err := json.Marshal(workflowVersionMutation{SchemaVersion: 1,
@@ -130,9 +130,10 @@ func TestProcessingSyntheticPreviewUsesOnlyPreviewSupportingInstalledPlugins(t *
 		t.Fatal(err)
 	}
 	networkID := uuid.New()
+	agency := seedAgency(t, store)
 	networks := previewFixtureNetworks{
 		values: map[uuid.UUID]synthetic.Network{
-			networkID: {ID: networkID, Name: "Standalone POCSAG", Protocol: protocols.POCSAG},
+			networkID: {ID: networkID, Name: "Standalone POCSAG", Protocol: protocols.POCSAG, AgencyID: agency},
 		},
 		identity: identityRepository,
 		units:    unitRepository,
@@ -208,7 +209,7 @@ func TestProcessingSyntheticPreviewUsesOnlyPreviewSupportingInstalledPlugins(t *
 	withoutPreviewID := createInstance(unsupportingArtifact)
 	workflowResponse := managementRequest(t, client, origin, http.MethodPost, "/api/v1/workflows",
 		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Installed Preview",`+
-			`"scope":{"kind":"all"},"enabled":true}`,
+			`"scope":`+workflowScopeJSON(agency)+`,"enabled":true}`,
 		login.CSRFToken, "", http.StatusCreated)
 	workflowID, _ := managementResultID(t, workflowResponse)
 	protocolField := processing.FieldRef{Namespace: "source", Path: []string{"protocol"}}

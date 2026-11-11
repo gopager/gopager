@@ -7763,24 +7763,50 @@ components:
       additionalProperties: false
     WorkflowScope:
       type: object
+      description: >-
+        Selects the Transmissions a Workflow processes. A Workflow reaches no Agency implicitly: it
+        processes Transmissions on Radio networks of its `agencies` only, optionally narrowed to some
+        Radio networks or Units of those Agencies. Managing it needs the action over every assigned
+        Agency (or, with a narrowing, over every referenced Network's Agency or Unit).
       required:
-      - kind
+      - agencies
+      - narrowing
       properties:
-        kind:
-          type: string
-          enum:
-          - all
-          - network
-          - unit
-        references:
+        agencies:
           type: array
           minItems: 1
-          maxItems: 1024
+          maxItems: 256
           uniqueItems: true
           items:
             type: string
             format: uuid
-          description: Required for `network` and `unit`, forbidden for `all`. Returned normalized and sorted.
+          description: Assigned Agencies. Returned sorted. An unknown Agency is `INVALID_INPUT`.
+        narrowing:
+          type: object
+          nullable: true
+          description: >-
+            `null` for every Radio network of the assigned Agencies. Every reference must belong to an
+            assigned Agency and every assigned Agency must contain at least one reference; otherwise
+            `INVALID_INPUT`.
+          required:
+          - kind
+          - references
+          properties:
+            kind:
+              type: string
+              enum:
+              - network
+              - unit
+            references:
+              type: array
+              minItems: 1
+              maxItems: 1024
+              uniqueItems: true
+              items:
+                type: string
+                format: uuid
+              description: Radio network or Unit identifiers, matching `kind`. Returned sorted.
+          additionalProperties: false
       additionalProperties: false
     Workflow:
       type: object

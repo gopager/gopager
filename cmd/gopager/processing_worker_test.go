@@ -26,14 +26,14 @@ import (
 func TestInstalledWorkflowRunsOnProductionWiring(t *testing.T) {
 	t.Parallel()
 	store := newManagementStoreWithFields(t, []string{"unit", "address", "payload", "gateway", "derived"})
-	network, gateway := uuid.New(), uuid.New()
+	network, gateway, agency := uuid.New(), uuid.New(), uuid.New()
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		executor, err := store.Resolve(tx)
 		if err != nil {
 			return err
 		}
-		if _, err := executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id)
-			INSERT INTO networks(id,name,protocol,agency_id) SELECT $1,'Installed Network','pocsag',a.id FROM a`, network); err != nil {
+		if _, err := executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES($2,'Fixture agency') RETURNING id)
+			INSERT INTO networks(id,name,protocol,agency_id) SELECT $1,'Installed Network','pocsag',a.id FROM a`, network, agency); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateways(id) VALUES($1)`, gateway); err != nil {
@@ -90,7 +90,7 @@ func TestInstalledWorkflowRunsOnProductionWiring(t *testing.T) {
 	seedCurrentInstance(t, store, instance)
 
 	workflowResponse := managementRequest(t, client, origin, http.MethodPost, "/api/v1/workflows",
-		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Installed run","scope":{"kind":"all"},"enabled":true}`,
+		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Installed run","scope":`+workflowScopeJSON(agency)+`,"enabled":true}`,
 		login.CSRFToken, "", http.StatusCreated)
 	workflowID, _ := managementResultID(t, workflowResponse)
 	protocolField := processing.FieldRef{Namespace: "source", Path: []string{"protocol"}}

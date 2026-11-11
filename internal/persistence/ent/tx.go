@@ -86,6 +86,8 @@ type Tx struct {
 	UserGroup *UserGroupClient
 	// Workflow is the client for interacting with the Workflow builders.
 	Workflow *WorkflowClient
+	// WorkflowAgency is the client for interacting with the WorkflowAgency builders.
+	WorkflowAgency *WorkflowAgencyClient
 	// WorkflowScopeReference is the client for interacting with the WorkflowScopeReference builders.
 	WorkflowScopeReference *WorkflowScopeReferenceClient
 	// WorkflowVersion is the client for interacting with the WorkflowVersion builders.
@@ -258,6 +260,7 @@ func (tx *Tx) init() {
 	tx.UnitTemplate = NewUnitTemplateClient(tx.config)
 	tx.UserGroup = NewUserGroupClient(tx.config)
 	tx.Workflow = NewWorkflowClient(tx.config)
+	tx.WorkflowAgency = NewWorkflowAgencyClient(tx.config)
 	tx.WorkflowScopeReference = NewWorkflowScopeReferenceClient(tx.config)
 	tx.WorkflowVersion = NewWorkflowVersionClient(tx.config)
 }
