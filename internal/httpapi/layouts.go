@@ -30,6 +30,7 @@ type layoutCreate struct {
 	CommandID     uuid.UUID          `json:"commandId"`
 	Name          string             `json:"name"`
 	Definition    *processing.Layout `json:"definition"`
+	Agencies      []uuid.UUID        `json:"agencies"`
 }
 
 // layoutUpdate is the body of PUT /layouts/{id}.
@@ -38,6 +39,7 @@ type layoutUpdate struct {
 	ExpectedRevision int64              `json:"expectedRevision,string"`
 	Name             string             `json:"name"`
 	Definition       *processing.Layout `json:"definition"`
+	Agencies         []uuid.UUID        `json:"agencies"`
 }
 
 // layoutVersion parses the positive decimal int64 version path parameter.
@@ -68,7 +70,7 @@ func RegisterLayoutRoutes(mux *http.ServeMux, transport *identity.HTTPTransport,
 			return nil, authz.ErrInvalidInput
 		}
 		return layouts.Create(r.Context(), proof, input.CommandID,
-			presentation.LayoutInput{Name: input.Name, Definition: *input.Definition}, check)
+			presentation.LayoutInput{Name: input.Name, Definition: *input.Definition, Agencies: input.Agencies}, check)
 	}, http.StatusCreated))
 	mux.HandleFunc("GET /api/v1/layouts/{id}", guard.route(func(r *http.Request, proof identity.Proof, _ func(identity.Authentication) error) (any, error) {
 		id, err := managementID(r)
@@ -98,7 +100,7 @@ func RegisterLayoutRoutes(mux *http.ServeMux, transport *identity.HTTPTransport,
 			return nil, authz.ErrInvalidInput
 		}
 		return layouts.Update(r.Context(), proof, id, input.ExpectedRevision,
-			presentation.LayoutInput{Name: input.Name, Definition: *input.Definition}, check)
+			presentation.LayoutInput{Name: input.Name, Definition: *input.Definition, Agencies: input.Agencies}, check)
 	}, http.StatusOK))
 	mux.HandleFunc("DELETE /api/v1/layouts/{id}", guard.route(func(r *http.Request, proof identity.Proof, check func(identity.Authentication) error) (any, error) {
 		var input deleteMutation

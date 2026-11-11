@@ -74,8 +74,8 @@ type Schema struct {
 	Fields      map[string]Field `json:"fields"`
 	Agencies    []uuid.UUID      `json:"agencies"`
 	// Deprecated hides the whole schema from new references; stored values stay readable.
-	Deprecated bool      `json:"deprecated,omitempty"`
-	Revision   int64     `json:"revision"`
+	Deprecated bool      `json:"deprecated"`
+	Revision   int64     `json:"revision,string"`
 	CreatedAt  time.Time `json:"createdAt"`
 	UpdatedAt  time.Time `json:"updatedAt"`
 }
@@ -133,7 +133,7 @@ func (s Schema) Validate() error {
 		return invalid("Attribute schema declares no field")
 	}
 	if len(s.Fields) > processing.MaxCollection {
-		return platform.NewFailure(platform.CodeResourceLimit, errors.New("Attribute-schema field boundary"))
+		return platform.NewFailure(platform.CodeResourceLimit, errors.New("attribute-schema field boundary"))
 	}
 	for name, field := range s.Fields {
 		if err := validateField(name, field, true); err != nil {

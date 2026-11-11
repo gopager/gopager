@@ -18,6 +18,13 @@ CREATE TABLE layout_definition_versions (
     created_at timestamptz NOT NULL,
     PRIMARY KEY (layout_id, version)
 );
+-- A layout belongs to one or more Agencies; they decide who may see, use and manage it.
+CREATE TABLE layout_definition_agencies (
+    layout_id uuid NOT NULL REFERENCES layout_definitions(id) ON DELETE CASCADE,
+    agency_id uuid NOT NULL REFERENCES agencies(id) ON DELETE CASCADE,
+    PRIMARY KEY (layout_id, agency_id)
+);
+CREATE INDEX layout_definition_agencies_agency ON layout_definition_agencies (agency_id);
 
 -- A Subscription selects Domain event types for one subscriber: the owning User of a personal
 -- Subscription or the technical account of a global one.
@@ -142,5 +149,6 @@ DROP TABLE deliveries;
 DROP TABLE integration_unit_parameters;
 DROP TABLE subscription_targets;
 DROP TABLE subscriptions;
+DROP TABLE layout_definition_agencies;
 DROP TABLE layout_definition_versions;
 DROP TABLE layout_definitions;

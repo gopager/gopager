@@ -6,6 +6,7 @@ import (
 )
 
 func TestValid(t *testing.T) {
+	t.Parallel()
 	for _, value := range []string{"a", "fire-truck", "mdi.bell_ring", "A9", strings.Repeat("x", MaxLength)} {
 		if !Valid(value) {
 			t.Errorf("Valid(%q) = false, want true", value)

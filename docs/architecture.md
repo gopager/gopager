@@ -150,7 +150,7 @@ Subscriptions select deliverable Domain event types for one subscriber (the owni
 - **Runner.** `delivery.Runner` (worker role, woken by the fact hub and polling every 5 s) first ends `started` Deliveries whose lease expired as `uncertain` (`lease-lost`), then claims up to 10 due `prepared` or `retry-pending` Deliveries with `FOR UPDATE SKIP LOCKED`, a new fencing token and a 60 s lease. Per Delivery, one transaction re-checks expiry, the Subscription (state and revision, share-locked until the start commits, so a confirmed pause or update is never overtaken by a start), the subscriber's authority, the projection and filter (re-rendering the input when the access or instance revision changed), the target instance and descriptor, and sending admission, then records the attempt `started`. The provider is called outside SQL with a 30 s deadline while the lease is renewed every 20 s; a lost lease, or a subscriber who may no longer see the Delivery's data after an access change, cancels the call. The outcome is written under the same claim: `accepted`, `retry-pending` (at most five attempts, 30 s/2 min/10 min/30 min ±20 %, a later provider retry time wins), `failed`, or `uncertain` for an uncertain answer or any error after the call started. Uncertain Deliveries are never retried automatically.
 - **Sending admission.** One-minute windows in `delivery_admissions`, keyed by a hash of the subscriber and of the target instance; each admitted send also sweeps up to 100 expired windows of any bucket (`--delivery-sends-per-minute`, `--delivery-target-sends-per-minute`). A background start over the limit is deferred to the next window without consuming an attempt; Subscription create and redelivery answer `RATE_LIMITED`.
 - **Targets.** `delivery.Targets` (`Describe`, `Attempt`) is the Core target port with the versioned `TargetDescriptor` and `AttemptInvocation`/`AttemptResult`. The process composes `delivery.UnavailableTargets` until a target provider is configured, so Subscription targets are rejected as unavailable and no Delivery starts.
-- **Layouts.** `processing/presentation` stores layout definitions with immutable versions (`layout_definitions`, `layout_definition_versions`) and resolves the Subscription's layout or the built-in default per output kind (`delivery.DefaultLayouts`).
+- **Layouts.** `processing/presentation` stores layout definitions with immutable versions (`layout_definitions`, `layout_definition_versions`, `layout_definition_agencies`) and resolves the Subscription's layout or the built-in default per output kind (`delivery.DefaultLayouts`).
 
 ### Address rule semantics
 
@@ -221,7 +221,8 @@ The layering rules that the code follows:
 | `internal/protocols` | Protocol enum, address/target model and ranges, payload forms, payload identity |
 | `internal/messages` | Grouping decision type and the pure grouping function `Decide` |
 | `internal/delivery` | Subscriptions (management, save-time checks), the field catalog of filters and layouts, the `delivery-fanout` consumer, materialization, the Delivery runner (claims, start check, attempts, retry, uncertainty), sending admission, Delivery management (list, read, retry, redelivery), the Core target port and built-in layouts |
-| `internal/processing/presentation` | Layout definitions with immutable versions (`presentation.manage`) and the `LayoutResolver` used by Delivery |
+| `internal/processing/presentation` | Layout definitions with immutable versions, assigned to Agencies (`presentation.manage`), and the `LayoutResolver` used by Delivery |
+| `internal/attributes` | Attribute schemas: model, validation, compatibility, service (`attribute-schema.manage`) and the store and catalog ports |
 | `internal/readmodel` | Message read side: feed/detail/filter-option service, filter parsing and canonical encoding, page tokens and positions, field-group projection; ports for the store, token key and Workflow classification |
 | `internal/units` (package `units`) | Agencies, Units, Unit collections, Organizations with setting defaults, Unit templates, bulk Unit operations, setting inheritance |
 | `internal/assignments` | Address rules (selectors, validity intervals, conflict validation), target matching, suppressions, correction status/retry, `CorrectionRunner` |
@@ -243,7 +244,9 @@ The layering rules that the code follows:
 | `internal/persistence/ent/ingeststore` | Gateways, Networks, credentials, transmission intake, grouping, the message_units cache, processing admission. `ProcessingSourceOwner` provides the source, reconciliation and publication readiness. Uses SQL directly through `postgres.Executor`. |
 | `internal/persistence/ent/processingstore` | Workflows, versions, scope references, instances, candidates, results, publication items |
 | `internal/persistence/ent/deliverystore` | SQL implementation of the Delivery store: Subscriptions and targets, Deliveries with fenced claims, attempts, admission windows, Unit parameters and the read helpers Delivery needs |
-| `internal/persistence/ent/layoutstore` | Layout definitions and versions |
+| `internal/persistence/ent/layoutstore` | Layout definitions, versions and Agencies |
+| `internal/persistence/ent/attributestore` | Attribute schemas, their Agencies and the catalog revision |
+| `internal/persistence/ent/agencyscope` | SQL condition for the Agencies a caller may see (raw-SQL stores of Agency-bound definitions) |
 | `internal/persistence/ent/readstore` | SQL implementation of the `readmodel` store: eligibility, filters, text search, keyset paging, projection aggregates and the token key, one statement per request |
 | `internal/persistence/ent/commandstore` | Command receipt persistence |
 | `internal/persistence/ent/eventstore` | Appends domain events and their outbox references |
@@ -344,6 +347,7 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 | Delivery | `deliveries`, `delivery.Delivery` | One job per Subscription, Domain event, target instance and split, with its bounded materialized input, attempts and outcome. |
 | Delivery target | `delivery.Targets`, `delivery.TargetDescriptor` | A configured processing instance offering the Delivery capability: output kinds, typed inputs, dependencies and an optional sending limit. |
 | Layout | `layout_definitions`, `processing.Layout` | A versioned, declarative arrangement of permitted fields for one output kind (`text`, `markdown`, `json`), rendered without a template engine. |
+| Attribute schema | `attribute_schemas`, `attributes.Schema` | An administrator-defined, keyed declaration of typed, nested fields for Message or Unit attributes, assigned to Agencies; changes are compatible-only and every change increments `attribute_catalog.revision`. |
 | Unit parameter | `integration_unit_parameters` | A Unit-specific value of a target input for one instance; applied to Deliveries of that Unit. |
 | Gateway | `gateways`, `ingest` | Registered receiver instance with a name that submits transmissions under its own bearer credential. It can be disabled (credentials authenticate nothing) and soft-deleted. It has a state (`never-seen`, `active`, `degraded`, `stopped`, `contact-lost`), contact timestamps and a history retention marker. |
 | Gateway state history | `gateway_state_history` | One row per Gateway revision that changed the state: old and new state, cause (`report`, `submission`, `timeout`), times and the degraded reason. |
