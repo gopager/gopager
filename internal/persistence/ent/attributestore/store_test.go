@@ -227,7 +227,7 @@ func TestDeleteRefusesReferencedSchema(t *testing.T) {
 	for name, insert := range map[string]func(w *world, key string){
 		"active Workflow version": func(w *world, key string) {
 			workflow, version := uuid.New(), uuid.New()
-			w.run(t, `INSERT INTO processing_workflows (id, name, scope_kind, created_at, updated_at) VALUES ($1, 'w', 'all', now(), now())`, workflow)
+			w.run(t, `INSERT INTO processing_workflows (id, name, created_at, updated_at) VALUES ($1, 'w', now(), now())`, workflow)
 			w.run(t, `INSERT INTO processing_workflow_versions (id, workflow_id, definition, created_at, created_by) VALUES ($1, $2, $3::jsonb, now(), $4)`,
 				version, workflow, `{"outputs":{"`+key+`":{}}}`, uuid.New())
 			w.run(t, `UPDATE processing_workflows SET active_version_id = $2 WHERE id = $1`, workflow, version)
