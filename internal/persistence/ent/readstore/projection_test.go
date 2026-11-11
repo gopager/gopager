@@ -194,8 +194,8 @@ func TestProjectionStoresLongStringsAndPrefiltersThemByDigest(t *testing.T) {
 	}
 }
 
-// TestProjectionAcceptsBoundaryNumbers expects the smallest and largest finite numbers that typed
-// values accept to be projected, so that publication never fails on a value evaluation accepted.
+// TestProjectionAcceptsBoundaryNumbers expects the smallest and largest finite numbers and the
+// largest timestamp offsets that typed values accept to be projected, so that publication never fails on a value evaluation accepted.
 func TestProjectionAcceptsBoundaryNumbers(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
@@ -206,8 +206,9 @@ func TestProjectionAcceptsBoundaryNumbers(t *testing.T) {
 	transmission := w.assigned(message, network, unit, agency, base, "")
 	workflow, version := w.workflow()
 	result := w.result(transmission, workflow, version, message, base, `["derived"]`,
-		untargeted(fieldsOf("incident", entry("tiny", "number", `1e-310`), entry("huge", "number", `1.7e308`))))
-	if got := w.projectedRows(result); len(got) != 2 {
-		t.Fatalf("projected rows = %v, want two", got)
+		untargeted(fieldsOf("incident", entry("tiny", "number", `1e-310`), entry("huge", "number", `1.7e308`),
+			entry("east", "timestamp", `"2026-01-01T12:00:00+15:59"`), entry("west", "timestamp", `"2026-01-01T12:00:00-15:59"`))))
+	if got := w.projectedRows(result); len(got) != 4 {
+		t.Fatalf("projected rows = %v, want four", got)
 	}
 }

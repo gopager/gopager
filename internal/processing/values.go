@@ -243,6 +243,11 @@ func (v Value) native(schema FieldSchema, depth int, decodedBytes *int) (any, er
 		if instant.Year() < 1 || instant.UTC().Year() < 1 {
 			return nil, invalid(errors.New("timestamp before year 1"))
 		}
+		// PostgreSQL accepts numeric offsets only up to 15:59:59; a larger one would fail the
+		// cast of every stored copy of the value.
+		if _, offset := instant.Zone(); offset >= maxTimestampOffset || offset <= -maxTimestampOffset {
+			return nil, invalid(errors.New("timestamp offset of 16 hours or more"))
+		}
 		return instant, nil
 	case BytesValue:
 		var encoded string
@@ -394,6 +399,9 @@ func Literal(kind ValueKind, value any) (Value, error) {
 	}
 	return Value{Kind: kind, Value: encoded}, nil
 }
+
+// maxTimestampOffset is the first UTC offset, in seconds, that PostgreSQL rejects.
+const maxTimestampOffset = 16 * 60 * 60
 
 // nonzeroMantissa reports whether the significand of a JSON number literal has a nonzero digit.
 func nonzeroMantissa(literal string) bool {
