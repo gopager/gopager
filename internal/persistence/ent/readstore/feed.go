@@ -232,11 +232,12 @@ result_rows AS (
 		COALESCE((SELECT jsonb_agg(DISTINCT s.network_agency) FROM sup s
 			WHERE s.message_id = p.id AND s.network_unresolved), '[]'::jsonb) AS unresolved,
 		` + b.attributesColumn() + ` AS attributes,
+		` + b.publishedResultsColumn() + ` AS published_results,
 		` + b.transmissionsColumn() + ` AS transmissions
 	FROM page p LEFT JOIN LATERAL (SELECT s.payload, s.protocol, s.incomplete FROM sup s WHERE s.message_id = p.id
 		ORDER BY s.incomplete, s.accepted_at, s.id LIMIT 1) r ON true)
 SELECT s.tx_id, s.seq, r.id, r.first_observed_at, r.processing_status, r.correcting, r.payload, r.protocol, r.incomplete,
-	r.units, r.without_unit, r.unresolved, r.attributes, r.transmissions
+	r.units, r.without_unit, r.unresolved, r.attributes, r.published_results, r.transmissions
 FROM snapshot s LEFT JOIN result_rows r ON true
 ORDER BY r.first_observed_at DESC NULLS LAST, r.id DESC`
 }
@@ -285,7 +286,7 @@ func (s *Store) run(ctx context.Context, tx platform.TransactionContext, query r
 		var row feedRow
 		if err := rows.Scan(&result.TxID, &result.Seq, &row.id, &row.time, &row.processing, &row.correcting, &row.payload,
 			&row.protocol, &row.incomplete, &row.units, &row.withoutUnit, &row.unresolved, &row.attributes,
-			&row.transmissions); err != nil {
+			&row.publishedResults, &row.transmissions); err != nil {
 			return readmodel.FeedResult{}, nil, err
 		}
 		if row.id == nil {
@@ -310,18 +311,19 @@ func (s *Store) run(ctx context.Context, tx platform.TransactionContext, query r
 
 // feedRow is one scanned row of the statement.
 type feedRow struct {
-	id            *uuid.UUID
-	time          *time.Time
-	processing    *string
-	correcting    *bool
-	payload       *string
-	protocol      *string
-	incomplete    *bool
-	units         []byte
-	withoutUnit   []byte
-	unresolved    []byte
-	attributes    []byte
-	transmissions []byte
+	id               *uuid.UUID
+	time             *time.Time
+	processing       *string
+	correcting       *bool
+	payload          *string
+	protocol         *string
+	incomplete       *bool
+	units            []byte
+	withoutUnit      []byte
+	unresolved       []byte
+	attributes       []byte
+	publishedResults []byte
+	transmissions    []byte
 }
 
 // record decodes the JSON aggregates of a row.
@@ -363,7 +365,7 @@ func (r feedRow) record() (readmodel.FeedRecord, []readmodel.TransmissionRecord,
 	for _, decode := range []struct {
 		data   []byte
 		target any
-	}{{r.units, &units}, {r.withoutUnit, &withoutUnit}, {r.unresolved, &record.UnresolvedAgencies}, {r.attributes, &attributes}} {
+	}{{r.units, &units}, {r.withoutUnit, &withoutUnit}, {r.unresolved, &record.UnresolvedAgencies}, {r.attributes, &attributes}, {r.publishedResults, &record.PublishedResults}} {
 		if err := json.Unmarshal(decode.data, decode.target); err != nil {
 			return readmodel.FeedRecord{}, nil, err
 		}

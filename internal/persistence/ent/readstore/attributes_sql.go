@@ -59,6 +59,21 @@ func (b *feedBuilder) effectiveAttributes(message, restriction string) string {
 		ORDER BY e.schema_key, e.field, e.position, e.published_at DESC, e.result_id DESC`
 }
 
+// publishedResultsColumn renders the IDs of the readable published results of the page Message p
+// as a jsonb array, empty unless the query asks for them and the caller can read derived results.
+// A result is readable like in attributeRows, but it counts without contributing an effective
+// value.
+func (b *feedBuilder) publishedResultsColumn() string {
+	if !b.query.WithPublishedResults || len(b.query.DerivedGroups) == 0 {
+		return `'[]'::jsonb`
+	}
+	return `COALESCE((SELECT jsonb_agg(DISTINCT r.id)
+		FROM transmissions dt JOIN networks dn ON dn.id = dt.network_id
+			JOIN processing_candidates c ON c.transmission_id = dt.id
+			JOIN processing_results r ON r.candidate_id = c.id AND r.published_at IS NOT NULL AND r.message_id = dt.message_id
+		WHERE dt.message_id = p.id AND r.field_groups <@ ` + b.groupsParam() + ` AND ` + b.supported("dt", "dn") + `), '[]'::jsonb)`
+}
+
 // attributesColumn renders the effective attribute values of the page Message p as a jsonb
 // array, empty when the caller cannot read derived results.
 func (b *feedBuilder) attributesColumn() string {

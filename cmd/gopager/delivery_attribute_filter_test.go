@@ -63,6 +63,38 @@ func TestSubscriptionProcessingCompletedWithoutVisibleResultCreatesNothing(t *te
 	}
 }
 
+// TestSubscriptionProcessingCompletedDoesNotDependOnEffectiveValues proves that an unfiltered
+// Subscription receives processing.completed for a readable published result also when that
+// result has no present outputs or when a later result of another Workflow superseded its
+// values: the result is visible to the subscriber even though it contributes no effective value.
+func TestSubscriptionProcessingCompletedDoesNotDependOnEffectiveValues(t *testing.T) {
+	t.Parallel()
+	f := newDeliveryFixture(t, delivery.AdmissionLimits{})
+	bearer, _ := f.subscriber(fanOutGroups...)
+	instance := f.instance(true)
+	f.attributeSchema("incident", incidentFields)
+	f.subCreated(bearer, subInput(instance, map[string]any{"eventTypes": []string{"processing.completed"}}))
+	unit := f.unit("Engine 1", nil)
+
+	empty := f.message(f.minuteAgo(), "EMPTY", unit)
+	emptyResult := f.publishResult(f.resultWorkflow(), empty, `{"selected":true,"fields":{}}`, `["derived","payload"]`)
+	emptyFact := f.messageFact("processing.completed", empty, map[string]any{"resultId": emptyResult})
+
+	superseded := f.message(f.minuteAgo(), "SUPERSEDED", unit)
+	earlier := f.publishLevel(f.resultWorkflow(), superseded, "1")
+	f.publishLevel(f.resultWorkflow(), superseded, "5")
+	supersededFact := f.messageFact("processing.completed", superseded, map[string]any{"resultId": earlier})
+
+	f.fanOutAll()
+	got := map[uuid.UUID]bool{}
+	for _, item := range f.deliveries(bearer, "") {
+		got[item.DomainEventID] = true
+	}
+	if len(got) != 2 || !got[emptyFact] || !got[supersededFact] {
+		t.Fatalf("Delivered facts = %v, want the empty-output and the superseded result", got)
+	}
+}
+
 // TestSubscriptionProcessingCompletedWithUnreadableResultGroupsCreatesNothing proves that a
 // published result whose stored field groups include one the subscriber cannot read neither
 // triggers a Delivery nor reaches another Delivery's input.

@@ -1166,7 +1166,9 @@ A filter on a field holds when any candidate value satisfies it (a list contribu
 assigned to a Unit relevant to the Delivery (with `splitByUnit` that Delivery's Unit, otherwise all of the Message's
 Units the subscriber may see); a value that does not match the declared type is ignored. A Layout `field`, `chip` or
 `when` reads one value: the untargeted effective value, else the one of the lowest relevant target position. A
-published result counts only when all field groups stored with it are readable.
+published result counts only when all field groups stored with it are readable. A `processing.completed` fact
+creates a Delivery when its published result is readable that way, independent of whether the result holds an
+effective value (it may hold none, or a later result may have replaced its values).
 
 ### Deliveries
 

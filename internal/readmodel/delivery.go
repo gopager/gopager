@@ -22,6 +22,10 @@ type DeliveryProjection struct {
 	WithoutUnit []WithoutUnitRecord
 	// Groups are the field groups the subscriber may read, sorted.
 	Groups []string
+	// PublishedResults are the published results of the Message that the subscriber may read.
+	// A result belongs here even when none of its values is effective, because a later result
+	// replaced them or because it holds none.
+	PublishedResults []uuid.UUID
 }
 
 // ProjectForDelivery returns the Message as the holder of authority may read it, inside the
@@ -41,7 +45,7 @@ func (s *Service) ProjectForDelivery(ctx context.Context, tx platform.Transactio
 		return DeliveryProjection{}, false, nil
 	}
 	result, err := s.store.Feed(tx.Context(), tx, FeedQuery{Access: current.rows, IDs: []uuid.UUID{messageID},
-		DerivedGroups: current.derivedGroups()})
+		DerivedGroups: current.derivedGroups(), WithPublishedResults: true})
 	if err != nil {
 		return DeliveryProjection{}, false, err
 	}
@@ -55,5 +59,6 @@ func (s *Service) ProjectForDelivery(ctx context.Context, tx platform.Transactio
 	}
 	slices.Sort(groups)
 	return DeliveryProjection{Item: current.viewer.feedItem(record, false), Units: slices.Clone(record.Units),
-		WithoutUnit: slices.Clone(record.WithoutUnit), Groups: groups}, true, nil
+		WithoutUnit: slices.Clone(record.WithoutUnit), Groups: groups,
+		PublishedResults: slices.Clone(record.PublishedResults)}, true, nil
 }

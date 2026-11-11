@@ -224,12 +224,11 @@ func (s *subject) observeGateway(ctx context.Context, tx platform.TransactionCon
 	return s, nil
 }
 
-// resultVisible reports whether the published result is part of the projection.
+// resultVisible reports whether the subscriber may read the published result. It does not
+// depend on the result's values being effective: a result without outputs, or one whose values a
+// later result replaced, is still a completed processing the subscriber may be told about.
 func resultVisible(projection readmodel.DeliveryProjection, result uuid.UUID) bool {
-	if result == uuid.Nil || projection.Item.Attributes == nil {
-		return false
-	}
-	return slices.ContainsFunc(*projection.Item.Attributes, func(item readmodel.AttributeValue) bool { return item.ResultID == result })
+	return result != uuid.Nil && slices.Contains(projection.PublishedResults, result)
 }
 
 func appendUnique(ids []uuid.UUID, id uuid.UUID) []uuid.UUID {
