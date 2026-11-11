@@ -66,8 +66,9 @@ func (f *FanOut) Handle(ctx context.Context, tx platform.TransactionContext, rec
 	if err != nil {
 		return err
 	}
+	memo := newEventMemo()
 	for _, subscription := range subscriptions {
-		records, err := materialize(ctx, tx, f.deps, now, subscription, event)
+		records, err := materialize(ctx, tx, f.deps, now, subscription, event, memo)
 		if err != nil {
 			return err
 		}

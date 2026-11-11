@@ -62,6 +62,9 @@ type subject struct {
 	message   *readmodel.DeliveryProjection
 	gateway   *GatewayView
 	splits    []split
+	// memo shares the projection among the Subscriptions of one subscriber within a fan-out
+	// event; nil outside fan-out.
+	memo *subjectMemo
 }
 
 // absentAuthority reports a failure that means the subscriber cannot act now (suspended,
@@ -124,12 +127,28 @@ func (s *subject) project(ctx context.Context, tx platform.TransactionContext, d
 	return nil, nil
 }
 
-// observeMessage projects the fact's Message and builds the splits.
-func (s *subject) observeMessage(ctx context.Context, tx platform.TransactionContext, deps Dependencies, now time.Time,
-	subscription Subscription) (*subject, error) {
-	if s.event.Data.MessageID == uuid.Nil {
-		return nil, nil
+// messageProjection returns the fact's Message as the subscriber's authority may read it, or nil
+// without error when it is gone, not eligible or, for processing.completed, lacks the fact's
+// result. Within a fan-out event the answer is computed once per subscriber and shared by that
+// subscriber's Subscriptions; the start check projects once per start and shares nothing.
+func (s *subject) messageProjection(ctx context.Context, tx platform.TransactionContext, deps Dependencies,
+	now time.Time) (*readmodel.DeliveryProjection, error) {
+	if s.memo != nil && s.memo.projected {
+		return s.memo.projection, nil
 	}
+	projection, err := s.projectMessage(ctx, tx, deps, now)
+	if err != nil {
+		return nil, err
+	}
+	if s.memo != nil {
+		s.memo.projected, s.memo.projection = true, projection
+	}
+	return projection, nil
+}
+
+// projectMessage reads the projection of the fact's Message under the subscriber's authority.
+func (s *subject) projectMessage(ctx context.Context, tx platform.TransactionContext, deps Dependencies,
+	now time.Time) (*readmodel.DeliveryProjection, error) {
 	message, err := deps.Store.CurrentMessage(ctx, tx, s.event.Data.MessageID, s.event.Data.TransmissionID)
 	if errors.Is(err, authz.ErrNotFound) {
 		return nil, nil
@@ -144,13 +163,23 @@ func (s *subject) observeMessage(ctx context.Context, tx platform.TransactionCon
 		}
 		return nil, err
 	}
-	if !ok {
+	if !ok || s.event.Type == "processing.completed" && !resultVisible(projection, s.event.Data.ResultID) {
 		return nil, nil
 	}
-	if s.event.Type == "processing.completed" && !resultVisible(projection, s.event.Data.ResultID) {
+	return &projection, nil
+}
+
+// observeMessage projects the fact's Message and builds the splits.
+func (s *subject) observeMessage(ctx context.Context, tx platform.TransactionContext, deps Dependencies, now time.Time,
+	subscription Subscription) (*subject, error) {
+	if s.event.Data.MessageID == uuid.Nil {
 		return nil, nil
 	}
-	s.message = &projection
+	projection, err := s.messageProjection(ctx, tx, deps, now)
+	if err != nil || projection == nil {
+		return nil, err
+	}
+	s.message = projection
 	withoutUnit := split{key: "", anchor: projection.Item.MessageTime}
 	for i, appearance := range projection.WithoutUnit {
 		withoutUnit.agencies = appendUnique(withoutUnit.agencies, appearance.AgencyID)
@@ -440,8 +469,8 @@ func newRecord(subscription Subscription, current *subject, part split, target T
 // does not compile now, or whose subscriber can no longer read their fields, becomes invalid
 // and creates none.
 func materialize(ctx context.Context, tx platform.TransactionContext, deps Dependencies, now time.Time,
-	subscription Subscription, event eventView) ([]DeliveryRecord, error) {
-	current, err := resolveSubject(ctx, tx, deps, event, subscription.SubscriberID)
+	subscription Subscription, event eventView, memo *eventMemo) ([]DeliveryRecord, error) {
+	current, err := memo.subject(ctx, tx, deps, event, subscription.SubscriberID)
 	if err != nil || current == nil {
 		return nil, err
 	}
