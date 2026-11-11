@@ -203,14 +203,16 @@ func (a actor) requireAuthorGroups(filters Filters) error {
 }
 
 // view builds the response of a stored view for this caller. A stored predicate that the
-// registry no longer accepts does not hide the view: its filter dimension is unavailable.
+// registry no longer accepts does not hide the view: its filter dimension is unavailable. The
+// predicate is compiled as running the view does, strictly, so that a field deprecated since
+// saving makes the filter unavailable instead of failing only when the view is run.
 func (a actor) view(record SavedViewRecord) (SavedView, error) {
 	definition, err := ParseDefinition(record.Definition)
 	if err != nil {
 		return SavedView{}, platform.NewFailure(platform.CodeInternalError, err)
 	}
 	filters := definition.FeedFilters()
-	selection, _ := CompileSelection(a.registry, filters.Filter, false)
+	selection, _ := CompileSelection(a.registry, filters.Filter, true)
 	return SavedView{ID: record.ID, Revision: record.Revision, Ownership: record.Ownership, Name: record.Name,
 		Definition: definition, UnavailableFilters: filters.UnavailableDimensions(a.can, selection),
 		CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}, nil

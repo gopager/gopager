@@ -8431,7 +8431,8 @@ components:
         unavailableFilters:
           type: array
           description: Sorted filter dimensions, named like the feed query parameters, whose field group the caller
-            cannot read now. Empty if none.
+            cannot read now; `filter` is also listed when its predicate uses a field that was deprecated or
+            removed since saving. Empty if none.
           items:
             type: string
             enum:
