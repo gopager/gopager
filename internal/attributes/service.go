@@ -174,7 +174,7 @@ func (s *Service) Read(ctx context.Context, proof identity.Proof, key string) (S
 // Create stores a schema at revision 1 with actor-bound command idempotency. The caller needs
 // ManageAction in every Agency of the schema. An existing key is authz.ErrRevisionConflict. An
 // identical replay of the command returns the stored schema as it is now, or authz.ErrNotFound
-// if it was deleted since.
+// if it was deleted since, was re-created under the same key or is no longer visible to the caller.
 func (s *Service) Create(ctx context.Context, proof identity.Proof, command uuid.UUID, input SchemaInput,
 	check func(identity.Authentication) error) (Schema, error) {
 	if command == uuid.Nil {
@@ -201,8 +201,16 @@ func (s *Service) Create(ctx context.Context, proof identity.Proof, command uuid
 			if _, err := receipt.Check(createOperation, fingerprint); err != nil {
 				return err
 			}
-			result, err = s.store.Get(tx.Context(), tx, schema.Key)
-			return err
+			result, err = s.visibleSchema(tx.Context(), tx, who, schema.Key)
+			if err != nil {
+				return err
+			}
+			// The receipt identifies the schema only by key; a schema deleted and created again
+			// under the same key since then is another schema, not this command's result.
+			if !result.CreatedAt.Truncate(time.Microsecond).Equal(receipt.RecordedAt.Truncate(time.Microsecond)) {
+				return authz.ErrNotFound
+			}
+			return nil
 		}
 		schema.Revision, schema.CreatedAt, schema.UpdatedAt = 1, now, now
 		if err := s.store.Insert(tx.Context(), tx, schema, who.principal); err != nil {
