@@ -265,6 +265,17 @@ func (s *Store) CatalogRevision(ctx context.Context, tx platform.TransactionCont
 	return revision, err
 }
 
+// LockCatalog implements attributes.CatalogSource. Deleting a schema updates the catalog row, so
+// it waits for every transaction holding this shared lock.
+func (s *Store) LockCatalog(ctx context.Context, tx platform.TransactionContext) error {
+	executor, err := s.primary.Resolve(tx)
+	if err != nil {
+		return err
+	}
+	_, err = executor.ExecContext(ctx, `SELECT 1 FROM attribute_catalog WHERE id = 1 FOR SHARE`)
+	return err
+}
+
 // requireOneRow reports a statement that matched no row as a revision conflict.
 func requireOneRow(result sql.Result, err error) error {
 	if err != nil {

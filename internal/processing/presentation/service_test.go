@@ -384,3 +384,44 @@ func TestCheckUse(t *testing.T) {
 		t.Fatalf("no authority: %v", err)
 	}
 }
+
+// LockCatalog implements FieldRegistry; the fake has no catalog.
+func (builtinRegistry) LockCatalog(context.Context, platform.TransactionContext) error { return nil }
+
+// lockingRegistry counts catalog locks.
+type lockingRegistry struct {
+	builtinRegistry
+	locks int
+}
+
+func (r *lockingRegistry) LockCatalog(context.Context, platform.TransactionContext) error {
+	r.locks++
+	return nil
+}
+
+// TestLayoutWritesLockTheCatalog expects create and update to lock the Attribute-schema catalog
+// before validating their field references, and reads not to.
+func TestLayoutWritesLockTheCatalog(t *testing.T) {
+	t.Parallel()
+	registry := &lockingRegistry{}
+	authority := authz.Authority{PrincipalID: uuid.NewString(), Revision: 1, Active: true}
+	authority.Grants = []authz.Grant{{ID: uuid.NewString(), SubjectID: authority.PrincipalID, SubjectKind: "principal",
+		Actions: []string{ManageAction}, Scope: authz.Scope{Kind: "all"}}}
+	service, err := NewService(fakeTransactions{}, fakeResolver{identity.Authentication{Authority: authority, Kind: identity.SessionProof}},
+		fakeClock{}, newMemoryStore(), &fakeReceipts{stored: map[[2]uuid.UUID]commands.Receipt{}}, registry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := service.Create(context.Background(), identity.Proof{}, uuid.New(),
+		LayoutInput{Name: "n", Definition: textLayout("text"), Agencies: agencies()}, allow)
+	if err != nil || registry.locks != 1 {
+		t.Fatalf("create: locks=%d err=%v, want 1", registry.locks, err)
+	}
+	if _, err := service.Read(context.Background(), identity.Proof{}, created.ID); err != nil || registry.locks != 1 {
+		t.Fatalf("read: locks=%d err=%v, want still 1", registry.locks, err)
+	}
+	if _, err := service.Update(context.Background(), identity.Proof{}, created.ID, 1,
+		LayoutInput{Name: "m", Definition: textLayout("text"), Agencies: agencies()}, allow); err != nil || registry.locks != 2 {
+		t.Fatalf("update: locks=%d err=%v, want 2", registry.locks, err)
+	}
+}

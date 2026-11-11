@@ -13,6 +13,9 @@ import (
 type FieldRegistry interface {
 	// Registry returns the current registry.
 	Registry(ctx context.Context, tx platform.TransactionContext) (*fields.Registry, error)
+	// LockCatalog holds the Attribute schemas against deletion until the write transaction ends.
+	// Writes that save references call it before validating them; reads never do.
+	LockCatalog(ctx context.Context, tx platform.TransactionContext) error
 }
 
 // CompileSelection checks a predicate against the Message-scope fields of the registry. With

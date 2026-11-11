@@ -122,6 +122,13 @@ func (s *SavedViews) within(ctx context.Context, proof identity.Proof, mutation 
 			if mutation && who.guest {
 				return identity.ErrLoginRequired
 			}
+			if mutation {
+				// Locked before the registry is read, so a concurrent schema deletion cannot
+				// pass its reference check before this write commits.
+				if err := s.registry.LockCatalog(tx.Context(), tx); err != nil {
+					return err
+				}
+			}
 			if who.registry, err = s.registry.Registry(tx.Context(), tx); err != nil {
 				return err
 			}

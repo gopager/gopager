@@ -28,6 +28,14 @@ func NewRegistrySource(catalog CatalogSource) (*RegistrySource, error) {
 	return &RegistrySource{catalog: catalog}, nil
 }
 
+// LockCatalog locks the catalog for the rest of the write transaction tx. A write that saves
+// references to schemas calls it before reading the registry it validates them against, so that
+// a concurrent schema deletion cannot pass its reference check before the write commits. Reads
+// must not call it: the lock fails in read-only transactions and would only add contention.
+func (s *RegistrySource) LockCatalog(ctx context.Context, tx platform.TransactionContext) error {
+	return s.catalog.LockCatalog(ctx, tx)
+}
+
 // Registry returns the registry for the catalog state visible in tx. A registry built from a
 // newer revision than the cached one replaces the cache; an older one (a concurrent reader on an
 // earlier snapshot) is returned without replacing it.

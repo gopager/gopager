@@ -25,6 +25,8 @@ func (c *countingCatalog) CatalogRevision(context.Context, platform.TransactionC
 	return c.revision, nil
 }
 
+func (c *countingCatalog) LockCatalog(context.Context, platform.TransactionContext) error { return nil }
+
 func TestRegistrySourceCachesByRevision(t *testing.T) {
 	t.Parallel()
 	catalog := &countingCatalog{schemas: []Schema{alarmSchema()}, revision: 1}
