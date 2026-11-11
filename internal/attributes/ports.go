@@ -40,4 +40,8 @@ type CatalogSource interface {
 	Catalog(ctx context.Context, tx platform.TransactionContext) ([]Schema, int64, error)
 	// CatalogRevision returns the current catalog revision without loading the schemas.
 	CatalogRevision(ctx context.Context, tx platform.TransactionContext) (int64, error)
+	// LockCatalog holds the catalog against schema changes for the rest of the write transaction
+	// tx, shared with other writers. A schema deletion waits for it and then re-checks its
+	// references. It fails in a read-only transaction.
+	LockCatalog(ctx context.Context, tx platform.TransactionContext) error
 }

@@ -10,6 +10,7 @@ import (
 	"io"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -275,6 +276,11 @@ func (v Value) native(schema FieldSchema, depth int, decodedBytes *int) (any, er
 		if err != nil || math.IsNaN(native) || math.IsInf(native, 0) {
 			return nil, invalid(errors.New("nonfinite processing number"))
 		}
+		// A nonzero literal that rounds to zero underflows; PostgreSQL rejects it when the
+		// stored text is cast, so it is rejected here, where all typed values are checked.
+		if native == 0 && nonzeroMantissa(string(number)) {
+			return nil, invalid(errors.New("processing number underflows"))
+		}
 		return native, nil
 	case ObjectValue:
 		var properties map[string]Value
@@ -387,4 +393,12 @@ func Literal(kind ValueKind, value any) (Value, error) {
 		return Value{}, resource(errors.New("processing literal boundary"))
 	}
 	return Value{Kind: kind, Value: encoded}, nil
+}
+
+// nonzeroMantissa reports whether the significand of a JSON number literal has a nonzero digit.
+func nonzeroMantissa(literal string) bool {
+	if i := strings.IndexAny(literal, "eE"); i >= 0 {
+		literal = literal[:i]
+	}
+	return strings.ContainsAny(literal, "123456789")
 }

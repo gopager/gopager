@@ -193,3 +193,21 @@ func TestProjectionStoresLongStringsAndPrefiltersThemByDigest(t *testing.T) {
 		}
 	}
 }
+
+// TestProjectionAcceptsBoundaryNumbers expects the smallest and largest finite numbers that typed
+// values accept to be projected, so that publication never fails on a value evaluation accepted.
+func TestProjectionAcceptsBoundaryNumbers(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	agency := w.agency("county")
+	unit := w.unit(agency, "A", nil)
+	network := w.network(agency, "N", "pocsag")
+	message := w.message(base, "text", "alarm")
+	transmission := w.assigned(message, network, unit, agency, base, "")
+	workflow, version := w.workflow()
+	result := w.result(transmission, workflow, version, message, base, `["derived"]`,
+		untargeted(fieldsOf("incident", entry("tiny", "number", `1e-310`), entry("huge", "number", `1.7e308`))))
+	if got := w.projectedRows(result); len(got) != 2 {
+		t.Fatalf("projected rows = %v, want two", got)
+	}
+}

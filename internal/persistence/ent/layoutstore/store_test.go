@@ -420,3 +420,6 @@ func seedCollection(t *testing.T, store *postgres.Store, unit uuid.UUID) uuid.UU
 	}
 	return id
 }
+
+// LockCatalog implements FieldRegistry; the fake has no catalog.
+func (builtinFields) LockCatalog(context.Context, platform.TransactionContext) error { return nil }

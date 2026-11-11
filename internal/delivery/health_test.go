@@ -128,3 +128,6 @@ func TestHealthCheckIgnoresAMissingLayout(t *testing.T) {
 		t.Fatalf("an infrastructure error must not become a health reason, got %v", err)
 	}
 }
+
+// LockCatalog implements FieldRegistry; the fake has no catalog.
+func (r fixedRegistry) LockCatalog(context.Context, platform.TransactionContext) error { return nil }

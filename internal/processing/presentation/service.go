@@ -48,6 +48,9 @@ type Service struct {
 // FieldRegistry supplies the field registry visible in a transaction.
 type FieldRegistry interface {
 	Registry(ctx context.Context, tx platform.TransactionContext) (*fields.Registry, error)
+	// LockCatalog holds the Attribute schemas against deletion until the write transaction ends.
+	// Writes that save references call it before validating them; reads never do.
+	LockCatalog(ctx context.Context, tx platform.TransactionContext) error
 }
 
 // NewService composes the layout service. fields supplies the registry whose Delivery fields a
@@ -130,6 +133,10 @@ func canonical(name string, definition processing.Layout) ([]byte, processing.La
 // checkFields requires every field a layout references to exist in the current registry's
 // Delivery scope and not to be deprecated.
 func (s *Service) checkFields(ctx context.Context, tx platform.TransactionContext, layout processing.Layout) error {
+	// Locking first keeps a schema from being deleted between this check and the commit.
+	if err := s.fields.LockCatalog(ctx, tx); err != nil {
+		return err
+	}
 	registry, err := s.fields.Registry(ctx, tx)
 	if err != nil {
 		return err

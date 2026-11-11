@@ -18,6 +18,9 @@ import (
 // place that declares which fields filters and Layouts may read.
 type FieldRegistry interface {
 	Registry(ctx context.Context, tx platform.TransactionContext) (*fields.Registry, error)
+	// LockCatalog holds the Attribute schemas against deletion until the write transaction ends.
+	// Writes that save references call it before validating them; reads never do.
+	LockCatalog(ctx context.Context, tx platform.TransactionContext) error
 }
 
 // Layouts resolves Layouts for rendering and decides whether an authority may choose one.

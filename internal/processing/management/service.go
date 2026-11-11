@@ -673,6 +673,9 @@ func (s *Service) ActivateVersion(ctx context.Context, proof identity.Proof, par
 		if err := authorizeReferences(authority, references); err != nil {
 			return err
 		}
+		if err := s.authorizeNewOutputs(tx, authority, "workflow.activate", parent, definition, now); err != nil {
+			return err
+		}
 		current.ActiveVersionID = &version
 		if err := s.repository.SaveWorkflow(tx.Context(), tx, authority, "workflow.activate", current, expected, now); err != nil {
 			return err

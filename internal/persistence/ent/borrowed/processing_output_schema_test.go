@@ -188,3 +188,48 @@ func TestProcessingDeletedAndRecreatedSchemaIsANewReference(t *testing.T) {
 		t.Fatalf("referencing a re-created schema of Agency B only: %v, want FORBIDDEN", err)
 	}
 }
+
+// TestProcessingActivationOfAVersionOfARecreatedSchemaIsAuthorized expects an inactive version
+// saved against a schema of Agency A to be refused activation for an author of Agency A once the
+// schema was deleted and re-created for Agency B only: the version predates the current schema.
+func TestProcessingActivationOfAVersionOfARecreatedSchemaIsAuthorized(t *testing.T) {
+	t.Parallel()
+	f := newMatcherFixture(t)
+	service, _ := newProcessingManagementFixture(t, f, &processingPreparationFixture{}, f.facts)
+	fields := map[string]attributes.Field{"out": {Kind: processing.BooleanValue},
+		"text": {Kind: processing.StringValue}, "mode": {Kind: processing.StringValue}}
+	attributeschemas.Insert(t, f.store, "test", fields)
+	actions := []string{"workflow.read", "workflow.create", "workflow.update", "workflow.activate"}
+	replaceManagementGrants(t, f, []authz.Grant{{Actions: actions,
+		Scope: authz.Scope{Kind: "agency", References: []string{f.agencies[0].String()}}}})
+	created, err := service.CreateWorkflow(t.Context(), f.proof, uuid.New(),
+		processingMetadataFixture("activation-recreated", f.agencyScope()), checkedMutation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	truth, err := processing.Literal(processing.BooleanValue, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writing := preparedProcessingDefinition(t)
+	writing.Outputs = map[string]map[string]processing.Assignment{"test": {"out": {Literal: &truth}}}
+	saved, err := service.SaveVersion(t.Context(), f.proof, uuid.New(), created.ID, 1, writing, checkedMutation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := f.store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		_, err = executor.ExecContext(tx.Context(), `DELETE FROM attribute_schemas WHERE key = 'test'`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	attributeschemas.Insert(t, f.store, "test", fields)
+	setSchemaAgencies(t, f, "test", f.agencies[1])
+	if _, err := service.ActivateVersion(t.Context(), f.proof, created.ID, saved.ID, saved.Revision, checkedMutation); !errors.Is(err, authz.ErrForbidden) {
+		t.Fatalf("activating a version of a re-created schema of Agency B only: %v, want FORBIDDEN", err)
+	}
+}

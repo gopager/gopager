@@ -426,6 +426,9 @@ func (s *Subscriptions) apply(ctx context.Context, tx platform.TransactionContex
 			return err
 		}
 	}
+	if err := s.deps.Fields.LockCatalog(ctx, tx); err != nil {
+		return err
+	}
 	check, err := compileSelection(ctx, tx, s.deps, selection{filter: input.Filter, layoutID: input.LayoutID,
 		splitByUnit: input.SplitByUnit})
 	var failure *fault
