@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
+	"github.com/gopager/gopager/internal/persistence/ent/processingstore"
 	"github.com/gopager/gopager/internal/readmodel"
 )
 
@@ -23,7 +24,8 @@ func (w *world) workflow() (workflow, version uuid.UUID) {
 
 // result publishes a Processing result of a Transmission with its stored field groups, a JSON
 // array; evaluation must be a valid result document. The Workflow version's definition is
-// deliberately not a compilable one: visibility must not depend on it.
+// deliberately not a compilable one: visibility must not depend on it. Its attribute values are
+// projected as publication does.
 func (w *world) result(transmission, workflow, version uuid.UUID, message uuid.UUID, published time.Time, groups, evaluation string) uuid.UUID {
 	candidate, result := uuid.New(), uuid.New()
 	w.serial++
@@ -32,6 +34,7 @@ func (w *world) result(transmission, workflow, version uuid.UUID, message uuid.U
 		VALUES ($1, $2, $3, $4, 1, 1, $5, 1, 'completed', true, $6, $6, $6)`, candidate, transmission, workflow, version, w.serial, base)
 	w.exec(`INSERT INTO processing_results (id, candidate_id, producing_fence, evaluation, field_groups, completed_at, published_at, message_id)
 		VALUES ($1, $2, 1, $3::jsonb, $4::jsonb, $5, $5, $6)`, result, candidate, evaluation, groups, published, message)
+	w.exec(processingstore.ProjectAttributeValuesSQL, []uuid.UUID{result})
 	return result
 }
 

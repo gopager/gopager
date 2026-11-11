@@ -150,9 +150,20 @@ func (b *feedBuilder) pageCTE() string {
 	}
 	conditions = append(conditions, `EXISTS (SELECT 1 FROM message_units mu LEFT JOIN units u ON u.id = mu.unit_id
 		WHERE mu.message_id = m.id AND `+b.eligible("mu")+b.appearanceFilters()+`)`)
-	where := strings.Join(conditions, "\n\t\tAND ") + b.selectionFilter()
+	narrowing, exact := b.selectionFilter()
+	where := strings.Join(conditions, "\n\t\tAND ")
+	source := "messages m"
+	if narrowing != "" {
+		// The fence makes the planner apply the cheap indexed prefilter before the exact check,
+		// which it would otherwise run first on every Message the prefilter lets through.
+		source = "(SELECT m.* FROM messages m WHERE " + where + " AND " + narrowing + " OFFSET 0) m"
+		where = "true"
+	}
+	if exact != "" {
+		where += " AND " + exact
+	}
 	return `page AS (
-	SELECT m.id, m.first_observed_at FROM messages m
+	SELECT m.id, m.first_observed_at FROM ` + source + `
 	WHERE ` + where + `
 	ORDER BY m.first_observed_at DESC, m.id DESC` + limit + `)`
 }
