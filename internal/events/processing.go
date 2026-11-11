@@ -75,8 +75,9 @@ type ProcessingCompletionFact struct {
 	CausationID         *uuid.UUID
 	CorrelationID       *uuid.UUID
 	Historical          bool
-	OutputSchema        map[string]processing.FieldSchema
-	Result              processing.Evaluation
+	// Outputs declares the Attribute fields the result may hold, as current at publication.
+	Outputs processing.Declarations
+	Result  processing.Evaluation
 }
 
 // ProcessingEnvelope is the common versioned event envelope used for processing
@@ -156,10 +157,10 @@ func (f ProcessingCompletionFact) Envelope(recorded time.Time) (ProcessingEnvelo
 	}
 	if f.TransmissionID == uuid.Nil || f.MessageID == uuid.Nil || !validMessageTime(f.MessageTime) || f.WorkflowID == uuid.Nil || f.DefinitionVersionID == uuid.Nil ||
 		f.ResultID == uuid.Nil || f.SourceRevision <= 0 || f.ContextRevision <= 0 || !f.Result.Selected ||
-		(f.Result.Fields == nil) == (len(f.Result.TargetResults) == 0) || f.OutputSchema == nil {
+		(f.Result.Fields == nil) == (len(f.Result.TargetResults) == 0) || f.Outputs == nil {
 		return ProcessingEnvelope{}, processingInvalid(errors.New("incomplete Processing publication fact"))
 	}
-	if err := processing.ValidateEvaluation(f.Result, f.OutputSchema, processing.EvaluationBinding{
+	if err := processing.ValidateEvaluation(f.Result, f.Outputs, processing.EvaluationBinding{
 		TransmissionID: f.TransmissionID, SourceRevision: f.SourceRevision,
 		ContextRevision: f.ContextRevision, TargetLimit: processing.MaxArguments,
 	}); err != nil {

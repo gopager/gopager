@@ -55,8 +55,8 @@ func TestBytesEvaluationEncodedOutputExactBoundary(t *testing.T) {
 	t.Parallel()
 	binary, _ := Literal(BytesValue, []byte{})
 	padding, _ := Literal(StringValue, "")
-	result := Evaluation{Selected: true, Fields: map[string]FieldValue{
-		"binary": {State: FieldPresent, Value: &binary}, "padding": {State: FieldPresent, Value: &padding}}}
+	result := Evaluation{Selected: true, Fields: map[string]map[string]FieldValue{testOutputSchemaKey: {
+		"binary": {State: FieldPresent, Value: &binary}, "padding": {State: FieldPresent, Value: &padding}}}}
 	base, err := json.Marshal(result)
 	if err != nil {
 		t.Fatal(err)
@@ -71,7 +71,7 @@ func TestBytesEvaluationEncodedOutputExactBoundary(t *testing.T) {
 	}
 	paddingSize := MaxOutputBytes - len(encoded)
 	binding := EvaluationBinding{TransmissionID: uuid.New(), SourceRevision: 1, ContextRevision: 1}
-	schema := map[string]FieldSchema{"binary": {Kind: BytesValue}, "padding": {Kind: StringValue}}
+	schema := testOutputs
 	for _, extra := range []int{0, 1} {
 		padding, err = Literal(StringValue, strings.Repeat("x", paddingSize+extra))
 		if err != nil {

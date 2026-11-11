@@ -144,8 +144,8 @@ func TestProcessingWorkflowHTTPRequiresCurrentCSRFAndUsesSyntheticDeclarations(t
 		t.Fatal(err)
 	}
 	definition := processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "eq", Field: &field, Value: &expectedProtocol},
-		OutputSchema: map[string]processing.FieldSchema{}, Outputs: map[string]processing.Assignment{}}
+		Selector: processing.Predicate{Op: "eq", Field: &field, Value: &expectedProtocol},
+		Outputs:  map[string]map[string]processing.Assignment{}}
 	versionInput, err := json.Marshal(workflowVersionMutation{SchemaVersion: 1,
 		CommandID: uuid.New(), ExpectedRevision: 2, Definition: definition})
 	if err != nil {

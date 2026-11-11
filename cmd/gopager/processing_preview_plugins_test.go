@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/attributes"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/persistence/ent/identitystore"
 	"github.com/gopager/gopager/internal/persistence/ent/unitstore"
@@ -17,6 +18,7 @@ import (
 	processingmanagement "github.com/gopager/gopager/internal/processing/management"
 	"github.com/gopager/gopager/internal/processing/synthetic"
 	"github.com/gopager/gopager/internal/protocols"
+	"github.com/gopager/gopager/internal/testutil/attributeschemas"
 )
 
 func TestProcessingSyntheticPreviewUsesProductionNetworkOwner(t *testing.T) {
@@ -218,6 +220,7 @@ func TestProcessingSyntheticPreviewUsesOnlyPreviewSupportingInstalledPlugins(t *
 		t.Fatal(err)
 	}
 	textField := processing.FieldRef{Namespace: "source", Path: []string{"payload", "text", "value"}}
+	attributeschemas.Insert(t, store, "plugin", map[string]attributes.Field{"text": {Kind: processing.StringValue}})
 	definition := processing.Definition{SchemaVersion: 1,
 		Selector: processing.Predicate{Op: "eq", Field: &protocolField, Value: &pocsag},
 		Steps: []processing.Step{{
@@ -225,10 +228,9 @@ func TestProcessingSyntheticPreviewUsesOnlyPreviewSupportingInstalledPlugins(t *
 			Installed: &processing.InstalledStep{InstanceID: instanceID, ConfigurationRevision: 1,
 				Input: map[string]processing.Assignment{"text": {Field: &textField}}},
 		}},
-		OutputSchema: map[string]processing.FieldSchema{"text": {Kind: processing.StringValue}},
-		Outputs: map[string]processing.Assignment{"text": {Field: &processing.FieldRef{
+		Outputs: map[string]map[string]processing.Assignment{"plugin": {"text": {Field: &processing.FieldRef{
 			Namespace: "step", Path: []string{"command", "text"},
-		}}}}
+		}}}}}
 	syntheticInput := synthetic.Input{SchemaVersion: 1, Protocol: protocols.POCSAG, Form: "text",
 		NetworkID: networkID, Payload: json.RawMessage(`{"value":"installed preview"}`),
 		Targets: []protocols.Target{}}
@@ -281,8 +283,8 @@ func TestProcessingSyntheticPreviewUsesOnlyPreviewSupportingInstalledPlugins(t *
 	if err := json.Unmarshal(response.Data, &evaluation); err != nil || !evaluation.Selected {
 		t.Fatalf("installed preview failed: %+v, %s, error=%v", evaluation, response.Data, err)
 	}
-	if evaluation.Fields["text"].Value == nil ||
-		string(evaluation.Fields["text"].Value.Value) != `"PREVIEW:installed preview"` {
+	if evaluation.Fields["plugin"]["text"].Value == nil ||
+		string(evaluation.Fields["plugin"]["text"].Value.Value) != `"PREVIEW:installed preview"` {
 		t.Fatalf("preview mode did not reach the plugin: %s", response.Data)
 	}
 	missing := managementRequest(t, client, origin, http.MethodPost,

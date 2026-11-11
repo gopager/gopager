@@ -74,8 +74,8 @@ func sourceProtocolPreviewDefinition(t *testing.T) processing.Definition {
 		})
 	}
 	return processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "or", Args: arguments},
-		OutputSchema: map[string]processing.FieldSchema{}, Outputs: map[string]processing.Assignment{}}
+		Selector: processing.Predicate{Op: "or", Args: arguments},
+		Outputs:  map[string]map[string]processing.Assignment{}}
 }
 
 func unitTargetPreviewDefinition(t *testing.T, unitID uuid.UUID) processing.Definition {
@@ -86,9 +86,8 @@ func unitTargetPreviewDefinition(t *testing.T, unitID uuid.UUID) processing.Defi
 		t.Fatal(err)
 	}
 	return processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "eq", Field: &field, Value: &expected},
-		OutputSchema: map[string]processing.FieldSchema{"unit": {Kind: processing.StringValue, Optional: true}},
-		Outputs:      map[string]processing.Assignment{"unit": {Field: &field}}}
+		Selector: processing.Predicate{Op: "eq", Field: &field, Value: &expected},
+		Outputs:  map[string]map[string]processing.Assignment{"unit-ref": {"unit": {Field: &field}}}}
 }
 
 func binarySourcePreviewDefinition(t *testing.T) processing.Definition {
@@ -99,8 +98,8 @@ func binarySourcePreviewDefinition(t *testing.T) processing.Definition {
 		t.Fatal(err)
 	}
 	return processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "eq", Field: &field, Value: &expected},
-		OutputSchema: map[string]processing.FieldSchema{}, Outputs: map[string]processing.Assignment{}}
+		Selector: processing.Predicate{Op: "eq", Field: &field, Value: &expected},
+		Outputs:  map[string]map[string]processing.Assignment{}}
 }
 
 func syntheticPreviewInputs(networks map[uuid.UUID]synthetic.Network) []synthetic.Input {

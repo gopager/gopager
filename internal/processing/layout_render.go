@@ -20,6 +20,7 @@ type layoutItem struct {
 	kind     string
 	text     string
 	label    string
+	icon     string
 	title    string
 	url      string
 	value    *Value
@@ -28,7 +29,7 @@ type layoutItem struct {
 
 // heldSize is what the renderer holds for the item, whatever the output kind emits of it.
 func (i layoutItem) heldSize() int {
-	size := len(i.label) + len(i.title) + len(i.url) + len(i.text)
+	size := len(i.label) + len(i.icon) + len(i.title) + len(i.url) + len(i.text)
 	if i.value != nil {
 		size += len(i.value.Value)
 	}
@@ -40,7 +41,7 @@ func (i layoutItem) heldSize() int {
 // never both. The serializer checks the exact length.
 func (i layoutItem) size(json bool) int {
 	if json {
-		size := len(i.label) + len(i.title) + len(i.url)
+		size := len(i.label) + len(i.icon) + len(i.title) + len(i.url)
 		if i.value != nil {
 			return size + len(i.value.Value)
 		}
@@ -167,7 +168,7 @@ func (r *layoutRenderer) block(node layoutNode) ([]layoutItem, error) {
 		if err != nil {
 			return nil, err
 		}
-		return r.emit(layoutItem{kind: node.kind, label: node.label, text: formatted, value: value})
+		return r.emit(layoutItem{kind: node.kind, label: node.label, icon: node.icon, text: formatted, value: value})
 	case blockLink:
 		target, err := r.link(node)
 		if err != nil || target == "" {

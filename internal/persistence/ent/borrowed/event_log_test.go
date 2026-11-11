@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/gopager/gopager/internal/events"
+	"github.com/gopager/gopager/internal/fields"
 	"github.com/gopager/gopager/internal/persistence/ent"
 	"github.com/gopager/gopager/internal/persistence/ent/borrowed"
 	"github.com/gopager/gopager/internal/persistence/ent/eventstore"
@@ -142,8 +143,8 @@ func TestEventLogAllProducersAreAtomic(t *testing.T) {
 				ID: id, WorkflowID: uuid.New(), ResultID: uuid.New(), ResultRevision: 1,
 				TransmissionID: uuid.New(), MessageID: uuid.New(), MessageTime: now, DefinitionVersionID: uuid.New(),
 				SourceRevision: 1, ContextRevision: 1, OccurredAt: now,
-				OutputSchema: map[string]processing.FieldSchema{},
-				Result:       processing.Evaluation{Selected: true, Fields: map[string]processing.FieldValue{}},
+				Outputs: fields.New().Declarations(fields.ScopeMessage, false),
+				Result:  processing.Evaluation{Selected: true, Fields: map[string]map[string]processing.FieldValue{}},
 			})
 		},
 	}

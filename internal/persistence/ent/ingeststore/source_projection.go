@@ -13,6 +13,7 @@ import (
 	"github.com/gopager/gopager/internal/assignments"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
+	"github.com/gopager/gopager/internal/processing/declarations"
 	"github.com/gopager/gopager/internal/protocols"
 	"github.com/gopager/gopager/internal/units"
 )
@@ -50,16 +51,13 @@ func projectProcessingSource(ctx context.Context, transmission uuid.UUID, networ
 	if err != nil {
 		return processing.SourceProjection{}, err
 	}
-	declarations, err := processing.NewSyntheticDeclarationOwner().ProcessingDeclarations(ctx)
-	if err != nil {
-		return processing.SourceProjection{}, err
-	}
-	for _, reference := range processing.SyntheticSourceDeclarationRefs() {
+	declared := declarations.Builtin()
+	for _, reference := range declarations.BuiltinSourceRefs() {
 		switch strings.Join(reference.Path, ".") {
 		case "protocol", "form", "subtype", "observedAt", "network.id", "network.name":
 			continue
 		}
-		schema, err := declarations.FieldSchema(reference)
+		schema, err := declared.FieldSchema(reference)
 		if err != nil {
 			return processing.SourceProjection{}, err
 		}

@@ -11,11 +11,14 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/assignments"
+	"github.com/gopager/gopager/internal/attributes"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/events"
+	"github.com/gopager/gopager/internal/persistence/ent/attributestore"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
 	"github.com/gopager/gopager/internal/processing"
+	"github.com/gopager/gopager/internal/processing/declarations"
 	processingmanagement "github.com/gopager/gopager/internal/processing/management"
 	"github.com/gopager/gopager/internal/processing/publication"
 	"github.com/gopager/gopager/internal/processing/worker"
@@ -41,6 +44,8 @@ type ProcessingSourceOwner struct {
 	executions  *processing.InstanceExecutions
 	principals  processing.ExecutionPrincipalResolver
 	publication *publication.Service
+	// registries yields the field registry of the catalog visible in a transaction.
+	registries *attributes.RegistrySource
 }
 
 type sourceSnapshot struct {
@@ -89,7 +94,15 @@ func NewProcessingSourceOwner(store *Store, matcher *assignments.Service, reposi
 		artifacts == nil || executions == nil || principals == nil {
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing Processing source owner dependency"))
 	}
-	owner := &ProcessingSourceOwner{store: store, matcher: matcher, repository: repository,
+	catalog, err := attributestore.New(store.primary)
+	if err != nil {
+		return nil, err
+	}
+	registries, err := attributes.NewRegistrySource(catalog)
+	if err != nil {
+		return nil, err
+	}
+	owner := &ProcessingSourceOwner{registries: registries, store: store, matcher: matcher, repository: repository,
 		facts: facts, clock: clock, artifacts: artifacts, executions: executions, principals: principals}
 	publisher, err := publication.New(repository, owner, facts, clock)
 	if err != nil {
@@ -141,6 +154,10 @@ func (o *ProcessingSourceOwner) CaptureCandidate(ctx context.Context, tx platfor
 	if err != nil {
 		return worker.Capture{}, err
 	}
+	registry, err := o.registries.Registry(ctx, tx)
+	if err != nil {
+		return worker.Capture{}, err
+	}
 	scope, err := o.evaluationScope(ctx, tx, *selected, snapshot)
 	if err != nil {
 		return worker.Capture{}, err
@@ -150,7 +167,8 @@ func (o *ProcessingSourceOwner) CaptureCandidate(ctx context.Context, tx platfor
 	if err != nil {
 		return worker.Capture{}, err
 	}
-	return worker.Capture{Definition: definition, Source: snapshot.captured, Scope: scope,
+	return worker.Capture{Definition: definition, Source: snapshot.captured,
+		Outputs: declarations.For(registry, false).Outputs, Scope: scope,
 		Artifacts: o.artifacts, Invocations: run, Release: func() error {
 			return run.Close(context.Background())
 		}}, nil

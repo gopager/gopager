@@ -68,7 +68,11 @@ func (s *Store) ReadPublicationItem(ctx context.Context, tx platform.Transaction
 	if err != nil {
 		return processing.PublicationItem{}, err
 	}
-	item := processing.PublicationItem{Candidate: candidate, Definition: version.Definition}
+	outputs, err := s.outputDeclarations(ctx, tx)
+	if err != nil {
+		return processing.PublicationItem{}, err
+	}
+	item := processing.PublicationItem{Candidate: candidate, Definition: version.Definition, Outputs: outputs}
 	if candidate.State != "completed" || candidate.Selected == nil || !*candidate.Selected {
 		return item, nil
 	}
@@ -120,7 +124,7 @@ func (s *Store) ApplyPublicationItem(ctx context.Context, tx platform.Transactio
 	if err != nil {
 		return err
 	}
-	if err := processing.ValidateEvaluation(item.Result.Evaluation, item.Definition.OutputSchema, processing.EvaluationBinding{
+	if err := processing.ValidateEvaluation(item.Result.Evaluation, item.Outputs, processing.EvaluationBinding{
 		TransmissionID: binding.Source.TransmissionID, SourceRevision: binding.Source.SourceRevision,
 		ContextRevision: binding.Source.ContextRevision, TargetLimit: binding.Source.OriginalTargetCount,
 	}); err != nil {

@@ -37,6 +37,9 @@ type PublicationItem struct {
 	Candidate  Candidate
 	Definition Definition
 	Result     *PrivateResult
+	// Outputs declares the Attribute fields a result may hold, as current in the reading
+	// transaction. It is not part of the stored evidence.
+	Outputs Declarations `json:"-"`
 }
 
 // Publishable reports whether the item holds a completed selected result that has not been

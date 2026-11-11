@@ -30,7 +30,7 @@ func TestInstalledAuthorizationIsNotChargedToTheBuiltinComputeAllowance(t *testi
 	owner := &deadlineProbeOwner{installedOwnerFixture: newInstalledOwnerFixture(t)}
 	_, source := sourceFixture(t)
 	definition := installedDefinition(owner.installedOwnerFixture, "ok", FieldRef{Namespace: "source", Path: []string{"text"}})
-	program, err := CompileWorkflowInstalled(context.Background(), definition, source, nil, owner)
+	program, err := CompileWorkflowInstalled(context.Background(), definition, source, testOutputs, nil, owner)
 	if err != nil {
 		t.Fatal(err)
 	}

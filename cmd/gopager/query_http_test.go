@@ -378,9 +378,8 @@ func TestMessageDerivedClassificationOverHTTP(t *testing.T) {
 	name := processing.FieldRef{Namespace: "source", Path: []string{"network", "name"}}
 	pocsag := processing.Value{Kind: processing.StringValue, Value: json.RawMessage(`"pocsag"`)}
 	definition, err := json.Marshal(processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "eq", Field: &protocol, Value: &pocsag},
-		OutputSchema: map[string]processing.FieldSchema{"network": {Kind: processing.StringValue}},
-		Outputs:      map[string]processing.Assignment{"network": {Field: &name}}})
+		Selector: processing.Predicate{Op: "eq", Field: &protocol, Value: &pocsag},
+		Outputs:  map[string]map[string]processing.Assignment{"info": {"network": {Field: &name}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,7 +394,7 @@ func TestMessageDerivedClassificationOverHTTP(t *testing.T) {
 		candidate, workflow, version, message)
 	f.exec(`INSERT INTO processing_results (id, candidate_id, producing_fence, evaluation, field_groups, completed_at, published_at, message_id)
 		VALUES ($1, $2, 1, $3::jsonb, '["derived","gateway","payload"]'::jsonb, now(), now(), $4)`, uuid.New(), candidate,
-		`{"selected":true,"fields":{"network":{"state":"present","value":{"kind":"string","value":"Net"}}}}`, message)
+		`{"selected":true,"fields":{"info":{"network":{"state":"present","value":{"kind":"string","value":"Net"}}}}}`, message)
 	read := []string{"message.read"}
 	everything := authz.Scope{Kind: "all"}
 	complete, _ := f.caller(read, everything, []string{"payload", "gateway", "derived"})

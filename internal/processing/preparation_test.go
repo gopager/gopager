@@ -13,8 +13,8 @@ type fixedDeclarationOwner struct {
 	err          error
 }
 
-func (o fixedDeclarationOwner) ProcessingDeclarations(context.Context) (Declarations, error) {
-	return o.declarations, o.err
+func (o fixedDeclarationOwner) ProcessingDeclarations(context.Context) (DeclarationSet, error) {
+	return DeclarationSet{Source: o.declarations, Outputs: testOutputs}, o.err
 }
 
 type fixedDeclarations map[string]FieldSchema

@@ -8,18 +8,21 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/attributes"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/persistence/ent/identitystore"
 	"github.com/gopager/gopager/internal/persistence/ent/unitstore"
 	"github.com/gopager/gopager/internal/processing"
 	"github.com/gopager/gopager/internal/processing/synthetic"
 	"github.com/gopager/gopager/internal/protocols"
+	"github.com/gopager/gopager/internal/testutil/attributeschemas"
 )
 
 // TestProcessingSaveAndDraftPreviewRejectUnreadableFieldGroups pins save-time field
 // validation over HTTP: an author who may read only the gateway group can save and preview a
 // definition that reads gateway fields, but a selector or output that references a payload
 // field is rejected with INVALID_INPUT, both on save and on the preview of an unsaved draft.
+// Outputs into an unknown Attribute schema or a deprecated field are rejected on save too.
 func TestProcessingSaveAndDraftPreviewRejectUnreadableFieldGroups(t *testing.T) {
 	t.Parallel()
 	store := newManagementStoreWithFields(t, []string{"gateway"})
@@ -79,15 +82,20 @@ func TestProcessingSaveAndDraftPreviewRejectUnreadableFieldGroups(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	attributeschemas.Insert(t, store, "info", map[string]attributes.Field{"protocol": {Kind: processing.StringValue},
+		"old": {Kind: processing.StringValue, Deprecated: true}})
 	readable := processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "eq", Field: &gatewayField, Value: &name},
-		OutputSchema: map[string]processing.FieldSchema{}, Outputs: map[string]processing.Assignment{}}
+		Selector: processing.Predicate{Op: "eq", Field: &gatewayField, Value: &name},
+		Outputs:  map[string]map[string]processing.Assignment{}}
 	bySelector := processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "eq", Field: &payloadField, Value: &protocol},
-		OutputSchema: map[string]processing.FieldSchema{}, Outputs: map[string]processing.Assignment{}}
+		Selector: processing.Predicate{Op: "eq", Field: &payloadField, Value: &protocol},
+		Outputs:  map[string]map[string]processing.Assignment{}}
 	byOutput := readable
-	byOutput.OutputSchema = map[string]processing.FieldSchema{"protocol": {Kind: processing.StringValue}}
-	byOutput.Outputs = map[string]processing.Assignment{"protocol": {Field: &payloadField}}
+	byOutput.Outputs = map[string]map[string]processing.Assignment{"info": {"protocol": {Field: &payloadField}}}
+	unknownSchema := readable
+	unknownSchema.Outputs = map[string]map[string]processing.Assignment{"missing": {"protocol": {Literal: &protocol}}}
+	deprecatedField := readable
+	deprecatedField.Outputs = map[string]map[string]processing.Assignment{"info": {"old": {Literal: &protocol}}}
 	byBranch := readable
 	byBranch.Steps = []processing.Step{{ID: "pick", Kind: "branch",
 		OutputSchema: map[string]processing.FieldSchema{},
@@ -107,6 +115,7 @@ func TestProcessingSaveAndDraftPreviewRejectUnreadableFieldGroups(t *testing.T) 
 	}
 	for name, definition := range map[string]processing.Definition{
 		"selector": bySelector, "output": byOutput, "branch condition": byBranch,
+		"unknown schema": unknownSchema, "deprecated field": deprecatedField,
 	} {
 		rejected := save(definition, http.StatusBadRequest)
 		if rejected.Code != "INVALID_INPUT" {

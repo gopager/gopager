@@ -97,8 +97,8 @@ func TestProcessingSourceOwnerMapsMissingMessageToNotFound(t *testing.T) {
 		t.Fatal(err)
 	}
 	definition := processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "eq", Field: &protocolField, Value: &protocolValue},
-		OutputSchema: map[string]processing.FieldSchema{}, Outputs: map[string]processing.Assignment{}}
+		Selector: processing.Predicate{Op: "eq", Field: &protocolField, Value: &protocolValue},
+		Outputs:  map[string]map[string]processing.Assignment{}}
 	encodedDefinition, err := json.Marshal(definition)
 	if err != nil {
 		t.Fatal(err)

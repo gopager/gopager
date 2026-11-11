@@ -10,9 +10,11 @@ import (
 
 	"entgo.io/ent/entql"
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/attributes"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/persistence/ent"
+	"github.com/gopager/gopager/internal/persistence/ent/attributestore"
 	"github.com/gopager/gopager/internal/persistence/ent/borrowed"
 	"github.com/gopager/gopager/internal/persistence/ent/guard"
 	"github.com/gopager/gopager/internal/persistence/ent/identitystore"
@@ -29,14 +31,26 @@ import (
 // Store persists Processing state: Workflows and their versions and scope references,
 // plugin instances, candidates, results and publication participation. It holds no
 // transaction of its own: every method runs in the caller's active primary transaction.
-type Store struct{ primary *postgres.Store }
+type Store struct {
+	primary *postgres.Store
+	// registries yields the field registry of the catalog visible in a transaction.
+	registries *attributes.RegistrySource
+}
 
 // New binds this owner to the existing primary store, never an independent connection.
 func New(primary *postgres.Store) (*Store, error) {
 	if primary == nil {
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing Processing primary"))
 	}
-	return &Store{primary: primary}, nil
+	catalog, err := attributestore.New(primary)
+	if err != nil {
+		return nil, err
+	}
+	registries, err := attributes.NewRegistrySource(catalog)
+	if err != nil {
+		return nil, err
+	}
+	return &Store{primary: primary, registries: registries}, nil
 }
 
 func (s *Store) client(ctx context.Context, tx platform.TransactionContext, predicates map[string]entql.P, create map[string]bool) (*ent.Client, context.Context, error) {
