@@ -237,6 +237,11 @@ func (v Value) native(schema FieldSchema, depth int, decodedBytes *int) (any, er
 		if err != nil {
 			return nil, invalid(err)
 		}
+		// PostgreSQL has no year zero; such a value would fail every later cast of the stored
+		// value, so it is rejected here, where all typed values are checked.
+		if instant.Year() < 1 || instant.UTC().Year() < 1 {
+			return nil, invalid(errors.New("timestamp before year 1"))
+		}
 		return instant, nil
 	case BytesValue:
 		var encoded string

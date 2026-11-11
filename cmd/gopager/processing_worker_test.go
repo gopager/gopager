@@ -203,6 +203,24 @@ func TestInstalledWorkflowRunsOnProductionWiring(t *testing.T) {
 	if state != "completed" || status != "completed" || published != 1 {
 		t.Fatalf("candidate=%s transmission=%s published results=%d; want completed/completed/1", state, status, published)
 	}
+	// Feed filters find Messages through the value projection, so publication must have written
+	// the published value into it.
+	var projected int
+	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		return executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM message_attribute_values v
+			JOIN processing_results r ON r.id = v.result_id
+			WHERE r.candidate_id = $1 AND v.schema_key = 'plugin' AND v.path = 'text' AND v.text_value IS NOT NULL`,
+			due[0].ID).Scan(&projected)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if projected != 1 {
+		t.Fatalf("published result projected %d values of plugin.text, want 1", projected)
+	}
 	var groups string
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		executor, err := store.Resolve(tx)
