@@ -115,6 +115,7 @@ func TestPredicatesAgreeBetweenSQLAndTheGoEvaluator(t *testing.T) {
 		entry("tags", "list", `[`+value("string", `"x"`)+`,`+value("string", `"y"`)+`]`),
 		entry("ratio", "number", `1.5`), entry("urgent", "boolean", `true`),
 		entry("at", "timestamp", `"2026-11-08T12:00:00Z"`),
+		entry("precise", "timestamp", `"2026-11-08T12:00:00.0000009Z"`),
 		entry("levels", "list", `[`+value("integer", `"1"`)+`,`+value("integer", `"5"`)+`]`),
 		entry("owner", "object", `{"name":`+value("string", `"Ada"`)+`,"age":`+value("integer", `"30"`)+`}`),
 		entry("note", "null", `null`))))
@@ -127,6 +128,7 @@ func TestPredicatesAgreeBetweenSQLAndTheGoEvaluator(t *testing.T) {
 		entry("level", "integer", `"9"`), entry("name", "string", `"brand"`), entry("tags", "list", `[]`),
 		entry("ratio", "number", `2.5`), entry("urgent", "boolean", `false`),
 		entry("at", "timestamp", `"2026-11-08T13:30:00.5Z"`),
+		entry("precise", "timestamp", `"2026-11-08T12:00:00.0000011Z"`),
 		entry("owner", "object", `{"name":`+value("string", `"Bob"`)+`}`),
 		entry("note", "string", `"n"`))))
 	w.result(t2, workflow, version, m2, base.Add(3*time.Minute), groups,
@@ -176,6 +178,11 @@ func TestPredicatesAgreeBetweenSQLAndTheGoEvaluator(t *testing.T) {
 		{"timestamp gt", compare("gt", "attributes.incident.at", "timestamp", `"2026-11-08T12:00:00Z"`), []string{"m2"}},
 		{"timestamp lte", compare("lte", "attributes.incident.at", "timestamp", `"2026-11-08T13:30:00.5Z"`), []string{"m1", "m2"}},
 		{"timestamp in", member("attributes.incident.at", "timestamp", `"2026-11-08T12:00:00Z"`), []string{"m1"}},
+		{"timestamp sub-microsecond eq", compare("eq", "attributes.incident.precise", "timestamp", `"2026-11-08T12:00:00.0000001Z"`), []string{"m1"}},
+		{"timestamp sub-microsecond candidate is truncated", compare("eq", "attributes.incident.precise", "timestamp", `"2026-11-08T12:00:00Z"`), []string{"m1"}},
+		{"timestamp sub-microsecond in", member("attributes.incident.precise", "timestamp", `"2026-11-08T12:00:00.0000004Z"`), []string{"m1"}},
+		{"timestamp sub-microsecond gt", compare("gt", "attributes.incident.precise", "timestamp", `"2026-11-08T12:00:00.0000009Z"`), []string{"m2"}},
+		{"timestamp sub-microsecond lte", compare("lte", "attributes.incident.precise", "timestamp", `"2026-11-08T12:00:00.0000019Z"`), []string{"m1", "m2"}},
 		{"string eq", compare("eq", "attributes.incident.name", "string", `"Brand"`), []string{"m1"}},
 		{"string in", member("attributes.incident.name", "string", `"Brand"`, `"brand"`), []string{"m1", "m2"}},
 		{"string contains", compare("contains", "attributes.incident.name", "string", `"ran"`), []string{"m1", "m2"}},

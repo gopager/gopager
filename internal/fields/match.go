@@ -102,10 +102,25 @@ func satisfies(n Node, candidate any) bool {
 	return false
 }
 
+// TimestampPrecision is the precision of every timestamp comparison. PostgreSQL stores
+// timestamptz in microseconds, so the Go evaluator and the SQL translation must both ignore
+// anything finer, or the same predicate would select different Messages in the feed and in a
+// live or Delivery evaluation.
+const TimestampPrecision = time.Microsecond
+
+// atPrecision truncates a native timestamp to TimestampPrecision and returns any other value
+// unchanged.
+func atPrecision(value any) any {
+	if at, ok := value.(time.Time); ok {
+		return at.Truncate(TimestampPrecision)
+	}
+	return value
+}
+
 func equal(a, b any) bool {
 	if at, ok := a.(time.Time); ok {
 		bt, isTime := b.(time.Time)
-		return isTime && at.Equal(bt)
+		return isTime && at.Truncate(TimestampPrecision).Equal(bt.Truncate(TimestampPrecision))
 	}
 	return a == b
 }
@@ -121,7 +136,7 @@ func compare(a, b any) (order int, ok bool) {
 		return cmpOrdered(av, bv), isFloat
 	case time.Time:
 		bv, isTime := b.(time.Time)
-		return av.Compare(bv), isTime
+		return av.Truncate(TimestampPrecision).Compare(bv.Truncate(TimestampPrecision)), isTime
 	}
 	return 0, false
 }

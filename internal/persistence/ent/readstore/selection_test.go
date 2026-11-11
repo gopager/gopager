@@ -12,15 +12,16 @@ import (
 // testSchemas declares the Message attributes that the predicate tests address.
 func testSchemas() []attributes.Schema {
 	return []attributes.Schema{{Key: "incident", Subject: attributes.SubjectMessage, Fields: map[string]attributes.Field{
-		"level":  {Kind: processing.IntegerValue},
-		"name":   {Kind: processing.StringValue},
-		"city":   {Kind: processing.StringValue},
-		"ratio":  {Kind: processing.NumberValue},
-		"urgent": {Kind: processing.BooleanValue},
-		"at":     {Kind: processing.TimestampValue},
-		"note":   {Kind: processing.StringValue, Nullable: true},
-		"tags":   {Kind: processing.ListValue, Element: &attributes.Field{Kind: processing.StringValue}},
-		"levels": {Kind: processing.ListValue, Element: &attributes.Field{Kind: processing.IntegerValue}},
+		"level":   {Kind: processing.IntegerValue},
+		"name":    {Kind: processing.StringValue},
+		"city":    {Kind: processing.StringValue},
+		"ratio":   {Kind: processing.NumberValue},
+		"urgent":  {Kind: processing.BooleanValue},
+		"at":      {Kind: processing.TimestampValue},
+		"precise": {Kind: processing.TimestampValue},
+		"note":    {Kind: processing.StringValue, Nullable: true},
+		"tags":    {Kind: processing.ListValue, Element: &attributes.Field{Kind: processing.StringValue}},
+		"levels":  {Kind: processing.ListValue, Element: &attributes.Field{Kind: processing.IntegerValue}},
 		"owner": {Kind: processing.ObjectValue, Properties: map[string]attributes.Field{
 			"name": {Kind: processing.StringValue},
 			"age":  {Kind: processing.IntegerValue, Optional: true},

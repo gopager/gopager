@@ -51,7 +51,7 @@ SELECT result_id, transmission_id, schema_key, path, target_position,
 	CASE WHEN x->>'kind' = 'string' THEN x->>'value' END,
 	CASE WHEN x->>'kind' = 'integer' THEN (x->>'value')::bigint END,
 	CASE WHEN x->>'kind' = 'number' THEN (x->>'value')::float8 END,
-	CASE WHEN x->>'kind' = 'timestamp' THEN (x->>'value')::timestamptz END,
+	CASE WHEN x->>'kind' = 'timestamp' THEN regexp_replace(x->>'value', '(\.[0-9]{6})[0-9]+', '\1')::timestamptz END,
 	CASE WHEN x->>'kind' = 'boolean' THEN (x->>'value')::boolean END
 FROM leaves WHERE x->>'kind' IN ('string', 'integer', 'number', 'timestamp', 'boolean')`
 

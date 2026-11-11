@@ -580,7 +580,9 @@ Network of that Agency). The `filter` combines with the other parameters by AND 
 
 **Selection predicate (`filter`).** The value is the [typed predicate](workflows.md#predicates) of
 the Subscription filters (`and`, `or`, `not`, `present`, `eq`, `in`, `lt`, `lte`, `gt`, `gte`,
-`contains`; schema `MessagePredicate`) over these fields:
+`contains`; schema `MessagePredicate`) over these fields. Timestamp comparisons (`eq`, `in`, ordered)
+use microsecond precision: candidates and operands are truncated to microseconds first, so values that
+differ only below a microsecond are equal.
 
 | Field | Type | Group | Source |
 | --- | --- | --- | --- |

@@ -130,6 +130,7 @@ func checkOperands(p processing.Predicate, scalar processing.FieldSchema) ([]any
 			if values[i], err = value.Native(scalar); err != nil {
 				return nil, err
 			}
+			values[i] = atPrecision(values[i])
 		}
 		return values, nil
 	case "eq", "lt", "lte", "gt", "gte", "contains":
@@ -155,7 +156,7 @@ func checkComparison(p processing.Predicate, scalar processing.FieldSchema) ([]a
 	if p.Op == "contains" && value == nil {
 		return nil, invalidInput("contains requires a nonnull string")
 	}
-	return []any{value}, nil
+	return []any{atPrecision(value)}, nil
 }
 
 func isOrdered(kind processing.ValueKind) bool {

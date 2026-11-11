@@ -75,7 +75,17 @@ func decoded(x string, kind processing.ValueKind) string {
 	if kind == processing.StringValue {
 		return x + "->>'value'"
 	}
+	if kind == processing.TimestampValue {
+		return "(" + TruncatedTimestampSQL(x+"->>'value'") + ")"
+	}
 	return "(" + x + "->>'value')::" + sqlType(kind)
+}
+
+// TruncatedTimestampSQL renders the cast of an RFC 3339 text expression to timestamptz after
+// cutting the fraction to microseconds. PostgreSQL would round the text, the Go evaluator
+// truncates, and both must agree (see fields.TimestampPrecision).
+func TruncatedTimestampSQL(text string) string {
+	return `regexp_replace(` + text + `, '(\.[0-9]{6})[0-9]+', '\1')::timestamptz`
 }
 
 // comparison renders the test of a comparison or membership leaf on the candidate column
