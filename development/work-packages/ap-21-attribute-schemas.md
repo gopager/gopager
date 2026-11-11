@@ -45,11 +45,11 @@ None. D-150..D-152 record the user's decisions of 2026-11-10/11.
 
 ## Tasks
 
-- [ ] T092 [AP-21] Implement the Attribute-schema catalog, the field registry, Agency binding of Workflows, Layouts and Attribute schemas, and Workflow outputs into Message attributes.
+- [x] T092 [AP-21] Implement the Attribute-schema catalog, the field registry, Agency binding of Workflows, Layouts and Attribute schemas, and Workflow outputs into Message attributes.
   - **Done when:** schemas validate, change only compatibly and keep their keys; display metadata edits need no new version; Workflows compile only against `message` schemas and persist only Message attributes; Workflow scope `all` is gone and admission follows assigned Agencies and narrowing; managing or reassigning a definition needs the right in every Agency involved; an Agency that is a definition's last Agency cannot be deleted; `attribute-schema.manage` exists and `extension.*` field groups are rejected; processing, delivery and read model use the same registry declarations.
-- [ ] T093 [AP-21] Switch search, live, saved views, Subscriptions and Layouts to registry fields with the typed predicate, effective values with provenance, Layout label/icon defaults and Subscription health.
+- [x] T093 [AP-21] Switch search, live, saved views, Subscriptions and Layouts to registry fields with the typed predicate, effective values with provenance, Layout label/icon defaults and Subscription health.
   - **Done when:** a typed predicate selects the same Messages in the feed as the equivalent Subscription filter matches; unknown or non-filterable paths and unreadable groups are rejected; two Workflows writing one field give one effective value with provenance in feed, detail, Delivery and Layout; target results reach Delivery; a Workflow version change no longer breaks a Subscription; a Layout field without overrides renders its schema label and icon and `text`/`markdown` ignore icons; a Subscription whose filter stops compiling turns `invalid` with its reason and event, and a valid save clears it; the new F-cases pass.
-- [ ] T094 [AP-21] Measure and, where the threshold is met, add the typed projection of effective values, the compiled-predicate cache and the shared Delivery projection.
+- [x] T094 [AP-21] Measure and, where the threshold is met, add the typed projection of effective values, the compiled-predicate cache and the shared Delivery projection.
   - **Done when:** the before/after `EXPLAIN ANALYZE` and query counts are recorded; adopted parts keep all T093 results; parts below the threshold are recorded as not adopted with their numbers.
 
 ## Documentation to Update

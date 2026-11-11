@@ -175,3 +175,4 @@ Add a decision to the ADR file of its topic with status, date, supersession, the
 | D-150 | Attribute schemas replace Workflow output schemas | accepted | 2026-11-11 | [04-processing-and-plugins](04-processing-and-plugins.md#d-150) |
 | D-151 | Agency-bound Workflows, Layouts and Attribute schemas | accepted | 2026-11-11 | [06-identity-and-authorization](06-identity-and-authorization.md#d-151) |
 | D-152 | Field registry, one selection predicate and Subscription health | accepted | 2026-11-11 | [07-query-and-live](07-query-and-live.md#d-152) |
+| D-153 | AP-21 write scope: Workflow selection in the intake store and the health fact store | accepted | 2026-11-11 | [04-processing-and-plugins](04-processing-and-plugins.md#d-153) |
