@@ -336,7 +336,7 @@ Evaluation runs once for the whole source unless the workflow is target-dependen
 
 - The selector and steps run once for each eligible original target position.
 - Positions are never renumbered.
-- Each selected position yields its own field set in `targetResults`.
+- Each selected position yields its own Message-attribute values in `targetResults`.
 
 ```json
 {"selected": true, "fields": {"alerts": {"level": {"state": "present", "value": {"kind": "integer", "value": "7"}}}}}
