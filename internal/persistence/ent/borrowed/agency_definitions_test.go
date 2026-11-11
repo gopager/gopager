@@ -1,8 +1,10 @@
 package borrowed_test
 
 import (
+	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/commands"
@@ -108,5 +110,104 @@ func TestAgencyDeletionKeepsEveryDefinitionAssigned(t *testing.T) {
 	}
 	if n := count(`SELECT count(*) FROM layout_definition_agencies WHERE layout_id = $1`, sharedLayout); n != 1 {
 		t.Fatalf("shared Layout keeps %d Agencies, want 1", n)
+	}
+}
+
+// TestConcurrentAgencyDeletionsKeepTheDefinitionAssigned expects two concurrent deletions of the
+// two only Agencies of one definition to serialize: the second waits for the first, re-checks the
+// committed state and is refused, so the definition keeps one Agency.
+func TestConcurrentAgencyDeletionsKeepTheDefinitionAssigned(t *testing.T) {
+	t.Parallel()
+	f := newMatcherFixture(t)
+	create := func(name string) commands.Result {
+		t.Helper()
+		created, err := f.units.CreateAgency(t.Context(), f.proof, uuid.New(), units.AgencyInput{Name: name}, checkedMutation)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return created
+	}
+	first, second := create("First"), create("Second")
+	layoutID := uuid.New()
+	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := f.store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO layout_definitions (id, revision, name, output_kind, created_by, created_at, updated_at)
+			VALUES ($1, 1, 'l', 'text', $2, now(), now())`, layoutID, uuid.New()); err != nil {
+			return err
+		}
+		for _, agencyID := range []uuid.UUID{first.ID, second.ID} {
+			if _, err := executor.ExecContext(tx.Context(), `INSERT INTO layout_definition_agencies (layout_id, agency_id) VALUES ($1, $2)`, layoutID, agencyID); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	remove := func(tx platform.TransactionContext, target commands.Result) error {
+		authentication, err := f.resolver.Resolve(tx.Context(), tx, f.proof)
+		if err != nil {
+			return err
+		}
+		now, err := f.store.Now(tx.Context(), tx)
+		if err != nil {
+			return err
+		}
+		return f.unitStore.DeleteAgency(tx.Context(), tx, authentication.Authority, units.Agency{ID: target.ID, Revision: target.Revision}, now)
+	}
+
+	deleted := make(chan struct{})
+	commit := make(chan struct{})
+	firstDone := make(chan error, 1)
+	go func() {
+		firstDone <- f.store.WithinTransaction(context.Background(), func(tx platform.TransactionContext) error {
+			if err := remove(tx, first); err != nil {
+				return err
+			}
+			close(deleted)
+			<-commit
+			return nil
+		})
+	}()
+	select {
+	case <-deleted:
+	case err := <-firstDone:
+		t.Fatalf("first deletion: %v", err)
+	}
+
+	secondDone := make(chan error, 1)
+	go func() {
+		secondDone <- f.store.WithinTransaction(context.Background(), func(tx platform.TransactionContext) error {
+			return remove(tx, second)
+		})
+	}()
+	select {
+	case err := <-secondDone:
+		t.Fatalf("second deletion did not wait for the first: %v", err)
+	case <-time.After(500 * time.Millisecond):
+	}
+	close(commit)
+	if err := <-firstDone; err != nil {
+		t.Fatalf("first deletion: %v", err)
+	}
+	if err := <-secondDone; !errors.Is(err, units.ErrAgencyInUse) {
+		t.Fatalf("second deletion: %v, want in use", err)
+	}
+	var remaining int
+	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := f.store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		return executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM layout_definition_agencies WHERE layout_id = $1 AND agency_id = $2`,
+			layoutID, second.ID).Scan(&remaining)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if remaining != 1 {
+		t.Fatalf("definition keeps %d assignments to the second Agency, want 1", remaining)
 	}
 }
