@@ -2,6 +2,7 @@ package presentation
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -137,6 +138,60 @@ func (s *Service) checkFields(ctx context.Context, tx platform.TransactionContex
 	return err
 }
 
+// attributeKeys returns the Attribute schema keys the layout references, compiled against the
+// registry without the deprecation policy. A stored definition that no longer compiles yields
+// no keys, so that every reference of a new definition counts as new.
+func (s *Service) attributeKeys(ctx context.Context, tx platform.TransactionContext, layout processing.Layout) ([]string, error) {
+	registry, err := s.fields.Registry(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	program, err := processing.CompileLayout(ctx, layout, registry.Declarations(fields.ScopeDelivery, false))
+	if err != nil {
+		return nil, nil
+	}
+	var keys []string
+	for _, reference := range program.Fields() {
+		if reference.Namespace == "attributes" && len(reference.Path) > 0 && !slices.Contains(keys, reference.Path[0]) {
+			keys = append(keys, reference.Path[0])
+		}
+	}
+	return keys, nil
+}
+
+// authorizeNewReferences requires ManageAction in at least one Agency of every Attribute schema
+// that layout references and the previous definition (nil for a new layout) did not. A reference
+// the layout already holds stays valid when its schema later loses an Agency. The failure is
+// authz.ErrForbidden.
+func (s *Service) authorizeNewReferences(ctx context.Context, tx platform.TransactionContext, who caller, now time.Time,
+	layout processing.Layout, previous []byte) error {
+	keys, err := s.attributeKeys(ctx, tx, layout)
+	if err != nil || len(keys) == 0 {
+		return err
+	}
+	if previous != nil {
+		old, err := processing.DecodeLayout(previous)
+		if err != nil {
+			return err
+		}
+		held, err := s.attributeKeys(ctx, tx, old)
+		if err != nil {
+			return err
+		}
+		keys = slices.DeleteFunc(keys, func(key string) bool { return slices.Contains(held, key) })
+	}
+	agencies, err := s.store.SchemaAgencies(ctx, tx, keys)
+	if err != nil {
+		return err
+	}
+	for _, schemaAgencies := range agencies {
+		if err := authz.AuthorizeInAnyAgency(who.authority, ManageAction, schemaAgencies, now); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // view builds the response of a stored layout.
 func view(record Record) (Layout, error) {
 	definition, err := processing.DecodeLayout(record.Definition)
@@ -267,6 +322,9 @@ func (s *Service) Create(ctx context.Context, proof identity.Proof, command uuid
 		if err := s.checkFields(tx.Context(), tx, layout); err != nil {
 			return err
 		}
+		if err := s.authorizeNewReferences(tx.Context(), tx, who, now, layout, nil); err != nil {
+			return err
+		}
 		record := Record{ID: uuid.New(), Revision: 1, Name: input.Name, OutputKind: input.Definition.OutputKind,
 			Definition: encoded, Agencies: agencies, CreatedBy: who.principal, CreatedAt: now, UpdatedAt: now}
 		if err := s.store.Insert(tx.Context(), tx, record); err != nil {
@@ -308,6 +366,9 @@ func (s *Service) Update(ctx context.Context, proof identity.Proof, id uuid.UUID
 			return err
 		}
 		if err := s.checkFields(tx.Context(), tx, layout); err != nil {
+			return err
+		}
+		if err := s.authorizeNewReferences(tx.Context(), tx, who, now, layout, record.Definition); err != nil {
 			return err
 		}
 		next, err := commands.NextRevision(record.Revision, expected)

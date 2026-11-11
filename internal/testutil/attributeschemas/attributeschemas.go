@@ -15,7 +15,7 @@ import (
 	"github.com/gopager/gopager/internal/platform/postgres"
 )
 
-// Insert stores a `message` schema without Agencies and increments the catalog revision. A schema
+// Insert stores a `message` schema assigned to every existing Agency and increments the catalog revision. A schema
 // with the key that already exists is left as it is.
 func Insert(t testing.TB, store *postgres.Store, key string, fields map[string]attributes.Field) {
 	t.Helper()
@@ -30,6 +30,20 @@ func Insert(t testing.TB, store *postgres.Store, key string, fields map[string]a
 		return schemas.Insert(tx.Context(), tx, schema, uuid.New())
 	})
 	if err != nil && !errors.Is(err, authz.ErrRevisionConflict) {
+		t.Fatal(err)
+	}
+	// Referencing a schema needs the right in one of its Agencies, so the fixture belongs to
+	// every existing Agency.
+	err = store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		_, err = executor.ExecContext(tx.Context(), `INSERT INTO attribute_schema_agencies (schema_key, agency_id)
+			SELECT $1, id FROM agencies ON CONFLICT DO NOTHING`, key)
+		return err
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
 }

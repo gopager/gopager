@@ -13,13 +13,17 @@ import (
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/persistence/ent/agencyscope"
+	"github.com/gopager/gopager/internal/persistence/ent/attributestore"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
 	"github.com/gopager/gopager/internal/processing/presentation"
 )
 
 // Store reads and writes layouts. It holds no transaction of its own.
-type Store struct{ primary *postgres.Store }
+type Store struct {
+	primary *postgres.Store
+	catalog *attributestore.Store
+}
 
 var _ presentation.Store = (*Store)(nil)
 
@@ -28,7 +32,11 @@ func New(primary *postgres.Store) (*Store, error) {
 	if primary == nil {
 		return nil, authz.ErrInvalidInput
 	}
-	return &Store{primary: primary}, nil
+	catalog, err := attributestore.New(primary)
+	if err != nil {
+		return nil, err
+	}
+	return &Store{primary: primary, catalog: catalog}, nil
 }
 
 // currentSelection selects a layout joined with its current version.
@@ -219,4 +227,9 @@ func requireOneRow(result sql.Result, err error) error {
 		return authz.ErrRevisionConflict
 	}
 	return nil
+}
+
+// SchemaAgencies implements presentation.Store.
+func (s *Store) SchemaAgencies(ctx context.Context, tx platform.TransactionContext, keys []string) (map[string][]uuid.UUID, error) {
+	return s.catalog.SchemaAgencies(ctx, tx, keys)
 }

@@ -604,6 +604,9 @@ func (s *Service) SaveVersion(ctx context.Context, proof identity.Proof, command
 		if err := authorizeReferences(authority, references); err != nil {
 			return err
 		}
+		if err := s.authorizeNewOutputs(tx, authority, "workflow.update", parent, detached, now); err != nil {
+			return err
+		}
 		current.Revision, err = commands.NextRevision(current.Revision, expected)
 		if err != nil {
 			return err
@@ -710,6 +713,28 @@ func authorizeReferences(authority authz.Authority, references []processing.Sour
 			if err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+// authorizeNewOutputs requires the author to hold the action in at least one Agency of every
+// Attribute schema the definition writes that no version of the Workflow wrote before. A
+// reference that an earlier version holds stays valid when its schema later loses an Agency, so
+// re-saving it needs no right. The failure is authz.ErrForbidden.
+func (s *Service) authorizeNewOutputs(tx platform.TransactionContext, authority authz.Authority, action string,
+	workflow uuid.UUID, definition processing.Definition, now time.Time) error {
+	keys := make([]string, 0, len(definition.Outputs))
+	for key := range definition.Outputs {
+		keys = append(keys, key)
+	}
+	added, err := s.repository.NewOutputSchemaAgencies(tx.Context(), tx, workflow, keys)
+	if err != nil {
+		return err
+	}
+	for _, agencies := range added {
+		if err := authz.AuthorizeInAnyAgency(authority, action, agencies, now); err != nil {
+			return err
 		}
 	}
 	return nil

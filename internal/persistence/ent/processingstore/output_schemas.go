@@ -24,7 +24,7 @@ func (s *Store) requireOutputSchemas(ctx context.Context, tx platform.Transactio
 	if err != nil {
 		return err
 	}
-	if _, err := executor.ExecContext(ctx, `SELECT 1 FROM attribute_catalog WHERE id = 1 FOR SHARE`); err != nil {
+	if err := s.lockCatalog(ctx, tx); err != nil {
 		return err
 	}
 	rows, err := executor.QueryContext(ctx, `SELECT k FROM unnest($1::text[]) AS k
@@ -78,4 +78,55 @@ func (s *Store) requireVersionOutputSchemas(ctx context.Context, tx platform.Tra
 		return err
 	}
 	return s.requireOutputSchemas(ctx, tx, keys)
+}
+
+// lockCatalog locks the schema catalog row FOR SHARE, which a schema deletion's update conflicts
+// with.
+func (s *Store) lockCatalog(ctx context.Context, tx platform.TransactionContext) error {
+	executor, err := s.primary.Resolve(tx)
+	if err != nil {
+		return err
+	}
+	_, err = executor.ExecContext(ctx, `SELECT 1 FROM attribute_catalog WHERE id = 1 FOR SHARE`)
+	return err
+}
+
+// NewOutputSchemaAgencies implements processing.ConfigurationRepository. A reference that an
+// earlier version of the Workflow already holds stays valid when its schema later loses an
+// Agency, so only references that no version holds yet need the author's right.
+func (s *Store) NewOutputSchemaAgencies(ctx context.Context, tx platform.TransactionContext, workflow uuid.UUID,
+	keys []string) (map[string][]uuid.UUID, error) {
+	if len(keys) == 0 {
+		return map[string][]uuid.UUID{}, nil
+	}
+	if err := s.lockCatalog(ctx, tx); err != nil {
+		return nil, err
+	}
+	executor, err := s.primary.Resolve(tx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := executor.QueryContext(ctx, `SELECT k FROM unnest($1::text[]) AS k WHERE NOT EXISTS (
+		SELECT 1 FROM processing_workflow_versions v WHERE v.workflow_id = $2 AND jsonb_exists(v.definition->'outputs', k))`,
+		keys, workflow)
+	if err != nil {
+		return nil, err
+	}
+	var added []string
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		added = append(added, key)
+	}
+	err = rows.Err()
+	if closeErr := rows.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return nil, err
+	}
+	return s.catalog.SchemaAgencies(ctx, tx, added)
 }

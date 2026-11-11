@@ -278,3 +278,33 @@ func requireOneRow(result sql.Result, err error) error {
 	}
 	return nil
 }
+
+// SchemaAgencies returns, for each of the keys that names an existing schema, the Agencies the
+// schema is assigned to. A key without a schema is absent from the result; an existing schema
+// without Agency has an empty list.
+func (s *Store) SchemaAgencies(ctx context.Context, tx platform.TransactionContext, keys []string) (map[string][]uuid.UUID, error) {
+	executor, err := s.primary.Resolve(tx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := executor.QueryContext(ctx, `SELECT s.key, a.agency_id FROM attribute_schemas s
+		LEFT JOIN attribute_schema_agencies a ON a.schema_key = s.key WHERE s.key = ANY($1::text[]) ORDER BY s.key, a.agency_id`, keys)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	result := make(map[string][]uuid.UUID)
+	for rows.Next() {
+		var key string
+		var agency *uuid.UUID
+		if err := rows.Scan(&key, &agency); err != nil {
+			return nil, err
+		}
+		agencies := result[key]
+		if agency != nil {
+			agencies = append(agencies, *agency)
+		}
+		result[key] = append([]uuid.UUID{}, agencies...)
+	}
+	return result, rows.Err()
+}

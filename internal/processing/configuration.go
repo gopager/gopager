@@ -71,5 +71,9 @@ type ConfigurationRepository interface {
 	ListVersions(context.Context, platform.TransactionContext, authz.Authority, uuid.UUID, PageInput, time.Time) (Page[Version], error)
 	SaveWorkflow(context.Context, platform.TransactionContext, authz.Authority, string, WorkflowConfiguration, int64, time.Time) error
 	SaveVersion(context.Context, platform.TransactionContext, Version) error
+	// NewOutputSchemaAgencies returns, for the Attribute schema keys among keys that no version
+	// of the Workflow references yet and that exist, the Agencies each schema is assigned to. It
+	// holds the schema catalog against deletion for the rest of the transaction.
+	NewOutputSchemaAgencies(ctx context.Context, tx platform.TransactionContext, workflow uuid.UUID, keys []string) (map[string][]uuid.UUID, error)
 	RecordChange(context.Context, platform.TransactionContext, uuid.UUID, uuid.UUID, string, time.Time) error
 }

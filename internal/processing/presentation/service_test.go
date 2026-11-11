@@ -65,6 +65,11 @@ func newMemoryStore() *memoryStore {
 	return &memoryStore{records: map[uuid.UUID]Record{}, versions: map[uuid.UUID][]VersionRecord{}}
 }
 
+// SchemaAgencies reports no Attribute schemas: the fake layouts reference none.
+func (m *memoryStore) SchemaAgencies(context.Context, platform.TransactionContext, []string) (map[string][]uuid.UUID, error) {
+	return map[string][]uuid.UUID{}, nil
+}
+
 func (m *memoryStore) Insert(_ context.Context, _ platform.TransactionContext, record Record) error {
 	m.records[record.ID] = record
 	m.versions[record.ID] = []VersionRecord{{LayoutID: record.ID, Version: 1, Definition: record.Definition}}

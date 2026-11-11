@@ -1248,7 +1248,9 @@ data, not a template: it has no expressions, loops or markup. Schemas: `Layout`,
   of scope `unit` or `unitCollection` that covers a Unit of that Agency (`account` scope does not count). A layout in no
   visible Agency is `404`; a caller with neither right anywhere gets `403 FORBIDDEN`. Create, update and delete need
   `presentation.manage` in every Agency involved: the new set on create, the stored and the new set on update, the
-  stored set on delete. Built-in default layouts are global.
+  stored set on delete. A field reference to an Attribute schema that the layout does not reference yet also needs
+  `presentation.manage` in one Agency of that schema, else `403 FORBIDDEN`; a reference the layout already holds stays
+  valid when the schema later loses that Agency. Built-in default layouts are global.
 - **Definition.** `{"schemaVersion":1,"outputKind","blocks":[…]}` with at least one block. Block kinds:
   `text` (literal `text`), `field` and `chip` (a catalog `field`, an optional `label` and an optional `icon`), `link` (a `label` and a
   `url` built from a template with the placeholders `{0}` to `{9}` over up to 10 `fields`), `section` (an optional
@@ -1306,6 +1308,10 @@ Workflows) or of Units (`subject` `unit`, maintained by managers). Schemas: `Att
   field or property, or change a type, nullability or optionality (`400`); such changes need a new schema.
 - **Deprecation.** `deprecated` on a schema or a field hides it from new references; stored values stay readable and
   existing references keep working.
+- **Referencing.** Adding a reference to a schema needs the right of the referencing resource in one of the schema's
+  Agencies: `workflow.update` to save a Workflow version that writes a schema no earlier version writes, and
+  `presentation.manage` to add a schema to a layout; otherwise `403 FORBIDDEN`. Existing references stay valid when the
+  schema loses that Agency.
 - **Delete.** A schema that an active Workflow version (as an output), the current version of a layout, a Subscription
   filter or a saved view references is `409 REVISION_CONFLICT`, like a stale revision. The conflict does not say which.
 - **Agencies and rights.** A schema is assigned to 1 to 256 distinct Agencies. Create, update and delete need

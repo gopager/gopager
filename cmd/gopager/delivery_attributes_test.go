@@ -18,6 +18,7 @@ func (f *deliveryFixture) attributeSchema(key, fields string) {
 	f.t.Helper()
 	f.exec(`INSERT INTO attribute_schemas (key, revision, label, subject, fields, created_by, created_at, updated_at)
 		VALUES ($1, 1, 'Incident', 'message', $2::jsonb, $3, now(), now())`, key, fields, uuid.New())
+	f.exec(`INSERT INTO attribute_schema_agencies (schema_key, agency_id) SELECT $1, id FROM agencies`, key)
 	f.exec(`UPDATE attribute_catalog SET revision = revision + 1 WHERE id = 1`)
 }
 

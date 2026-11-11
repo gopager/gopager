@@ -33,6 +33,8 @@ import (
 // transaction of its own: every method runs in the caller's active primary transaction.
 type Store struct {
 	primary *postgres.Store
+	// catalog reads the Attribute schemas that Workflow outputs reference.
+	catalog *attributestore.Store
 	// registries yields the field registry of the catalog visible in a transaction.
 	registries *attributes.RegistrySource
 }
@@ -50,7 +52,7 @@ func New(primary *postgres.Store) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Store{primary: primary, registries: registries}, nil
+	return &Store{primary: primary, catalog: catalog, registries: registries}, nil
 }
 
 func (s *Store) client(ctx context.Context, tx platform.TransactionContext, predicates map[string]entql.P, create map[string]bool) (*ent.Client, context.Context, error) {

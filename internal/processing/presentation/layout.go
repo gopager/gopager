@@ -89,4 +89,7 @@ type Store interface {
 	// Delete removes the layout and its versions at the expected revision. A stale revision or
 	// a layout that a subscription references is authz.ErrRevisionConflict.
 	Delete(ctx context.Context, tx platform.TransactionContext, id uuid.UUID, expected int64) error
+	// SchemaAgencies returns, for each key naming an existing Attribute schema, the Agencies the
+	// schema is assigned to; other keys are absent.
+	SchemaAgencies(ctx context.Context, tx platform.TransactionContext, keys []string) (map[string][]uuid.UUID, error)
 }
