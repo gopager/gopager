@@ -5,6 +5,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gopager/gopager/internal/authz"
+	"github.com/gopager/gopager/internal/icons"
 )
 
 func canonicalFieldSetting[T any](setting FieldSetting[T], validate func(T) error) (FieldSetting[T], error) {
@@ -67,16 +68,8 @@ func canonicalColor(value string) error {
 }
 
 func canonicalIcon(value string) error {
-	if value == "" || len(value) > 128 {
+	if !icons.Valid(value) {
 		return authz.ErrInvalidInput
-	}
-	for _, character := range value {
-		if (character < 'a' || character > 'z') &&
-			(character < 'A' || character > 'Z') &&
-			(character < '0' || character > '9') &&
-			!strings.ContainsRune("._-", character) {
-			return authz.ErrInvalidInput
-		}
 	}
 	return nil
 }
