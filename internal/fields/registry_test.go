@@ -87,6 +87,27 @@ func TestRegistryFirstProviderWins(t *testing.T) {
 	}
 }
 
+// TestStaticProviderDuplicateReferenceLastEntryWins expects List and Lookup to agree on a
+// reference declared twice: the later declaration, here a deprecated one, applies to both.
+func TestStaticProviderDuplicateReferenceLastEntryWins(t *testing.T) {
+	t.Parallel()
+	declared := []Field{
+		{Ref: ref("x", "a"), Label: "early", Scopes: []Scope{ScopeMessage}},
+		{Ref: ref("x", "a"), Label: "late", Scopes: []Scope{ScopeMessage}, Deprecated: true},
+	}
+	provider := NewStaticProvider(0, declared)
+	if got := provider.Fields(); len(got) != 1 || got[0].Label != "late" {
+		t.Fatalf("Fields = %+v, want only the later declaration", got)
+	}
+	registry := New(provider)
+	if list := registry.List(ScopeMessage); len(list) != 0 {
+		t.Fatalf("List = %+v, want the deprecated field absent", list)
+	}
+	if _, err := registry.Lookup(ScopeMessage, ref("x", "a"), true); err == nil {
+		t.Fatal("strict Lookup accepted the deprecated field")
+	}
+}
+
 func TestRegistryListAndRevision(t *testing.T) {
 	t.Parallel()
 	registry := New(testProvider(), Builtin())

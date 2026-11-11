@@ -24,11 +24,20 @@ type staticProvider struct {
 // later entry for the same reference replaces an earlier one. The caller must not modify the
 // fields afterwards.
 func NewStaticProvider(revision int64, fields []Field) Provider {
-	index := make(map[string]Field, len(fields))
-	for _, field := range fields {
-		index[refKey(field.Ref)] = field
+	last := make(map[string]int, len(fields))
+	for i, field := range fields {
+		last[refKey(field.Ref)] = i
 	}
-	return &staticProvider{fields: fields, index: index, revision: revision}
+	// The list holds the same declarations as the index, so that Fields and Field agree.
+	index := make(map[string]Field, len(last))
+	unique := make([]Field, 0, len(last))
+	for i, field := range fields {
+		if key := refKey(field.Ref); last[key] == i {
+			index[key] = field
+			unique = append(unique, field)
+		}
+	}
+	return &staticProvider{fields: unique, index: index, revision: revision}
 }
 
 func (p *staticProvider) Field(ref processing.FieldRef) (Field, bool) {
