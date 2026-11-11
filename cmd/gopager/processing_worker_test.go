@@ -213,7 +213,7 @@ func TestInstalledWorkflowRunsOnProductionWiring(t *testing.T) {
 		}
 		return executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM message_attribute_values v
 			JOIN processing_results r ON r.id = v.result_id
-			WHERE r.candidate_id = $1 AND v.schema_key = 'plugin' AND v.path = 'text' AND v.text_value IS NOT NULL`,
+			WHERE r.candidate_id = $1 AND v.schema_key = 'plugin' AND v.path = 'text' AND v.text_digest IS NOT NULL`,
 			due[0].ID).Scan(&projected)
 	}); err != nil {
 		t.Fatal(err)

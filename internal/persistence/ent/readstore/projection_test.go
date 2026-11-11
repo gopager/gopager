@@ -2,7 +2,10 @@ package readstore_test
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"slices"
 	"testing"
@@ -22,7 +25,7 @@ func (w *world) projectedRows(result uuid.UUID) []string {
 		if err != nil {
 			w.t.Fatal(err)
 		}
-		found, err := executor.QueryContext(ctx, `SELECT schema_key, path, target_position, text_value, integer_value,
+		found, err := executor.QueryContext(ctx, `SELECT schema_key, path, target_position, encode(text_digest, 'hex'), integer_value,
 			number_value, to_char(time_value AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), boolean_value
 			FROM message_attribute_values WHERE result_id = $1`, result)
 		if err != nil {
@@ -93,8 +96,8 @@ func TestProjectionHoldsOneRowPerScalarPath(t *testing.T) {
 		)))
 	want := []string{
 		"incident/level=integer:7", "incident/ratio=number:2.5", "incident/when=time:2026-11-08T12:00:00Z",
-		"incident/urgent=boolean:true", "incident/tags=text:x", "incident/tags=text:y",
-		"incident/owner.name=text:Ada", "incident/owner.address.city=text:Bonn",
+		"incident/urgent=boolean:true", "incident/tags=text:" + digest("x"), "incident/tags=text:" + digest("y"),
+		"incident/owner.name=text:" + digest("Ada"), "incident/owner.address.city=text:" + digest("Bonn"),
 	}
 	slices.Sort(want)
 	if got := w.projectedRows(untargetedResult); !slices.Equal(got, want) {
@@ -102,7 +105,7 @@ func TestProjectionHoldsOneRowPerScalarPath(t *testing.T) {
 	}
 	targetedResult := w.result(transmission, workflow, version, message, base, `["derived"]`,
 		targeted(2, fieldsOf("incident", entry("city", "string", `"Bonn"`))))
-	if got, want := w.projectedRows(targetedResult), []string{"incident/city@2=text:Bonn"}; !slices.Equal(got, want) {
+	if got, want := w.projectedRows(targetedResult), []string{"incident/city@2=text:" + digest("Bonn")}; !slices.Equal(got, want) {
 		t.Errorf("targeted rows: got %v, want %v", got, want)
 	}
 }
@@ -135,6 +138,53 @@ func TestPrefilterNarrowsThroughTheProjection(t *testing.T) {
 		"presence":           {present("attributes.incident.level", true), 1},
 		"and without any":    {logical("and", present("attributes.incident.level", true), present("message.text", true)), 1},
 		"negated comparison": {logical("not", level), 0},
+	} {
+		result := w.feed(all(), base.Add(time.Hour), readmodel.FeedQuery{Selection: compile(t, test.predicate),
+			DerivedGroups: []string{"derived", "payload"}})
+		if len(result.Items) != test.want {
+			t.Errorf("%s: %d rows, want %d", name, len(result.Items), test.want)
+		}
+	}
+}
+
+// digest renders the hex SHA-256 of a string like the projection stores it.
+func digest(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:])
+}
+
+// TestProjectionStoresLongStringsAndPrefiltersThemByDigest expects a published string of 16 KiB
+// of incompressible text to project without failing the publication, and an equality filter on
+// it to find the Message through the digest index, while a different long string does not.
+func TestProjectionStoresLongStringsAndPrefiltersThemByDigest(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	agency := w.agency("county")
+	unit := w.unit(agency, "A", nil)
+	network := w.network(agency, "N", "pocsag")
+	message := w.message(base, "text", "alarm")
+	transmission := w.assigned(message, network, unit, agency, base, "")
+	workflow, version := w.workflow()
+	random := make([]byte, 8<<10)
+	if _, err := rand.Read(random); err != nil {
+		t.Fatal(err)
+	}
+	long := hex.EncodeToString(random)
+	w.result(transmission, workflow, version, message, base, `["derived","payload"]`,
+		untargeted(fieldsOf("incident", entry("name", "string", `"`+long+`"`))))
+
+	other := make([]byte, 8<<10)
+	if _, err := rand.Read(other); err != nil {
+		t.Fatal(err)
+	}
+	for name, test := range map[string]struct {
+		predicate string
+		want      int
+	}{
+		"eq":       {compare("eq", "attributes.incident.name", "string", `"`+long+`"`), 1},
+		"in":       {member("attributes.incident.name", "string", `"`+hex.EncodeToString(other)+`"`, `"`+long+`"`), 1},
+		"other eq": {compare("eq", "attributes.incident.name", "string", `"`+hex.EncodeToString(other)+`"`), 0},
+		"other in": {member("attributes.incident.name", "string", `"`+hex.EncodeToString(other)+`"`), 0},
 	} {
 		result := w.feed(all(), base.Add(time.Hour), readmodel.FeedQuery{Selection: compile(t, test.predicate),
 			DerivedGroups: []string{"derived", "payload"}})

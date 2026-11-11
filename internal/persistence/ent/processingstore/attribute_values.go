@@ -17,7 +17,7 @@ import (
 // definition for publication and for fixtures that insert results directly.
 const ProjectAttributeValuesSQL = `
 INSERT INTO message_attribute_values (result_id, transmission_id, schema_key, path, target_position,
-	text_value, integer_value, number_value, time_value, boolean_value)
+	text_digest, integer_value, number_value, time_value, boolean_value)
 WITH RECURSIVE roots AS (
 	SELECT r.id AS result_id, c.transmission_id, k.key AS schema_key, f.key AS path, NULL::int AS target_position,
 		f.value->'value' AS v
@@ -48,7 +48,7 @@ WITH RECURSIVE roots AS (
 		THEN w.v->'value' ELSE '[]'::jsonb END) AS e(x)
 )
 SELECT result_id, transmission_id, schema_key, path, target_position,
-	CASE WHEN x->>'kind' = 'string' THEN x->>'value' END,
+	CASE WHEN x->>'kind' = 'string' THEN sha256(convert_to(x->>'value', 'UTF8')) END,
 	CASE WHEN x->>'kind' = 'integer' THEN (x->>'value')::bigint END,
 	CASE WHEN x->>'kind' = 'number' THEN (x->>'value')::float8 END,
 	CASE WHEN x->>'kind' = 'timestamp' THEN regexp_replace(x->>'value', '(\.[0-9]{6})[0-9]+', '\1')::timestamptz END,

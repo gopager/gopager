@@ -1,6 +1,7 @@
 package readstore
 
 import (
+	"crypto/sha256"
 	"slices"
 	"strings"
 
@@ -72,10 +73,18 @@ func (b *feedBuilder) leafPrefilter(n fields.Node) string {
 	scalar := scalarSchema(n.Field.Type)
 	column := valueColumn(scalar.Kind)
 	var test string
-	switch n.Op {
-	case "eq":
+	switch {
+	case scalar.Kind == processing.StringValue && n.Op == "eq":
+		test = "= " + b.params.add(textDigest(n.Values[0].(string))) + "::bytea"
+	case scalar.Kind == processing.StringValue && n.Op == "in":
+		digests := make([][]byte, len(n.Values))
+		for i, value := range n.Values {
+			digests[i] = textDigest(value.(string))
+		}
+		test = "= ANY(" + b.params.add(digests) + "::bytea[])"
+	case n.Op == "eq":
 		test = "= " + b.params.add(n.Values[0]) + "::" + sqlType(scalar.Kind)
-	case "in":
+	case n.Op == "in":
 		test = "= ANY(" + b.params.add(typedArray(scalar.Kind, n.Values)) + "::" + sqlType(scalar.Kind) + "[])"
 	default:
 		test = map[string]string{"lt": "<", "lte": "<=", "gt": ">", "gte": ">="}[n.Op] + " " +
@@ -86,11 +95,18 @@ func (b *feedBuilder) leafPrefilter(n fields.Node) string {
 		b.params.add(strings.Join(ref.Path[1:], ".")) + "::text AND v." + column + " " + test + ")"
 }
 
+// textDigest is the SHA-256 digest of a string as the projection stores it, so that a long value
+// needs no B-tree entry of its own size.
+func textDigest(value string) []byte {
+	sum := sha256.Sum256([]byte(value))
+	return sum[:]
+}
+
 // valueColumn names the projection column of a scalar kind, "" for a kind that is not projected.
 func valueColumn(kind processing.ValueKind) string {
 	switch kind {
 	case processing.StringValue:
-		return "text_value"
+		return "text_digest"
 	case processing.IntegerValue:
 		return "integer_value"
 	case processing.NumberValue:

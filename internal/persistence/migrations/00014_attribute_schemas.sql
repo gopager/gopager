@@ -41,16 +41,19 @@ CREATE TABLE message_attribute_values (
     schema_key varchar(64) NOT NULL,
     path text NOT NULL,
     target_position integer,
-    text_value text,
+    text_digest bytea,
     integer_value bigint,
     number_value double precision,
     time_value timestamptz,
     boolean_value boolean,
-    CHECK (num_nonnulls(text_value, integer_value, number_value, time_value, boolean_value) <= 1)
+    CHECK (num_nonnulls(text_digest, integer_value, number_value, time_value, boolean_value) <= 1)
 );
 CREATE INDEX message_attribute_values_result ON message_attribute_values (result_id);
-CREATE INDEX message_attribute_values_text ON message_attribute_values (schema_key, path, text_value)
-    WHERE text_value IS NOT NULL;
+-- A string is indexed by its SHA-256 digest, not in full: a B-tree entry is limited to about a
+-- third of a page, and a long value would fail the insert and roll the publication back. Only
+-- equality and membership use the prefilter, and the exact check follows it.
+CREATE INDEX message_attribute_values_text ON message_attribute_values (schema_key, path, text_digest)
+    WHERE text_digest IS NOT NULL;
 CREATE INDEX message_attribute_values_integer ON message_attribute_values (schema_key, path, integer_value)
     WHERE integer_value IS NOT NULL;
 CREATE INDEX message_attribute_values_number ON message_attribute_values (schema_key, path, number_value)
