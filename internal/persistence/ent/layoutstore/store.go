@@ -229,7 +229,15 @@ func requireOneRow(result sql.Result, err error) error {
 	return nil
 }
 
-// SchemaAgencies implements presentation.Store.
-func (s *Store) SchemaAgencies(ctx context.Context, tx platform.TransactionContext, keys []string) (map[string][]uuid.UUID, error) {
-	return s.catalog.SchemaAgencies(ctx, tx, keys)
+// SchemaAssignments implements presentation.Store.
+func (s *Store) SchemaAssignments(ctx context.Context, tx platform.TransactionContext, keys []string) (map[string]presentation.SchemaAssignment, error) {
+	found, err := s.catalog.SchemaAssignments(ctx, tx, keys)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]presentation.SchemaAssignment, len(found))
+	for key, assignment := range found {
+		result[key] = presentation.SchemaAssignment{Agencies: assignment.Agencies, CreatedAt: assignment.CreatedAt}
+	}
+	return result, nil
 }

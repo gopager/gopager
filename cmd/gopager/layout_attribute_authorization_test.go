@@ -57,3 +57,28 @@ func withAgency(body map[string]any, agencies ...uuid.UUID) map[string]any {
 	body["agencies"] = agencies
 	return body
 }
+
+// TestLayoutReferenceToARecreatedSchemaIsNew expects the exemption for a reference a layout
+// already holds to apply only to the schema that existed when that version was saved: after the
+// schema was deleted and re-created for Agency B only, an update by a manager of Agency A that
+// keeps the reference is refused.
+func TestLayoutReferenceToARecreatedSchemaIsNew(t *testing.T) {
+	t.Parallel()
+	f := newDeliveryFixture(t, delivery.AdmissionLimits{})
+	other := uuid.New()
+	f.exec(`INSERT INTO agencies (id, name) VALUES ($1, 'Agency B')`, other)
+	f.attributeSchema("incident", incidentFields)
+	manager, _ := f.caller([]string{"presentation.manage"}, authz.Scope{Kind: "agency", References: []string{f.agency.String()}}, []string{"payload"})
+	withCity := func(label string) map[string]any {
+		return layoutBody("text", []any{map[string]any{"kind": "field", "field": attributeRef("city"), "label": label}})
+	}
+	created := f.layoutCreated(manager, withCity("City"))
+
+	f.exec(`DELETE FROM attribute_schemas WHERE key = 'incident'`)
+	f.attributeSchema("incident", incidentFields)
+	f.exec(`DELETE FROM attribute_schema_agencies WHERE schema_key = 'incident'`)
+	f.exec(`INSERT INTO attribute_schema_agencies (schema_key, agency_id) VALUES ('incident', $1)`, other)
+	if response := f.layoutUpdate(manager, created.ID, created.Revision, withCity("Town")); response.status != http.StatusForbidden {
+		t.Fatalf("update keeping a reference to a re-created schema of Agency B only returned %d, want 403", response.status)
+	}
+}

@@ -93,7 +93,9 @@ func (s *Store) lockCatalog(ctx context.Context, tx platform.TransactionContext)
 
 // NewOutputSchemaAgencies implements processing.ConfigurationRepository. A reference that an
 // earlier version of the Workflow already holds stays valid when its schema later loses an
-// Agency, so only references that no version holds yet need the author's right.
+// Agency, so only references that no version holds yet need the author's right. A version
+// holds a reference only if the current schema existed when it was saved: a schema that was
+// deleted and re-created under the same key is a different schema.
 func (s *Store) NewOutputSchemaAgencies(ctx context.Context, tx platform.TransactionContext, workflow uuid.UUID,
 	keys []string) (map[string][]uuid.UUID, error) {
 	if len(keys) == 0 {
@@ -107,7 +109,8 @@ func (s *Store) NewOutputSchemaAgencies(ctx context.Context, tx platform.Transac
 		return nil, err
 	}
 	rows, err := executor.QueryContext(ctx, `SELECT k FROM unnest($1::text[]) AS k WHERE NOT EXISTS (
-		SELECT 1 FROM processing_workflow_versions v WHERE v.workflow_id = $2 AND jsonb_exists(v.definition->'outputs', k))`,
+		SELECT 1 FROM processing_workflow_versions v WHERE v.workflow_id = $2 AND jsonb_exists(v.definition->'outputs', k)
+			AND v.created_at >= (SELECT s.created_at FROM attribute_schemas s WHERE s.key = k))`,
 		keys, workflow)
 	if err != nil {
 		return nil, err
@@ -128,5 +131,13 @@ func (s *Store) NewOutputSchemaAgencies(ctx context.Context, tx platform.Transac
 	if err != nil {
 		return nil, err
 	}
-	return s.catalog.SchemaAgencies(ctx, tx, added)
+	assignments, err := s.catalog.SchemaAssignments(ctx, tx, added)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string][]uuid.UUID, len(assignments))
+	for key, assignment := range assignments {
+		result[key] = assignment.Agencies
+	}
+	return result, nil
 }

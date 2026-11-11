@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/attributes"
@@ -279,32 +280,42 @@ func requireOneRow(result sql.Result, err error) error {
 	return nil
 }
 
-// SchemaAgencies returns, for each of the keys that names an existing schema, the Agencies the
-// schema is assigned to. A key without a schema is absent from the result; an existing schema
-// without Agency has an empty list.
-func (s *Store) SchemaAgencies(ctx context.Context, tx platform.TransactionContext, keys []string) (map[string][]uuid.UUID, error) {
+// SchemaAssignment is the assignment of an existing Attribute schema.
+type SchemaAssignment struct {
+	// Agencies the schema is assigned to, ordered by ID; empty when it has none.
+	Agencies []uuid.UUID
+	// CreatedAt identifies this incarnation of the key: a deleted and re-created schema is newer.
+	CreatedAt time.Time
+}
+
+// SchemaAssignments returns the assignment of each of the keys that names an existing schema. A
+// key without a schema is absent from the result.
+func (s *Store) SchemaAssignments(ctx context.Context, tx platform.TransactionContext, keys []string) (map[string]SchemaAssignment, error) {
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := executor.QueryContext(ctx, `SELECT s.key, a.agency_id FROM attribute_schemas s
+	rows, err := executor.QueryContext(ctx, `SELECT s.key, s.created_at, a.agency_id FROM attribute_schemas s
 		LEFT JOIN attribute_schema_agencies a ON a.schema_key = s.key WHERE s.key = ANY($1::text[]) ORDER BY s.key, a.agency_id`, keys)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	result := make(map[string][]uuid.UUID)
+	result := make(map[string]SchemaAssignment)
 	for rows.Next() {
 		var key string
+		var createdAt time.Time
 		var agency *uuid.UUID
-		if err := rows.Scan(&key, &agency); err != nil {
+		if err := rows.Scan(&key, &createdAt, &agency); err != nil {
 			return nil, err
 		}
-		agencies := result[key]
+		assignment := result[key]
+		assignment.CreatedAt = createdAt
+		assignment.Agencies = append([]uuid.UUID{}, assignment.Agencies...)
 		if agency != nil {
-			agencies = append(agencies, *agency)
+			assignment.Agencies = append(assignment.Agencies, *agency)
 		}
-		result[key] = append([]uuid.UUID{}, agencies...)
+		result[key] = assignment
 	}
 	return result, rows.Err()
 }

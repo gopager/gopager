@@ -1311,7 +1311,8 @@ Workflows) or of Units (`subject` `unit`, maintained by managers). Schemas: `Att
 - **Referencing.** Adding a reference to a schema needs the right of the referencing resource in one of the schema's
   Agencies: `workflow.update` to save a Workflow version that writes a schema no earlier version writes, and
   `presentation.manage` to add a schema to a layout; otherwise `403 FORBIDDEN`. Existing references stay valid when the
-  schema loses that Agency.
+  schema loses that Agency, but not when the schema was deleted and re-created under the same key since the
+  referencing version was saved: that is a different schema.
 - **Delete.** A schema that an active Workflow version (as an output), the current version of a layout, a Subscription
   filter or a saved view references is `409 REVISION_CONFLICT`, like a stale revision. The conflict does not say which.
 - **Agencies and rights.** A schema is assigned to 1 to 256 distinct Agencies. Create, update and delete need

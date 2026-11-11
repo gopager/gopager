@@ -89,7 +89,15 @@ type Store interface {
 	// Delete removes the layout and its versions at the expected revision. A stale revision or
 	// a layout that a subscription references is authz.ErrRevisionConflict.
 	Delete(ctx context.Context, tx platform.TransactionContext, id uuid.UUID, expected int64) error
-	// SchemaAgencies returns, for each key naming an existing Attribute schema, the Agencies the
-	// schema is assigned to; other keys are absent.
-	SchemaAgencies(ctx context.Context, tx platform.TransactionContext, keys []string) (map[string][]uuid.UUID, error)
+	// SchemaAssignments returns, for each key naming an existing Attribute schema, its Agencies
+	// and creation time; other keys are absent.
+	SchemaAssignments(ctx context.Context, tx platform.TransactionContext, keys []string) (map[string]SchemaAssignment, error)
+}
+
+// SchemaAssignment is the assignment of an existing Attribute schema.
+type SchemaAssignment struct {
+	// Agencies the schema is assigned to.
+	Agencies []uuid.UUID
+	// CreatedAt tells a schema from one deleted and re-created under the same key.
+	CreatedAt time.Time
 }

@@ -160,32 +160,35 @@ func (s *Service) attributeKeys(ctx context.Context, tx platform.TransactionCont
 }
 
 // authorizeNewReferences requires ManageAction in at least one Agency of every Attribute schema
-// that layout references and the previous definition (nil for a new layout) did not. A reference
-// the layout already holds stays valid when its schema later loses an Agency. The failure is
-// authz.ErrForbidden.
+// that layout references and the previous version (nil for a new layout, saved at previousAt)
+// did not. A reference the layout already holds stays valid when its schema later loses an
+// Agency, but only if the current schema existed when that version was saved: a schema deleted
+// and re-created under the same key is a different one. The failure is authz.ErrForbidden.
 func (s *Service) authorizeNewReferences(ctx context.Context, tx platform.TransactionContext, who caller, now time.Time,
-	layout processing.Layout, previous []byte) error {
+	layout processing.Layout, previous []byte, previousAt time.Time) error {
 	keys, err := s.attributeKeys(ctx, tx, layout)
 	if err != nil || len(keys) == 0 {
 		return err
 	}
+	assignments, err := s.store.SchemaAssignments(ctx, tx, keys)
+	if err != nil {
+		return err
+	}
+	var held []string
 	if previous != nil {
 		old, err := processing.DecodeLayout(previous)
 		if err != nil {
 			return err
 		}
-		held, err := s.attributeKeys(ctx, tx, old)
-		if err != nil {
+		if held, err = s.attributeKeys(ctx, tx, old); err != nil {
 			return err
 		}
-		keys = slices.DeleteFunc(keys, func(key string) bool { return slices.Contains(held, key) })
 	}
-	agencies, err := s.store.SchemaAgencies(ctx, tx, keys)
-	if err != nil {
-		return err
-	}
-	for _, schemaAgencies := range agencies {
-		if err := authz.AuthorizeInAnyAgency(who.authority, ManageAction, schemaAgencies, now); err != nil {
+	for key, assignment := range assignments {
+		if slices.Contains(held, key) && !previousAt.Before(assignment.CreatedAt) {
+			continue
+		}
+		if err := authz.AuthorizeInAnyAgency(who.authority, ManageAction, assignment.Agencies, now); err != nil {
 			return err
 		}
 	}
@@ -322,7 +325,7 @@ func (s *Service) Create(ctx context.Context, proof identity.Proof, command uuid
 		if err := s.checkFields(tx.Context(), tx, layout); err != nil {
 			return err
 		}
-		if err := s.authorizeNewReferences(tx.Context(), tx, who, now, layout, nil); err != nil {
+		if err := s.authorizeNewReferences(tx.Context(), tx, who, now, layout, nil, time.Time{}); err != nil {
 			return err
 		}
 		record := Record{ID: uuid.New(), Revision: 1, Name: input.Name, OutputKind: input.Definition.OutputKind,
@@ -368,7 +371,7 @@ func (s *Service) Update(ctx context.Context, proof identity.Proof, id uuid.UUID
 		if err := s.checkFields(tx.Context(), tx, layout); err != nil {
 			return err
 		}
-		if err := s.authorizeNewReferences(tx.Context(), tx, who, now, layout, record.Definition); err != nil {
+		if err := s.authorizeNewReferences(tx.Context(), tx, who, now, layout, record.Definition, record.UpdatedAt); err != nil {
 			return err
 		}
 		next, err := commands.NextRevision(record.Revision, expected)
