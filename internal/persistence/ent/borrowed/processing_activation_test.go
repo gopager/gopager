@@ -4,9 +4,11 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/attributes"
 	"github.com/gopager/gopager/internal/persistence/ent/processingstore"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
+	"github.com/gopager/gopager/internal/testutil/attributeschemas"
 )
 
 // TestProcessingActivationValidatesReferencesForTheActivator expects a retained version to be
@@ -27,6 +29,7 @@ func TestProcessingActivationValidatesReferencesForTheActivator(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	attributeschemas.Insert(t, f.store, "test", map[string]attributes.Field{"out": {Kind: processing.StringValue}})
 	definition := preparedProcessingDefinition(t)
 	secret := processing.FieldRef{Namespace: "source", Path: []string{"secret"}}
 	definition.Outputs = map[string]map[string]processing.Assignment{"test": {"out": {Field: &secret}}}

@@ -309,6 +309,11 @@ func (s *Store) SaveWorkflow(ctx context.Context, tx platform.TransactionContext
 	if value.Revision != next {
 		return authz.ErrInvalidInput
 	}
+	if action == "workflow.activate" && value.ActiveVersionID != nil {
+		if err := s.requireVersionOutputSchemas(ctx, tx, *value.ActiveVersionID); err != nil {
+			return err
+		}
+	}
 	filter := entql.FieldEQ("id", value.ID)
 	if expected != 0 {
 		allowed, err := workflowScope(authority, action, now)
@@ -408,6 +413,13 @@ func (s *Store) SaveVersion(ctx context.Context, tx platform.TransactionContext,
 	}
 	if detached.SchemaVersion != 1 {
 		return authz.ErrInvalidInput
+	}
+	keys := make([]string, 0, len(detached.Outputs))
+	for key := range detached.Outputs {
+		keys = append(keys, key)
+	}
+	if err := s.requireOutputSchemas(ctx, tx, keys); err != nil {
+		return err
 	}
 	client, scope, err := s.client(ctx, tx, nil, map[string]bool{"WorkflowVersion": true})
 	if err != nil {
