@@ -146,25 +146,30 @@ The [D-125 term addition](authoritative-plan.md#ap-08-unit-template-ownership) s
 | --- | --- | --- |
 | **Core** | GoPager's application and authoritative domain services, excluding operator-installed extension code. | Plugin host |
 | **Integration** | Configured use of an operator-installed plugin and its declared capabilities; not an additional permission bypass or global Unit-to-Delivery-target mapping. | Integration ownership role |
-| **Plugin manifest** | Versioned declaration of an artifact's identity, SDK compatibility, capabilities, internal data access, configuration/Secret fields, extension fields, and input/result schemas. | Grant |
+| **Plugin manifest** | Versioned declaration of an artifact's identity, SDK compatibility, capabilities, internal data access, configuration/Secret fields, and input/result schemas. | Grant |
 | **Processing instance** | Separately revisioned administrative binding of a provisioned pure processing capability, its execution Principal and configuration; optionally binds an independent pure preview. Owner: [C-10](../docs/workflows.md#installed-plugin-step). | Workflow, module artifact, Delivery target |
 | **Plugin host** | Core runtime that verifies Operator-provisioned plugin executables, starts each configured plugin instance as a managed child process (D-131), invokes it over the published protocol, and records bounded outcomes. Trust does not imply a hostile-code sandbox guarantee. | External plugin process |
 | **Plugin instance** | One separately configured and revisioned use of a plugin (for example one Pushover application token, one printer or one SMTP server). Several instances of the same plugin are independent and run in separate processes. | Plugin artifact, Processing instance |
 | **Host capability** | SDK-mediated ability declared by a plugin and explicitly approved for an instance, including optional network, filesystem, or command access. | Domain Capability/Grant |
 | **Secret reference** | Versioned reference to an instance-bound confidential configuration value in the Core Secret store or an external provider. | Plaintext configuration |
 | **Secret store** | Core resolution boundary for encrypted local secrets and externally supplied secrets, including mounted Kubernetes Secret files or environment values; external secrets need not be copied to the database. | Backup |
-| **Extension field** | Plugin-namespaced, typed, versioned field attached to a supported Core entity (initially Unit), with explicit read/write permissions and no automatic rights. | Assignment, arbitrary database column |
 | **Workflow** | Versioned ingest-processing definition selecting Transmissions and composing bounded parsing/mapping/branching steps or trusted installed code steps. Multiple matching Workflows may run independently. | Subscription, Delivery |
-| **Workflow definition version** | Immutable saved selector/step/output-schema definition referenced by a Workflow's active pointer and source-bound Processing results. Saving is not activation or historical reprocessing. | Mutable Workflow revision, Address-rule validity |
+| **Workflow definition version** | Immutable saved selector/step/output definition (outputs map into Message attributes, [D-150](decisions/04-processing-and-plugins.md#d-150)) referenced by a Workflow's active pointer and source-bound Processing results. Saving is not activation or historical reprocessing. | Mutable Workflow revision, Address-rule validity |
 | **Processing status** | Per-Transmission marker (`none`, `pending`, `completed`, `failed`) derived from the candidates of the currently selected Workflows. Accepted evidence is visible from intake; Workflow results attach to the Message when they complete, and `processing.completed` is the trigger for result-dependent reactions. Replaces the ingest publication barrier under [D-135](decisions/10-foundation-redesign.md#d-135). | Provider acceptance, whole-Message retention |
 | **Workflow selector** | Explicit trigger and correlated domain/Payload predicate deciding whether a Workflow runs for a particular Transmission. | Grant |
 | **Workflow candidate work** | Durable evaluation work for a scope-eligible Workflow; its admission does not prove that the selector matched. The Processing and Delivery domains own its [approved lifecycle](../docs/workflows.md#worker-dispatch), introduced under D-75. | Selected Workflow execution, published Processing result |
 | **Execution generation proposal** | Unapproved D-77 alternative for separately identifiable evaluation work under the stable logical candidate key. The Processing and Delivery domains own the [reselection binding review](decisions/10-foundation-redesign.md#d-135-foundation-redesign-after-the-2026-11-06-re-evaluation); it is not the current adopted schema or a second queue. | Candidate revision, Fencing token, automatically renewed retry budget |
-| **Processing result** | Typed, namespaced derived fields and status from one Workflow version and input Transmission. A field such as `level` is data, not a Domain event. | Original Payload, Domain event type |
+| **Processing result** | Typed Message-attribute values ([D-150](decisions/04-processing-and-plugins.md#d-150)) and status from one Workflow version and input Transmission; it is stored unchanged, and the Effective attribute value is derived from it. A field such as `level` is data, not a Domain event. | Original Payload, Domain event type |
+| **Attribute schema** | Administrator-defined, Agency-assigned ([D-151](decisions/06-identity-and-authorization.md#d-151)) set of typed, possibly nested fields with immutable keys and editable label, description and optional icon. Its subject is Message (written only by Workflows) or Unit (maintained by managers). Introduced by [D-150](decisions/04-processing-and-plugins.md#d-150). | Workflow definition version, the plugin manifest's `resultSchema`, Readable field groups |
+| **Message attribute** | Field of a Message Attribute schema; the only Workflow output that is persisted. Intermediate step outputs stay internal to a run. | Original Payload, Workflow step output |
+| **Unit attribute** | Field of a Unit Attribute schema on a Unit, inherited from Organization defaults like Unit settings; it never changes rights and never triggers reprocessing. | Unit setting, Unit parameter, Extension field (dropped) |
+| **Effective attribute value** | The latest published value of a top-level Message-attribute field per Message and target position, with its producing Workflow, definition version and result; searches, Subscriptions and Layouts use it. | Stored Processing result |
+| **Field registry** | The single declaration of every field usable in Workflows, search, Subscription filters and Layouts (kind, field group, filterability, label, icon), from built-in fields and Attribute schemas. Introduced by [D-152](decisions/07-query-and-live.md#d-152). | Readable field groups, Attribute schema |
+| **Subscription health** | `valid` or `invalid` (with a reason) state of a Subscription; `invalid` when its filter or Layout no longer compiles ([D-152](decisions/07-query-and-live.md#d-152)). | Subscription state `active`/`paused`, Delivery state |
 | **Target-result binding candidate** | Stable historical heading for [C-11's approved target-result binding](../docs/workflows.md#result-shape): target-correlated field sets inside one Processing result, not a new original target/Message. | Per-target Transmission splitting, field permission scope |
 | **Presentation template** | Versioned, permission-filtered rendering definition using an established template engine's constrained logic and escaped data interpolation. | Arbitrary browser script |
 | **Text key** | Stable identifier in the English text catalog, mapped to typed parameters and optional plural selection. | Domain event/error code |
-| **Field set** | Explicit set of readable domain field categories; computed and plugin-defined fields receive no rights merely by existing. | Scope |
+| **Readable field groups** | Fixed, product-defined field groups a Principal may read ([D-68](decisions/06-identity-and-authorization.md#d-68), [D-69](decisions/06-identity-and-authorization.md#d-69)); computed and plugin-defined fields receive no rights merely by existing. | Scope, Attribute schema |
 | **Scope** | One explicit permission or filter dimension and its concrete references; an absent/deleted restricting reference never means unrestricted access. | Workflow selector |
 | **Page token** | Opaque URL-safe continuation reference, bound to a query and Principal context, never proof of authorization. | SSE resume token |
 | **SSE resume token** | Opaque stream-position reference used as SSE `id`/`Last-Event-ID`, bound to a permitted view and current revision checks. | Domain event ID, Page token |
@@ -180,11 +185,11 @@ Exact identifier spelling, schema and behavior have the same owner. This section
 | Submission, Gateway operations and acceptance fields | [C-01](contracts/c-01-transmission-acceptance.md), [C-02 Protocol fields](contracts/c-02-protocol-payload.md) |
 | Membership/representative and internal Message fields | [C-03](contracts/c-03-message-grouping.md) |
 | Target resolution, contribution/support and correction fields | [C-05](contracts/c-05-matching-correction.md) |
-| Grant scopes, global field permissions, field sets and exact action names | [C-06](contracts/c-06-identity-authorization.md) |
+| Grant scopes, global field permissions, readable field groups and exact action names | [C-06](contracts/c-06-identity-authorization.md) |
 | Query/live fields, errors/codes and API fallback mappings | [C-07](contracts/c-07-query-live.md) |
 | Domain event envelope/type names and job fields | [C-08](contracts/c-08-events-jobs.md) |
 | Delivery state and input/attempt fields | [C-09](contracts/c-09-delivery.md) |
-| Plugin namespaces and Extension fields | [C-10](contracts/c-10-plugin-host.md) |
+| Plugin namespaces | [C-10](contracts/c-10-plugin-host.md) |
 | Workflow/result fields, text-key namespaces and English entries | [C-11](contracts/c-11-processing-presentation.md) |
 | Account cleanup fields/states | [C-13](contracts/c-13-account-lifecycle.md) |
 | Operation names | Respective [C-ID owner](domain-contracts.md#contract-register) |
@@ -236,6 +241,8 @@ Personas describe who uses GoPager in requirements; they are not permissions. Pe
 | Message (for UI or error text) | Not used. | Localized text |
 | Event (unqualified) | Not used. | Domain event, EAS event code, Incident |
 | Notification | Not used as a domain term. | Delivery |
+| Extension field | Dropped by [D-135](decisions/10-foundation-redesign.md#d-135) item 15; not used. | Unit attribute, Unit parameter |
+| Field set | Renamed; collides with Attribute schema. | Readable field groups |
 
 ## Stored Information (Logical, Not a Data Model)
 
@@ -255,6 +262,7 @@ These rules bind every work package and every agent or person working on GoPager
 
 | Date | Old name(s) | New name | Meaning / reason | Package |
 | --- | --- | --- | --- | --- |
+| 2026-11-11 | Field set | Readable field groups | The vague name invited confusion with the new Attribute schemas ([D-152](decisions/07-query-and-live.md#d-152)). | AP-21 |
 | 2026-11-08 | View time | Message time | D-135 orders and filters feeds by the stored Message time; the per-query View time is retired, per-Unit first times stay in details. | AP-10 |
 | 2026-11-06 | DOM-01..DOM-08 | Intake, Grouping, Master data, Assignment, Identity, Query, Delivery, Processing | Numbered domain IDs replaced by fixed names usable in code (`producer.domain`) and permanent documentation. | Documentation |
 | 2026-10-26 | Mandatory Message aliases / enduring Message identity | Message merge without identity-continuity requirement | D-40 withdraws old-link and ID-mapping requirements; authorization-relevant identities and operation-specific deduplication are unaffected. | AP-05 |

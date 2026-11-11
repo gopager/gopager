@@ -14,8 +14,10 @@ Complete each producer and verify its handover before starting a dependent AP. S
 | AP-08 | [Master Data and Correction](work-packages/ap-08-master-data-correction-after-intake.md) | T060..T062 | done ([handover](execution/ap-08.md#handover)) |
 | AP-09 | [Gateway and Network Administration](work-packages/ap-09-gateway-network.md) | T086..T088 | done ([handover](execution/ap-09.md#handover)) |
 | AP-10 | [Query and Live API](work-packages/ap-10-query-live.md) | T063..T065 | done ([handover](execution/ap-10.md#handover)) |
-| AP-11 | [Events and Delivery](work-packages/ap-11-events-delivery.md) | T066..T068 | open |
+| AP-11 | [Events and Delivery](work-packages/ap-11-events-delivery.md) | T066..T068 | done ([handover](execution/ap-11.md#handover)) |
+| AP-21 | [Attribute Schemas, Agency Binding and Field Registry](work-packages/ap-21-attribute-schemas.md) ([D-150](decisions/04-processing-and-plugins.md#d-150), [D-151](decisions/06-identity-and-authorization.md#d-151), [D-152](decisions/07-query-and-live.md#d-152)) | T092..T094 | open |
 | AP-12 | [Plugin Host and Initial Targets](work-packages/ap-12-plugin-host.md) | T069..T071 | open |
+| AP-22 | [Unit Attributes](work-packages/ap-22-unit-attributes.md) ([D-150](decisions/04-processing-and-plugins.md#d-150)) | T095..T096 | open |
 | AP-13 | [Processing Presentation and Integration](work-packages/ap-13-processing-presentation-integration.md) | T072..T074 | open |
 | AP-14 | [Identity Lifecycle Completion](work-packages/ap-14-identity-lifecycle.md) | T075..T077 | open |
 | AP-15 | [Frontend](work-packages/ap-15-frontend.md) | T078..T080, T089 | open |

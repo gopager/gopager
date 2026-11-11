@@ -27,7 +27,7 @@
   - `internal/httpapi/` and the versioned configuration OpenAPI
   - `cmd/gopager/` — managed invocation, lifecycle and root registration only
   - `docs/` — plugin, operations, HTTP API and development documentation (`docs/development.md`)
-- **Compatibility context:** [AP-13](ap-13-processing-presentation-integration.md), [AP-14](ap-14-identity-lifecycle.md), [AP-15](ap-15-frontend.md), [AP-16](ap-16-operations.md) and [AP-17](ap-17-integration-evidence.md) consume the manifest/SDK/input/attempt versions, configuration/Secret owner interfaces, installed-host calls, management APIs and provider evidence. Their code is not required.
+- **Compatibility context:** [AP-22](ap-22-unit-attributes.md) binds Delivery target inputs to Unit attributes ([D-150](../decisions/04-processing-and-plugins.md#d-150)) and consumes the plugin-declared input kinds; [AP-13](ap-13-processing-presentation-integration.md), [AP-14](ap-14-identity-lifecycle.md), [AP-15](ap-15-frontend.md), [AP-16](ap-16-operations.md) and [AP-17](ap-17-integration-evidence.md) consume the manifest/SDK/input/attempt versions, configuration/Secret owner interfaces, installed-host calls, management APIs and provider evidence. Their code is not required.
 
 ## Open User Decisions
 
