@@ -107,6 +107,8 @@ func buildActionScopes() map[string][]string {
 	add("delivery.read delivery.retry delivery.redeliver", "all", "agency", "unit", "unitCollection", "account")
 	add("workflow.read workflow.create workflow.update workflow.delete workflow.preview workflow.activate workflow.reprocess presentation.manage",
 		"all", "agency", "unit")
+	// Attribute schemas are Agency-bound definitions: managing one needs the right in every Agency it is assigned to.
+	add("attribute-schema.manage", "all", "agency")
 	add("notice.manage plugin.configure operations.manage saved-view.manage-global", "all")
 	add("audit.read", "all", "agency", "account")
 	return out

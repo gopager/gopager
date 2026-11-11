@@ -33,6 +33,9 @@ func textBlock(text string) any { return map[string]any{"kind": "text", "text": 
 // layoutCreated posts a layout that must be accepted and returns it.
 func (f *deliveryFixture) layoutCreated(bearer string, body map[string]any) presentation.Layout {
 	f.t.Helper()
+	if _, ok := body["agencies"]; !ok {
+		body["agencies"] = []uuid.UUID{f.agency}
+	}
 	response := f.subCall(bearer, http.MethodPost, "/api/v1/layouts", body)
 	if response.status != http.StatusCreated {
 		f.t.Fatalf("layout create returned %d/%s", response.status, response.Code)
@@ -48,7 +51,7 @@ func (f *deliveryFixture) layoutCreated(bearer string, body map[string]any) pres
 func (f *deliveryFixture) layoutUpdate(bearer string, id uuid.UUID, revision int64, body map[string]any) subResponse {
 	f.t.Helper()
 	update := map[string]any{"schemaVersion": 1, "expectedRevision": strconv.FormatInt(revision, 10),
-		"name": body["name"], "definition": body["definition"]}
+		"name": body["name"], "definition": body["definition"], "agencies": []uuid.UUID{f.agency}}
 	return f.subCall(bearer, http.MethodPut, "/api/v1/layouts/"+id.String(), update)
 }
 
@@ -96,38 +99,58 @@ func TestLayoutCreateReplayAndVersionedUpdate(t *testing.T) {
 	}
 }
 
-// TestLayoutRightsSeparateWritersReadersAndOthers proves that presentation.manage is needed to
-// write, that Subscription managers may read, and that other accounts are refused.
-func TestLayoutRightsSeparateWritersReadersAndOthers(t *testing.T) {
+// TestLayoutRightsFollowAgencies proves that presentation.manage in the layout's Agency is needed
+// to write, that message.read in it is enough to read, and that subscription rights alone and
+// rights in other Agencies show nothing.
+func TestLayoutRightsFollowAgencies(t *testing.T) {
 	t.Parallel()
 	f := newDeliveryFixture(t, delivery.AdmissionLimits{})
 	manager := f.layoutManager()
 	created := f.layoutCreated(manager, layoutBody("text", []any{textBlock("x")}))
-	own, _ := f.subscriber("payload")
-	global, _ := f.caller([]string{"subscription.manage-global"}, authz.Scope{Kind: "all"}, []string{"payload"})
-	other, _ := f.caller([]string{"message.read"}, authz.Scope{Kind: "all"}, []string{"payload"})
 	path := "/api/v1/layouts/" + created.ID.String()
+	foreignAgency := seedAgency(t, f.store)
+	inAgency := func(actions ...string) string {
+		bearer, _ := f.caller(actions, authz.Scope{Kind: "agency", References: []string{f.agency.String()}}, []string{"payload"})
+		return bearer
+	}
+	reader := inAgency("message.read")
+	managerOfAgency := inAgency("presentation.manage")
+	foreign, _ := f.caller([]string{"presentation.manage", "message.read"},
+		authz.Scope{Kind: "agency", References: []string{foreignAgency.String()}}, []string{"payload"})
+	subscriber, _ := f.caller([]string{"subscription.manage-own", "subscription.manage-global"}, authz.Scope{Kind: "all"}, []string{"payload"})
 
-	for name, bearer := range map[string]string{"manage-own": own, "manage-global": global} {
+	for name, bearer := range map[string]string{"reader": reader, "agency manager": managerOfAgency} {
 		if got := f.subCall(bearer, http.MethodGet, path, nil); got.status != http.StatusOK {
 			t.Errorf("%s read = %d/%s", name, got.status, got.Code)
 		}
 		if got := f.subCall(bearer, http.MethodGet, "/api/v1/layouts", nil); got.status != http.StatusOK {
 			t.Errorf("%s list = %d/%s", name, got.status, got.Code)
 		}
-		if got := f.subCall(bearer, http.MethodPost, "/api/v1/layouts", layoutBody("text", []any{textBlock("y")})); got.status != http.StatusForbidden {
-			t.Errorf("%s write = %d/%s, want 403", name, got.status, got.Code)
-		}
 	}
-	if got := f.subCall(other, http.MethodGet, path, nil); got.status != http.StatusForbidden {
-		t.Errorf("unrelated account read = %d/%s, want 403", got.status, got.Code)
+	if got := f.subCall(reader, http.MethodPost, "/api/v1/layouts", withAgencies(layoutBody("text", []any{textBlock("y")}), f.agency)); got.status != http.StatusForbidden {
+		t.Errorf("reader write = %d/%s, want 403", got.status, got.Code)
 	}
-	if got := f.subCall(other, http.MethodGet, "/api/v1/layouts", nil); got.status != http.StatusForbidden {
-		t.Errorf("unrelated account list = %d/%s, want 403", got.status, got.Code)
+	if got := f.subCall(managerOfAgency, http.MethodPost, "/api/v1/layouts", withAgencies(layoutBody("text", []any{textBlock("y")}), f.agency)); got.status != http.StatusCreated {
+		t.Errorf("agency manager write = %d/%s, want 201", got.status, got.Code)
 	}
-	if got := f.subCall(other, http.MethodPost, "/api/v1/layouts", layoutBody("text", []any{textBlock("y")})); got.status != http.StatusForbidden {
-		t.Errorf("unrelated account write = %d/%s, want 403", got.status, got.Code)
+	if got := f.subCall(managerOfAgency, http.MethodPost, "/api/v1/layouts", withAgencies(layoutBody("text", []any{textBlock("y")}), f.agency, foreignAgency)); got.status != http.StatusForbidden {
+		t.Errorf("write into a foreign Agency = %d/%s, want 403", got.status, got.Code)
 	}
+	if got := f.subCall(foreign, http.MethodGet, path, nil); got.status != http.StatusNotFound {
+		t.Errorf("foreign Agency read = %d/%s, want 404", got.status, got.Code)
+	}
+	if got := f.subCall(subscriber, http.MethodGet, "/api/v1/layouts", nil); got.status != http.StatusForbidden {
+		t.Errorf("subscription rights list = %d/%s, want 403", got.status, got.Code)
+	}
+	if got := f.subCall(subscriber, http.MethodGet, path, nil); got.status != http.StatusForbidden {
+		t.Errorf("subscription rights read = %d/%s, want 403", got.status, got.Code)
+	}
+}
+
+// withAgencies sets the Agencies of a layout body.
+func withAgencies(body map[string]any, agencies ...uuid.UUID) map[string]any {
+	body["agencies"] = agencies
+	return body
 }
 
 // TestMarkdownLayoutEscapesPayloadMetacharacters proves that a Subscription with a Markdown

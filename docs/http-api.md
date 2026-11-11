@@ -234,6 +234,7 @@ Scope kinds each action accepts (`internal/authz/grants.go` is the source; a gra
 | `gateway.diagnostics.read`, `gateway.credential.rotate` | `all`, `agency`, `gateway` |
 | `delivery.read`, `delivery.retry`, `delivery.redeliver` | `all`, `agency`, `unit`, `unitCollection`, `account` |
 | `workflow.*`, `presentation.manage` | `all`, `agency`, `unit` |
+| `attribute-schema.manage` | `all`, `agency` |
 | `audit.read` | `all`, `agency`, `account` |
 
 Grant semantics:
@@ -274,7 +275,8 @@ Scope evaluation per resource:
 | Processing instance | The global `plugin.configure` right. |
 | Subscription | `subscription.manage-own` on the caller's own account for personal Subscriptions; `subscription.manage-global` on the technical subscriber's account for global ones. See [Subscriptions](#subscriptions). |
 | Delivery | `delivery.read`, `delivery.retry` and `delivery.redeliver`, each matched against the subscriber's account, the Agencies and Units the Delivery concerns and their Unit collections, within the grant's maximum data age. See [Deliveries](#deliveries). |
-| Layout | Reads need `presentation.manage`, `subscription.manage-own` or `subscription.manage-global`; changes need `presentation.manage`. See [Layouts](#layouts). |
+| Layout | The Agencies the layout is assigned to: visible with `presentation.manage` or `message.read` in one of them; changes need `presentation.manage` in every one. See [Layouts](#layouts). |
+| Attribute schema | The Agencies the schema is assigned to: visible through any right that picks or fills attributes; changes need `attribute-schema.manage` in every one. See [Attribute schemas](#attribute-schemas). |
 
 ## Conventions
 
@@ -1157,18 +1159,22 @@ schemas `Delivery` and `DeliveryAttempt`.
 | Method | Path | Right | Success | Purpose |
 | --- | --- | --- | --- | --- |
 | GET | `/layouts` | see below | 200 | List, ordered by name, then ID |
-| POST | `/layouts` | `presentation.manage` | 201 | Create (`commandId`, `name`, `definition`) |
+| POST | `/layouts` | `presentation.manage` | 201 | Create (`commandId`, `name`, `agencies`, `definition`) |
 | GET | `/layouts/{id}` | see below | 200 | Read at the current version |
-| PUT | `/layouts/{id}` | `presentation.manage` | 200 | Replace `name` and `definition` at `expectedRevision`; appends a version |
+| PUT | `/layouts/{id}` | `presentation.manage` | 200 | Replace `name`, `agencies` and `definition` at `expectedRevision`; appends a version |
 | DELETE | `/layouts/{id}` | `presentation.manage` | 200 | Delete at `expectedRevision`; returns `{"id","revision"}` |
 | GET | `/layouts/{id}/versions/{version}` | see below | 200 | Read one immutable version |
 
 A layout is a named, versioned arrangement of catalog fields that a Subscription renders a Domain event with. It is
 data, not a template: it has no expressions, loops or markup. Schemas: `Layout`, `LayoutDefinition`, `LayoutBlock`.
 
-- **Rights.** Reads need `presentation.manage`, `subscription.manage-own` or `subscription.manage-global`, so
-  Subscription authors can pick a layout; a caller with none of them gets `403 FORBIDDEN`. Changes need
-  `presentation.manage`. Layouts are not scoped to an owner.
+- **Agencies.** Every layout is assigned to 1 to 256 distinct Agencies (`agencies`, required on create and update and in
+  every response); an unknown Agency is `400`. A layout is listed and readable for a caller who
+  holds `presentation.manage` or `message.read` in at least one of its Agencies: a grant of scope `all` or `agency`, or
+  of scope `unit` or `unitCollection` that covers a Unit of that Agency (`account` scope does not count). A layout in no
+  visible Agency is `404`; a caller with neither right anywhere gets `403 FORBIDDEN`. Create, update and delete need
+  `presentation.manage` in every Agency involved: the new set on create, the stored and the new set on update, the
+  stored set on delete. Built-in default layouts are global.
 - **Definition.** `{"schemaVersion":1,"outputKind","blocks":[…]}` with at least one block. Block kinds:
   `text` (literal `text`), `field` and `chip` (a catalog `field` and an optional `label`), `link` (a `label` and a
   `url` built from a template with the placeholders `{0}` to `{9}` over up to 10 `fields`), `section` (an optional
@@ -1191,6 +1197,48 @@ data, not a template: it has no expressions, loops or markup. Schemas: `Layout`,
 - `POST` takes a `commandId`; an identical replay returns the layout as it is now, or `404` if it was deleted
   since. `GET /layouts` uses [offset paging](#pagination).
 - Layouts write no domain event.
+
+### Attribute schemas
+
+| Method | Path | Right | Success | Purpose |
+| --- | --- | --- | --- | --- |
+| GET | `/attribute-schemas` | see below | 200 | List, ordered by key; `agency` narrows to one Agency |
+| POST | `/attribute-schemas` | `attribute-schema.manage` | 201 | Create (`commandId`, `key`, `label`, `description`, `subject`, `fields`, `agencies`, `deprecated`) |
+| GET | `/attribute-schemas/{key}` | see below | 200 | Read |
+| PUT | `/attribute-schemas/{key}` | `attribute-schema.manage` | 200 | Replace at `expectedRevision` (compatible changes only) |
+| DELETE | `/attribute-schemas/{key}` | `attribute-schema.manage` | 200 | Delete at `expectedRevision`; returns `{"key","revision"}` |
+
+An Attribute schema declares typed, nested fields for the attributes of Messages (`subject` `message`, written by
+Workflows) or of Units (`subject` `unit`, maintained by managers). Schemas: `AttributeSchema`, `AttributeField`.
+
+- **Key.** The identifier is the `key`: 1 to 64 lowercase ASCII letters, digits and `-`, starting with a letter. It is
+  fixed at creation, and the path parameter `{key}` is that key. Field and property names are 1 to 64 ASCII letters,
+  digits and `_`, starting with a letter, so dotted field paths stay unambiguous.
+- **Fields.** Each field has a `kind` (`string`, `boolean`, `integer`, `number`, `timestamp`, `bytes`, `object`, `list`;
+  `object` has `properties`, `list` an `element`) with `nullable`, `optional` (object properties only; top-level fields
+  are always optional) and display metadata `label` (at most 256 characters), `description` (at most 2048 characters),
+  `icon` (a Unit icon identifier) and `deprecated`. A schema has at least one field. Type limits (nesting depth,
+  properties per object, field count) are those of Processing field types; exceeding one is `413 RESOURCE_LIMIT`, any
+  other invalid content `400`.
+- **Compatibility.** An update may add top-level fields and optional object properties at any depth, change labels,
+  descriptions and icons, set or clear deprecation and change the Agencies. It may not change the subject, remove a
+  field or property, or change a type, nullability or optionality (`400`); such changes need a new schema.
+- **Deprecation.** `deprecated` on a schema or a field hides it from new references; stored values stay readable and
+  existing references keep working.
+- **Delete.** A schema that an active Workflow version (as an output), the current version of a layout, a Subscription
+  filter or a saved view references is `409 REVISION_CONFLICT`, like a stale revision. The conflict does not say which.
+- **Agencies and rights.** A schema is assigned to 1 to 256 distinct Agencies. Create, update and delete need
+  `attribute-schema.manage` in every Agency involved (new set; stored and new set; stored set). A schema is visible to a
+  caller holding any of `message.read`, `workflow.read`, `presentation.manage`, `subscription.manage-own`,
+  `subscription.manage-global`, `saved-view.manage-global`, `unit.update` or `attribute-schema.manage`: a grant of scope
+  `all` or `account` shows every schema, `agency` the schemas of that Agency, `unit` and `unitCollection` those of the
+  Agency of the Units. Metadata is not confidential, so the maximum data age is ignored. An invisible schema is `404`; a
+  caller with none of these rights gets `403 FORBIDDEN`.
+- `POST` takes a `commandId`; an existing key is `409 REVISION_CONFLICT`, an unknown Agency `400`. An identical replay
+  returns the schema as it is now, or `404` if it was deleted since. `GET /attribute-schemas` uses
+  [offset paging](#pagination); `agency` must be a UUID, any other parameter is `400`.
+- Every create, update and delete increments a catalog revision in the same transaction, which caches of the catalog use.
+- Schemas write no domain event.
 
 ### Delivery sending admission
 

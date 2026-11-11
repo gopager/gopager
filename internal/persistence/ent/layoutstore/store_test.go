@@ -56,6 +56,7 @@ func (noFields) FieldSchema(processing.FieldRef) (processing.FieldSchema, error)
 }
 
 type world struct {
+	agency   uuid.UUID
 	store    *postgres.Store
 	layouts  *layoutstore.Store
 	manager  *presentation.Service
@@ -65,6 +66,12 @@ type world struct {
 
 func serviceFor(t *testing.T, store *postgres.Store, layouts *layoutstore.Store, action string) *presentation.Service {
 	t.Helper()
+	return serviceWithScope(t, store, layouts, action, authz.Scope{Kind: "all"})
+}
+
+// serviceWithScope grants the action within scope.
+func serviceWithScope(t *testing.T, store *postgres.Store, layouts *layoutstore.Store, action string, scope authz.Scope) *presentation.Service {
+	t.Helper()
 	receipts, err := commandstore.New(store)
 	if err != nil {
 		t.Fatal(err)
@@ -72,7 +79,7 @@ func serviceFor(t *testing.T, store *postgres.Store, layouts *layoutstore.Store,
 	principal := uuid.NewString()
 	authority := authz.Authority{PrincipalID: principal, Revision: 1, Active: true, Grants: []authz.Grant{{
 		ID: uuid.NewString(), SubjectID: principal, SubjectKind: "principal", Actions: []string{action},
-		Scope: authz.Scope{Kind: "all"}}}}
+		Scope: scope}}}
 	service, err := presentation.NewService(store, staticResolver{identity.Authentication{Authority: authority,
 		Kind: identity.SessionProof}}, fixedClock{}, layouts, receipts, noFields{})
 	if err != nil {
@@ -96,13 +103,36 @@ func newWorld(t *testing.T) *world {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &world{store: store, layouts: layouts, resolver: resolver,
+	return &world{store: store, layouts: layouts, resolver: resolver, agency: seedAgency(t, store),
 		manager: serviceFor(t, store, layouts, presentation.ManageAction),
-		reader:  serviceFor(t, store, layouts, presentation.SubscriptionManageOwnAction)}
+		reader:  serviceFor(t, store, layouts, presentation.ReadAction)}
+}
+
+// seedAgency inserts an Agency, which layouts must be assigned to.
+func seedAgency(t *testing.T, store *postgres.Store) uuid.UUID {
+	t.Helper()
+	id := uuid.New()
+	err := store.WithinTransaction(context.Background(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		_, err = executor.ExecContext(tx.Context(), `INSERT INTO agencies (id, name) VALUES ($1, 'Agency')`, id)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
 }
 
 func layout(kind, text string) processing.Layout {
 	return processing.Layout{SchemaVersion: 1, OutputKind: kind, Blocks: []processing.LayoutBlock{{Kind: "text", Text: text}}}
+}
+
+// input returns a valid layout input in the world's Agency.
+func (w *world) input(name, text string) presentation.LayoutInput {
+	return presentation.LayoutInput{Name: name, Definition: layout("text", text), Agencies: []uuid.UUID{w.agency}}
 }
 
 func allow(identity.Authentication) error { return nil }
@@ -112,7 +142,7 @@ func TestLayoutLifecycle(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()
 	command := uuid.New()
-	input := presentation.LayoutInput{Name: "Alarm", Definition: layout("text", "v1")}
+	input := w.input("Alarm", "v1")
 	created, err := w.manager.Create(ctx, identity.Proof{}, command, input, allow)
 	if err != nil || created.Revision != 1 || created.OutputKind != "text" {
 		t.Fatalf("create = %+v, %v", created, err)
@@ -129,7 +159,7 @@ func TestLayoutLifecycle(t *testing.T) {
 	}
 
 	updated, err := w.manager.Update(ctx, identity.Proof{}, created.ID, 1,
-		presentation.LayoutInput{Name: "Alarm", Definition: layout("text", "v2")}, allow)
+		w.input("Alarm", "v2"), allow)
 	if err != nil || updated.Revision != 2 || updated.Definition.Blocks[0].Text != "v2" {
 		t.Fatalf("update = %+v, %v", updated, err)
 	}
@@ -171,12 +201,12 @@ func TestResolverReadsCurrentVersionAndDefaults(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()
 	created, err := w.manager.Create(ctx, identity.Proof{}, uuid.New(),
-		presentation.LayoutInput{Name: "A", Definition: layout("text", "v1")}, allow)
+		w.input("A", "v1"), allow)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := w.manager.Update(ctx, identity.Proof{}, created.ID, 1,
-		presentation.LayoutInput{Name: "A", Definition: layout("text", "v2")}, allow); err != nil {
+		w.input("A", "v2"), allow); err != nil {
 		t.Fatal(err)
 	}
 	resolved, err := w.resolve(processing.LayoutRequest{LayoutID: &created.ID, OutputKind: "text"})
@@ -200,7 +230,7 @@ func TestDeleteRefusesReferencedLayout(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
 	ctx := context.Background()
-	input := presentation.LayoutInput{Name: "A", Definition: layout("text", "v1")}
+	input := w.input("A", "v1")
 	used, err := w.manager.Create(ctx, identity.Proof{}, uuid.New(), input, allow)
 	if err != nil {
 		t.Fatal(err)
@@ -249,7 +279,7 @@ func TestDeleteWaitsForAConcurrentReferenceAndConflicts(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()
 	created, err := w.manager.Create(ctx, identity.Proof{}, uuid.New(),
-		presentation.LayoutInput{Name: "A", Definition: layout("text", "v1")}, allow)
+		w.input("A", "v1"), allow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,4 +319,103 @@ func TestDeleteWaitsForAConcurrentReferenceAndConflicts(t *testing.T) {
 	if err := <-deleted; !errors.Is(err, authz.ErrRevisionConflict) {
 		t.Fatalf("delete during a referencing save: %v", err)
 	}
+}
+
+// TestAgencyBinding proves that a layout keeps its Agencies, that an unknown Agency is invalid
+// input, and that visibility follows the Agency scopes of the grants.
+func TestAgencyBinding(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	ctx := context.Background()
+	other := seedAgency(t, w.store)
+	created, err := w.manager.Create(ctx, identity.Proof{}, uuid.New(), w.input("A", "v1"), allow)
+	if err != nil || len(created.Agencies) != 1 || created.Agencies[0] != w.agency {
+		t.Fatalf("create = %+v, %v", created, err)
+	}
+	unknown := w.input("B", "v1")
+	unknown.Agencies = []uuid.UUID{uuid.New()}
+	if _, err := w.manager.Create(ctx, identity.Proof{}, uuid.New(), unknown, allow); !errors.Is(err, authz.ErrInvalidInput) {
+		t.Fatalf("unknown Agency on create: %v", err)
+	}
+	if _, err := w.manager.Update(ctx, identity.Proof{}, created.ID, 1, unknown, allow); !errors.Is(err, authz.ErrInvalidInput) {
+		t.Fatalf("unknown Agency on update: %v", err)
+	}
+	moved := w.input("A", "v2")
+	moved.Agencies = []uuid.UUID{other}
+	updated, err := w.manager.Update(ctx, identity.Proof{}, created.ID, 1, moved, allow)
+	if err != nil || len(updated.Agencies) != 1 || updated.Agencies[0] != other {
+		t.Fatalf("update = %+v, %v", updated, err)
+	}
+
+	scoped := func(kind string, references ...uuid.UUID) *presentation.Service {
+		refs := make([]string, len(references))
+		for i, id := range references {
+			refs[i] = id.String()
+		}
+		return serviceWithScope(t, w.store, w.layouts, presentation.ReadAction, authz.Scope{Kind: kind, References: refs})
+	}
+	for name, test := range map[string]struct {
+		service *presentation.Service
+		visible bool
+	}{
+		"agency of the layout":  {scoped("agency", other), true},
+		"other agency":          {scoped("agency", w.agency), false},
+		"unit of the Agency":    {scoped("unit", seedUnit(t, w.store, other, nil)), true},
+		"unit of other Agency":  {scoped("unit", seedUnit(t, w.store, w.agency, nil)), false},
+		"collection of Agency":  {scoped("unitCollection", seedCollection(t, w.store, seedUnit(t, w.store, other, nil))), true},
+		"collection elsewhere":  {scoped("unitCollection", seedCollection(t, w.store, seedUnit(t, w.store, w.agency, nil))), false},
+		"all":                   {w.reader, true},
+		"deleted unit is blind": {scoped("unit", seedUnit(t, w.store, other, ptr(true))), false},
+	} {
+		page, err := test.service.List(ctx, identity.Proof{}, units.PageInput{})
+		if err != nil || (page.Total == 1) != test.visible || len(page.Items) != page.Total {
+			t.Errorf("%s: list = %+v, %v, want visible=%v", name, page, err, test.visible)
+		}
+		_, err = test.service.Read(ctx, identity.Proof{}, created.ID)
+		if test.visible != (err == nil) || (err != nil && !errors.Is(err, authz.ErrNotFound)) {
+			t.Errorf("%s: read: %v, want visible=%v", name, err, test.visible)
+		}
+	}
+}
+
+func ptr[T any](v T) *T { return &v }
+
+// seedUnit inserts a Unit of the Agency, deleted when deleted points to true.
+func seedUnit(t *testing.T, store *postgres.Store, agency uuid.UUID, deleted *bool) uuid.UUID {
+	t.Helper()
+	id := uuid.New()
+	err := store.WithinTransaction(context.Background(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		_, err = executor.ExecContext(tx.Context(), `INSERT INTO units (id, name, agency_id, deleted) VALUES ($1, 'Unit', $2, $3)`,
+			id, agency, deleted != nil && *deleted)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+// seedCollection inserts a Unit collection with the Unit as its member.
+func seedCollection(t *testing.T, store *postgres.Store, unit uuid.UUID) uuid.UUID {
+	t.Helper()
+	id := uuid.New()
+	err := store.WithinTransaction(context.Background(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		if _, err = executor.ExecContext(tx.Context(), `INSERT INTO unit_collections (id, name) VALUES ($1, 'Collection')`, id); err != nil {
+			return err
+		}
+		_, err = executor.ExecContext(tx.Context(), `INSERT INTO unit_collection_memberships (unit_id, collection_id) VALUES ($1, $2)`, unit, id)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
 }

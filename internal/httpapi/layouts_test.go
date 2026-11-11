@@ -66,6 +66,7 @@ func TestLayoutRoutes(t *testing.T) {
 	t.Parallel()
 	id := uuid.NewString()
 	definition := `{"schemaVersion":1,"outputKind":"text","blocks":[{"kind":"text","text":"x"}]}`
+	agency := uuid.NewString()
 	for _, test := range []struct {
 		name, method, path, body string
 		status                   int
@@ -76,9 +77,9 @@ func TestLayoutRoutes(t *testing.T) {
 		{"version text", "GET", "/api/v1/layouts/" + id + "/versions/x", "", 400},
 		{"version overflow", "GET", "/api/v1/layouts/" + id + "/versions/99999999999999999999", "", 400},
 		{"bad id", "GET", "/api/v1/layouts/nope", "", 400},
-		{"create", "POST", "/api/v1/layouts", `{"schemaVersion":1,"commandId":"` + uuid.NewString() + `","name":"n","definition":` + definition + `}`, 201},
+		{"create", "POST", "/api/v1/layouts", `{"schemaVersion":1,"commandId":"` + uuid.NewString() + `","name":"n","agencies":["` + agency + `"],"definition":` + definition + `}`, 201},
 		{"create without definition", "POST", "/api/v1/layouts", `{"schemaVersion":1,"commandId":"` + uuid.NewString() + `","name":"n"}`, 400},
-		{"update", "PUT", "/api/v1/layouts/" + id, `{"schemaVersion":1,"expectedRevision":"4","name":"n","definition":` + definition + `}`, 200},
+		{"update", "PUT", "/api/v1/layouts/" + id, `{"schemaVersion":1,"expectedRevision":"4","name":"n","agencies":["` + agency + `"],"definition":` + definition + `}`, 200},
 		{"delete", "DELETE", "/api/v1/layouts/" + id, `{"schemaVersion":1,"expectedRevision":"4"}`, 200},
 		{"delete wrong schema", "DELETE", "/api/v1/layouts/" + id, `{"schemaVersion":2,"expectedRevision":"4"}`, 400},
 	} {
@@ -107,6 +108,10 @@ func TestLayoutRoutes(t *testing.T) {
 			case "update":
 				if layouts.updated != 4 {
 					t.Fatalf("expected revision = %d", layouts.updated)
+				}
+			case "create":
+				if len(layouts.created.Agencies) != 1 || layouts.created.Agencies[0].String() != agency {
+					t.Fatalf("created Agencies = %v", layouts.created.Agencies)
 				}
 			}
 		})

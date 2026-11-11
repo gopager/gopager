@@ -74,8 +74,8 @@ type Schema struct {
 	Fields      map[string]Field `json:"fields"`
 	Agencies    []uuid.UUID      `json:"agencies"`
 	// Deprecated hides the whole schema from new references; stored values stay readable.
-	Deprecated bool      `json:"deprecated,omitempty"`
-	Revision   int64     `json:"revision"`
+	Deprecated bool      `json:"deprecated"`
+	Revision   int64     `json:"revision,string"`
 	CreatedAt  time.Time `json:"createdAt"`
 	UpdatedAt  time.Time `json:"updatedAt"`
 }

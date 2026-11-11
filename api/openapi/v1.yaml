@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: GoPager API
-  version: 1.7.0
+  version: 1.8.0
   description: |
     GoPager application API. Human guide: docs/http-api.md.
 
@@ -80,6 +80,8 @@ tags:
     means the provider accepted the input, not that anyone read it; an acceptance cannot be recalled.
 - name: Layouts
   description: Named, versioned arrangements of fields that Subscriptions render Domain events with.
+- name: Attribute schemas
+  description: Administrator-defined, typed field declarations for Message and Unit attributes, assigned to Agencies.
 paths:
   /health/live:
     get:
@@ -4075,6 +4077,213 @@ paths:
           $ref: '#/components/responses/InternalError'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /attribute-schemas:
+    get:
+      operationId: listAttributeSchemas
+      tags:
+      - Attribute schemas
+      summary: List Attribute schemas
+      description: |
+        A schema is listed when a right that picks or fills attributes reaches one of its Agencies: `message.read`,
+        `workflow.read`, `presentation.manage`, `subscription.manage-own`, `subscription.manage-global`,
+        `saved-view.manage-global`, `unit.update` or `attribute-schema.manage`. Grant scope `all` and `account` show every
+        schema, `agency` the schemas of that Agency, `unit` and `unitCollection` those of the Agency of the Units. Ordered by
+        key; offset paging; `agency` narrows to one Agency; any other query parameter is 400. Without any such right the
+        response is 403.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      parameters:
+      - $ref: '#/components/parameters/Offset'
+      - $ref: '#/components/parameters/Limit'
+      - name: agency
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: A page of schemas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeSchemaPageResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    post:
+      operationId: createAttributeSchema
+      tags:
+      - Attribute schemas
+      summary: Create an Attribute schema
+      description: |
+        Requires `attribute-schema.manage` in every Agency of the schema. The key is the identifier and immutable; field
+        names, types, labels, icons and limits are validated (400 `INVALID_INPUT`, 413 `RESOURCE_LIMIT`). An existing key is
+        409 `REVISION_CONFLICT`; an unknown Agency is 400. Idempotent per (caller, `commandId`): an identical replay returns
+        the schema as it is now (404 if deleted since).
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAttributeSchemaRequest'
+      responses:
+        '201':
+          description: The created schema at revision 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeSchemaResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /attribute-schemas/{key}:
+    parameters:
+    - name: key
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[a-z][a-z0-9-]*$'
+        maxLength: 64
+    get:
+      operationId: readAttributeSchema
+      tags:
+      - Attribute schemas
+      summary: Read an Attribute schema
+      description: Same visibility as the list; a schema in no visible Agency is 404.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      responses:
+        '200':
+          description: The schema.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeSchemaResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    put:
+      operationId: updateAttributeSchema
+      tags:
+      - Attribute schemas
+      summary: Replace an Attribute schema
+      description: |
+        Requires `attribute-schema.manage` in every stored and every new Agency. Replaces label, description, fields,
+        deprecation and Agencies at `expectedRevision` (stale: 409). Only compatible changes are accepted (400): fields and
+        optional object properties may be added; nothing is removed; the subject and the type of existing fields do not
+        change; labels, descriptions, icons and deprecation may change. Deprecation hides a schema or field from new
+        references while stored values stay readable.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAttributeSchemaRequest'
+      responses:
+        '200':
+          description: The schema at its new revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeSchemaResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    delete:
+      operationId: deleteAttributeSchema
+      tags:
+      - Attribute schemas
+      summary: Delete an Attribute schema
+      description: |
+        Requires `attribute-schema.manage` in every Agency of the schema. A schema that an active Workflow version, a
+        Layout, a Subscription filter or a saved view references is 409 `REVISION_CONFLICT`, like a stale revision.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteRequest'
+      responses:
+        '200':
+          description: The deleted schema key and the revision it reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttributeSchemaDeleteResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /layouts:
     get:
       operationId: listLayouts
@@ -4082,9 +4291,9 @@ paths:
       - Layouts
       summary: List layouts
       description: |
-        Requires `presentation.manage`, `subscription.manage-own` or `subscription.manage-global`, so Subscription authors can
-        pick a layout. Ordered by name then ID; offset paging, any other query parameter is 400. Without any of the rights
-        the response is 403.
+        A layout is listed when the caller holds `presentation.manage` or `message.read` in one of its Agencies (grant scope
+        `all`, `agency`, or `unit`/`unitCollection` of a Unit of that Agency). Ordered by name then ID; offset paging, any
+        other query parameter is 400. Without any such right the response is 403.
       security:
       - sessionCookie: []
       - accessKey: []
@@ -4115,8 +4324,8 @@ paths:
       - Layouts
       summary: Create a layout
       description: |
-        Requires `presentation.manage`. The definition's structure, limits and field references are validated against the
-        Delivery field catalog; an invalid definition is 400 `INVALID_INPUT`, a limit overrun 413 `RESOURCE_LIMIT`. The
+        Requires `presentation.manage` in every Agency of the layout; an unknown Agency is 400 `INVALID_INPUT`. The
+        definition's structure, limits and field references are validated against the Delivery field catalog; an invalid definition is 400 `INVALID_INPUT`, a limit overrun 413 `RESOURCE_LIMIT`. The
         layout's output kind is the definition's and fixed at creation. Idempotent per (caller, `commandId`): an identical
         replay returns the layout as it is now (404 if deleted since).
       security:
@@ -4161,7 +4370,7 @@ paths:
       - Layouts
       summary: Read a layout
       description: |
-        Same rights as the list. Returns the layout at its current version.
+        Same visibility as the list; a layout in no visible Agency is 404. Returns the layout at its current version.
       security:
       - sessionCookie: []
       - accessKey: []
@@ -4191,7 +4400,8 @@ paths:
       - Layouts
       summary: Replace a layout
       description: |
-        Requires `presentation.manage`. Replaces name and definition at `expectedRevision` (stale: 409 `REVISION_CONFLICT`) and
+        Requires `presentation.manage` in every Agency the layout has and in every Agency it will have. Replaces name,
+        Agencies and definition at `expectedRevision` (stale: 409 `REVISION_CONFLICT`) and
         appends an immutable version whose number is the new revision. The definition's `outputKind` must equal the layout's
         (400). Subscriptions that reference the layout use the new version for Deliveries created afterwards.
       security:
@@ -4233,7 +4443,7 @@ paths:
       - Layouts
       summary: Delete a layout
       description: |
-        Requires `presentation.manage`. Removes the layout and its versions at `expectedRevision`. A layout that a
+        Requires `presentation.manage` in every Agency of the layout. Removes the layout and its versions at `expectedRevision`. A layout that a
         Subscription still references is 409 `REVISION_CONFLICT`, like a stale revision.
       security:
       - sessionCookie: []
@@ -8204,6 +8414,7 @@ components:
       - ownership
       - name
       - definition
+      - agencies
       properties:
         schemaVersion:
           $ref: '#/components/schemas/SchemaVersion'
@@ -8230,6 +8441,7 @@ components:
       - expectedRevision
       - name
       - definition
+      - agencies
       properties:
         schemaVersion:
           $ref: '#/components/schemas/SchemaVersion'
@@ -9382,6 +9594,7 @@ components:
       - name
       - outputKind
       - definition
+      - agencies
       - createdAt
       - updatedAt
       properties:
@@ -9398,6 +9611,8 @@ components:
           $ref: '#/components/schemas/LayoutOutputKind'
         definition:
           $ref: '#/components/schemas/LayoutDefinition'
+        agencies:
+          $ref: '#/components/schemas/AssignedAgencies'
         createdAt:
           type: string
           format: date-time
@@ -9484,6 +9699,8 @@ components:
           description: Valid UTF-8, not blank, at most 256 bytes.
         definition:
           $ref: '#/components/schemas/LayoutDefinition'
+        agencies:
+          $ref: '#/components/schemas/AssignedAgencies'
       additionalProperties: false
     UpdateLayoutRequest:
       type: object
@@ -9503,6 +9720,224 @@ components:
           maxLength: 256
         definition:
           $ref: '#/components/schemas/LayoutDefinition'
+        agencies:
+          $ref: '#/components/schemas/AssignedAgencies'
+      additionalProperties: false
+    AssignedAgencies:
+      type: array
+      minItems: 1
+      maxItems: 256
+      uniqueItems: true
+      description: Distinct Agencies the definition is assigned to; they decide who may see, use and manage it.
+      items:
+        type: string
+        format: uuid
+    AttributeField:
+      type: object
+      description: |
+        A typed field with display metadata. `properties` (kind `object`) and `element` (kind `list`) nest at most 32 levels.
+        Top-level fields are always optional; `optional` applies to object properties only.
+      required:
+      - kind
+      properties:
+        kind:
+          $ref: '#/components/schemas/ValueKind'
+        optional:
+          type: boolean
+        nullable:
+          type: boolean
+        properties:
+          type: object
+          description: Property names are 1 to 64 ASCII letters, digits and `_`, starting with a letter.
+          additionalProperties:
+            $ref: '#/components/schemas/AttributeField'
+        element:
+          $ref: '#/components/schemas/AttributeField'
+        label:
+          type: string
+          maxLength: 256
+        description:
+          type: string
+          maxLength: 2048
+        icon:
+          type: string
+        deprecated:
+          type: boolean
+      additionalProperties: false
+    AttributeSchema:
+      type: object
+      required:
+      - key
+      - label
+      - subject
+      - fields
+      - agencies
+      - deprecated
+      - revision
+      - createdAt
+      - updatedAt
+      properties:
+        key:
+          type: string
+          pattern: '^[a-z][a-z0-9-]*$'
+          maxLength: 64
+        label:
+          type: string
+          minLength: 1
+          maxLength: 256
+        description:
+          type: string
+          maxLength: 2048
+        subject:
+          type: string
+          enum:
+          - message
+          - unit
+        fields:
+          type: object
+          minProperties: 1
+          description: Top-level field names are 1 to 64 ASCII letters, digits and `_`, starting with a letter.
+          additionalProperties:
+            $ref: '#/components/schemas/AttributeField'
+        agencies:
+          $ref: '#/components/schemas/AssignedAgencies'
+        deprecated:
+          type: boolean
+        revision:
+          $ref: '#/components/schemas/Revision'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    AttributeSchemaResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          $ref: '#/components/schemas/AttributeSchema'
+    AttributeSchemaDeleteResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          type: object
+          required:
+          - key
+          - revision
+          properties:
+            key:
+              type: string
+            revision:
+              $ref: '#/components/schemas/Revision'
+    AttributeSchemaPageResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          type: object
+          required:
+          - items
+          - total
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/AttributeSchema'
+            total:
+              type: integer
+              minimum: 0
+    CreateAttributeSchemaRequest:
+      type: object
+      required:
+      - schemaVersion
+      - commandId
+      - key
+      - label
+      - subject
+      - fields
+      - agencies
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        commandId:
+          type: string
+          format: uuid
+          description: Client-generated idempotency key (not the nil UUID).
+        key:
+          type: string
+          pattern: '^[a-z][a-z0-9-]*$'
+          maxLength: 64
+        label:
+          type: string
+          minLength: 1
+          maxLength: 256
+        description:
+          type: string
+          maxLength: 2048
+        subject:
+          type: string
+          enum:
+          - message
+          - unit
+        fields:
+          type: object
+          minProperties: 1
+          additionalProperties:
+            $ref: '#/components/schemas/AttributeField'
+        agencies:
+          $ref: '#/components/schemas/AssignedAgencies'
+        deprecated:
+          type: boolean
+      additionalProperties: false
+    UpdateAttributeSchemaRequest:
+      type: object
+      required:
+      - schemaVersion
+      - expectedRevision
+      - label
+      - subject
+      - fields
+      - agencies
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        expectedRevision:
+          $ref: '#/components/schemas/Revision'
+        label:
+          type: string
+          minLength: 1
+          maxLength: 256
+        description:
+          type: string
+          maxLength: 2048
+        subject:
+          type: string
+          enum:
+          - message
+          - unit
+        fields:
+          type: object
+          minProperties: 1
+          additionalProperties:
+            $ref: '#/components/schemas/AttributeField'
+        agencies:
+          $ref: '#/components/schemas/AssignedAgencies'
+        deprecated:
+          type: boolean
       additionalProperties: false
     Error:
       type: object

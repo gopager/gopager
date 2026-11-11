@@ -190,6 +190,7 @@ Bootstrap opens no listener, completes within 30 s, and can succeed only once pe
 | Accounts | `account.read`, `account.create`, `account.update`, `account.delete`, `account.delete-own`, `grant.manage`, `password.local`, `recovery.request`, `recovery.issue`, `recovery.consume`, `session.manage-own`, `key.create-own`, `key.manage-own`, `key.manage-technical` |
 | Subscriptions and delivery | `subscription.manage-own`, `subscription.manage-global`, `delivery.read`, `delivery.retry`, `delivery.redeliver` |
 | Processing | `workflow.read`, `workflow.create`, `workflow.update`, `workflow.delete`, `workflow.preview`, `workflow.activate`, `workflow.reprocess`, `presentation.manage`, `plugin.configure` |
+| Attribute schemas | `attribute-schema.manage` |
 | Other | `notice.manage`, `operations.manage`, `saved-view.manage-global`, `audit.read` |
 
 The `*` notation above is shorthand for this table only; `--actions` requires each action spelled out.
