@@ -9,6 +9,7 @@ import (
 	"github.com/gopager/gopager/internal/assignments"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/commands"
+	"github.com/gopager/gopager/internal/delivery"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/ingest"
 	"github.com/gopager/gopager/internal/platform"
@@ -22,6 +23,10 @@ func writeManagementError(w http.ResponseWriter, err error) {
 	var failure *platform.Failure
 	var limited *identity.RateLimited
 	var retryAfter *int64
+	var unavailableTarget *delivery.TargetUnavailableError
+	var dependency *delivery.DependencyError
+	var uncertain *delivery.UncertainError
+	parameters := map[string]any{}
 	switch {
 	case errors.Is(err, authz.ErrInvalidInput), errors.Is(err, identity.ErrInvalidInput),
 		errors.Is(err, assignments.ErrInvalidRule), errors.Is(err, protocols.ErrInvalidTarget),
@@ -44,6 +49,21 @@ func writeManagementError(w http.ResponseWriter, err error) {
 		seconds := limited.Seconds()
 		code, fallback, status, retryable, retryAfter = "RATE_LIMITED", "Try again later.", http.StatusTooManyRequests, true, &seconds
 		w.Header().Set("Retry-After", strconv.FormatInt(seconds, 10))
+	case errors.Is(err, delivery.ErrDependencyUnavailable):
+		code, fallback, status = "DEPENDENCY_UNAVAILABLE", "Required data or a required service is unavailable.", http.StatusConflict
+		if errors.As(err, &dependency) {
+			parameters["dependency"] = dependency.Dependency
+		}
+	case errors.Is(err, delivery.ErrExternalUncertain):
+		code, fallback, status = "EXTERNAL_UNCERTAIN", "The external outcome is uncertain; send it again only deliberately.", http.StatusConflict
+		if errors.As(err, &uncertain) {
+			parameters["deliveryId"] = uncertain.DeliveryID.String()
+		}
+	case errors.As(err, &unavailableTarget):
+		unavailable := platform.NewFailure(platform.CodeAuthorityUnavailable, nil)
+		code, fallback, retryable = string(unavailable.Code()), unavailable.Error(), unavailable.Retryable()
+		status = platform.HTTPStatus(platform.CodeAuthorityUnavailable)
+		parameters["status"], parameters["instanceId"] = unavailableTarget.Status(), unavailableTarget.InstanceID.String()
 	case errors.As(err, &failure):
 		code, fallback, retryable = string(failure.Code()), failure.Error(), failure.Retryable()
 		status = platform.HTTPStatus(failure.Code())
@@ -59,5 +79,5 @@ func writeManagementError(w http.ResponseWriter, err error) {
 		RequestID         string         `json:"requestId"`
 		Retryable         bool           `json:"retryable"`
 		RetryAfterSeconds *int64         `json:"retryAfterSeconds,omitempty"`
-	}{1, code, map[string]any{}, "error." + code, fallback, requestID, retryable, retryAfter})
+	}{1, code, parameters, "error." + code, fallback, requestID, retryable, retryAfter})
 }

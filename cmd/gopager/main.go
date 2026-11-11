@@ -29,7 +29,9 @@
 // login limits, positive), -search-attempts-per-minute (default 60, at least 1), -gateway-heartbeat-interval (default 60s),
 // -gateway-contact-timeout (default 180s, at least the heartbeat interval) and
 // -gateway-contact-scan-interval (default 15s, at most the contact timeout) for
-// the worker's Gateway contact-loss monitor, and -allow-insecure-db (accept a
+// the worker's Gateway contact-loss monitor, -delivery-sends-per-minute (default 60) and
+// -delivery-target-sends-per-minute (default 600) for Delivery sending admission per subscriber
+// and per target instance, and -allow-insecure-db (accept a
 // remote database without certificate-verified TLS). Positional arguments are
 // rejected.
 //
@@ -63,6 +65,7 @@ import (
 	"time"
 
 	"github.com/gopager/gopager/internal/assignments"
+	"github.com/gopager/gopager/internal/delivery"
 	"github.com/gopager/gopager/internal/events"
 	"github.com/gopager/gopager/internal/httpapi"
 	"github.com/gopager/gopager/internal/identity"
@@ -86,6 +89,7 @@ type startupConfig struct {
 	EventPollInterval      time.Duration
 	LiveReplayWindow       time.Duration
 	GatewayContact         ingestdomain.ContactConfig
+	Delivery               deliveryConfig
 }
 
 func main() {
@@ -126,6 +130,7 @@ func run() (result error) {
 		if err != nil {
 			return errors.Join(err, store.Close())
 		}
+		shared.deliveryConfig = config.Delivery
 		eventRuntime, err = composeEventsRuntime(shared, slices.Contains(config.Roles, platform.RoleWorker), config.EventPollInterval)
 		if err != nil {
 			return errors.Join(err, store.Close())
@@ -214,6 +219,8 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 	heartbeatInterval := flags.Duration("gateway-heartbeat-interval", ingestdomain.DefaultHeartbeatInterval, "Interval in which Gateways are expected to send a heartbeat")
 	contactTimeout := flags.Duration("gateway-contact-timeout", ingestdomain.DefaultContactTimeout, "Silence after which an active or degraded Gateway is contact-lost (at least the heartbeat interval)")
 	contactScan := flags.Duration("gateway-contact-scan-interval", ingestdomain.DefaultContactScan, "Interval of the worker's Gateway contact-loss scan (at most the contact timeout)")
+	deliverySends := flags.Int("delivery-sends-per-minute", delivery.DefaultSubscriberSendsPerMinute, "Per-minute Delivery sends and send requests per subscriber (at least 1)")
+	deliveryTargetSends := flags.Int("delivery-target-sends-per-minute", delivery.DefaultTargetSendsPerMinute, "Per-minute Delivery sends per target instance; a smaller limit of the target lowers it (at least 1)")
 	allowInsecure := flags.Bool("allow-insecure-db", false, "Operator approval for unverified remote database TLS")
 	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
 		return startupConfig{}, platform.NewFailure(platform.CodeInvalidInput, err)
@@ -282,10 +289,14 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 	if err := contact.Validate(); err != nil {
 		return startupConfig{}, err
 	}
+	if *deliverySends < 1 || *deliveryTargetSends < 1 {
+		return startupConfig{}, platform.NewFailure(platform.CodeInvalidInput, errors.New("invalid Delivery sending limit"))
+	}
+	deliveries := deliveryConfig{limits: delivery.AdmissionLimits{Subscriber: *deliverySends, Target: *deliveryTargetSends}}
 	return startupConfig{Config: config, PublicOrigin: *publicOrigin,
 		ProcessingArtifactRoot: *processingArtifactRoot, SearchAttempts: *searchAttempts,
 		LoginLimits:        identity.LoginRateLimits{AccountAttempts: *loginAccount, SourceAttempts: *loginSource, InstanceAttempts: *loginInstance},
-		ProcessingDispatch: dispatch, EventPollInterval: *eventPoll, LiveReplayWindow: *liveReplayWindow, GatewayContact: contact}, nil
+		ProcessingDispatch: dispatch, EventPollInterval: *eventPoll, LiveReplayWindow: *liveReplayWindow, GatewayContact: contact, Delivery: deliveries}, nil
 }
 
 // composeApplicationAPI binds the shared services to the HTTP listener. A non-nil networkOwner
@@ -338,6 +349,9 @@ func composeApplicationAPI(publicOrigin string, limits identity.LoginRateLimits,
 		return nil, err
 	}
 	if err := registerLiveRoutes(mux, transport, preauthenticator, c); err != nil {
+		return nil, err
+	}
+	if err := registerDeliveryRoutes(mux, transport, preauthenticator, c); err != nil {
 		return nil, err
 	}
 	httpapi.RegisterIngestRoutes(mux, intakeService)

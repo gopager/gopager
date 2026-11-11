@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: GoPager API
-  version: 1.6.0
+  version: 1.7.0
   description: |
     GoPager application API. Human guide: docs/http-api.md.
 
@@ -72,6 +72,14 @@ tags:
   description: Processing Workflows, versions, preview and candidates.
 - name: Processing instances
   description: Configured plugin instances.
+- name: Subscriptions
+  description: Personal and global Subscriptions that select Domain event types and send authorized, rendered input to
+    delivery targets. A Subscription the caller may not manage is 404.
+- name: Deliveries
+  description: Inspectable results of Subscription sends, with explicit retry and confirmed redelivery. `accepted`
+    means the provider accepted the input, not that anyone read it; an acceptance cannot be recalled.
+- name: Layouts
+  description: Named, versioned arrangements of fields that Subscriptions render Domain events with.
 paths:
   /health/live:
     get:
@@ -3685,6 +3693,616 @@ paths:
           $ref: '#/components/responses/InternalError'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /subscriptions:
+    get:
+      operationId: listSubscriptions
+      tags:
+      - Subscriptions
+      summary: List Subscriptions
+      description: |
+        The caller's own personal Subscriptions (with `subscription.manage-own` on the caller's account) and the global
+        Subscriptions of every technical subscriber the caller manages (`subscription.manage-global` on that subscriber's
+        account). A caller without either right, and the guest, gets an empty page. Offset paging; any other query
+        parameter is 400.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      parameters:
+      - $ref: '#/components/parameters/Offset'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Caller-visible page; `total` counts the Subscriptions the caller may manage.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionPageResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    post:
+      operationId: createSubscription
+      tags:
+      - Subscriptions
+      summary: Create a Subscription
+      description: |
+        A personal Subscription needs `subscription.manage-own` on the caller's account and is bound to the caller. A global
+        Subscription needs `subscription.manage-global` on the named subscriber, which must be an active technical account.
+        The filter, layout and `splitByUnit` are validated against the subscriber's field groups, not the caller's: a field
+        group the subscriber cannot read is 400 `INVALID_INPUT`. A target whose instance is missing, disabled or without a
+        provider is 503 `AUTHORITY_UNAVAILABLE` with `parameters.status` `unavailable` and `parameters.instanceId`; a target
+        `revision` other than 0 or the instance's current revision is 409 `REVISION_CONFLICT`. Creating takes one unit of the
+        subscriber's sending admission (429 `RATE_LIMITED` with `Retry-After`). Idempotent per (caller, `commandId`): an
+        identical replay returns the Subscription as it is now; reusing the `commandId` with different input is 409
+        `IDEMPOTENCY_CONFLICT`. Guests cannot create.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSubscriptionRequest'
+      responses:
+        '201':
+          description: The created Subscription at revision 1.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /subscriptions/{id}:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    get:
+      operationId: readSubscription
+      tags:
+      - Subscriptions
+      summary: Read a Subscription
+      description: |
+        A personal Subscription is visible only to its subscriber; a global one to a caller with `subscription.manage-global`
+        on its subscriber. Every other Subscription is 404.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      responses:
+        '200':
+          description: The Subscription.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    put:
+      operationId: updateSubscription
+      tags:
+      - Subscriptions
+      summary: Replace a Subscription
+      description: |
+        Replaces all writable properties at `expectedRevision` (stale: 409 `REVISION_CONFLICT`). `kind` and `subscriberId`
+        cannot change (400). The validation of the create route applies. Deliveries of the previous revision that have not
+        started are cancelled with outcome code `subscription-changed`, or `subscription-paused` when the update pauses an
+        active Subscription. A Subscription the caller cannot manage is 404.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSubscriptionRequest'
+      responses:
+        '200':
+          description: The Subscription at its new revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    delete:
+      operationId: deleteSubscription
+      tags:
+      - Subscriptions
+      summary: Delete a Subscription
+      description: |
+        Same visibility as the update; optimistic concurrency via `expectedRevision`. Unstarted Deliveries are cancelled with
+        outcome code `subscription-deleted`; Delivery history keeps the Subscription ID.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteRequest'
+      responses:
+        '200':
+          description: The deleted Subscription's ID and the revision it reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /deliveries:
+    get:
+      operationId: listDeliveries
+      tags:
+      - Deliveries
+      summary: List Deliveries
+      description: |
+        Requires `delivery.read`; the page holds the Deliveries whose subscriber account, Agency, Units or Unit
+        collections a matching grant covers (inside its maximum data age), newest first. A caller without any
+        `delivery.read` grant gets 403. Optional filters `subscriptionId` and `state`; any other, repeated or non-integer
+        query parameter is 400. Deliveries are returned without `attempts`.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      parameters:
+      - $ref: '#/components/parameters/Offset'
+      - $ref: '#/components/parameters/Limit'
+      - name: subscriptionId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: state
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/DeliveryState'
+      responses:
+        '200':
+          description: Caller-visible page; `total` counts the Deliveries the caller may read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryPageResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /deliveries/{id}:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    get:
+      operationId: readDelivery
+      tags:
+      - Deliveries
+      summary: Read a Delivery
+      description: |
+        Requires `delivery.read` covering the Delivery. Returns the Delivery with its `attempts`. A Delivery outside the
+        caller's read scope is 404.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      responses:
+        '200':
+          description: The Delivery with its attempts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /deliveries/{id}/retry:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    post:
+      operationId: retryDelivery
+      tags:
+      - Deliveries
+      summary: Retry a failed Delivery
+      description: |
+        Requires `delivery.retry` covering the Delivery. Makes a `failed` Delivery with outcome code `transient` or
+        `retry-exhausted` due again before its expiry. A stale `expectedRevision`, any other state or outcome code, and a
+        Delivery past its expiry are 409 `REVISION_CONFLICT`; an `uncertain` Delivery is 409 `EXTERNAL_UNCERTAIN` and can
+        only be sent again by a confirmed redelivery. A caller who may read but not retry the Delivery gets 403; one who may
+        not read it gets 404. Takes no `commandId`.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetryDeliveryRequest'
+      responses:
+        '200':
+          description: The Delivery after the retry was scheduled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/DeliveryConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /deliveries/{id}/redeliver:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    post:
+      operationId: redeliverDelivery
+      tags:
+      - Deliveries
+      summary: Send a Delivery again
+      description: |
+        Requires `delivery.redeliver` covering the Delivery (403 when the caller may only read it, 404 when not even that).
+        Creates a new Delivery with origin `redelivery` for the original's Subscription, Domain event, target and split,
+        materialized under the subscriber's current authority and the Subscription's current content. `confirmDuplicateRisk`
+        must be `true` (400 otherwise): the recipient may receive the content twice, and a provider acceptance cannot be
+        recalled. The original must be in a terminal state, otherwise 409 `REVISION_CONFLICT`, as when its Subscription is
+        paused. 409 `DEPENDENCY_UNAVAILABLE` when more than 24 hours passed since the original was created, or the
+        Subscription, target, Domain event or readable data no longer exists. A target that became unavailable is 503
+        `AUTHORITY_UNAVAILABLE` with `parameters.status` `unavailable` and `parameters.instanceId`. Takes one unit of the
+        subscriber's sending admission (429 `RATE_LIMITED` with `Retry-After`). Idempotent per (caller, `commandId`): a replay
+        returns the redelivery as it is now.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedeliverDeliveryRequest'
+      responses:
+        '201':
+          description: The new Delivery in state `prepared`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/DeliveryConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /layouts:
+    get:
+      operationId: listLayouts
+      tags:
+      - Layouts
+      summary: List layouts
+      description: |
+        Requires `presentation.manage`, `subscription.manage-own` or `subscription.manage-global`, so Subscription authors can
+        pick a layout. Ordered by name then ID; offset paging, any other query parameter is 400. Without any of the rights
+        the response is 403.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      parameters:
+      - $ref: '#/components/parameters/Offset'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A page of layouts at their current version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LayoutPageResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    post:
+      operationId: createLayout
+      tags:
+      - Layouts
+      summary: Create a layout
+      description: |
+        Requires `presentation.manage`. The definition's structure, limits and field references are validated against the
+        Delivery field catalog; an invalid definition is 400 `INVALID_INPUT`, a limit overrun 413 `RESOURCE_LIMIT`. The
+        layout's output kind is the definition's and fixed at creation. Idempotent per (caller, `commandId`): an identical
+        replay returns the layout as it is now (404 if deleted since).
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLayoutRequest'
+      responses:
+        '201':
+          description: The created layout at revision 1 (version 1).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LayoutResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /layouts/{id}:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    get:
+      operationId: readLayout
+      tags:
+      - Layouts
+      summary: Read a layout
+      description: |
+        Same rights as the list. Returns the layout at its current version.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      responses:
+        '200':
+          description: The layout.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LayoutResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    put:
+      operationId: updateLayout
+      tags:
+      - Layouts
+      summary: Replace a layout
+      description: |
+        Requires `presentation.manage`. Replaces name and definition at `expectedRevision` (stale: 409 `REVISION_CONFLICT`) and
+        appends an immutable version whose number is the new revision. The definition's `outputKind` must equal the layout's
+        (400). Subscriptions that reference the layout use the new version for Deliveries created afterwards.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLayoutRequest'
+      responses:
+        '200':
+          description: The layout at its new revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LayoutResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    delete:
+      operationId: deleteLayout
+      tags:
+      - Layouts
+      summary: Delete a layout
+      description: |
+        Requires `presentation.manage`. Removes the layout and its versions at `expectedRevision`. A layout that a
+        Subscription still references is 409 `REVISION_CONFLICT`, like a stale revision.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteRequest'
+      responses:
+        '200':
+          description: The deleted layout's ID and the revision it reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /layouts/{id}/versions/{version}:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    - $ref: '#/components/parameters/LayoutVersionNumber'
+    get:
+      operationId: readLayoutVersion
+      tags:
+      - Layouts
+      summary: Read a layout version
+      description: |
+        Same rights as the list. A version is immutable; its number is the layout revision that created it. A malformed
+        version is 400, an unknown one 404.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      responses:
+        '200':
+          description: The version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LayoutVersionResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 components:
   securitySchemes:
     sessionCookie:
@@ -3770,6 +4388,14 @@ components:
         minimum: 1
         maximum: 200
         default: 50
+    LayoutVersionNumber:
+      name: version
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^[1-9][0-9]*$
+      description: Layout version number (the layout revision that created it); a malformed value is 400.
     OriginHeader:
       name: Origin
       in: header
@@ -3890,7 +4516,8 @@ components:
                   enum:
                   - RESOURCE_LIMIT
     RateLimited:
-      description: Login attempts or Message searches throttled. `retryAfterSeconds` matches `Retry-After`.
+      description: Login attempts, Message searches or Delivery sending admission throttled. `retryAfterSeconds` matches
+        `Retry-After`.
       content:
         application/json:
           schema:
@@ -3904,10 +4531,30 @@ components:
                   - RATE_LIMITED
       headers:
         Retry-After:
-          description: Seconds until the next attempt (for a search, until its one-minute window ends).
+          description: Seconds until the next attempt (for a search or a send, until its one-minute window ends).
           schema:
             type: integer
             minimum: 1
+    DeliveryConflict:
+      description: '`REVISION_CONFLICT` (retryable): stale revision or a state the command does not apply to.
+        `IDEMPOTENCY_CONFLICT` (not retryable): `commandId` reused with a different operation or input.
+        `EXTERNAL_UNCERTAIN` (not retryable): the external outcome of the Delivery is uncertain; send it again only by
+        a confirmed redelivery. `DEPENDENCY_UNAVAILABLE` (not retryable): what a redelivery needs is gone or no longer
+        readable for the subscriber.'
+      content:
+        application/json:
+          schema:
+            allOf:
+            - $ref: '#/components/schemas/Error'
+            - type: object
+              properties:
+                code:
+                  type: string
+                  enum:
+                  - REVISION_CONFLICT
+                  - IDEMPOTENCY_CONFLICT
+                  - EXTERNAL_UNCERTAIN
+                  - DEPENDENCY_UNAVAILABLE
     InternalError:
       description: Unexpected failure.
       content:
@@ -3923,7 +4570,7 @@ components:
                   - INTERNAL_ERROR
     ServiceUnavailable:
       description: Process not ready or shutting down (`AUTHORITY_UNAVAILABLE`, returned before any database access),
-        a required component unavailable, storage unavailable, or an uncertain commit.
+        a required component or Delivery target unavailable, storage unavailable, or an uncertain commit.
       content:
         application/json:
           schema:
@@ -8128,6 +8775,735 @@ components:
               type: integer
               minimum: 0
               description: Number of rows the caller may read, independent of paging.
+    DeliveryFieldRef:
+      type: object
+      description: Reference to a field of the Delivery field catalog, for Subscription filters and layouts. See
+        docs/http-api.md (Subscriptions) for the fields and their field groups.
+      required:
+      - namespace
+      - path
+      properties:
+        namespace:
+          type: string
+          enum:
+          - event
+          - message
+          - unit
+          - gateway
+          - result
+        path:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items:
+            type: string
+            minLength: 1
+          description: One element for the fixed fields (for example `["occurredAt"]` in `event`); `result` takes the
+            Workflow ID and the output name.
+      additionalProperties: false
+    DeliveryPredicate:
+      type: object
+      description: Same shape and operators as `Predicate`, over Delivery catalog fields. Nests at most 32 levels.
+      required:
+      - op
+      properties:
+        op:
+          type: string
+          enum:
+          - and
+          - or
+          - not
+          - present
+          - eq
+          - in
+          - lt
+          - lte
+          - gt
+          - gte
+          - contains
+        field:
+          $ref: '#/components/schemas/DeliveryFieldRef'
+        value:
+          $ref: '#/components/schemas/TypedValue'
+        values:
+          type: array
+          minItems: 1
+          maxItems: 1024
+          items:
+            $ref: '#/components/schemas/TypedValue'
+        args:
+          type: array
+          minItems: 1
+          maxItems: 1024
+          items:
+            $ref: '#/components/schemas/DeliveryPredicate'
+      additionalProperties: false
+    SubscriptionKind:
+      type: string
+      enum:
+      - personal
+      - global
+    SubscriptionState:
+      type: string
+      enum:
+      - active
+      - paused
+    SubscriptionTargetInput:
+      type: object
+      description: One configured instance with the Delivery capability.
+      required:
+      - instanceId
+      properties:
+        instanceId:
+          type: string
+          format: uuid
+        capabilityKind:
+          type: string
+          enum:
+          - delivery
+        revision:
+          type: string
+          pattern: ^(0|[1-9][0-9]*)$
+          description: 0 or absent, or the instance's current revision; anything else is 409 `REVISION_CONFLICT`.
+        inputs:
+          type: object
+          maxProperties: 64
+          additionalProperties:
+            $ref: '#/components/schemas/TypedValue'
+          description: Constants for inputs the instance's descriptor declares; names are 1 to 128 bytes.
+      additionalProperties: false
+    SubscriptionTarget:
+      type: object
+      required:
+      - instanceId
+      - capabilityKind
+      - revision
+      - inputs
+      properties:
+        instanceId:
+          type: string
+          format: uuid
+        capabilityKind:
+          type: string
+          enum:
+          - delivery
+        revision:
+          $ref: '#/components/schemas/Revision'
+          description: The instance revision current when the Subscription was saved.
+        inputs:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/TypedValue'
+    SubscriptionInput:
+      type: object
+      description: The writable part of a Subscription.
+      required:
+      - kind
+      - state
+      - eventTypes
+      - targets
+      properties:
+        kind:
+          $ref: '#/components/schemas/SubscriptionKind'
+        subscriberId:
+          type: string
+          format: uuid
+          description: Required for a global Subscription (an active technical account), forbidden for a personal one.
+            On update it must be absent or unchanged.
+        state:
+          $ref: '#/components/schemas/SubscriptionState'
+        eventTypes:
+          type: array
+          minItems: 1
+          maxItems: 16
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+            - message.created
+            - message.transmission-joined
+            - message.merged
+            - assignment.changed
+            - suppression.changed
+            - processing.completed
+            - gateway.state-changed
+          description: Deliverable Domain event types. Stored sorted.
+        filter:
+          $ref: '#/components/schemas/DeliveryPredicate'
+        targets:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items:
+            $ref: '#/components/schemas/SubscriptionTargetInput'
+          description: Distinct instances.
+        layoutId:
+          type: string
+          format: uuid
+          description: A layout whose output kind every target supports. Absent selects the built-in layout.
+        splitByUnit:
+          type: boolean
+          description: One Delivery per relevant Unit instead of one per target. Needs the `unit` field group.
+        maxAgeSeconds:
+          type: integer
+          minimum: 1
+          maximum: 86400
+          description: Deliveries expire this long after the Message time anchor. Absent applies only the 24-hour limit.
+    Subscription:
+      type: object
+      required:
+      - id
+      - revision
+      - kind
+      - subscriberId
+      - state
+      - eventTypes
+      - targets
+      - splitByUnit
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        revision:
+          $ref: '#/components/schemas/Revision'
+        kind:
+          $ref: '#/components/schemas/SubscriptionKind'
+        subscriberId:
+          type: string
+          format: uuid
+          description: The account the Subscription acts as, which is the owner of a personal one and the technical
+            account of a global one.
+        state:
+          $ref: '#/components/schemas/SubscriptionState'
+        eventTypes:
+          type: array
+          items:
+            type: string
+        filter:
+          $ref: '#/components/schemas/DeliveryPredicate'
+        targets:
+          type: array
+          items:
+            $ref: '#/components/schemas/SubscriptionTarget'
+        layoutId:
+          type: string
+          format: uuid
+        splitByUnit:
+          type: boolean
+        maxAgeSeconds:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    SubscriptionResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          $ref: '#/components/schemas/Subscription'
+    SubscriptionPageResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          type: object
+          required:
+          - items
+          - total
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Subscription'
+            total:
+              type: integer
+              minimum: 0
+    CreateSubscriptionRequest:
+      description: A `SubscriptionInput` with `schemaVersion` and `commandId`. Unknown fields are 400.
+      allOf:
+      - $ref: '#/components/schemas/SubscriptionInput'
+      - type: object
+        required:
+        - schemaVersion
+        - commandId
+        properties:
+          schemaVersion:
+            $ref: '#/components/schemas/SchemaVersion'
+          commandId:
+            type: string
+            format: uuid
+            description: Client-generated idempotency key (not the nil UUID).
+    UpdateSubscriptionRequest:
+      description: A `SubscriptionInput` with `schemaVersion` and `expectedRevision`; no `commandId`. Unknown fields are 400.
+      allOf:
+      - $ref: '#/components/schemas/SubscriptionInput'
+      - type: object
+        required:
+        - schemaVersion
+        - expectedRevision
+        properties:
+          schemaVersion:
+            $ref: '#/components/schemas/SchemaVersion'
+          expectedRevision:
+            $ref: '#/components/schemas/Revision'
+    DeliveryState:
+      type: string
+      description: '`prepared`, `started` and `retry-pending` are open; the others are terminal.'
+      enum:
+      - prepared
+      - started
+      - retry-pending
+      - accepted
+      - failed
+      - uncertain
+      - expired
+      - cancelled
+    DeliveryOutcomeCode:
+      type: string
+      description: Why a Delivery or attempt is in its state. See docs/http-api.md (Deliveries) for the meaning of each
+        code.
+      enum:
+      - accepted
+      - transient
+      - permanent
+      - retry-exhausted
+      - uncertain
+      - lease-lost
+      - expired
+      - subscription-paused
+      - subscription-changed
+      - subscription-deleted
+      - authority-revoked
+      - no-longer-matching
+      - parameter-conflict
+      - input-invalid
+      - render-limit
+      - rate-limited
+      - dependency-unavailable
+    DeliveryAttempt:
+      type: object
+      required:
+      - number
+      - id
+      - state
+      - instanceRevision
+      - startedAt
+      properties:
+        number:
+          type: integer
+          minimum: 1
+        id:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum:
+          - started
+          - accepted
+          - transient
+          - permanent
+          - uncertain
+        outcomeCode:
+          $ref: '#/components/schemas/DeliveryOutcomeCode'
+        instanceRevision:
+          $ref: '#/components/schemas/Revision'
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+        receipt:
+          description: Bounded JSON (at most 4 KiB) the target provider deems safe to show.
+    Delivery:
+      type: object
+      description: Inspectable state of one Delivery. The rendered input and authorization context are never part of it.
+      required:
+      - id
+      - revision
+      - origin
+      - subscriptionId
+      - subscriptionRevision
+      - subscriberId
+      - domainEventId
+      - eventType
+      - targetInstanceId
+      - splitKey
+      - state
+      - attemptCount
+      - layoutVersion
+      - expiresAt
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        revision:
+          $ref: '#/components/schemas/Revision'
+        origin:
+          type: string
+          enum:
+          - automatic
+          - redelivery
+        redeliveryOf:
+          type: string
+          format: uuid
+          description: The Delivery a redelivery repeats.
+        subscriptionId:
+          type: string
+          format: uuid
+        subscriptionRevision:
+          $ref: '#/components/schemas/Revision'
+        subscriberId:
+          type: string
+          format: uuid
+        domainEventId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+        targetInstanceId:
+          type: string
+          format: uuid
+        splitKey:
+          type: string
+          description: The Unit ID of a split Delivery, empty otherwise.
+        state:
+          $ref: '#/components/schemas/DeliveryState'
+        outcomeCode:
+          $ref: '#/components/schemas/DeliveryOutcomeCode'
+        attemptCount:
+          type: integer
+          minimum: 0
+        layoutId:
+          type: string
+          format: uuid
+        layoutVersion:
+          type: string
+          pattern: ^(0|[1-9][0-9]*)$
+          description: 0 for the built-in layout.
+        messageId:
+          type: string
+          format: uuid
+        nextAttemptAt:
+          type: string
+          format: date-time
+          description: Only while the Delivery is open and not started.
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+        attempts:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeliveryAttempt'
+          description: Only on single-Delivery reads and command results.
+    DeliveryResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          $ref: '#/components/schemas/Delivery'
+    DeliveryPageResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          type: object
+          required:
+          - items
+          - total
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Delivery'
+            total:
+              type: integer
+              minimum: 0
+    RetryDeliveryRequest:
+      type: object
+      required:
+      - schemaVersion
+      - expectedRevision
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        expectedRevision:
+          $ref: '#/components/schemas/Revision'
+      additionalProperties: false
+    RedeliverDeliveryRequest:
+      type: object
+      required:
+      - schemaVersion
+      - commandId
+      - confirmDuplicateRisk
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        commandId:
+          type: string
+          format: uuid
+          description: Client-generated idempotency key (not the nil UUID).
+        confirmDuplicateRisk:
+          type: boolean
+          enum:
+          - true
+          description: Acknowledges that the recipient may receive the content twice. `false` is 400.
+      additionalProperties: false
+    LayoutOutputKind:
+      type: string
+      description: '`text` renders plain lines, `markdown` Markdown with every interpolated value escaped (never HTML),
+        `json` an array of typed items.'
+      enum:
+      - text
+      - markdown
+      - json
+    LayoutUrl:
+      type: object
+      description: Link target built from a template and field values. The placeholders `{0}` to `{9}` index `fields`;
+        every placeholder needs a field and every field must be used. Values are path-escaped; only `http`, `https`
+        and `mailto` results render.
+      required:
+      - template
+      - fields
+      properties:
+        template:
+          type: string
+          minLength: 1
+          maxLength: 2048
+        fields:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/DeliveryFieldRef'
+      additionalProperties: false
+    LayoutBlock:
+      type: object
+      description: 'One element of a layout. `kind` selects the allowed properties: `text` takes `text`; `field` and
+        `chip` take `field` and optional `label`; `link` takes `label` and `url`; `section` takes optional `title` and
+        `blocks`; `conditional` takes `when`, `then` and optional `else`; `fallback` takes `blocks` (2 to 8
+        alternatives, the first non-empty one renders). Any other property is 400.'
+      required:
+      - kind
+      properties:
+        kind:
+          type: string
+          enum:
+          - text
+          - field
+          - chip
+          - link
+          - section
+          - conditional
+          - fallback
+        text:
+          type: string
+          maxLength: 4096
+        field:
+          $ref: '#/components/schemas/DeliveryFieldRef'
+        label:
+          type: string
+          maxLength: 256
+        title:
+          type: string
+          maxLength: 256
+        url:
+          $ref: '#/components/schemas/LayoutUrl'
+        when:
+          $ref: '#/components/schemas/DeliveryPredicate'
+        blocks:
+          type: array
+          items:
+            $ref: '#/components/schemas/LayoutBlock'
+        then:
+          type: array
+          items:
+            $ref: '#/components/schemas/LayoutBlock'
+        else:
+          type: array
+          items:
+            $ref: '#/components/schemas/LayoutBlock'
+      additionalProperties: false
+    LayoutDefinition:
+      type: object
+      description: Declarative arrangement of typed fields for one output kind. It is data, not a template. At most 256
+        blocks in total and 8 levels of nesting.
+      required:
+      - schemaVersion
+      - outputKind
+      - blocks
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        outputKind:
+          $ref: '#/components/schemas/LayoutOutputKind'
+        blocks:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/LayoutBlock'
+      additionalProperties: false
+    Layout:
+      type: object
+      required:
+      - id
+      - revision
+      - name
+      - outputKind
+      - definition
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        revision:
+          $ref: '#/components/schemas/Revision'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+        outputKind:
+          $ref: '#/components/schemas/LayoutOutputKind'
+        definition:
+          $ref: '#/components/schemas/LayoutDefinition'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    LayoutVersion:
+      type: object
+      required:
+      - layoutId
+      - version
+      - definition
+      - createdAt
+      properties:
+        layoutId:
+          type: string
+          format: uuid
+        version:
+          $ref: '#/components/schemas/Revision'
+        definition:
+          $ref: '#/components/schemas/LayoutDefinition'
+        createdAt:
+          type: string
+          format: date-time
+    LayoutResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          $ref: '#/components/schemas/Layout'
+    LayoutVersionResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          $ref: '#/components/schemas/LayoutVersion'
+    LayoutPageResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          type: object
+          required:
+          - items
+          - total
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Layout'
+            total:
+              type: integer
+              minimum: 0
+    CreateLayoutRequest:
+      type: object
+      required:
+      - schemaVersion
+      - commandId
+      - name
+      - definition
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        commandId:
+          type: string
+          format: uuid
+          description: Client-generated idempotency key (not the nil UUID).
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: Valid UTF-8, not blank, at most 256 bytes.
+        definition:
+          $ref: '#/components/schemas/LayoutDefinition'
+      additionalProperties: false
+    UpdateLayoutRequest:
+      type: object
+      required:
+      - schemaVersion
+      - expectedRevision
+      - name
+      - definition
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        expectedRevision:
+          $ref: '#/components/schemas/Revision'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+        definition:
+          $ref: '#/components/schemas/LayoutDefinition'
+      additionalProperties: false
     Error:
       type: object
       required:
@@ -8156,6 +9532,8 @@ components:
           - STORAGE_UNAVAILABLE
           - AUTHORITY_UNAVAILABLE
           - COMMIT_UNCERTAIN
+          - DEPENDENCY_UNAVAILABLE
+          - EXTERNAL_UNCERTAIN
           - INTERNAL_ERROR
           description: |
             Stable, language-independent code. HTTP status and `retryable` per code:
@@ -8164,11 +9542,33 @@ components:
             `INCOMPATIBLE_VERSION` 409 (false); `RESOURCE_LIMIT` 413 (false); `RATE_LIMITED` 429 (true);
             `STORAGE_UNAVAILABLE` 503 (true); `AUTHORITY_UNAVAILABLE` 503 (true); `COMMIT_UNCERTAIN` 503
             (false; the write may have committed, so re-send with the same `commandId`/`submissionId` or read
-            the resource); `INTERNAL_ERROR` 500 (false).
+            the resource); `DEPENDENCY_UNAVAILABLE` 409 (false); `EXTERNAL_UNCERTAIN` 409 (false);
+            `INTERNAL_ERROR` 500 (false).
         parameters:
           type: object
-          maxProperties: 0
-          description: Currently always `{}`.
+          properties:
+            status:
+              type: string
+              enum:
+              - unavailable
+            instanceId:
+              type: string
+              format: uuid
+            dependency:
+              type: string
+              enum:
+              - input-ceiling
+              - subscription
+              - domain-event
+              - data
+              - input
+            deliveryId:
+              type: string
+              format: uuid
+          description: '`{}`, except: with `AUTHORITY_UNAVAILABLE` for a Subscription target or redelivery whose instance
+            is missing, disabled or without a provider, `status` is `unavailable` and `instanceId` names the instance;
+            with `DEPENDENCY_UNAVAILABLE`, `dependency` names what is missing; with `EXTERNAL_UNCERTAIN`, `deliveryId`
+            names the uncertain Delivery.'
         textKey:
           type: string
           pattern: ^error\.[A-Z_]+$

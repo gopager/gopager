@@ -107,3 +107,14 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Scope (AP-10 write scope extension):** `internal/events/` fact types and validation; producers in `internal/persistence/ent/ingeststore/` (Grouping and intake facts, Processing source binding), `internal/processing/` (publication binding and `publication.Service`), `internal/assignments/` (correction and suppression facts) and `internal/persistence/ent/assignmentstore/` (Message times of corrected Transmissions); their tests and the PostgreSQL fixtures in `internal/persistence/ent/borrowed/`.
 - **Consequences:** The [AP-06](../execution/ap-06.md), [AP-07](../execution/ap-07.md), [AP-08](../execution/ap-08.md) and [AP-20](../execution/ap-20.md) records get a follow-up with the fact tests rerun; [AP-11](../work-packages/ap-11-events-delivery.md) lists the fields in its compatibility context; [Architecture: Domain events and outbox](../../docs/architecture.md#domain-events-and-outbox) and C-08 describe them.
 - **Owner detail:** [C-08](../contracts/c-08-events-jobs.md), [AP-10 record](../execution/ap-10.md)
+
+<a id="d-149"></a>
+## D-149 Per-instance use of Delivery targets belongs to AP-12
+
+- **Status:** accepted
+- **Date:** 2026-11-10
+- **Decision:** An automated security review of the AP-11 pull request found that every holder of `subscription.manage-own` (and every global Subscription) may select any enabled processing instance with a Delivery descriptor as a target; only the subscriber's own permitted data reaches it (REQ-082 lets users build Subscriptions on administratively configured integrations), but an administrator cannot restrict an instance, for example an internal webhook, to some users. No target is usable in production before AP-12 supplies providers. The user assigned the restriction to AP-12's configuration authority instead of adding a usage action in AP-11 or accepting unrestricted use: the administrative configuration of each Delivery instance declares who may use it as a target, checked at Subscription save, at fan-out and before each start, so revoking it stops future sends.
+- **Scope:** AP-12 T069 (configuration authority) and its C-06/C-09 slices; AP-11 is unchanged.
+- **Consequences:** [AP-12](../work-packages/ap-12-plugin-host.md) T069 amended; [C-09 Configuration Authority](../contracts/c-09-delivery.md#configuration-authority) notes the open rule; the [AP-11 record](../execution/ap-11.md) links this decision.
+- **Owner detail:** [C-09](../contracts/c-09-delivery.md), AP-12
+

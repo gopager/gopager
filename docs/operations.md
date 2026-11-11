@@ -80,6 +80,8 @@ Flags use Go `flag` syntax (`--name=value` or `-name value`). Positional argumen
 | `--gateway-heartbeat-interval` | `60s` | — | Interval in which Gateways are expected to send a heartbeat. Must be > 0. Used to validate the contact timeout. |
 | `--gateway-contact-timeout` | `180s` | — | Silence after which the worker sets an enabled `active` or `degraded` Gateway to `contact-lost`, compared on the database clock. Must be at least `--gateway-heartbeat-interval`. |
 | `--gateway-contact-scan-interval` | `15s` | — | Pause between the worker's contact-loss scans. Must be > 0 and at most `--gateway-contact-timeout`. Detection may lag the timeout by up to this interval. |
+| `--delivery-sends-per-minute` | `60` | — | Delivery sends per minute per subscriber, counting background attempt starts, Subscription creation and redelivery requests. Must be >= 1. A background start over the limit is deferred to the next minute without consuming an attempt; an HTTP request over it is `429 RATE_LIMITED`. |
+| `--delivery-target-sends-per-minute` | `600` | — | Delivery sends per minute per target instance; a smaller limit declared by the target lowers it. Must be >= 1. Over the limit, starts are deferred like above. |
 | `--allow-insecure-db` | `false` | — | Permit a non-local database connection without certificate-verified TLS. See [Database TLS](#database-tls). |
 
 Fixed values (not configurable):
@@ -114,7 +116,7 @@ Fixed values (not configurable):
 | Role | Runs |
 | --- | --- |
 | `api` | HTTP listener with health endpoints and all `/api/v1` routes (authentication, management, gateway intake and administration, processing). See [HTTP API](http-api.md). |
-| `worker` | Processing dispatcher (executes due workflow work), the assignment correction runner and the Gateway contact-loss monitor. No listener. |
+| `worker` | Processing dispatcher (executes due workflow work), the assignment correction runner, the Gateway contact-loss monitor, the Delivery fan-out consumer (turns new facts into Deliveries) and the Delivery runner (attempts due Deliveries, polling every 5 s besides fact notifications). No listener. Without a configured Delivery target provider every Subscription target is unavailable and no Delivery starts. |
 
 Both roles load the plugin directory, if configured, because workflow management and preview on the API also execute plugins.
 
@@ -153,6 +155,8 @@ Rolling upgrades with mixed releases are not supported. Downgrading the binary a
 ## Event Log Retention
 
 `domain_events` (the sequenced fact log) and `consumer_offsets` (one read position per consumer) grow without bound until a retention job prunes them; no such job is implemented yet. Both tables belong in the planned retention configuration. The rule the job must follow: a `domain_events` row is prunable only when its `(tx_id, seq)` is at or below the lowest `(last_tx_id, last_seq)` of every registered consumer **and** it is older than the replay window, so no consumer can be left with a gap and late-registered consumers still find recent history. The replay window is at least `--live-replay-window`, because a live stream resumes from a position up to that old and reads every fact after it; pruning younger facts would silently drop Message updates for reconnecting clients. A `consumer_offsets` row is removed only when its consumer is decommissioned.
+
+Delivery adds its own retention participants, also without a pruning job yet: `deliveries` and `delivery_attempts` (terminal Deliveries no longer hold input; their history and attempt receipts remain until pruned; prune only terminal Deliveries older than 24 h after they ended, so explicit redelivery and the fan-out deduplication of a fact still recorded within the 24 h fan-out window keep working), and `delivery_admissions` (each admitted send deletes the older windows of its own bucket and up to 100 expired windows of any bucket, so buckets of removed subscribers or instances do not stay behind). A fact older than 24 h never creates a Delivery, so the Delivery fan-out needs no older facts; its consumer `delivery-fanout` still follows the offset rule above.
 
 ## First Start and Bootstrap
 

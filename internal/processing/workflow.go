@@ -125,6 +125,9 @@ type workflowDeclarations struct {
 }
 
 func (d workflowDeclarations) FieldSchema(ref FieldRef) (FieldSchema, error) {
+	if err := ref.validate(); err != nil {
+		return FieldSchema{}, err
+	}
 	if ref.Namespace == "step" {
 		if schema, ok := d.local[ref.key()]; ok {
 			return schema, nil
