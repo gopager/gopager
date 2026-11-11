@@ -3,7 +3,6 @@ package processing
 import (
 	"context"
 	"errors"
-	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -15,42 +14,22 @@ import (
 
 // WorkflowConfiguration is revisioned metadata, separate from saved immutable definitions.
 type WorkflowConfiguration struct {
-	ID              uuid.UUID   `json:"id"`
-	Revision        int64       `json:"revision,string"`
-	Name            string      `json:"name"`
-	Scope           authz.Scope `json:"scope"`
-	Enabled         bool        `json:"enabled"`
-	ActiveVersionID *uuid.UUID  `json:"activeVersionId,omitempty"`
-	CreatedAt       time.Time   `json:"createdAt"`
-	UpdatedAt       time.Time   `json:"updatedAt"`
-	Deleted         bool        `json:"-"`
-}
-
-// validWorkflowScope accepts the Workflow selection scopes all, network and unit: a technical
-// selection by Radio network or Unit, independent of the grant scope kinds of authz.
-func validWorkflowScope(scope authz.Scope) bool {
-	if !slices.Contains([]string{"all", "network", "unit"}, scope.Kind) {
-		return false
-	}
-	if scope.Kind == "all" {
-		return len(scope.References) == 0
-	}
-	if len(scope.References) == 0 || len(scope.References) > 1024 {
-		return false
-	}
-	for _, reference := range scope.References {
-		if id, err := uuid.Parse(reference); err != nil || id == uuid.Nil {
-			return false
-		}
-	}
-	return true
+	ID              uuid.UUID     `json:"id"`
+	Revision        int64         `json:"revision,string"`
+	Name            string        `json:"name"`
+	Scope           WorkflowScope `json:"scope"`
+	Enabled         bool          `json:"enabled"`
+	ActiveVersionID *uuid.UUID    `json:"activeVersionId,omitempty"`
+	CreatedAt       time.Time     `json:"createdAt"`
+	UpdatedAt       time.Time     `json:"updatedAt"`
+	Deleted         bool          `json:"-"`
 }
 
 // Validate checks metadata without inventing scope/enable defaults or coercing operator names.
 func (w WorkflowConfiguration) Validate() error {
 	if w.ID == uuid.Nil || w.Revision <= 0 || !utf8.ValidString(w.Name) ||
 		strings.TrimSpace(w.Name) == "" || strings.ContainsRune(w.Name, '\x00') ||
-		!validWorkflowScope(w.Scope) ||
+		w.Scope.Validate() != nil ||
 		(w.ActiveVersionID != nil && *w.ActiveVersionID == uuid.Nil) ||
 		(w.Deleted && (w.Enabled || w.ActiveVersionID != nil)) {
 		return invalid(errors.New("invalid Workflow configuration"))

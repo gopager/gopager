@@ -53,6 +53,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/unittemplate"
 	"github.com/gopager/gopager/internal/persistence/ent/usergroup"
 	"github.com/gopager/gopager/internal/persistence/ent/workflow"
+	"github.com/gopager/gopager/internal/persistence/ent/workflowagency"
 	"github.com/gopager/gopager/internal/persistence/ent/workflowscopereference"
 	"github.com/gopager/gopager/internal/persistence/ent/workflowversion"
 )
@@ -136,6 +137,8 @@ type Client struct {
 	UserGroup *UserGroupClient
 	// Workflow is the client for interacting with the Workflow builders.
 	Workflow *WorkflowClient
+	// WorkflowAgency is the client for interacting with the WorkflowAgency builders.
+	WorkflowAgency *WorkflowAgencyClient
 	// WorkflowScopeReference is the client for interacting with the WorkflowScopeReference builders.
 	WorkflowScopeReference *WorkflowScopeReferenceClient
 	// WorkflowVersion is the client for interacting with the WorkflowVersion builders.
@@ -188,6 +191,7 @@ func (c *Client) init() {
 	c.UnitTemplate = NewUnitTemplateClient(c.config)
 	c.UserGroup = NewUserGroupClient(c.config)
 	c.Workflow = NewWorkflowClient(c.config)
+	c.WorkflowAgency = NewWorkflowAgencyClient(c.config)
 	c.WorkflowScopeReference = NewWorkflowScopeReferenceClient(c.config)
 	c.WorkflowVersion = NewWorkflowVersionClient(c.config)
 }
@@ -319,6 +323,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		UnitTemplate:              NewUnitTemplateClient(cfg),
 		UserGroup:                 NewUserGroupClient(cfg),
 		Workflow:                  NewWorkflowClient(cfg),
+		WorkflowAgency:            NewWorkflowAgencyClient(cfg),
 		WorkflowScopeReference:    NewWorkflowScopeReferenceClient(cfg),
 		WorkflowVersion:           NewWorkflowVersionClient(cfg),
 	}, nil
@@ -377,6 +382,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		UnitTemplate:              NewUnitTemplateClient(cfg),
 		UserGroup:                 NewUserGroupClient(cfg),
 		Workflow:                  NewWorkflowClient(cfg),
+		WorkflowAgency:            NewWorkflowAgencyClient(cfg),
 		WorkflowScopeReference:    NewWorkflowScopeReferenceClient(cfg),
 		WorkflowVersion:           NewWorkflowVersionClient(cfg),
 	}, nil
@@ -417,7 +423,7 @@ func (c *Client) Use(hooks ...Hook) {
 		c.ProcessingControl, c.ProcessingInstance, c.ProcessingInstanceVersion,
 		c.ProcessingResult, c.TargetSuppression, c.Transmission, c.TransmissionTarget,
 		c.Unit, c.UnitCollection, c.UnitTemplate, c.UserGroup, c.Workflow,
-		c.WorkflowScopeReference, c.WorkflowVersion,
+		c.WorkflowAgency, c.WorkflowScopeReference, c.WorkflowVersion,
 	} {
 		n.Use(hooks...)
 	}
@@ -436,7 +442,7 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.ProcessingControl, c.ProcessingInstance, c.ProcessingInstanceVersion,
 		c.ProcessingResult, c.TargetSuppression, c.Transmission, c.TransmissionTarget,
 		c.Unit, c.UnitCollection, c.UnitTemplate, c.UserGroup, c.Workflow,
-		c.WorkflowScopeReference, c.WorkflowVersion,
+		c.WorkflowAgency, c.WorkflowScopeReference, c.WorkflowVersion,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -519,6 +525,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.UserGroup.mutate(ctx, m)
 	case *WorkflowMutation:
 		return c.Workflow.mutate(ctx, m)
+	case *WorkflowAgencyMutation:
+		return c.WorkflowAgency.mutate(ctx, m)
 	case *WorkflowScopeReferenceMutation:
 		return c.WorkflowScopeReference.mutate(ctx, m)
 	case *WorkflowVersionMutation:
@@ -961,6 +969,38 @@ func (c *AgencyClient) QueryNetworks(_m *Agency) *NetworkQuery {
 			sqlgraph.From(agency.Table, agency.FieldID, id),
 			sqlgraph.To(network.Table, network.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, agency.NetworksTable, agency.NetworksColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryWorkflows queries the workflows edge of a Agency.
+func (c *AgencyClient) QueryWorkflows(_m *Agency) *WorkflowQuery {
+	query := (&WorkflowClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(agency.Table, agency.FieldID, id),
+			sqlgraph.To(workflow.Table, workflow.FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, true, agency.WorkflowsTable, agency.WorkflowsPrimaryKey...),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryWorkflowAgencies queries the workflow_agencies edge of a Agency.
+func (c *AgencyClient) QueryWorkflowAgencies(_m *Agency) *WorkflowAgencyQuery {
+	query := (&WorkflowAgencyClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(agency.Table, agency.FieldID, id),
+			sqlgraph.To(workflowagency.Table, workflowagency.AgencyColumn),
+			sqlgraph.Edge(sqlgraph.O2M, true, agency.WorkflowAgenciesTable, agency.WorkflowAgenciesColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -5716,6 +5756,38 @@ func (c *WorkflowClient) QueryScopeReferences(_m *Workflow) *WorkflowScopeRefere
 	return query
 }
 
+// QueryAgencies queries the agencies edge of a Workflow.
+func (c *WorkflowClient) QueryAgencies(_m *Workflow) *AgencyQuery {
+	query := (&AgencyClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(workflow.Table, workflow.FieldID, id),
+			sqlgraph.To(agency.Table, agency.FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, false, workflow.AgenciesTable, workflow.AgenciesPrimaryKey...),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryWorkflowAgencies queries the workflow_agencies edge of a Workflow.
+func (c *WorkflowClient) QueryWorkflowAgencies(_m *Workflow) *WorkflowAgencyQuery {
+	query := (&WorkflowAgencyClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(workflow.Table, workflow.FieldID, id),
+			sqlgraph.To(workflowagency.Table, workflowagency.WorkflowColumn),
+			sqlgraph.Edge(sqlgraph.O2M, true, workflow.WorkflowAgenciesTable, workflow.WorkflowAgenciesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *WorkflowClient) Hooks() []Hook {
 	hooks := c.hooks.Workflow
@@ -5739,6 +5811,123 @@ func (c *WorkflowClient) mutate(ctx context.Context, m *WorkflowMutation) (Value
 		return (&WorkflowDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Workflow mutation op: %q", m.Op())
+	}
+}
+
+// WorkflowAgencyClient is a client for the WorkflowAgency schema.
+type WorkflowAgencyClient struct {
+	config
+}
+
+// NewWorkflowAgencyClient returns a client for the WorkflowAgency from the given config.
+func NewWorkflowAgencyClient(c config) *WorkflowAgencyClient {
+	return &WorkflowAgencyClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `workflowagency.Hooks(f(g(h())))`.
+func (c *WorkflowAgencyClient) Use(hooks ...Hook) {
+	c.hooks.WorkflowAgency = append(c.hooks.WorkflowAgency, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `workflowagency.Intercept(f(g(h())))`.
+func (c *WorkflowAgencyClient) Intercept(interceptors ...Interceptor) {
+	c.inters.WorkflowAgency = append(c.inters.WorkflowAgency, interceptors...)
+}
+
+// Create returns a builder for creating a WorkflowAgency entity.
+func (c *WorkflowAgencyClient) Create() *WorkflowAgencyCreate {
+	mutation := newWorkflowAgencyMutation(c.config, OpCreate)
+	return &WorkflowAgencyCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of WorkflowAgency entities.
+func (c *WorkflowAgencyClient) CreateBulk(builders ...*WorkflowAgencyCreate) *WorkflowAgencyCreateBulk {
+	return &WorkflowAgencyCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *WorkflowAgencyClient) MapCreateBulk(slice any, setFunc func(*WorkflowAgencyCreate, int)) *WorkflowAgencyCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &WorkflowAgencyCreateBulk{err: fmt.Errorf("calling to WorkflowAgencyClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*WorkflowAgencyCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &WorkflowAgencyCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for WorkflowAgency.
+func (c *WorkflowAgencyClient) Update() *WorkflowAgencyUpdate {
+	mutation := newWorkflowAgencyMutation(c.config, OpUpdate)
+	return &WorkflowAgencyUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *WorkflowAgencyClient) UpdateOne(_m *WorkflowAgency) *WorkflowAgencyUpdateOne {
+	mutation := newWorkflowAgencyMutation(c.config, OpUpdateOne)
+	mutation.workflow = &_m.WorkflowID
+	mutation.agency = &_m.AgencyID
+	return &WorkflowAgencyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for WorkflowAgency.
+func (c *WorkflowAgencyClient) Delete() *WorkflowAgencyDelete {
+	mutation := newWorkflowAgencyMutation(c.config, OpDelete)
+	return &WorkflowAgencyDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Query returns a query builder for WorkflowAgency.
+func (c *WorkflowAgencyClient) Query() *WorkflowAgencyQuery {
+	return &WorkflowAgencyQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeWorkflowAgency},
+		inters: c.Interceptors(),
+	}
+}
+
+// QueryWorkflow queries the workflow edge of a WorkflowAgency.
+func (c *WorkflowAgencyClient) QueryWorkflow(_m *WorkflowAgency) *WorkflowQuery {
+	return c.Query().
+		Where(workflowagency.WorkflowID(_m.WorkflowID), workflowagency.AgencyID(_m.AgencyID)).
+		QueryWorkflow()
+}
+
+// QueryAgency queries the agency edge of a WorkflowAgency.
+func (c *WorkflowAgencyClient) QueryAgency(_m *WorkflowAgency) *AgencyQuery {
+	return c.Query().
+		Where(workflowagency.WorkflowID(_m.WorkflowID), workflowagency.AgencyID(_m.AgencyID)).
+		QueryAgency()
+}
+
+// Hooks returns the client hooks.
+func (c *WorkflowAgencyClient) Hooks() []Hook {
+	hooks := c.hooks.WorkflowAgency
+	return append(hooks[:len(hooks):len(hooks)], workflowagency.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *WorkflowAgencyClient) Interceptors() []Interceptor {
+	return c.inters.WorkflowAgency
+}
+
+func (c *WorkflowAgencyClient) mutate(ctx context.Context, m *WorkflowAgencyMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&WorkflowAgencyCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&WorkflowAgencyUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&WorkflowAgencyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&WorkflowAgencyDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown WorkflowAgency mutation op: %q", m.Op())
 	}
 }
 
@@ -6084,7 +6273,7 @@ type (
 		Organization, PendingAssignmentScope, ProcessingCandidate, ProcessingControl,
 		ProcessingInstance, ProcessingInstanceVersion, ProcessingResult,
 		TargetSuppression, Transmission, TransmissionTarget, Unit, UnitCollection,
-		UnitTemplate, UserGroup, Workflow, WorkflowScopeReference,
+		UnitTemplate, UserGroup, Workflow, WorkflowAgency, WorkflowScopeReference,
 		WorkflowVersion []ent.Hook
 	}
 	inters struct {
@@ -6095,7 +6284,7 @@ type (
 		Organization, PendingAssignmentScope, ProcessingCandidate, ProcessingControl,
 		ProcessingInstance, ProcessingInstanceVersion, ProcessingResult,
 		TargetSuppression, Transmission, TransmissionTarget, Unit, UnitCollection,
-		UnitTemplate, UserGroup, Workflow, WorkflowScopeReference,
+		UnitTemplate, UserGroup, Workflow, WorkflowAgency, WorkflowScopeReference,
 		WorkflowVersion []ent.Interceptor
 	}
 )

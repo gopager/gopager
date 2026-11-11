@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/persistence/ent/processingstore"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
@@ -20,7 +19,7 @@ func TestProcessingActivationValidatesReferencesForTheActivator(t *testing.T) {
 	f := newMatcherFixture(t)
 	service, _ := newProcessingManagementFixture(t, f, &processingPreparationFixture{}, f.facts)
 	created, err := service.CreateWorkflow(t.Context(), f.proof, uuid.New(),
-		processingMetadataFixture("activation", authz.Scope{Kind: "all"}), checkedMutation)
+		processingMetadataFixture("activation", f.agencyScope()), checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}

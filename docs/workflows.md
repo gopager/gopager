@@ -389,20 +389,20 @@ Common rules:
 - Every mutation needs `expectedRevision`, encoded as a decimal string. A mismatch returns `REVISION_CONFLICT`.
 - Create and update need `enabled`.
 - `name` must be non-blank UTF-8.
-- `scope` is `{"kind": "all"}` or `{"kind": "network" | "unit", "references": [uuid, ...]}`, with 1–1024 references. References are de-duplicated and sorted, and each must exist.
-- The caller must hold the action for every network or unit the scope covers.
+- `scope` is `{"agencies": [uuid, ...], "narrowing": null | {"kind": "network" | "unit", "references": [uuid, ...]}}`. `agencies` holds 1–256 distinct Agencies, each of which must exist. `narrowing.references` holds 1–1024 distinct networks or units that must exist, each belonging to an assigned Agency, and every assigned Agency must contain at least one reference. Both lists are returned sorted. Any violation is `INVALID_INPUT`.
+- Without a narrowing the caller must hold the action for every assigned Agency; with a narrowing, for every referenced network (through its Agency) and unit (Agency, unit and collections). An update needs both the stored and the new scope, a delete the stored one. A workflow is listed and readable when the caller's `workflow.read` matches one assigned Agency (grant scope `all` or `agency`) or, for a unit narrowing, one referenced unit (scope `unit`).
 
 Typical sequence (from tests):
 
-1. Create: `{"schemaVersion":1,"commandId":"…","name":"Synthetic Preview","scope":{"kind":"all"},"enabled":true}` returns revision `1`.
+1. Create: `{"schemaVersion":1,"commandId":"…","name":"Synthetic Preview","scope":{"agencies":["<agencyId>"],"narrowing":null},"enabled":true}` returns revision `1`.
 2. Save version: `{"schemaVersion":1,"commandId":"…","expectedRevision":"1","definition":{…}}` returns the version ID and revision `2`.
 3. Activate: `{"schemaVersion":1,"expectedRevision":"2"}`.
 
-A workflow processes new transmissions only when it is `enabled`, not deleted, has an active version, and its scope covers the transmission:
+A workflow processes new transmissions only when it is `enabled`, not deleted, has an active version, and its scope covers the transmission. A workflow reaches no Agency implicitly, so a new Agency has no workflow until one is assigned. The transmission's network must belong to an assigned Agency, and the narrowing must also cover it:
 
-| Scope kind | Covers |
+| Narrowing | Covers |
 | --- | --- |
-| `all` | Every transmission. |
+| none (`null`) | Every transmission on a network of an assigned Agency. |
 | `network` | Transmissions received on a referenced network. |
 | `unit` | Transmissions with at least one target assigned to a referenced unit. Only those target positions are evaluated. |
 
@@ -478,7 +478,7 @@ Rules:
 When a transmission is accepted, the same transaction:
 
 1. Locks the processing configuration revision.
-2. Selects every enabled, non-deleted workflow with an active version whose scope covers the transmission (network, or a unit of any target).
+2. Selects every enabled, non-deleted workflow with an active version whose scope covers the transmission (the network's Agency is assigned and, with a narrowing, the network or a unit of any target is referenced).
 3. Inserts one `pending` candidate per workflow, due immediately. Each candidate pins the transmission, the workflow and its revision, the active version, the configuration revision, the source revision (1) and the assignment context revision.
 
 The transmission's `processing_status` is `pending` when at least one candidate was admitted and `none` otherwise. The receipt reports the same value; the HTTP status is `202` for `pending` and `200` for every other value. Evidence is visible to readers in both cases.
@@ -627,7 +627,7 @@ Result metadata returns `{"id", "revision", "completedAt"}`. Source identity, ex
 | Branch nesting depth | 32 | `RESOURCE_LIMIT` |
 | Schema properties, step/final outputs, object and list elements | 1000 | `RESOURCE_LIMIT` |
 | Predicate `args` / `values`; targets per transmission | 1024 | `RESOURCE_LIMIT` |
-| Scope references | 1–1024 | `INVALID_INPUT` |
+| Scope Agencies / narrowing references | 1–256 / 1–1024 | `INVALID_INPUT` |
 | CEL cost / tracked memory / wall time per predicate | 2 000 000 / 2 MiB / 1 s | `RESOURCE_LIMIT` |
 | Regex pattern / text / instructions / NFA memory / match time | 4096 B / 1 MiB / 20 000 / 32 MiB / 1 s | `RESOURCE_LIMIT` |
 | Built-in compute per run (accumulated) | 1 s | `RESOURCE_LIMIT` |

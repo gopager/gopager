@@ -19,7 +19,7 @@ func seedPendingCandidates(t *testing.T, primary *postgres.Store, repository *pr
 	actor := uuid.New()
 	authority := processingAuthorityFixture(actor, authz.Scope{Kind: "all"})
 	configuration := processing.WorkflowConfiguration{ID: uuid.New(), Revision: 1, Name: "selection",
-		Scope: authz.Scope{Kind: "all"}, Enabled: true}
+		Scope: seedAgencyScope(t, primary), Enabled: true}
 	version := processing.Version{ID: uuid.New(), WorkflowID: configuration.ID,
 		CreatedBy: actor, Definition: preparedProcessingDefinition(t)}
 	admitted := make(map[uuid.UUID]bool, count)

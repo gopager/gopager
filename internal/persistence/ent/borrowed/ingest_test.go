@@ -478,8 +478,11 @@ func TestTransmissionAcceptanceRollsBackAtEachParticipant(t *testing.T) {
 				}
 				if test.selectedWorkflow {
 					if _, err := executor.ExecContext(tx.Context(), `INSERT INTO processing_workflows
-						(id,name,scope_kind,enabled,created_at,updated_at)
-						VALUES($1,'atomicity workflow','all',true,$2,$2)`, workflow, now); err != nil {
+						(id,name,enabled,created_at,updated_at)
+						VALUES($1,'atomicity workflow',true,$2,$2)`, workflow, now); err != nil {
+						return err
+					}
+					if _, err := executor.ExecContext(tx.Context(), `INSERT INTO processing_workflow_agencies(workflow_id,agency_id) SELECT $1, id FROM agencies`, workflow); err != nil {
 						return err
 					}
 					if _, err := executor.ExecContext(tx.Context(), `INSERT INTO processing_workflow_versions
@@ -922,8 +925,11 @@ func TestSelectedWorkflowKeepsProcessingPending(t *testing.T) {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO processing_workflows
-			(id,name,scope_kind,enabled,created_at,updated_at)
-			VALUES($1,'test workflow','all',true,$2,$2)`, workflow, now); err != nil {
+			(id,name,enabled,created_at,updated_at)
+			VALUES($1,'test workflow',true,$2,$2)`, workflow, now); err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO processing_workflow_agencies(workflow_id,agency_id) SELECT $1, id FROM agencies`, workflow); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO processing_workflow_versions
@@ -1081,8 +1087,11 @@ func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
 		for i, workflow := range workflows {
 			version := versions[i]
 			if _, err := executor.ExecContext(tx.Context(), `INSERT INTO processing_workflows
-				(id,name,scope_kind,enabled,created_at,updated_at)
-				VALUES($1,$2,'all',true,$3,$3)`, workflow, "publication workflow "+workflow.String(), now); err != nil {
+				(id,name,enabled,created_at,updated_at)
+				VALUES($1,$2,true,$3,$3)`, workflow, "publication workflow "+workflow.String(), now); err != nil {
+				return err
+			}
+			if _, err := executor.ExecContext(tx.Context(), `INSERT INTO processing_workflow_agencies(workflow_id,agency_id) SELECT $1, id FROM agencies`, workflow); err != nil {
 				return err
 			}
 			if _, err := executor.ExecContext(tx.Context(), `INSERT INTO processing_workflow_versions
@@ -1284,8 +1293,11 @@ func TestSelectedWorkflowPublicationRollsBackAndRecovers(t *testing.T) {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO processing_workflows
-			(id,name,scope_kind,enabled,created_at,updated_at)
-			VALUES($1,'invalid selected workflow','all',true,$2,$2)`, failedWorkflow, now); err != nil {
+			(id,name,enabled,created_at,updated_at)
+			VALUES($1,'invalid selected workflow',true,$2,$2)`, failedWorkflow, now); err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO processing_workflow_agencies(workflow_id,agency_id) SELECT $1, id FROM agencies`, failedWorkflow); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO processing_workflow_versions

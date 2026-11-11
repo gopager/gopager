@@ -15,6 +15,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/network"
 	"github.com/gopager/gopager/internal/persistence/ent/predicate"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
+	"github.com/gopager/gopager/internal/persistence/ent/workflow"
 )
 
 // AgencyUpdate is the builder for updating Agency entities.
@@ -96,6 +97,21 @@ func (_u *AgencyUpdate) AddNetworks(v ...*Network) *AgencyUpdate {
 	return _u.AddNetworkIDs(ids...)
 }
 
+// AddWorkflowIDs adds the "workflows" edge to the Workflow entity by IDs.
+func (_u *AgencyUpdate) AddWorkflowIDs(ids ...uuid.UUID) *AgencyUpdate {
+	_u.mutation.AddWorkflowIDs(ids...)
+	return _u
+}
+
+// AddWorkflows adds the "workflows" edges to the Workflow entity.
+func (_u *AgencyUpdate) AddWorkflows(v ...*Workflow) *AgencyUpdate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddWorkflowIDs(ids...)
+}
+
 // Mutation returns the AgencyMutation object of the builder.
 func (_u *AgencyUpdate) Mutation() *AgencyMutation {
 	return _u.mutation
@@ -141,6 +157,27 @@ func (_u *AgencyUpdate) RemoveNetworks(v ...*Network) *AgencyUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveNetworkIDs(ids...)
+}
+
+// ClearWorkflows clears all "workflows" edges to the Workflow entity.
+func (_u *AgencyUpdate) ClearWorkflows() *AgencyUpdate {
+	_u.mutation.ClearWorkflows()
+	return _u
+}
+
+// RemoveWorkflowIDs removes the "workflows" edge to Workflow entities by IDs.
+func (_u *AgencyUpdate) RemoveWorkflowIDs(ids ...uuid.UUID) *AgencyUpdate {
+	_u.mutation.RemoveWorkflowIDs(ids...)
+	return _u
+}
+
+// RemoveWorkflows removes "workflows" edges to Workflow entities.
+func (_u *AgencyUpdate) RemoveWorkflows(v ...*Workflow) *AgencyUpdate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveWorkflowIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -302,6 +339,51 @@ func (_u *AgencyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.WorkflowsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   agency.WorkflowsTable,
+			Columns: agency.WorkflowsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedWorkflowsIDs(); len(nodes) > 0 && !_u.mutation.WorkflowsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   agency.WorkflowsTable,
+			Columns: agency.WorkflowsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.WorkflowsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   agency.WorkflowsTable,
+			Columns: agency.WorkflowsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -389,6 +471,21 @@ func (_u *AgencyUpdateOne) AddNetworks(v ...*Network) *AgencyUpdateOne {
 	return _u.AddNetworkIDs(ids...)
 }
 
+// AddWorkflowIDs adds the "workflows" edge to the Workflow entity by IDs.
+func (_u *AgencyUpdateOne) AddWorkflowIDs(ids ...uuid.UUID) *AgencyUpdateOne {
+	_u.mutation.AddWorkflowIDs(ids...)
+	return _u
+}
+
+// AddWorkflows adds the "workflows" edges to the Workflow entity.
+func (_u *AgencyUpdateOne) AddWorkflows(v ...*Workflow) *AgencyUpdateOne {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddWorkflowIDs(ids...)
+}
+
 // Mutation returns the AgencyMutation object of the builder.
 func (_u *AgencyUpdateOne) Mutation() *AgencyMutation {
 	return _u.mutation
@@ -434,6 +531,27 @@ func (_u *AgencyUpdateOne) RemoveNetworks(v ...*Network) *AgencyUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveNetworkIDs(ids...)
+}
+
+// ClearWorkflows clears all "workflows" edges to the Workflow entity.
+func (_u *AgencyUpdateOne) ClearWorkflows() *AgencyUpdateOne {
+	_u.mutation.ClearWorkflows()
+	return _u
+}
+
+// RemoveWorkflowIDs removes the "workflows" edge to Workflow entities by IDs.
+func (_u *AgencyUpdateOne) RemoveWorkflowIDs(ids ...uuid.UUID) *AgencyUpdateOne {
+	_u.mutation.RemoveWorkflowIDs(ids...)
+	return _u
+}
+
+// RemoveWorkflows removes "workflows" edges to Workflow entities.
+func (_u *AgencyUpdateOne) RemoveWorkflows(v ...*Workflow) *AgencyUpdateOne {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveWorkflowIDs(ids...)
 }
 
 // Where appends a list predicates to the AgencyUpdate builder.
@@ -618,6 +736,51 @@ func (_u *AgencyUpdateOne) sqlSave(ctx context.Context) (_node *Agency, err erro
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(network.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.WorkflowsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   agency.WorkflowsTable,
+			Columns: agency.WorkflowsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedWorkflowsIDs(); len(nodes) > 0 && !_u.mutation.WorkflowsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   agency.WorkflowsTable,
+			Columns: agency.WorkflowsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.WorkflowsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   agency.WorkflowsTable,
+			Columns: agency.WorkflowsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {

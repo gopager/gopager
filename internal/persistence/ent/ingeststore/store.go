@@ -415,42 +415,8 @@ func (s *Store) admitProcessing(ctx context.Context, executor postgres.Executor,
 		unitIDs = append(unitIDs, id)
 	}
 	sort.Slice(unitIDs, func(i, j int) bool { return unitIDs[i].String() < unitIDs[j].String() })
-	rows, err := executor.QueryContext(ctx, `SELECT w.id,w.active_version_id,w.revision
-		FROM processing_workflows w
-		WHERE w.enabled=true AND w.deleted=false AND w.active_version_id IS NOT NULL AND (
-			w.scope_kind='all' OR
-			(w.scope_kind='network' AND EXISTS (
-				SELECT 1 FROM processing_workflow_scope_references r
-				WHERE r.workflow_id=w.id AND r.network_id=$1
-			)) OR
-			(w.scope_kind='unit' AND EXISTS (
-				SELECT 1 FROM processing_workflow_scope_references r
-				WHERE r.workflow_id=w.id AND r.unit_id=ANY($2::uuid[])
-			))
-		)
-		ORDER BY w.id FOR SHARE OF w`, network, unitIDs)
+	selected, err := selectWorkflows(ctx, executor, network, unitIDs)
 	if err != nil {
-		return "", err
-	}
-	type selectedWorkflow struct {
-		id       uuid.UUID
-		version  uuid.UUID
-		revision int64
-	}
-	var selected []selectedWorkflow
-	for rows.Next() {
-		var workflow selectedWorkflow
-		if err := rows.Scan(&workflow.id, &workflow.version, &workflow.revision); err != nil {
-			rows.Close()
-			return "", err
-		}
-		selected = append(selected, workflow)
-	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return "", err
-	}
-	if err := rows.Close(); err != nil {
 		return "", err
 	}
 	// The processing context is the assignment revision stamped on the Transmission's own targets;

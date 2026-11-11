@@ -64,6 +64,10 @@ func (o matcherOwners) ReadUnitContext(ctx context.Context, tx platform.Transact
 	return o.units.ReadUnitContext(ctx, tx, id)
 }
 
+func (o matcherOwners) LockAgency(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) error {
+	return o.units.LockAgency(ctx, tx, id)
+}
+
 func (o matcherOwners) ScopesExist(ctx context.Context, tx platform.TransactionContext, scopes []authz.Scope) ([]bool, error) {
 	result := make([]bool, len(scopes))
 	for i, scope := range scopes {

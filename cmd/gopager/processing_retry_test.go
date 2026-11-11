@@ -81,14 +81,14 @@ func TestProcessingCandidateRetryHTTPUsesCurrentSourceOwner(t *testing.T) {
 	t.Parallel()
 	// The saved definitions select on a payload field, which the author must be able to read.
 	store := newManagementStoreWithFields(t, []string{"unit", "address", "payload"})
-	network, gateway := uuid.New(), uuid.New()
+	network, gateway, agency := uuid.New(), uuid.New(), uuid.New()
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		executor, err := store.Resolve(tx)
 		if err != nil {
 			return err
 		}
-		if _, err := executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id)
-			INSERT INTO networks(id,name,protocol,agency_id) SELECT $1,'Retry Network','pocsag',a.id FROM a`, network); err != nil {
+		if _, err := executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES($2,'Fixture agency') RETURNING id)
+			INSERT INTO networks(id,name,protocol,agency_id) SELECT $1,'Retry Network','pocsag',a.id FROM a`, network, agency); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateways(id) VALUES($1)`, gateway); err != nil {
@@ -130,7 +130,7 @@ func TestProcessingCandidateRetryHTTPUsesCurrentSourceOwner(t *testing.T) {
 		`{"schemaVersion":1,"username":"operator","password":"initial-password"}`, "", "", http.StatusOK)
 
 	workflowResponse := managementRequest(t, client, origin, http.MethodPost, "/api/v1/workflows",
-		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Retry","scope":{"kind":"all"},"enabled":true}`,
+		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Retry","scope":`+workflowScopeJSON(agency)+`,"enabled":true}`,
 		login.CSRFToken, "", http.StatusCreated)
 	workflowID, _ := managementResultID(t, workflowResponse)
 	versionInput, err := json.Marshal(workflowVersionMutation{SchemaVersion: 1,
@@ -232,7 +232,7 @@ func TestProcessingCandidateRetryHTTPUsesCurrentSourceOwner(t *testing.T) {
 	failProcessingCandidateTerminally(t, store, candidateID)
 	_, failedRevision := readCandidate()
 	managementRequest(t, client, origin, http.MethodPut, "/api/v1/workflows/"+workflowID.String(),
-		`{"schemaVersion":1,"expectedRevision":"`+workflowRevision+`","name":"Retry renamed","scope":{"kind":"all"},"enabled":true}`,
+		`{"schemaVersion":1,"expectedRevision":"`+workflowRevision+`","name":"Retry renamed","scope":`+workflowScopeJSON(agency)+`,"enabled":true}`,
 		login.CSRFToken, "", http.StatusOK)
 	stale := managementRequest(t, client, origin, http.MethodPost, candidatePath+"/retry",
 		`{"schemaVersion":1,"expectedRevision":"`+failedRevision+`"}`, login.CSRFToken, "", http.StatusConflict)

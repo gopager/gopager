@@ -86,7 +86,7 @@ func testAuthority(groups ...string) authz.Authority {
 }
 
 func testOwner(protocol protocols.Protocol, unitID *uuid.UUID) (*Owner, Network, testTx) {
-	network := Network{ID: uuid.New(), Name: "Dispatch", Protocol: protocol}
+	network := Network{ID: uuid.New(), Name: "Dispatch", Protocol: protocol, AgencyID: testAgency}
 	tx := testTx{ctx: context.Background()}
 	owner, err := NewOwner(testMatcher{unitID: unitID}, testNetworks{network: network},
 		testClock{now: time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)}, &testScope{})
@@ -96,8 +96,12 @@ func testOwner(protocol protocols.Protocol, unitID *uuid.UUID) (*Owner, Network,
 	return owner, network, tx
 }
 
-func testWorkflow(scope authz.Scope) processing.WorkflowConfiguration {
-	return processing.WorkflowConfiguration{ID: uuid.New(), Revision: 1, Name: "preview", Scope: scope, Enabled: true}
+// testAgency is the Agency of the fixture Network and the only one fixture Workflows are assigned to.
+var testAgency = uuid.MustParse("00000000-0000-4000-8000-0000000000a1")
+
+func testWorkflow(narrowing *processing.WorkflowNarrowing) processing.WorkflowConfiguration {
+	return processing.WorkflowConfiguration{ID: uuid.New(), Revision: 1, Name: "preview", Enabled: true,
+		Scope: processing.WorkflowScope{Agencies: []uuid.UUID{testAgency}, Narrowing: narrowing}}
 }
 
 func capture(t *testing.T, owner *Owner, network Network, tx testTx, authority authz.Authority,
@@ -157,7 +161,7 @@ func TestSyntheticOwnerCapturesEveryFrozenForm(t *testing.T) {
 			owner, network, tx := testOwner(protocol, &unit)
 			raw := replaceNetworkID(test.raw, network.ID)
 			projection, _ := capture(t, owner, network, tx, allowed,
-				testWorkflow(authz.Scope{Kind: "all"}), raw)
+				testWorkflow(nil), raw)
 			if !projection.Synthetic || projection.SourceRevision != 1 || projection.ContextRevision != 7 {
 				t.Fatalf("synthetic identity was not server-owned: %+v", projection)
 			}
@@ -182,7 +186,7 @@ func TestSyntheticOwnerUsesMatcherAndWorkflowUnitScope(t *testing.T) {
 	unit := uuid.New()
 	owner, network, tx := testOwner(protocols.POCSAG, &unit)
 	authority := testAuthority("payload", "gateway", "address", "unit")
-	workflow := testWorkflow(authz.Scope{Kind: "unit", References: []string{unit.String()}})
+	workflow := testWorkflow(&processing.WorkflowNarrowing{Kind: "unit", References: []uuid.UUID{unit}})
 	raw := replaceNetworkID(`{"schemaVersion":1,"protocol":"pocsag","form":"text","networkId":"NETWORK","payload":{"value":"x"},"targets":[{"address":7,"function":0},{"address":8,"function":1}]}`, network.ID)
 	projection, scope := capture(t, owner, network, tx, authority, workflow, raw)
 	if !scope.SourceEligible || len(scope.TargetPositions) != 2 || scope.TargetPositions[0] != 0 ||
@@ -204,7 +208,7 @@ func TestSyntheticOwnerCapturesEveryFieldRegardlessOfEditorRightsAndFailsClosedW
 	owner, network, tx := testOwner(protocols.POCSAG, nil)
 	authority := testAuthority("payload")
 	raw := replaceNetworkID(`{"schemaVersion":1,"protocol":"pocsag","form":"text","networkId":"NETWORK","payload":{"value":"x"},"targets":[]}`, network.ID)
-	projection, _ := capture(t, owner, network, tx, authority, testWorkflow(authz.Scope{Kind: "all"}), raw)
+	projection, _ := capture(t, owner, network, tx, authority, testWorkflow(nil), raw)
 	name, ok := findField(projection.Fields, "network", "name")
 	text, textOK := findField(projection.Fields, "payload", "text", "value")
 	if !ok || name.Field.State != processing.FieldPresent || !textOK || text.Field.State != processing.FieldPresent {
@@ -215,12 +219,12 @@ func TestSyntheticOwnerCapturesEveryFieldRegardlessOfEditorRightsAndFailsClosedW
 		t.Fatal(err)
 	}
 	_, err = missing.CaptureSyntheticPreview(context.Background(), tx, authority,
-		testWorkflow(authz.Scope{Kind: "all"}), json.RawMessage(raw))
+		testWorkflow(nil), json.RawMessage(raw))
 	if platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
 		t.Fatalf("missing Network owner was not explicit: %v", err)
 	}
 	_, err = owner.CaptureStoredPreview(context.Background(), tx, authority,
-		testWorkflow(authz.Scope{Kind: "all"}), uuid.New())
+		testWorkflow(nil), uuid.New())
 	if platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
 		t.Fatalf("stored source was substituted: %v", err)
 	}
@@ -230,7 +234,7 @@ func TestSyntheticOwnerRejectsUnfrozenInputAndOutOfScopeNetwork(t *testing.T) {
 	t.Parallel()
 	owner, network, tx := testOwner(protocols.POCSAG, nil)
 	authority := testAuthority("payload", "gateway", "address", "unit")
-	workflow := testWorkflow(authz.Scope{Kind: "network", References: []string{uuid.NewString()}})
+	workflow := testWorkflow(&processing.WorkflowNarrowing{Kind: "network", References: []uuid.UUID{uuid.New()}})
 	cases := []string{
 		`{"schemaVersion":1,"protocol":"pocsag","form":"text","networkId":"NETWORK","payload":{"value":"x","schema":{} }}`,
 		`{"schemaVersion":1,"protocol":"pocsag","form":"numeric","networkId":"NETWORK","payload":{"value":"12A"},"targets":[]}`,
@@ -241,7 +245,7 @@ func TestSyntheticOwnerRejectsUnfrozenInputAndOutOfScopeNetwork(t *testing.T) {
 	}
 	for _, raw := range cases {
 		raw = replaceNetworkID(raw, network.ID)
-		if _, err := owner.CaptureSyntheticPreview(context.Background(), tx, authority, testWorkflow(authz.Scope{Kind: "all"}),
+		if _, err := owner.CaptureSyntheticPreview(context.Background(), tx, authority, testWorkflow(nil),
 			json.RawMessage(raw)); err == nil {
 			t.Fatalf("invalid synthetic request accepted: %s", raw)
 		}
@@ -268,7 +272,7 @@ func TestSyntheticUnionDeclarationsRemainAvailableAcrossForms(t *testing.T) {
 	t.Parallel()
 	owner, network, tx := testOwner(protocols.POCSAG, nil)
 	projection, _ := capture(t, owner, network, tx, testAuthority("payload", "gateway"),
-		testWorkflow(authz.Scope{Kind: "all"}),
+		testWorkflow(nil),
 		replaceNetworkID(`{"schemaVersion":1,"protocol":"pocsag","form":"tone-only","networkId":"NETWORK","targets":[]}`, network.ID))
 	source, err := processing.CaptureSource(t.Context(), projection)
 	if err != nil {
@@ -325,7 +329,7 @@ func TestSyntheticRecheckRejectsNetworkUnitAndFieldChanges(t *testing.T) {
 		UnitContext: map[uuid.UUID]units.Context{unit: {ID: unit, Revision: 1}}}}
 	owner.matcher = matcher
 	authority := testAuthority("payload", "gateway", "address", "unit")
-	workflow := testWorkflow(authz.Scope{Kind: "all"})
+	workflow := testWorkflow(nil)
 	projection, _ := capture(t, owner, network, tx, authority, workflow,
 		replaceNetworkID(`{"schemaVersion":1,"protocol":"pocsag","form":"text","observedAt":"2020-01-01T10:00:00.123456789+01:00","networkId":"NETWORK","payload":{"value":"x"},"targets":[{"address":7,"function":0}]}`, network.ID))
 	source, err := processing.CaptureSource(t.Context(), projection)
@@ -384,7 +388,7 @@ func TestSyntheticUnitScopeDoesNotReturnSiblingTargetContext(t *testing.T) {
 			{TargetPosition: 1, Status: "assigned", UnitID: &sibling}},
 		UnitContext: map[uuid.UUID]units.Context{unit: {ID: unit, Revision: 1}, sibling: {ID: sibling, Revision: 1}}}}
 	projection, scope := capture(t, owner, network, tx, testAuthority("payload", "gateway", "unit", "address"),
-		testWorkflow(authz.Scope{Kind: "unit", References: []string{unit.String()}}),
+		testWorkflow(&processing.WorkflowNarrowing{Kind: "unit", References: []uuid.UUID{unit}}),
 		replaceNetworkID(`{"schemaVersion":1,"protocol":"pocsag","form":"text","networkId":"NETWORK","payload":{"value":"x"},"targets":[{"address":7,"function":0},{"address":8,"function":0}]}`, network.ID))
 	source, err := processing.CaptureSource(t.Context(), projection)
 	if err != nil {

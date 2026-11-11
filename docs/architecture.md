@@ -79,7 +79,7 @@ flowchart TD
 | Persistence | Transmission, ordered targets with their resolution and typed address columns (`network_id`, `protocol`, `observed_at`, `address_number` or `address_text`, `function`), `message_units` cache rows (one per Message and Unit with the Unit's Agency, or one Unit-less row per Message and Network Agency for targetless input and for unassigned targets) | `ingeststore.AcceptTransmission` |
 | Correction scope | None at intake: targets are stamped with the assignment revision read under the shared Assignment lock, so a correction recorded afterwards (always at a higher revision) selects them by selector if affected; no dirty capture exists | `assignmentstore.MarkPending` |
 | Facts | `gateway.state-changed`, `message.created` / `message.transmission-joined` / `message.merged`, one `assignment.changed` (reason `created`) per Transmission with targets, carrying the ordered target resolutions, `operation.observation-time-implausible` | `events`, `eventstore` |
-| Processing admission | Select enabled workflows with an active version and scope `all`, the matching Network, or one of the matched Units. Insert one `processing_candidates` row per selected workflow and set `processing_status` to `pending`, or to `none` when no workflow is selected. | `ingeststore.admitProcessing` |
+| Processing admission | Select enabled workflows with an active version assigned to the Network's Agency and, when narrowed, referring to the matching Network or one of the matched Units. Insert one `processing_candidates` row per selected workflow and set `processing_status` to `pending`, or to `none` when no workflow is selected. | `ingeststore.admitProcessing` |
 
 The response is `202` when the processing status is `pending` and `200` otherwise. The accepted evidence is visible to readers either way.
 
@@ -286,7 +286,9 @@ erDiagram
     UNIT_COLLECTION ||--o{ UNIT_COLLECTION_MEMBERSHIP : ""
     WORKFLOW ||--o{ WORKFLOW_VERSION : versions
     WORKFLOW |o--o| WORKFLOW_VERSION : "active version"
-    WORKFLOW ||--o{ WORKFLOW_SCOPE_REFERENCE : "scope (Network or Unit)"
+    WORKFLOW ||--|{ WORKFLOW_AGENCY : "assigned Agencies"
+    AGENCY ||--o{ WORKFLOW_AGENCY : "assigned Workflows"
+    WORKFLOW ||--o{ WORKFLOW_SCOPE_REFERENCE : "narrowing (Network or Unit)"
     WORKFLOW_VERSION }o..o{ PROCESSING_INSTANCE : "installed steps reference"
     PROCESSING_INSTANCE ||--|{ PROCESSING_INSTANCE_VERSION : revisions
     PROCESSING_INSTANCE_VERSION }o..|| ACCOUNT : "execution principal"
@@ -378,7 +380,7 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 | Authority | `authz.Authority` | Current grants, field permissions and key restrictions of a principal, loaded once per transaction |
 | Saved view | `saved_views`, `readmodel.SavedViews` | Named feed filter set (`definition` jsonb: filter dimensions plus optional time range) with a revision. A personal view is personal data keyed by `owner_principal_id` and visible only to that Principal; a global view has no owner and is maintained with `saved-view.manage-global`. Writes no domain event and no audit record. |
 | Search admission | `search_admissions`, `readmodel.Admission` | Fixed one-minute window counter per bucket (SHA-256 of the access-key credential, the Principal or, for the guest, the client source). Incremented atomically only while below `--search-attempts-per-minute`; an admitted request deletes its bucket's older windows and up to 100 expired windows of any bucket (index on `window_start`, `SKIP LOCKED`), so buckets that never return do not accumulate. It holds no addresses or IDs in clear. |
-| Workflow | `processing_workflows` | Named, scoped (`all`, `network`, `unit`), enable-able processing configuration that points at an active version |
+| Workflow | `processing_workflows` | Named, enable-able processing configuration bound to Agencies (`processing_workflow_agencies`) and optionally narrowed to Networks or Units (`narrowing_kind`, scope references) that points at an active version |
 | Workflow version | `processing_workflow_versions` | Immutable definition: selector predicate, steps (`map`, `extract`, `branch`, `installed`), output schema, outputs. Saving checks every referenced source field's group against the author's field permissions; the version's outputs are classified once as `derived` plus the groups it reads, computed from the definition and the source declarations on load (see [Classification](workflows.md#classification)) |
 | Processing instance | `processing_instances`, `processing_instance_versions` | Revisioned binding of a provisioned plugin artifact (manifest path and pin), its configuration, and the execution principal it runs as |
 | Processing candidate | `processing_candidates` | Durable work item for one transmission and workflow version at given source/context revisions. States: `pending`, `running`, `completed`, `failed`, `superseded`. Has lease, fencing token and attempts. |

@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/persistence/ent/agency"
 	"github.com/gopager/gopager/internal/persistence/ent/workflow"
 	"github.com/gopager/gopager/internal/persistence/ent/workflowscopereference"
 	"github.com/gopager/gopager/internal/persistence/ent/workflowversion"
@@ -43,9 +44,17 @@ func (_c *WorkflowCreate) SetName(v string) *WorkflowCreate {
 	return _c
 }
 
-// SetScopeKind sets the "scope_kind" field.
-func (_c *WorkflowCreate) SetScopeKind(v workflow.ScopeKind) *WorkflowCreate {
-	_c.mutation.SetScopeKind(v)
+// SetNarrowingKind sets the "narrowing_kind" field.
+func (_c *WorkflowCreate) SetNarrowingKind(v workflow.NarrowingKind) *WorkflowCreate {
+	_c.mutation.SetNarrowingKind(v)
+	return _c
+}
+
+// SetNillableNarrowingKind sets the "narrowing_kind" field if the given value is not nil.
+func (_c *WorkflowCreate) SetNillableNarrowingKind(v *workflow.NarrowingKind) *WorkflowCreate {
+	if v != nil {
+		_c.SetNarrowingKind(*v)
+	}
 	return _c
 }
 
@@ -147,6 +156,21 @@ func (_c *WorkflowCreate) AddScopeReferences(v ...*WorkflowScopeReference) *Work
 	return _c.AddScopeReferenceIDs(ids...)
 }
 
+// AddAgencyIDs adds the "agencies" edge to the Agency entity by IDs.
+func (_c *WorkflowCreate) AddAgencyIDs(ids ...uuid.UUID) *WorkflowCreate {
+	_c.mutation.AddAgencyIDs(ids...)
+	return _c
+}
+
+// AddAgencies adds the "agencies" edges to the Agency entity.
+func (_c *WorkflowCreate) AddAgencies(v ...*Agency) *WorkflowCreate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddAgencyIDs(ids...)
+}
+
 // Mutation returns the WorkflowMutation object of the builder.
 func (_c *WorkflowCreate) Mutation() *WorkflowMutation {
 	return _c.mutation
@@ -224,12 +248,9 @@ func (_c *WorkflowCreate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Workflow.name": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.ScopeKind(); !ok {
-		return &ValidationError{Name: "scope_kind", err: errors.New(`ent: missing required field "Workflow.scope_kind"`)}
-	}
-	if v, ok := _c.mutation.ScopeKind(); ok {
-		if err := workflow.ScopeKindValidator(v); err != nil {
-			return &ValidationError{Name: "scope_kind", err: fmt.Errorf(`ent: validator failed for field "Workflow.scope_kind": %w`, err)}
+	if v, ok := _c.mutation.NarrowingKind(); ok {
+		if err := workflow.NarrowingKindValidator(v); err != nil {
+			return &ValidationError{Name: "narrowing_kind", err: fmt.Errorf(`ent: validator failed for field "Workflow.narrowing_kind": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.Enabled(); !ok {
@@ -287,9 +308,9 @@ func (_c *WorkflowCreate) createSpec() (*Workflow, *sqlgraph.CreateSpec) {
 		_spec.SetField(workflow.FieldName, field.TypeString, value)
 		_node.Name = value
 	}
-	if value, ok := _c.mutation.ScopeKind(); ok {
-		_spec.SetField(workflow.FieldScopeKind, field.TypeEnum, value)
-		_node.ScopeKind = value
+	if value, ok := _c.mutation.NarrowingKind(); ok {
+		_spec.SetField(workflow.FieldNarrowingKind, field.TypeEnum, value)
+		_node.NarrowingKind = &value
 	}
 	if value, ok := _c.mutation.Enabled(); ok {
 		_spec.SetField(workflow.FieldEnabled, field.TypeBool, value)
@@ -336,6 +357,22 @@ func (_c *WorkflowCreate) createSpec() (*Workflow, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(workflowscopereference.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.AgenciesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   workflow.AgenciesTable,
+			Columns: workflow.AgenciesPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(agency.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {

@@ -20,8 +20,8 @@ const (
 	FieldRevision = "revision"
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
-	// FieldScopeKind holds the string denoting the scope_kind field in the database.
-	FieldScopeKind = "scope_kind"
+	// FieldNarrowingKind holds the string denoting the narrowing_kind field in the database.
+	FieldNarrowingKind = "narrowing_kind"
 	// FieldEnabled holds the string denoting the enabled field in the database.
 	FieldEnabled = "enabled"
 	// FieldDeleted holds the string denoting the deleted field in the database.
@@ -36,6 +36,10 @@ const (
 	EdgeVersions = "versions"
 	// EdgeScopeReferences holds the string denoting the scope_references edge name in mutations.
 	EdgeScopeReferences = "scope_references"
+	// EdgeAgencies holds the string denoting the agencies edge name in mutations.
+	EdgeAgencies = "agencies"
+	// EdgeWorkflowAgencies holds the string denoting the workflow_agencies edge name in mutations.
+	EdgeWorkflowAgencies = "workflow_agencies"
 	// Table holds the table name of the workflow in the database.
 	Table = "processing_workflows"
 	// VersionsTable is the table that holds the versions relation/edge.
@@ -52,6 +56,18 @@ const (
 	ScopeReferencesInverseTable = "processing_workflow_scope_references"
 	// ScopeReferencesColumn is the table column denoting the scope_references relation/edge.
 	ScopeReferencesColumn = "workflow_id"
+	// AgenciesTable is the table that holds the agencies relation/edge. The primary key declared below.
+	AgenciesTable = "processing_workflow_agencies"
+	// AgenciesInverseTable is the table name for the Agency entity.
+	// It exists in this package in order to avoid circular dependency with the "agency" package.
+	AgenciesInverseTable = "agencies"
+	// WorkflowAgenciesTable is the table that holds the workflow_agencies relation/edge.
+	WorkflowAgenciesTable = "processing_workflow_agencies"
+	// WorkflowAgenciesInverseTable is the table name for the WorkflowAgency entity.
+	// It exists in this package in order to avoid circular dependency with the "workflowagency" package.
+	WorkflowAgenciesInverseTable = "processing_workflow_agencies"
+	// WorkflowAgenciesColumn is the table column denoting the workflow_agencies relation/edge.
+	WorkflowAgenciesColumn = "workflow_id"
 )
 
 // Columns holds all SQL columns for workflow fields.
@@ -59,13 +75,19 @@ var Columns = []string{
 	FieldID,
 	FieldRevision,
 	FieldName,
-	FieldScopeKind,
+	FieldNarrowingKind,
 	FieldEnabled,
 	FieldDeleted,
 	FieldActiveVersionID,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
+
+var (
+	// AgenciesPrimaryKey and AgenciesColumn2 are the table columns denoting the
+	// primary key for the agencies relation (M2M).
+	AgenciesPrimaryKey = []string{"workflow_id", "agency_id"}
+)
 
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
@@ -99,27 +121,26 @@ var (
 	DefaultID func() uuid.UUID
 )
 
-// ScopeKind defines the type for the "scope_kind" enum field.
-type ScopeKind string
+// NarrowingKind defines the type for the "narrowing_kind" enum field.
+type NarrowingKind string
 
-// ScopeKind values.
+// NarrowingKind values.
 const (
-	ScopeKindAll     ScopeKind = "all"
-	ScopeKindNetwork ScopeKind = "network"
-	ScopeKindUnit    ScopeKind = "unit"
+	NarrowingKindNetwork NarrowingKind = "network"
+	NarrowingKindUnit    NarrowingKind = "unit"
 )
 
-func (sk ScopeKind) String() string {
-	return string(sk)
+func (nk NarrowingKind) String() string {
+	return string(nk)
 }
 
-// ScopeKindValidator is a validator for the "scope_kind" field enum values. It is called by the builders before save.
-func ScopeKindValidator(sk ScopeKind) error {
-	switch sk {
-	case ScopeKindAll, ScopeKindNetwork, ScopeKindUnit:
+// NarrowingKindValidator is a validator for the "narrowing_kind" field enum values. It is called by the builders before save.
+func NarrowingKindValidator(nk NarrowingKind) error {
+	switch nk {
+	case NarrowingKindNetwork, NarrowingKindUnit:
 		return nil
 	default:
-		return fmt.Errorf("workflow: invalid enum value for scope_kind field: %q", sk)
+		return fmt.Errorf("workflow: invalid enum value for narrowing_kind field: %q", nk)
 	}
 }
 
@@ -141,9 +162,9 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldName, opts...).ToFunc()
 }
 
-// ByScopeKind orders the results by the scope_kind field.
-func ByScopeKind(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldScopeKind, opts...).ToFunc()
+// ByNarrowingKind orders the results by the narrowing_kind field.
+func ByNarrowingKind(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldNarrowingKind, opts...).ToFunc()
 }
 
 // ByEnabled orders the results by the enabled field.
@@ -198,6 +219,34 @@ func ByScopeReferences(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newScopeReferencesStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByAgenciesCount orders the results by agencies count.
+func ByAgenciesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newAgenciesStep(), opts...)
+	}
+}
+
+// ByAgencies orders the results by agencies terms.
+func ByAgencies(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newAgenciesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByWorkflowAgenciesCount orders the results by workflow_agencies count.
+func ByWorkflowAgenciesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newWorkflowAgenciesStep(), opts...)
+	}
+}
+
+// ByWorkflowAgencies orders the results by workflow_agencies terms.
+func ByWorkflowAgencies(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newWorkflowAgenciesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newVersionsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -210,5 +259,19 @@ func newScopeReferencesStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(ScopeReferencesInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, ScopeReferencesTable, ScopeReferencesColumn),
+	)
+}
+func newAgenciesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(AgenciesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2M, false, AgenciesTable, AgenciesPrimaryKey...),
+	)
+}
+func newWorkflowAgenciesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(WorkflowAgenciesInverseTable, WorkflowAgenciesColumn),
+		sqlgraph.Edge(sqlgraph.O2M, true, WorkflowAgenciesTable, WorkflowAgenciesColumn),
 	)
 }

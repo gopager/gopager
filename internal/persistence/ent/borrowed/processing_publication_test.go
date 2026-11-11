@@ -137,7 +137,7 @@ func TestProcessingPublicationAtomicEvidenceAndFences(t *testing.T) {
 		}
 		for range 2 {
 			configuration := processing.WorkflowConfiguration{ID: uuid.New(), Revision: 1,
-				Name: uuid.NewString(), Scope: authz.Scope{Kind: "all"}, Enabled: true,
+				Name: uuid.NewString(), Scope: seedAgencyScope(t, primary), Enabled: true,
 				CreatedAt: now, UpdatedAt: now}
 			version := processing.Version{ID: uuid.New(), WorkflowID: configuration.ID,
 				CreatedAt: now, CreatedBy: actor, Definition: preparedProcessingDefinition(t)}

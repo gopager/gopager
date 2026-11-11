@@ -26,11 +26,13 @@ type DefinitionPreparer interface {
 	PrepareWorkflow(context.Context, processing.Definition) (*processing.WorkflowProgram, error)
 }
 
-// ScopeContext resolves the Agency of a Radio network or a Unit, so Workflow scope references can
-// be checked for existence and authorized by Agency.
+// ScopeContext resolves the Agency of a Radio network or a Unit and locks Agencies, so Workflow
+// scopes can be checked for existence and authorized by Agency.
 type ScopeContext interface {
 	ReadNetwork(context.Context, platform.TransactionContext, uuid.UUID) (protocols.Protocol, uuid.UUID, error)
 	ReadUnitContext(context.Context, platform.TransactionContext, uuid.UUID) (units.Context, error)
+	// LockAgency holds the Agency against deletion until commit; an unknown Agency is authz.ErrInvalidInput.
+	LockAgency(context.Context, platform.TransactionContext, uuid.UUID) error
 }
 
 // Service manages Workflow configuration: reads, saves and versioning. Every operation
@@ -73,29 +75,71 @@ func (s *Service) within(ctx context.Context, proof identity.Proof, mutation boo
 		}))
 }
 
-// authorizeScope checks that every Workflow scope reference exists and that the caller holds
-// action on each reference's Agency (and Unit); an unknown reference is invalid input.
+// authorizeScope checks that the caller holds action over everything a Workflow scope covers:
+// every assigned Agency, or, with a narrowing, every referenced Network (by its Agency) and Unit.
+// An unknown reference is invalid input.
 func (s *Service) authorizeScope(ctx context.Context, tx platform.TransactionContext, authority authz.Authority,
-	action string, scope authz.Scope, now time.Time) error {
-	switch scope.Kind {
-	case "all":
-		return authz.Authorize(authority, action, nil, authz.Target{}, now)
-	case "network", "unit":
-	default:
-		return authz.ErrInvalidInput
+	action string, scope processing.WorkflowScope, now time.Time) error {
+	targets, err := s.scopeTargets(ctx, tx, scope)
+	if err != nil {
+		return err
 	}
-	for _, reference := range scope.References {
-		id, err := uuid.Parse(reference)
-		if err != nil {
-			return authz.ErrInvalidInput
-		}
-		target, err := s.scopeTarget(ctx, tx, scope.Kind, id)
-		if err != nil {
-			return err
-		}
+	for _, target := range targets {
 		if err := authz.Authorize(authority, action, nil, target, now); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// scopeTargets resolves a Workflow scope to its authorization targets: one per assigned Agency
+// without narrowing, otherwise one per reference.
+func (s *Service) scopeTargets(ctx context.Context, tx platform.TransactionContext,
+	scope processing.WorkflowScope) ([]authz.Target, error) {
+	if scope.Narrowing == nil {
+		targets := make([]authz.Target, len(scope.Agencies))
+		for i, agency := range scope.Agencies {
+			targets[i] = authz.Target{AgencyID: agency}
+		}
+		return targets, nil
+	}
+	targets := make([]authz.Target, len(scope.Narrowing.References))
+	for i, reference := range scope.Narrowing.References {
+		target, err := s.scopeTarget(ctx, tx, scope.Narrowing.Kind, reference)
+		if err != nil {
+			return nil, err
+		}
+		targets[i] = target
+	}
+	return targets, nil
+}
+
+// checkNewScope validates a scope about to be stored: every assigned Agency exists (and stays
+// until commit), every reference belongs to an assigned Agency, and with a narrowing every assigned
+// Agency holds at least one reference. Violations are invalid input.
+func (s *Service) checkNewScope(ctx context.Context, tx platform.TransactionContext,
+	scope processing.WorkflowScope) error {
+	for _, agency := range scope.Agencies {
+		if err := s.scopes.LockAgency(ctx, tx, agency); err != nil {
+			return err
+		}
+	}
+	if scope.Narrowing == nil {
+		return nil
+	}
+	targets, err := s.scopeTargets(ctx, tx, scope)
+	if err != nil {
+		return err
+	}
+	covered := make(map[uuid.UUID]bool, len(scope.Agencies))
+	for _, target := range targets {
+		if !slices.Contains(scope.Agencies, target.AgencyID) {
+			return authz.ErrInvalidInput
+		}
+		covered[target.AgencyID] = true
+	}
+	if len(covered) != len(scope.Agencies) {
+		return authz.ErrInvalidInput
 	}
 	return nil
 }
@@ -144,35 +188,40 @@ func (s *Service) CheckSyntheticPreviewScope(ctx context.Context, tx platform.Tr
 	if err != nil {
 		return err
 	}
-	switch workflow.Scope.Kind {
-	case "all":
-	case "network":
-		if !slices.Contains(workflow.Scope.References, networkID.String()) {
-			return authz.ErrForbidden
+	scope := workflow.Scope
+	if !slices.Contains(scope.Agencies, target.AgencyID) {
+		return authz.ErrForbidden
+	}
+	if scope.Narrowing != nil {
+		switch scope.Narrowing.Kind {
+		case "network":
+			if !slices.Contains(scope.Narrowing.References, networkID) {
+				return authz.ErrForbidden
+			}
+		case "unit":
+			if unitID == uuid.Nil || !slices.Contains(scope.Narrowing.References, unitID) {
+				return authz.ErrForbidden
+			}
+			unit, err := s.scopes.ReadUnitContext(ctx, tx, unitID)
+			if err != nil {
+				return err
+			}
+			target.UnitID, target.UnitCollections = unitID, unit.CollectionIDs
+		default:
+			return authz.ErrInvalidInput
 		}
-	case "unit":
-		if unitID == uuid.Nil || !slices.Contains(workflow.Scope.References, unitID.String()) {
-			return authz.ErrForbidden
-		}
-		unit, err := s.scopes.ReadUnitContext(ctx, tx, unitID)
-		if err != nil {
-			return err
-		}
-		target.UnitID, target.UnitCollections = unitID, unit.CollectionIDs
-	default:
-		return authz.ErrInvalidInput
 	}
 	return authz.Authorize(authority, "workflow.preview", nil, target, now)
 }
 
 // MetadataInput excludes active-version changes, which require the independent activation action.
 type MetadataInput struct {
-	Name    string      `json:"name"`
-	Scope   authz.Scope `json:"scope"`
-	Enabled *bool       `json:"enabled"`
+	Name    string                   `json:"name"`
+	Scope   processing.WorkflowScope `json:"scope"`
+	Enabled *bool                    `json:"enabled"`
 }
 
-// canonical bounds and detaches input and normalizes only set-valued scope references.
+// canonical bounds and detaches input and normalizes only the set-valued scope members.
 func (input MetadataInput) canonical() (MetadataInput, error) {
 	encoded, err := json.Marshal(input)
 	if err != nil {
@@ -185,19 +234,11 @@ func (input MetadataInput) canonical() (MetadataInput, error) {
 	if result.Enabled == nil {
 		return MetadataInput{}, authz.ErrInvalidInput
 	}
-	for i, reference := range result.Scope.References {
-		id, err := uuid.Parse(reference)
-		if err != nil {
-			return MetadataInput{}, authz.ErrInvalidInput
-		}
-		result.Scope.References[i] = id.String()
+	scope, err := result.Scope.Canonical()
+	if err != nil {
+		return MetadataInput{}, err
 	}
-	slices.Sort(result.Scope.References)
-	for i := 1; i < len(result.Scope.References); i++ {
-		if result.Scope.References[i-1] == result.Scope.References[i] {
-			return MetadataInput{}, authz.ErrInvalidInput
-		}
-	}
+	result.Scope = scope
 	value := processing.WorkflowConfiguration{ID: uuid.New(), Revision: 1,
 		Name: result.Name, Scope: result.Scope, Enabled: *result.Enabled}
 	if err := value.Validate(); err != nil {
@@ -306,6 +347,9 @@ func (s *Service) CreateWorkflow(ctx context.Context, proof identity.Proof, comm
 		if err := s.authorizeScope(tx.Context(), tx, authority, "workflow.create", input.Scope, now); err != nil {
 			return err
 		}
+		if err := s.checkNewScope(tx.Context(), tx, input.Scope); err != nil {
+			return err
+		}
 		actor, err := uuid.Parse(authority.PrincipalID)
 		if err != nil {
 			return err
@@ -353,6 +397,9 @@ func (s *Service) UpdateWorkflow(ctx context.Context, proof identity.Proof, id u
 			return err
 		}
 		if err := s.authorizeScope(tx.Context(), tx, authority, "workflow.update", input.Scope, now); err != nil {
+			return err
+		}
+		if err := s.checkNewScope(tx.Context(), tx, input.Scope); err != nil {
 			return err
 		}
 		current.Name, current.Scope, current.Enabled = input.Name, input.Scope, *input.Enabled

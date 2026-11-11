@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/persistence/ent/agency"
 	"github.com/gopager/gopager/internal/persistence/ent/predicate"
 	"github.com/gopager/gopager/internal/persistence/ent/workflow"
 	"github.com/gopager/gopager/internal/persistence/ent/workflowscopereference"
@@ -67,17 +68,23 @@ func (_u *WorkflowUpdate) SetNillableName(v *string) *WorkflowUpdate {
 	return _u
 }
 
-// SetScopeKind sets the "scope_kind" field.
-func (_u *WorkflowUpdate) SetScopeKind(v workflow.ScopeKind) *WorkflowUpdate {
-	_u.mutation.SetScopeKind(v)
+// SetNarrowingKind sets the "narrowing_kind" field.
+func (_u *WorkflowUpdate) SetNarrowingKind(v workflow.NarrowingKind) *WorkflowUpdate {
+	_u.mutation.SetNarrowingKind(v)
 	return _u
 }
 
-// SetNillableScopeKind sets the "scope_kind" field if the given value is not nil.
-func (_u *WorkflowUpdate) SetNillableScopeKind(v *workflow.ScopeKind) *WorkflowUpdate {
+// SetNillableNarrowingKind sets the "narrowing_kind" field if the given value is not nil.
+func (_u *WorkflowUpdate) SetNillableNarrowingKind(v *workflow.NarrowingKind) *WorkflowUpdate {
 	if v != nil {
-		_u.SetScopeKind(*v)
+		_u.SetNarrowingKind(*v)
 	}
+	return _u
+}
+
+// ClearNarrowingKind clears the value of the "narrowing_kind" field.
+func (_u *WorkflowUpdate) ClearNarrowingKind() *WorkflowUpdate {
+	_u.mutation.ClearNarrowingKind()
 	return _u
 }
 
@@ -173,6 +180,21 @@ func (_u *WorkflowUpdate) AddScopeReferences(v ...*WorkflowScopeReference) *Work
 	return _u.AddScopeReferenceIDs(ids...)
 }
 
+// AddAgencyIDs adds the "agencies" edge to the Agency entity by IDs.
+func (_u *WorkflowUpdate) AddAgencyIDs(ids ...uuid.UUID) *WorkflowUpdate {
+	_u.mutation.AddAgencyIDs(ids...)
+	return _u
+}
+
+// AddAgencies adds the "agencies" edges to the Agency entity.
+func (_u *WorkflowUpdate) AddAgencies(v ...*Agency) *WorkflowUpdate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddAgencyIDs(ids...)
+}
+
 // Mutation returns the WorkflowMutation object of the builder.
 func (_u *WorkflowUpdate) Mutation() *WorkflowMutation {
 	return _u.mutation
@@ -220,6 +242,27 @@ func (_u *WorkflowUpdate) RemoveScopeReferences(v ...*WorkflowScopeReference) *W
 	return _u.RemoveScopeReferenceIDs(ids...)
 }
 
+// ClearAgencies clears all "agencies" edges to the Agency entity.
+func (_u *WorkflowUpdate) ClearAgencies() *WorkflowUpdate {
+	_u.mutation.ClearAgencies()
+	return _u
+}
+
+// RemoveAgencyIDs removes the "agencies" edge to Agency entities by IDs.
+func (_u *WorkflowUpdate) RemoveAgencyIDs(ids ...uuid.UUID) *WorkflowUpdate {
+	_u.mutation.RemoveAgencyIDs(ids...)
+	return _u
+}
+
+// RemoveAgencies removes "agencies" edges to Agency entities.
+func (_u *WorkflowUpdate) RemoveAgencies(v ...*Agency) *WorkflowUpdate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveAgencyIDs(ids...)
+}
+
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *WorkflowUpdate) Save(ctx context.Context) (int, error) {
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
@@ -259,9 +302,9 @@ func (_u *WorkflowUpdate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Workflow.name": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.ScopeKind(); ok {
-		if err := workflow.ScopeKindValidator(v); err != nil {
-			return &ValidationError{Name: "scope_kind", err: fmt.Errorf(`ent: validator failed for field "Workflow.scope_kind": %w`, err)}
+	if v, ok := _u.mutation.NarrowingKind(); ok {
+		if err := workflow.NarrowingKindValidator(v); err != nil {
+			return &ValidationError{Name: "narrowing_kind", err: fmt.Errorf(`ent: validator failed for field "Workflow.narrowing_kind": %w`, err)}
 		}
 	}
 	return nil
@@ -294,8 +337,11 @@ func (_u *WorkflowUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(workflow.FieldName, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.ScopeKind(); ok {
-		_spec.SetField(workflow.FieldScopeKind, field.TypeEnum, value)
+	if value, ok := _u.mutation.NarrowingKind(); ok {
+		_spec.SetField(workflow.FieldNarrowingKind, field.TypeEnum, value)
+	}
+	if _u.mutation.NarrowingKindCleared() {
+		_spec.ClearField(workflow.FieldNarrowingKind, field.TypeEnum)
 	}
 	if value, ok := _u.mutation.Enabled(); ok {
 		_spec.SetField(workflow.FieldEnabled, field.TypeBool, value)
@@ -402,6 +448,51 @@ func (_u *WorkflowUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.AgenciesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   workflow.AgenciesTable,
+			Columns: workflow.AgenciesPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(agency.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedAgenciesIDs(); len(nodes) > 0 && !_u.mutation.AgenciesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   workflow.AgenciesTable,
+			Columns: workflow.AgenciesPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(agency.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.AgenciesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   workflow.AgenciesTable,
+			Columns: workflow.AgenciesPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(agency.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -459,17 +550,23 @@ func (_u *WorkflowUpdateOne) SetNillableName(v *string) *WorkflowUpdateOne {
 	return _u
 }
 
-// SetScopeKind sets the "scope_kind" field.
-func (_u *WorkflowUpdateOne) SetScopeKind(v workflow.ScopeKind) *WorkflowUpdateOne {
-	_u.mutation.SetScopeKind(v)
+// SetNarrowingKind sets the "narrowing_kind" field.
+func (_u *WorkflowUpdateOne) SetNarrowingKind(v workflow.NarrowingKind) *WorkflowUpdateOne {
+	_u.mutation.SetNarrowingKind(v)
 	return _u
 }
 
-// SetNillableScopeKind sets the "scope_kind" field if the given value is not nil.
-func (_u *WorkflowUpdateOne) SetNillableScopeKind(v *workflow.ScopeKind) *WorkflowUpdateOne {
+// SetNillableNarrowingKind sets the "narrowing_kind" field if the given value is not nil.
+func (_u *WorkflowUpdateOne) SetNillableNarrowingKind(v *workflow.NarrowingKind) *WorkflowUpdateOne {
 	if v != nil {
-		_u.SetScopeKind(*v)
+		_u.SetNarrowingKind(*v)
 	}
+	return _u
+}
+
+// ClearNarrowingKind clears the value of the "narrowing_kind" field.
+func (_u *WorkflowUpdateOne) ClearNarrowingKind() *WorkflowUpdateOne {
+	_u.mutation.ClearNarrowingKind()
 	return _u
 }
 
@@ -565,6 +662,21 @@ func (_u *WorkflowUpdateOne) AddScopeReferences(v ...*WorkflowScopeReference) *W
 	return _u.AddScopeReferenceIDs(ids...)
 }
 
+// AddAgencyIDs adds the "agencies" edge to the Agency entity by IDs.
+func (_u *WorkflowUpdateOne) AddAgencyIDs(ids ...uuid.UUID) *WorkflowUpdateOne {
+	_u.mutation.AddAgencyIDs(ids...)
+	return _u
+}
+
+// AddAgencies adds the "agencies" edges to the Agency entity.
+func (_u *WorkflowUpdateOne) AddAgencies(v ...*Agency) *WorkflowUpdateOne {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddAgencyIDs(ids...)
+}
+
 // Mutation returns the WorkflowMutation object of the builder.
 func (_u *WorkflowUpdateOne) Mutation() *WorkflowMutation {
 	return _u.mutation
@@ -610,6 +722,27 @@ func (_u *WorkflowUpdateOne) RemoveScopeReferences(v ...*WorkflowScopeReference)
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveScopeReferenceIDs(ids...)
+}
+
+// ClearAgencies clears all "agencies" edges to the Agency entity.
+func (_u *WorkflowUpdateOne) ClearAgencies() *WorkflowUpdateOne {
+	_u.mutation.ClearAgencies()
+	return _u
+}
+
+// RemoveAgencyIDs removes the "agencies" edge to Agency entities by IDs.
+func (_u *WorkflowUpdateOne) RemoveAgencyIDs(ids ...uuid.UUID) *WorkflowUpdateOne {
+	_u.mutation.RemoveAgencyIDs(ids...)
+	return _u
+}
+
+// RemoveAgencies removes "agencies" edges to Agency entities.
+func (_u *WorkflowUpdateOne) RemoveAgencies(v ...*Agency) *WorkflowUpdateOne {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveAgencyIDs(ids...)
 }
 
 // Where appends a list predicates to the WorkflowUpdate builder.
@@ -664,9 +797,9 @@ func (_u *WorkflowUpdateOne) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Workflow.name": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.ScopeKind(); ok {
-		if err := workflow.ScopeKindValidator(v); err != nil {
-			return &ValidationError{Name: "scope_kind", err: fmt.Errorf(`ent: validator failed for field "Workflow.scope_kind": %w`, err)}
+	if v, ok := _u.mutation.NarrowingKind(); ok {
+		if err := workflow.NarrowingKindValidator(v); err != nil {
+			return &ValidationError{Name: "narrowing_kind", err: fmt.Errorf(`ent: validator failed for field "Workflow.narrowing_kind": %w`, err)}
 		}
 	}
 	return nil
@@ -716,8 +849,11 @@ func (_u *WorkflowUpdateOne) sqlSave(ctx context.Context) (_node *Workflow, err 
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(workflow.FieldName, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.ScopeKind(); ok {
-		_spec.SetField(workflow.FieldScopeKind, field.TypeEnum, value)
+	if value, ok := _u.mutation.NarrowingKind(); ok {
+		_spec.SetField(workflow.FieldNarrowingKind, field.TypeEnum, value)
+	}
+	if _u.mutation.NarrowingKindCleared() {
+		_spec.ClearField(workflow.FieldNarrowingKind, field.TypeEnum)
 	}
 	if value, ok := _u.mutation.Enabled(); ok {
 		_spec.SetField(workflow.FieldEnabled, field.TypeBool, value)
@@ -817,6 +953,51 @@ func (_u *WorkflowUpdateOne) sqlSave(ctx context.Context) (_node *Workflow, err 
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(workflowscopereference.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.AgenciesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   workflow.AgenciesTable,
+			Columns: workflow.AgenciesPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(agency.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedAgenciesIDs(); len(nodes) > 0 && !_u.mutation.AgenciesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   workflow.AgenciesTable,
+			Columns: workflow.AgenciesPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(agency.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.AgenciesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   workflow.AgenciesTable,
+			Columns: workflow.AgenciesPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(agency.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {

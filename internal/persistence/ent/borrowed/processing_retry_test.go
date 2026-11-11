@@ -45,7 +45,7 @@ func TestProcessingRetryRechecksProofAndRequiresCurrentSourceOwner(t *testing.T)
 	f := newMatcherFixture(t)
 	service, _ := newProcessingManagementFixture(t, f, &processingPreparationFixture{}, f.facts)
 	created, err := service.CreateWorkflow(t.Context(), f.proof, uuid.New(),
-		processingMetadataFixture("retry", authz.Scope{Kind: "all"}), checkedMutation)
+		processingMetadataFixture("retry", f.agencyScope()), checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}

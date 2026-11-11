@@ -270,7 +270,7 @@ Scope evaluation per resource:
 | Network | The Network's Agency. Protocol and Agency are fixed at creation. |
 | Gateway administration | The Agency of every Network currently assigned to the Gateway, and for creation and network replacement of every proposed Network; a replacement also needs the Agency of every Network that the Gateway's accepted Transmissions of a changed Protocol reference, because its correction can move them. A Gateway without Networks needs an `all` grant. Lists show only Gateways whose every Agency is readable. |
 | Gateway delegation | `gateway.diagnostics.read` and `gateway.credential.rotate` with a `gateway` scope reach exactly the listed Gateways; with `agency` scope they need every Agency of the Gateway. Diagnostics grant only the diagnostics and history routes; rotation grants only credential status, issue and revoke. Neither implies the other, any Message or Payload access, or Gateway administration. A grant on a deleted Gateway stops applying. |
-| Workflow | The workflow's own selection scope (`all`, `network` or `unit`), with each Network resolved to its Agency and each Unit to its Agency and collections. |
+| Workflow | The workflow's own selection scope: its assigned Agencies, or with a narrowing each referenced Network resolved to its Agency and each referenced Unit to its Agency and collections. Reading needs one assigned Agency (or one referenced Unit); managing needs all of them. |
 | Processing instance | The global `plugin.configure` right. |
 | Subscription | `subscription.manage-own` on the caller's own account for personal Subscriptions; `subscription.manage-global` on the technical subscriber's account for global ones. See [Subscriptions](#subscriptions). |
 | Delivery | `delivery.read`, `delivery.retry` and `delivery.redeliver`, each matched against the subscriber's account, the Agencies and Units the Delivery concerns and their Unit collections, within the grant's maximum data age. See [Deliveries](#deliveries). |
@@ -980,7 +980,7 @@ Network replacement body:
 | GET | `/workflows/{id}/candidates/{candidate}/result` | `workflow.read` | 200 | Result metadata only (`id`, `revision`, `completedAt`) |
 | POST | `/workflows/{id}/candidates/{candidate}/retry` | `workflow.reprocess` | 200 | Retry a failed candidate (`expectedRevision`) |
 
-Workflow `scope.kind` is `all`, `network` or `unit`. Creating, updating and deleting a
+Workflow `scope` is `{"agencies": [...], "narrowing": null | {"kind": "network" | "unit", "references": [...]}}`; see [Workflows](workflows.md#workflow-configuration). Creating, updating and deleting a
 workflow, saving a version and activating one all advance the workflow revision.
 
 Preview body:

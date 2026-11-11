@@ -385,7 +385,8 @@ func TestMessageDerivedClassificationOverHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	workflow, version, candidate := uuid.New(), uuid.New(), uuid.New()
-	f.exec(`INSERT INTO processing_workflows (id, name, scope_kind, created_at, updated_at) VALUES ($1, 'w', 'all', now(), now())`, workflow)
+	f.exec(`INSERT INTO processing_workflows (id, name, created_at, updated_at) VALUES ($1, 'w', now(), now())`, workflow)
+	f.exec(`INSERT INTO processing_workflow_agencies(workflow_id,agency_id) SELECT $1, id FROM agencies`, workflow)
 	f.exec(`INSERT INTO processing_workflow_versions (id, workflow_id, definition, created_at, created_by) VALUES ($1, $2, $3::jsonb, now(), $4)`,
 		version, workflow, definition, uuid.New())
 	f.exec(`INSERT INTO processing_candidates (id, transmission_id, workflow_id, definition_version_id, workflow_revision, configuration_revision,
