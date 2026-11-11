@@ -76,11 +76,12 @@ func (s Step) MarshalJSON() ([]byte, error) {
 
 // Definition is an immutable prepared Workflow definition, separate from activation.
 type Definition struct {
-	SchemaVersion int                    `json:"schemaVersion"`
-	Selector      Predicate              `json:"selector"`
-	Steps         []Step                 `json:"steps"`
-	OutputSchema  map[string]FieldSchema `json:"outputSchema"`
-	Outputs       map[string]Assignment  `json:"outputs"`
+	SchemaVersion int       `json:"schemaVersion"`
+	Selector      Predicate `json:"selector"`
+	Steps         []Step    `json:"steps"`
+	// Outputs maps an Attribute schema key and a field of that schema to the assignment that
+	// produces its value. The field type comes from the schema, never from the definition.
+	Outputs map[string]map[string]Assignment `json:"outputs"`
 }
 
 type compiledStep struct {
@@ -97,6 +98,7 @@ type WorkflowProgram struct {
 	selector             *PredicateProgram
 	steps                []compiledStep
 	targeted             bool
+	outputSchemas        map[string]map[string]FieldSchema
 	selectorReferences   *referenceSet
 	bodyReferences       *referenceSet
 	regex                RegexEvaluator
@@ -222,19 +224,21 @@ func cloneDeclarations(local map[string]FieldSchema) map[string]FieldSchema {
 
 // CompileWorkflow prepares a closed definition outside source transactions.
 // The supplied owner declarations are authoritative; this does not accept a user schema as authority.
-func CompileWorkflow(ctx context.Context, definition Definition, source Declarations, regex RegexEvaluator) (*WorkflowProgram, error) {
-	return compileWorkflow(ctx, definition, source, regex, nil)
+// source declares the fields the definition reads and outputs the Attribute fields it writes;
+// outputs may be nil only for a definition without outputs.
+func CompileWorkflow(ctx context.Context, definition Definition, source, outputs Declarations, regex RegexEvaluator) (*WorkflowProgram, error) {
+	return compileWorkflow(ctx, definition, source, outputs, regex, nil)
 }
 
 // CompileWorkflowInstalled additionally prepares declared artifacts through their trusted instance owner.
-func CompileWorkflowInstalled(ctx context.Context, definition Definition, source Declarations, regex RegexEvaluator, artifacts InstalledArtifacts) (*WorkflowProgram, error) {
+func CompileWorkflowInstalled(ctx context.Context, definition Definition, source, outputs Declarations, regex RegexEvaluator, artifacts InstalledArtifacts) (*WorkflowProgram, error) {
 	if artifacts == nil {
 		return nil, capabilityUnavailable(errors.New("installed artifact owner unavailable"))
 	}
-	return compileWorkflow(ctx, definition, source, regex, artifacts)
+	return compileWorkflow(ctx, definition, source, outputs, regex, artifacts)
 }
 
-func compileWorkflow(ctx context.Context, definition Definition, source Declarations, regex RegexEvaluator, artifacts InstalledArtifacts) (*WorkflowProgram, error) {
+func compileWorkflow(ctx context.Context, definition Definition, source, outputs Declarations, regex RegexEvaluator, artifacts InstalledArtifacts) (*WorkflowProgram, error) {
 	if ctx == nil || source == nil {
 		return nil, invalid(errors.New("missing Workflow preparation participant"))
 	}
@@ -414,18 +418,8 @@ func compileWorkflow(ctx context.Context, definition Definition, source Declarat
 	if err != nil {
 		return nil, err
 	}
-	for name, schema := range detached.OutputSchema {
-		if !validLocalName(name) {
-			return nil, invalid(errors.New("invalid final output name"))
-		}
-		if err := schema.Validate(); err != nil {
-			return nil, err
-		}
-	}
-	if len(detached.OutputSchema) > MaxCollection {
-		return nil, resource(errors.New("final schema boundary"))
-	}
-	if err := validateMappings(detached.OutputSchema, detached.Outputs, tracking); err != nil {
+	program.outputSchemas, err = compileOutputs(detached.Outputs, outputs, tracking)
+	if err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -455,8 +449,9 @@ func (d declarationTracker) FieldSchema(ref FieldRef) (FieldSchema, error) {
 
 // TargetResult is one derived output set tied to an original target position.
 type TargetResult struct {
-	TargetPosition uint32                `json:"targetPosition"`
-	Fields         map[string]FieldValue `json:"fields"`
+	TargetPosition uint32 `json:"targetPosition"`
+	// Fields holds the present output values by schema key and field.
+	Fields map[string]map[string]FieldValue `json:"fields"`
 }
 
 // Evaluation exposes no partial successful output on any selected-context failure.
@@ -464,9 +459,11 @@ type TargetResult struct {
 // require global derived visibility plus the groups of Dependencies, which classify the
 // whole definition's outputs once.
 type Evaluation struct {
-	Selected      bool                  `json:"selected"`
-	Fields        map[string]FieldValue `json:"fields,omitempty"`
-	TargetResults []TargetResult        `json:"targetResults,omitempty"`
+	Selected bool `json:"selected"`
+	// Fields holds the present output values by Attribute schema key and field; an absent
+	// output is omitted.
+	Fields        map[string]map[string]FieldValue `json:"fields,omitempty"`
+	TargetResults []TargetResult                   `json:"targetResults,omitempty"`
 	dependencies  []Dependency
 }
 
@@ -476,12 +473,16 @@ type Evaluation struct {
 // values or of any reader. It is host-only and is never added to the public result envelope.
 func (e Evaluation) Dependencies() ([]Dependency, error) {
 	dependencies := append([]Dependency(nil), e.dependencies...)
-	for _, field := range e.Fields {
-		dependencies = append(dependencies, field.Dependencies...)
+	for _, schema := range e.Fields {
+		for _, field := range schema {
+			dependencies = append(dependencies, field.Dependencies...)
+		}
 	}
 	for _, target := range e.TargetResults {
-		for _, field := range target.Fields {
-			dependencies = append(dependencies, field.Dependencies...)
+		for _, schema := range target.Fields {
+			for _, field := range schema {
+				dependencies = append(dependencies, field.Dependencies...)
+			}
 		}
 	}
 	return UnionDependencies(dependencies)
@@ -512,9 +513,9 @@ func (e Evaluation) FieldGroups() ([]string, error) {
 // MarshalJSON preserves an explicitly empty successful field map as a result container.
 func (e Evaluation) MarshalJSON() ([]byte, error) {
 	type wire struct {
-		Selected      bool                   `json:"selected"`
-		Fields        *map[string]FieldValue `json:"fields,omitempty"`
-		TargetResults []TargetResult         `json:"targetResults,omitempty"`
+		Selected      bool                              `json:"selected"`
+		Fields        *map[string]map[string]FieldValue `json:"fields,omitempty"`
+		TargetResults []TargetResult                    `json:"targetResults,omitempty"`
 	}
 	result := wire{Selected: e.Selected, TargetResults: e.TargetResults}
 	if e.Fields != nil {
@@ -875,7 +876,7 @@ func (p *WorkflowProgram) evaluateScoped(ctx context.Context, source *CapturedSo
 		if err := p.execute(ctx, p.steps, frame); err != nil {
 			return Evaluation{}, err
 		}
-		fields, err := evaluateMappings(budget.computeContext(), p.definition.OutputSchema, p.definition.Outputs, frame)
+		fields, err := evaluateOutputs(budget.computeContext(), p.outputSchemas, p.definition.Outputs, frame)
 		if err != nil {
 			return Evaluation{}, err
 		}

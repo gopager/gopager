@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: GoPager API
-  version: 1.8.0
+  version: 1.9.0
   description: |
     GoPager application API. Human guide: docs/http-api.md.
 
@@ -7743,7 +7743,6 @@ components:
       required:
       - schemaVersion
       - selector
-      - outputSchema
       - outputs
       properties:
         schemaVersion:
@@ -7756,15 +7755,16 @@ components:
           items:
             $ref: '#/components/schemas/Step'
           description: At most 128 steps in total, nested branch steps included.
-        outputSchema:
-          type: object
-          maxProperties: 1000
-          additionalProperties:
-            $ref: '#/components/schemas/FieldSchema'
         outputs:
           type: object
+          description: Message attributes the Workflow writes, by Attribute schema key and then field name. Each key
+            names a `message` Attribute schema and each field one of its top-level fields; the type comes from the
+            schema. At most 1000 fields in total. A deprecated schema or field is rejected when a version is saved,
+            activated or previewed.
           additionalProperties:
-            $ref: '#/components/schemas/Assignment'
+            type: object
+            additionalProperties:
+              $ref: '#/components/schemas/Assignment'
       additionalProperties: false
     WorkflowScope:
       type: object
@@ -8083,8 +8083,11 @@ components:
         fields:
           type: object
           additionalProperties:
-            $ref: '#/components/schemas/FieldValue'
-          description: Omitted when not selected or when results are per target; `{}` when selected without outputs.
+            type: object
+            additionalProperties:
+              $ref: '#/components/schemas/FieldValue'
+          description: Present values by Attribute schema key and field name. Omitted when not selected or when results
+            are per target; `{}` when selected without outputs or when every output is absent.
         targetResults:
           type: array
           items:
@@ -8099,7 +8102,9 @@ components:
               fields:
                 type: object
                 additionalProperties:
-                  $ref: '#/components/schemas/FieldValue'
+                  type: object
+                  additionalProperties:
+                    $ref: '#/components/schemas/FieldValue'
           description: Per original target position, for target-dependent Workflows.
     EvaluationResponse:
       type: object
@@ -9592,7 +9597,8 @@ components:
     LayoutBlock:
       type: object
       description: 'One element of a layout. `kind` selects the allowed properties: `text` takes `text`; `field` and
-        `chip` take `field` and optional `label`; `link` takes `label` and `url`; `section` takes optional `title` and
+        `chip` take `field`, optional `label` and optional `icon` (a missing label or icon is taken from the field
+        registry where the field declares one); `link` takes `label` and `url`; `section` takes optional `title` and
         `blocks`; `conditional` takes `when`, `then` and optional `else`; `fallback` takes `blocks` (2 to 8
         alternatives, the first non-empty one renders). Any other property is 400.'
       required:
@@ -9616,6 +9622,13 @@ components:
         label:
           type: string
           maxLength: 256
+        icon:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[A-Za-z0-9._-]+$
+          description: Icon identifier, a hint for card output. `text` and `markdown` renderings ignore it; `json`
+            items carry it when set.
         title:
           type: string
           maxLength: 256

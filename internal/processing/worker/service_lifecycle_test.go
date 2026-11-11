@@ -171,5 +171,5 @@ func lifecycleDefinition() processing.Definition {
 	field := processing.FieldRef{Namespace: "source", Path: []string{"flag"}}
 	value, _ := processing.Literal(processing.BooleanValue, true)
 	return processing.Definition{SchemaVersion: 1, Selector: processing.Predicate{Op: "eq", Field: &field, Value: &value},
-		OutputSchema: map[string]processing.FieldSchema{}, Outputs: map[string]processing.Assignment{}}
+		Outputs: map[string]map[string]processing.Assignment{}}
 }

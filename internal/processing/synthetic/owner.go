@@ -26,6 +26,7 @@ import (
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
+	"github.com/gopager/gopager/internal/processing/declarations"
 	"github.com/gopager/gopager/internal/processing/management"
 	"github.com/gopager/gopager/internal/protocols"
 	"github.com/gopager/gopager/internal/units"
@@ -573,18 +574,15 @@ func project(input Input, network Network, observed time.Time, match assignments
 		}
 		projection.Targets = append(projection.Targets, processing.TargetContext{Position: index, Fields: fields})
 	}
-	declarations, err := processing.NewSyntheticDeclarationOwner().ProcessingDeclarations(context.Background())
-	if err != nil {
-		return processing.SourceProjection{}, err
-	}
-	for _, ref := range processing.SyntheticSourceDeclarationRefs() {
+	declared := declarations.Builtin()
+	for _, ref := range declarations.BuiltinSourceRefs() {
 		exists := slices.ContainsFunc(projection.Fields, func(field processing.CapturedField) bool {
 			return field.Reference.Namespace == ref.Namespace && slices.Equal(field.Reference.Path, ref.Path)
 		})
 		if exists {
 			continue
 		}
-		schema, err := declarations.FieldSchema(ref)
+		schema, err := declared.FieldSchema(ref)
 		if err != nil || !schema.Optional {
 			return processing.SourceProjection{}, unavailable(errors.New("synthetic projection omitted required declaration"))
 		}

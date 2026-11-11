@@ -6,10 +6,13 @@ import (
 	"os"
 
 	"github.com/gopager/gopager/internal/assignments"
+	"github.com/gopager/gopager/internal/attributes"
 	"github.com/gopager/gopager/internal/httpapi"
+	"github.com/gopager/gopager/internal/persistence/ent/attributestore"
 	"github.com/gopager/gopager/internal/persistence/ent/ingeststore"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
+	"github.com/gopager/gopager/internal/processing/declarations"
 	processingmanagement "github.com/gopager/gopager/internal/processing/management"
 	"github.com/gopager/gopager/internal/processing/synthetic"
 	"github.com/gopager/gopager/internal/processing/worker"
@@ -75,7 +78,21 @@ func composeProcessingAPIRuntime(ctx context.Context, c *core, artifactRoot stri
 	store := c.store
 	artifacts := &processingDefinitionArtifacts{host: host, root: root, store: store,
 		repository: c.processing, resolver: c.resolver}
-	preparer, err := processing.NewWorkflowDefinitionPreparer(processing.NewSyntheticDeclarationOwner(), processing.CoreRegex{}, artifacts)
+	catalog, err := attributestore.New(store)
+	if err != nil {
+		return nil, err
+	}
+	registries, err := attributes.NewRegistrySource(catalog)
+	if err != nil {
+		return nil, err
+	}
+	// Saving, previewing and activating a version reject deprecated fields; the worker resolves
+	// the outputs of an active version without strictness.
+	declared, err := declarations.NewOwner(store, registries, true)
+	if err != nil {
+		return nil, err
+	}
+	preparer, err := processing.NewWorkflowDefinitionPreparer(declared, processing.CoreRegex{}, artifacts)
 	if err != nil {
 		return nil, err
 	}

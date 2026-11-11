@@ -38,7 +38,7 @@ func (f *processingPreparationFixture) PrepareWorkflow(ctx context.Context, defi
 		}
 		definition.Selector.Value = &no
 	}
-	return processing.CompileWorkflow(ctx, definition, processingDeclarationsFixture{}, nil)
+	return processing.CompileWorkflow(ctx, definition, processingDeclarationsFixture{}, processingOutputsFixture{}, nil)
 }
 
 type processingTransactionCapture struct {

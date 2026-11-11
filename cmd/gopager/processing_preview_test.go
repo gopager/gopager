@@ -9,12 +9,14 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/attributes"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/persistence/ent/identitystore"
 	"github.com/gopager/gopager/internal/persistence/ent/unitstore"
 	"github.com/gopager/gopager/internal/processing"
 	"github.com/gopager/gopager/internal/processing/synthetic"
 	"github.com/gopager/gopager/internal/protocols"
+	"github.com/gopager/gopager/internal/testutil/attributeschemas"
 )
 
 func TestProcessingSyntheticPreviewHTTPUsesCurrentFixtureNetworks(t *testing.T) {
@@ -236,6 +238,7 @@ func TestProcessingSyntheticPreviewHonorsCurrentUnitScope(t *testing.T) {
 			unitID.String()+`"]}},"enabled":true}`,
 		login.CSRFToken, "", http.StatusCreated)
 	workflowID, _ := managementResultID(t, workflowResponse)
+	attributeschemas.Insert(t, store, "unit-ref", map[string]attributes.Field{"unit": {Kind: processing.StringValue}})
 	definition := unitTargetPreviewDefinition(t, unitID)
 	versionInput, err := json.Marshal(workflowVersionMutation{SchemaVersion: 1,
 		CommandID: uuid.New(), ExpectedRevision: 1, Definition: definition})

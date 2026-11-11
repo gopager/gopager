@@ -1026,7 +1026,8 @@ Preview body:
 - exactly one of `syntheticJson` (raw input document) or `storedTransmissionId`
 
 The result is `{"selected","fields","targetResults"}`, restricted to fields the caller
-may read. A `syntheticJson` input is evaluated against the current network named by its
+may read. `fields` (and each `targetResults[].fields`) is keyed by Attribute schema key and then
+field name; an output without a value is omitted ([Workflows](workflows.md#outputs)). A `syntheticJson` input is evaluated against the current network named by its
 `networkId`: an unknown network returns `404 NOT_FOUND`, and a deleted network or one
 whose protocol differs from the input returns `503 AUTHORITY_UNAVAILABLE`.
 `storedTransmissionId` is not supported and returns `503 AUTHORITY_UNAVAILABLE`.
@@ -1131,7 +1132,7 @@ cannot read is absent when evaluated and rejected when saved.
 | `unit.id`, `unit.name` | string | `unit` |
 | `gateway.id`, `gateway.name`, `gateway.oldState`, `gateway.newState` | string | `gateway` |
 | `gateway.contactTime` | timestamp | `gateway` |
-| `result` with path `[workflowId, output]` | the output's declared type | `derived`; the result counts only when all field groups stored with it are readable |
+| `result` with path `[workflowId, output]` | none: Workflow outputs are Message attributes now, so no `result` reference resolves | n/a |
 
 ### Deliveries
 
@@ -1211,7 +1212,7 @@ data, not a template: it has no expressions, loops or markup. Schemas: `Layout`,
   `presentation.manage` in every Agency involved: the new set on create, the stored and the new set on update, the
   stored set on delete. Built-in default layouts are global.
 - **Definition.** `{"schemaVersion":1,"outputKind","blocks":[…]}` with at least one block. Block kinds:
-  `text` (literal `text`), `field` and `chip` (a catalog `field` and an optional `label`), `link` (a `label` and a
+  `text` (literal `text`), `field` and `chip` (a catalog `field`, an optional `label` and an optional `icon`), `link` (a `label` and a
   `url` built from a template with the placeholders `{0}` to `{9}` over up to 10 `fields`), `section` (an optional
   `title` and nested `blocks`), `conditional` (a `when` predicate, `then` blocks and optional `else` blocks) and
   `fallback` (2 to 8 alternative `blocks`; the first one that renders something is used; a present but empty, unlabelled value renders nothing, and an alternative without content never fails the 64 KiB output limit, while everything a chosen alternative emits counts; independently, one render holds at most 1 MiB of rendered output and looked-up values, including those of discarded alternatives). A property that does
@@ -1219,6 +1220,13 @@ data, not a template: it has no expressions, loops or markup. Schemas: `Layout`,
   definition may hold at most 256 blocks, nested at most 8 levels; text is limited to 4096 bytes and labels
   and titles to 256 bytes. Exceeding such a limit is `413 RESOURCE_LIMIT`. A name is 1 to 256 bytes, valid UTF-8 and
   not blank (`400` otherwise).
+- **Label and icon.** A `field` or `chip` block without a `label` takes the label of its field in the field registry,
+  and without an `icon` the registry icon (the label and icon of an Attribute schema field, or the name of a built-in
+  field), where the field declares one; a `label` or `icon` of the block overrides it. `icon` is an icon identifier: 1 to
+  128 ASCII letters, digits, `.`, `_` or `-`; the server has no icon catalog and anything else is `400`. Icons are hints
+  for card output: `text` and `markdown` ignore them, `json` items carry an `icon` when one is set. The defaults are
+  resolved when the layout is rendered with its Subscription, so editing display metadata changes renderings without a
+  new layout version.
 - **Output kinds.** `text` renders plain lines, `markdown` renders Markdown and `json` renders a JSON array of typed
   items. The output kind is part of the definition and cannot change on update. Markdown escapes every
   interpolated value, including angle brackets, `~`, `=` and `&`, and escapes `&` in link destinations so entity-shaped text stays literal, and no layout ever produces HTML. Interpolated text drops

@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/events"
+	"github.com/gopager/gopager/internal/fields"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
@@ -407,8 +408,8 @@ func TestLiveStreamRemoveBasis(t *testing.T) {
 			_, err := f.core.facts.AppendProcessingCompletion(ctx, tx, events.ProcessingCompletionFact{
 				ID: uuid.New(), WorkflowID: uuid.New(), ResultID: uuid.New(), ResultRevision: 1, TransmissionID: uuid.New(),
 				MessageID: message, MessageTime: base.Add(5 * time.Minute), DefinitionVersionID: uuid.New(), SourceRevision: 1,
-				ContextRevision: 1, OccurredAt: now, OutputSchema: map[string]processing.FieldSchema{},
-				Result: processing.Evaluation{Selected: true, Fields: map[string]processing.FieldValue{}}})
+				ContextRevision: 1, OccurredAt: now, Outputs: fields.New().Declarations(fields.ScopeMessage, false),
+				Result: processing.Evaluation{Selected: true, Fields: map[string]map[string]processing.FieldValue{}}})
 			return err
 		})
 		stream.expect(t, "upsert", message)

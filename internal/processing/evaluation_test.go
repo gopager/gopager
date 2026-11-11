@@ -12,16 +12,16 @@ import (
 func TestEvaluationValidationRejectsNamespacesAndOriginalPositionSubstitution(t *testing.T) {
 	t.Parallel()
 	binding := EvaluationBinding{TransmissionID: uuid.New(), SourceRevision: 1, ContextRevision: 2, TargetLimit: 2}
-	schema := map[string]FieldSchema{}
+	schema := testOutputs
 	if err := ValidateEvaluation(Evaluation{}, schema, binding); err != nil {
 		t.Fatal(err)
 	}
-	if err := ValidateEvaluation(Evaluation{Fields: map[string]FieldValue{}}, schema, binding); err == nil {
+	if err := ValidateEvaluation(Evaluation{Fields: map[string]map[string]FieldValue{}}, schema, binding); err == nil {
 		t.Fatal("not-selected outcome created a namespace")
 	}
 	result := Evaluation{Selected: true, TargetResults: []TargetResult{
-		{TargetPosition: 0, Fields: map[string]FieldValue{}},
-		{TargetPosition: 1, Fields: map[string]FieldValue{}},
+		{TargetPosition: 0, Fields: map[string]map[string]FieldValue{}},
+		{TargetPosition: 1, Fields: map[string]map[string]FieldValue{}},
 	}}
 	if err := ValidateEvaluation(result, schema, binding); err != nil {
 		t.Fatal(err)
@@ -39,12 +39,12 @@ func TestEvaluationValidationRejectsNamespacesAndOriginalPositionSubstitution(t 
 		t.Fatal(err)
 	}
 	position := uint32(2)
-	fields := map[string]FieldValue{"flag": {State: FieldPresent, Value: &value, Dependencies: []Dependency{{
+	fields := map[string]map[string]FieldValue{testOutputSchemaKey: {"text": {State: FieldPresent, Value: &value, Dependencies: []Dependency{{
 		TransmissionID: binding.TransmissionID, NetworkID: uuid.New(), SourceRevision: 1, ContextRevision: 2,
 		TargetPosition: &position, Groups: []string{"payload"},
-	}}}}
+	}}}}}
 	if err := ValidateEvaluation(Evaluation{Selected: true, Fields: fields},
-		map[string]FieldSchema{"flag": {Kind: BooleanValue}}, binding); err == nil {
+		testOutputs, binding); err == nil {
 		t.Fatal("accepted dependency outside actual original count")
 	}
 }
@@ -52,12 +52,12 @@ func TestEvaluationValidationRejectsNamespacesAndOriginalPositionSubstitution(t 
 func TestEvaluationValidationMeasuresExactWholeOutputBoundary(t *testing.T) {
 	t.Parallel()
 	binding := EvaluationBinding{TransmissionID: uuid.New(), SourceRevision: 1, ContextRevision: 1}
-	schema := map[string]FieldSchema{"text": {Kind: StringValue}}
+	schema := testOutputs
 	value, err := Literal(StringValue, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	result := Evaluation{Selected: true, Fields: map[string]FieldValue{"text": {State: FieldPresent, Value: &value}}}
+	result := Evaluation{Selected: true, Fields: map[string]map[string]FieldValue{testOutputSchemaKey: {"text": {State: FieldPresent, Value: &value}}}}
 	encoded, err := json.Marshal(result)
 	if err != nil {
 		t.Fatal(err)
@@ -68,7 +68,7 @@ func TestEvaluationValidationMeasuresExactWholeOutputBoundary(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		result.Fields["text"] = FieldValue{State: FieldPresent, Value: &value}
+		result.Fields["t"]["text"] = FieldValue{State: FieldPresent, Value: &value}
 		encoded, err := json.Marshal(result)
 		if err != nil || len(encoded) != MaxOutputBytes+extra {
 			t.Fatalf("incorrect exact-boundary fixture: len=%d err=%v", len(encoded), err)

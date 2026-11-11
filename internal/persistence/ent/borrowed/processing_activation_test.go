@@ -29,8 +29,7 @@ func TestProcessingActivationValidatesReferencesForTheActivator(t *testing.T) {
 	}
 	definition := preparedProcessingDefinition(t)
 	secret := processing.FieldRef{Namespace: "source", Path: []string{"secret"}}
-	definition.OutputSchema = map[string]processing.FieldSchema{"out": {Kind: processing.BooleanValue}}
-	definition.Outputs = map[string]processing.Assignment{"out": {Field: &secret}}
+	definition.Outputs = map[string]map[string]processing.Assignment{"test": {"out": {Field: &secret}}}
 	retained := uuid.New()
 	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		if _, err := store.LockRevision(tx.Context(), tx); err != nil {

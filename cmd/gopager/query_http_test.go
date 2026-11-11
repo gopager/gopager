@@ -407,9 +407,8 @@ func TestMessageDerivedClassificationOverHTTP(t *testing.T) {
 	name := processing.FieldRef{Namespace: "source", Path: []string{"network", "name"}}
 	pocsag := processing.Value{Kind: processing.StringValue, Value: json.RawMessage(`"pocsag"`)}
 	definition, err := json.Marshal(processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "eq", Field: &protocol, Value: &pocsag},
-		OutputSchema: map[string]processing.FieldSchema{"network": {Kind: processing.StringValue}},
-		Outputs:      map[string]processing.Assignment{"network": {Field: &name}}})
+		Selector: processing.Predicate{Op: "eq", Field: &protocol, Value: &pocsag},
+		Outputs:  map[string]map[string]processing.Assignment{"incident": {"network": {Field: &name}}}})
 	if err != nil {
 		t.Fatal(err)
 	}

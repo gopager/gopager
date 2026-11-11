@@ -31,11 +31,14 @@ func (s *Store) CompleteCandidate(ctx context.Context, tx platform.TransactionCo
 		if err != nil {
 			return processing.Candidate{}, err
 		}
-		version, err := client.WorkflowVersion.Query().Only(scope)
+		if _, err := client.WorkflowVersion.Query().Only(scope); err != nil {
+			return processing.Candidate{}, err
+		}
+		outputs, err := s.outputDeclarations(ctx, tx)
 		if err != nil {
 			return processing.Candidate{}, err
 		}
-		if err := processing.ValidateEvaluation(evaluation, version.Definition.OutputSchema, processing.EvaluationBinding{
+		if err := processing.ValidateEvaluation(evaluation, outputs, processing.EvaluationBinding{
 			TransmissionID: current.TransmissionID, SourceRevision: current.SourceRevision,
 			ContextRevision: current.ContextRevision, TargetLimit: originalTargetCount,
 		}); err != nil {

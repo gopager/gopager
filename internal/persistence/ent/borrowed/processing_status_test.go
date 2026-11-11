@@ -238,8 +238,8 @@ func protocolSelectorDefinition(t *testing.T) processing.Definition {
 		t.Fatal(err)
 	}
 	return processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "eq", Field: &field, Value: &value},
-		OutputSchema: map[string]processing.FieldSchema{}, Outputs: map[string]processing.Assignment{}}
+		Selector: processing.Predicate{Op: "eq", Field: &field, Value: &value},
+		Outputs:  map[string]map[string]processing.Assignment{}}
 }
 
 // undeclaredFieldDefinition references a source field that no source declares, so compiling it
@@ -252,8 +252,8 @@ func undeclaredFieldDefinition(t *testing.T) processing.Definition {
 		t.Fatal(err)
 	}
 	return processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "eq", Field: &field, Value: &value},
-		OutputSchema: map[string]processing.FieldSchema{}, Outputs: map[string]processing.Assignment{}}
+		Selector: processing.Predicate{Op: "eq", Field: &field, Value: &value},
+		Outputs:  map[string]map[string]processing.Assignment{}}
 }
 
 const toneOnlyPayload = `{"form":"tone-only"}`

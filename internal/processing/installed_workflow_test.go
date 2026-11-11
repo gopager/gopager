@@ -108,7 +108,7 @@ func TestInstalledWorkflowPreviewModeRunsOnlyPluginsThatSupportIt(t *testing.T) 
 	owner := newInstalledOwnerFixture(t)
 	_, source := sourceFixture(t)
 	definition := installedDefinition(owner, "ok", FieldRef{Namespace: "source", Path: []string{"text"}})
-	program, err := CompileWorkflowInstalled(t.Context(), definition, source, nil, owner)
+	program, err := CompileWorkflowInstalled(t.Context(), definition, source, testOutputs, nil, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,12 +120,12 @@ func TestInstalledWorkflowPreviewModeRunsOnlyPluginsThatSupportIt(t *testing.T) 
 	}
 	owner.artifact.manifest.SupportsPreview = true
 	result, err = program.EvaluateInstalled(t.Context(), source, owner)
-	if err != nil || result.Fields["text"].Value == nil || string(result.Fields["text"].Value.Value) != `"PREVIEW:LEVEL=7"` {
+	if err != nil || result.Fields["t"]["text"].Value == nil || string(result.Fields["t"]["text"].Value.Value) != `"PREVIEW:LEVEL=7"` {
 		t.Fatalf("preview mode did not reach the plugin: %+v %v", result, err)
 	}
 	owner.previewMode = false
 	result, err = program.EvaluateInstalled(t.Context(), source, owner)
-	if err != nil || result.Fields["text"].Value == nil || string(result.Fields["text"].Value.Value) != `"LEVEL=7"` {
+	if err != nil || result.Fields["t"]["text"].Value == nil || string(result.Fields["t"]["text"].Value.Value) != `"LEVEL=7"` {
 		t.Fatalf("preview replaced ordinary processing: %+v %v", result, err)
 	}
 }
@@ -137,8 +137,7 @@ func installedDefinition(owner *installedOwnerFixture, mode string, input FieldR
 		Installed: &InstalledStep{InstanceID: owner.instance, ConfigurationRevision: 1,
 			Input: map[string]Assignment{"mode": {Literal: &modeValue}, "text": {Field: &input}}}}}
 	output := FieldRef{Namespace: "step", Path: []string{"module", "text"}}
-	definition.OutputSchema["text"] = FieldSchema{Kind: StringValue, Optional: true}
-	definition.Outputs["text"] = Assignment{Field: &output}
+	setOutput(&definition, "text", Assignment{Field: &output})
 	return definition
 }
 
@@ -160,7 +159,7 @@ func TestInstalledWorkflowIdenticalInputsStillCarryDistinctOriginalContexts(t *t
 		{Op: "eq", Field: &address, Value: &first},
 		{Op: "eq", Field: &address, Value: &second},
 	}}
-	program, err := CompileWorkflowInstalled(t.Context(), definition, source, nil, owner)
+	program, err := CompileWorkflowInstalled(t.Context(), definition, source, testOutputs, nil, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +188,7 @@ func TestInstalledWorkflowActuallyWaitsBeyondBuiltinBudgetWithoutDetachingCaller
 	owner := newInstalledOwnerFixture(t)
 	_, source := sourceFixture(t)
 	definition := installedDefinition(owner, "loop", FieldRef{Namespace: "source", Path: []string{"text"}})
-	program, err := CompileWorkflowInstalled(context.Background(), definition, source, nil, owner)
+	program, err := CompileWorkflowInstalled(context.Background(), definition, source, testOutputs, nil, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,17 +202,17 @@ func TestInstalledWorkflowActuallyWaitsBeyondBuiltinBudgetWithoutDetachingCaller
 		t.Fatalf("real installed loop used builtin deadline rather than caller deadline: %+v, %v", result, err)
 	}
 	definition = installedDefinition(owner, "ok", FieldRef{Namespace: "source", Path: []string{"text"}})
-	program, err = CompileWorkflowInstalled(context.Background(), definition, source, nil, owner)
+	program, err = CompileWorkflowInstalled(context.Background(), definition, source, testOutputs, nil, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
 	result, err = program.EvaluateInstalled(context.Background(), source, owner)
-	if err != nil || !result.Selected || result.Fields["text"].Value == nil ||
-		string(result.Fields["text"].Value.Value) != `"LEVEL=7"` {
+	if err != nil || !result.Selected || result.Fields["t"]["text"].Value == nil ||
+		string(result.Fields["t"]["text"].Value.Value) != `"LEVEL=7"` {
 		t.Fatalf("host mapping after installed call or prior deadline failed: %+v, %v", result, err)
 	}
 	dependencies, err := result.Dependencies()
-	if err != nil || len(result.Fields["text"].Dependencies) != 0 || len(dependencies) != 1 || dependencies[0].Groups[0] != "payload" {
+	if err != nil || len(result.Fields["t"]["text"].Dependencies) != 0 || len(dependencies) != 1 || dependencies[0].Groups[0] != "payload" {
 		t.Fatalf("installed output is not classified once per definition: %+v, %v", result, err)
 	}
 }
@@ -222,7 +221,7 @@ func TestInstalledWorkflowPluginOwnDeadlineIsResourceLimit(t *testing.T) { //nol
 	owner := newInstalledOwnerFixture(t)
 	_, source := sourceFixture(t)
 	definition := installedDefinition(owner, "loop", FieldRef{Namespace: "source", Path: []string{"text"}})
-	program, err := CompileWorkflowInstalled(context.Background(), definition, source, nil, owner)
+	program, err := CompileWorkflowInstalled(context.Background(), definition, source, testOutputs, nil, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +239,7 @@ func TestInstalledWorkflowRechecksEveryTargetAndRejectsInputSubstitution(t *test
 	owner := newInstalledOwnerFixture(t)
 	_, source := sourceFixture(t, "111", "222")
 	definition := installedDefinition(owner, "ok", FieldRef{Namespace: "target", Path: []string{"address"}})
-	program, err := CompileWorkflowInstalled(context.Background(), definition, source, nil, owner)
+	program, err := CompileWorkflowInstalled(context.Background(), definition, source, testOutputs, nil, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -260,7 +259,7 @@ func TestInstalledWorkflowRechecksEveryTargetAndRejectsInputSubstitution(t *test
 		t.Fatalf("authorized installed target results failed after rejection: %+v, %v", result, err)
 	}
 	for i, target := range result.TargetResults {
-		if target.TargetPosition != uint32(i) || string(target.Fields["text"].Value.Value) != []string{`"111"`, `"222"`}[i] {
+		if target.TargetPosition != uint32(i) || string(target.Fields["t"]["text"].Value.Value) != []string{`"111"`, `"222"`}[i] {
 			t.Fatalf("installed guest mixed original targets: %+v", result)
 		}
 	}

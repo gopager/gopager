@@ -69,27 +69,8 @@ func notFound(err error) error {
 	return err
 }
 
-// ResultFieldSchema implements delivery.ResultSchemas from the Workflow's active version.
-func (s *Store) ResultFieldSchema(ctx context.Context, tx platform.TransactionContext, workflow uuid.UUID,
-	output string) (processing.FieldSchema, error) {
-	executor, err := s.executor(tx)
-	if err != nil {
-		return processing.FieldSchema{}, err
-	}
-	var stored []byte
-	err = executor.QueryRowContext(ctx, `SELECT v.definition FROM processing_workflows w
-		JOIN processing_workflow_versions v ON v.id = w.active_version_id
-		WHERE w.id = $1 AND NOT w.deleted`, workflow).Scan(&stored)
-	if err != nil {
-		return processing.FieldSchema{}, notFound(err)
-	}
-	var definition processing.Definition
-	if err := processing.Decode(stored, &definition); err != nil {
-		return processing.FieldSchema{}, platform.NewFailure(platform.CodeInternalError, err)
-	}
-	schema, ok := definition.OutputSchema[output]
-	if !ok {
-		return processing.FieldSchema{}, authz.ErrNotFound
-	}
-	return schema, nil
+// ResultFieldSchema implements delivery.ResultSchemas. Workflow outputs are Message attributes
+// declared by Attribute schemas, so a Workflow has no result schema of its own to reference.
+func (s *Store) ResultFieldSchema(context.Context, platform.TransactionContext, uuid.UUID, string) (processing.FieldSchema, error) {
+	return processing.FieldSchema{}, authz.ErrNotFound
 }

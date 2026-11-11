@@ -69,8 +69,7 @@ func (s *publicationSourceFixture) CheckItem(ctx context.Context, tx platform.Tr
 			return err
 		}
 		if s.mutate {
-			item.Result.Evaluation.Fields["injected"] = processing.FieldValue{State: processing.FieldAbsent}
-			item.Definition.OutputSchema["injected"] = processing.FieldSchema{Kind: processing.StringValue, Optional: true}
+			item.Result.Evaluation.Fields["injected"] = map[string]processing.FieldValue{"field": {State: processing.FieldAbsent}}
 		}
 	}
 	return nil
@@ -206,7 +205,7 @@ func TestProcessingPublicationAtomicEvidenceAndFences(t *testing.T) {
 						selected := name != "false" && i == 0
 						evaluation := processing.Evaluation{Selected: selected}
 						if selected {
-							evaluation.Fields = map[string]processing.FieldValue{}
+							evaluation.Fields = map[string]map[string]processing.FieldValue{}
 						}
 						candidate, _, err = repository.CompleteCandidate(tx.Context(), tx, lease, 0, evaluation)
 						if err != nil {

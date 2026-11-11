@@ -39,6 +39,24 @@ func (processingDeclarationsFixture) FieldGroups(ref processing.FieldRef) ([]str
 	return []string{"unit"}, nil
 }
 
+// processingOutputsFixture declares the Attribute fields test.out (boolean) and test.text and
+// test.mode (strings) that fixture Workflows write.
+type processingOutputsFixture struct{}
+
+// FieldSchema implements processing.Declarations.
+func (processingOutputsFixture) FieldSchema(ref processing.FieldRef) (processing.FieldSchema, error) {
+	if ref.Namespace != "attributes" || len(ref.Path) != 2 || ref.Path[0] != "test" {
+		return processing.FieldSchema{}, authz.ErrInvalidInput
+	}
+	switch ref.Path[1] {
+	case "out":
+		return processing.FieldSchema{Kind: processing.BooleanValue}, nil
+	case "text", "mode":
+		return processing.FieldSchema{Kind: processing.StringValue}, nil
+	}
+	return processing.FieldSchema{}, authz.ErrInvalidInput
+}
+
 func preparedProcessingDefinition(t *testing.T) processing.Definition {
 	t.Helper()
 	flag := processing.FieldRef{Namespace: "source", Path: []string{"flag"}}
@@ -47,9 +65,8 @@ func preparedProcessingDefinition(t *testing.T) processing.Definition {
 		t.Fatal(err)
 	}
 	definition := processing.Definition{SchemaVersion: 1, Selector: processing.Predicate{
-		Op: "eq", Field: &flag, Value: &value}, OutputSchema: map[string]processing.FieldSchema{},
-		Outputs: map[string]processing.Assignment{}}
-	if _, err := processing.CompileWorkflow(t.Context(), definition, processingDeclarationsFixture{}, nil); err != nil {
+		Op: "eq", Field: &flag, Value: &value}, Outputs: map[string]map[string]processing.Assignment{}}
+	if _, err := processing.CompileWorkflow(t.Context(), definition, processingDeclarationsFixture{}, processingOutputsFixture{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	return definition

@@ -181,8 +181,8 @@ func TestAdmissionSelectsWorkflowsOfTheNetworkAgencyAndNarrowing(t *testing.T) {
 		t.Fatal(err)
 	}
 	definition, err := json.Marshal(processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "eq", Field: &protocolField, Value: &protocolValue},
-		OutputSchema: map[string]processing.FieldSchema{}, Outputs: map[string]processing.Assignment{}})
+		Selector: processing.Predicate{Op: "eq", Field: &protocolField, Value: &protocolValue},
+		Outputs:  map[string]map[string]processing.Assignment{}})
 	if err != nil {
 		t.Fatal(err)
 	}

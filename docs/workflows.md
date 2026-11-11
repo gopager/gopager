@@ -17,7 +17,7 @@ Related: [HTTP API](http-api.md) (routes, authentication, errors) · [Plugins](p
 | Term | Meaning |
 | --- | --- |
 | **Workflow** | Revisioned metadata: `name`, `scope`, `enabled`, `activeVersionId`. Every change increments `revision`. Deleting a workflow is logical: it sets `enabled=false` and clears the active version. |
-| **Workflow version** | An immutable saved **definition** (selector, steps, output schema). Saving a version does not activate it. Any retained version can be activated. |
+| **Workflow version** | An immutable saved **definition** (selector, steps, outputs). Saving a version does not activate it. Any retained version can be activated. |
 | **Processing instance** | An administratively configured, revisioned binding of one plugin capability: the `main` plugin artifact, an execution principal and a configuration value. Each save creates a new immutable revision. Installed steps pin an instance ID and revision. |
 | **Candidate** | Durable work item for one (transmission, workflow, definition version, source revision, context revision). It is admitted when a transmission is accepted and an enabled workflow's scope covers it. Admission does not mean the selector matched. |
 | **Result** | Private evaluation evidence stored when a candidate completes with `selected=true`. Not-selected completions store no result. |
@@ -38,7 +38,7 @@ flowchart LR
   P --> S
 ```
 
-Multiple workflows can match the same transmission. Each one runs independently and produces its own result namespace.
+Multiple workflows can match the same transmission. Each one runs independently and writes its own result; several workflows may write the same attribute field (see [Outputs](#outputs)).
 
 ## Definition format
 
@@ -55,10 +55,9 @@ All processing JSON is decoded strictly:
 | `schemaVersion` | integer | yes | Must be `1`. |
 | `selector` | [Predicate](#predicates) | yes | Decides whether the workflow produces a result for a source or target context. |
 | `steps` | [Step](#steps)[] | no | Executed in order. At most 128 steps in total, counting nested branch steps. |
-| `outputSchema` | map name → [FieldSchema](#field-schema) | yes (may be `{}`) | Declares the result fields. At most 1000 entries. |
-| `outputs` | map name → [Assignment](#assignments) | yes (may be `{}`) | Assigns each output from a field or a literal. Every non-optional output must be assigned. |
+| `outputs` | map schema key → field → [Assignment](#assignments) | yes (may be `{}`) | Writes Message attributes: each key names a `message` [Attribute schema](http-api.md#attribute-schemas), each field one of its top-level fields, each assignment the value from a field or a literal. At most 1000 fields in total. See [Outputs](#outputs). |
 
-Minimal definition (from tests). It selects transmissions of any of the four protocols and produces an empty field set:
+Minimal definition (from tests). It selects transmissions of any of the four protocols and writes no attribute:
 
 ```json
 {
@@ -69,12 +68,11 @@ Minimal definition (from tests). It selects transmissions of any of the four pro
     {"op": "eq", "field": {"namespace": "source", "path": ["protocol"]}, "value": {"kind": "string", "value": "zvei"}},
     {"op": "eq", "field": {"namespace": "source", "path": ["protocol"]}, "value": {"kind": "string", "value": "eas"}}
   ]},
-  "outputSchema": {},
   "outputs": {}
 }
 ```
 
-Extract-and-branch definition (from tests; the test source has a `source.text` field). It extracts `level` from text such as `LEVEL=7`:
+Extract-and-branch definition (from tests; the test source has a `source.text` field). It extracts `level` from text such as `LEVEL=7` and writes it to the integer field `level` of the `message` Attribute schema `alerts`:
 
 ```json
 {
@@ -92,12 +90,23 @@ Extract-and-branch definition (from tests; the test source has a `source.text` f
                 "thenOutputs": {"level": {"field": {"namespace": "step", "path": ["extract", "level"]}}},
                 "elseOutputs": {"level": {"literal": {"kind": "integer", "value": "7"}}}}}
   ],
-  "outputSchema": {"level": {"kind": "integer"}},
-  "outputs": {"level": {"field": {"namespace": "step", "path": ["choose", "level"]}}}
+  "outputs": {"alerts": {"level": {"field": {"namespace": "step", "path": ["choose", "level"]}}}}
 }
 ```
 
-Here `extract.level` is required, so a text that does not match fails the run (see [Extract](#extract)). Declare the output `"optional": true` if a non-match should be allowed.
+Here the step output `extract.level` is required, so a text that does not match fails the run (see [Extract](#extract)). Declare the step output `"optional": true` if a non-match should be allowed; an absent optional step value then leaves the attribute unwritten.
+
+### Outputs
+
+`outputs` is the only way a definition writes data. Step `outputSchema` declarations stay internal to the definition; the result carries attributes only.
+
+- **Typed by the Attribute schema.** `outputs[<schemaKey>][<field>]` writes the field `attributes.<schemaKey>.<field>`. Its type comes from the schema, never from the definition, so the assignment must produce exactly that type (nested object properties keep their required and optional markers). The key must name a `message` schema: an unknown key, a `unit` schema, an unknown field or an incompatible assignment is `INVALID_INPUT`.
+- **Optional for the producer.** Top-level fields are always optional. An assignment whose value is absent writes nothing, so it never replaces an earlier value. An explicit `null` (on a nullable field) is a present value and is written.
+- **Result.** Only present values are kept, keyed by schema and field. See [Result shape](#result-shape).
+- **Several workflows, one field.** Any number of workflows may write the same field. Each stores its own result; the effective value of a field for a Message is the latest published present value, ordered by publication time and then result ID, and it keeps the provenance of the workflow and result it came from.
+- **Deprecation.** A deprecated schema, field or ancestor property cannot be referenced by a new reference: saving a version, activating one and previewing a draft fail with `INVALID_INPUT`. A version that is already active keeps being evaluated and published, so processing never stops on a deprecation; already stored values stay readable.
+- **Schemas current at publication.** A result is validated against the schemas as they are when it is stored and again when it is published. Compatible schema changes (see [Attribute schemas](http-api.md#attribute-schemas)) keep results valid.
+- **Known classification limitation.** The classification of an output is the definition version's, as described in [Classification](#classification): `derived` plus the groups of every source field the definition reads. It is stored per result, not per attribute, and does not change when another workflow writes the same field.
 
 ### Field references
 
@@ -105,9 +114,9 @@ A field reference has the form `{"namespace": "source" | "target" | "step", "pat
 
 | Namespace | Resolves to |
 | --- | --- |
-| `source` | A field of the transmission (see [Source fields](#source-fields)). |
+| `source` | A field of the transmission (see [Source fields](#source-fields)); the catalog is the field registry's `workflow` scope. |
 | `target` | A field of one original target of the transmission. Referencing any `target` field anywhere in the definition makes the workflow **target-dependent** (see [Result shape](#result-shape)). |
-| `step` | `["<stepId>", "<outputName>"]`: an output of a step that ran earlier in the same lexical scope. Forward references, references to sibling-branch steps, and references from the definition's `outputs` into steps nested inside a branch are rejected. |
+| `step` | `["<stepId>", "<outputName>"]`: an output of a step that ran earlier in the same lexical scope. Forward references, references to sibling-branch steps, and references from the definition's `outputs` into steps nested inside a branch are rejected. Output targets are not field references: they are the `<schemaKey>`/`<field>` keys of `outputs`. |
 
 #### Source fields
 
@@ -330,16 +339,18 @@ Evaluation runs once for the whole source unless the workflow is target-dependen
 - Each selected position yields its own field set in `targetResults`.
 
 ```json
-{"selected": true, "fields": {"level": {"state": "present", "value": {"kind": "integer", "value": "7"}}}}
+{"selected": true, "fields": {"alerts": {"level": {"state": "present", "value": {"kind": "integer", "value": "7"}}}}}
 ```
 
 ```json
-{"selected": true, "targetResults": [{"targetPosition": 1, "fields": {"address": {"state": "present", "value": {"kind": "string", "value": "222"}}}}]}
+{"selected": true, "targetResults": [{"targetPosition": 1, "fields": {"routing": {"address": {"state": "present", "value": {"kind": "string", "value": "222"}}}}}]}
 ```
 
+`fields` is keyed by Attribute schema key and then field name.
+
 - Not selected: `{"selected": false}`.
-- Selected with no outputs: `{"selected": true, "fields": {}}`.
-- Field `state` is `present` or `absent`. There is no `hidden` state.
+- Selected with no outputs, or with every output absent: `{"selected": true, "fields": {}}`. An output without a value is omitted, never stored as `absent`.
+- Stored field `state` is always `present`. There is no `hidden` state.
 - Output fields carry no per-value `dependencies`; the result is classified once per definition (see [Classification](#classification)).
 - If any selected context fails, the whole evaluation fails. Partial results are never returned.
 - The encoded result must not exceed 256 KiB, and decoded bytes inside it must not exceed 256 KiB. Otherwise the run fails with `RESOURCE_LIMIT`.
@@ -352,7 +363,7 @@ At run time `Evaluation.Dependencies()` returns the owner dependency (transmissi
 
 ## Validation
 
-A definition is compiled when a version is **saved**, when it is **activated**, when it is **previewed**, and again at the start of every **run**. Compilation is checked against the server's field catalog and the current processing instances. If saving the version would change the definition in any way, the request is rejected.
+A definition is compiled when a version is **saved**, when it is **activated**, when it is **previewed**, and again at the start of every **run**. Compilation is checked against the field registry (the source and target catalog and the current Attribute schemas) and the current processing instances. Saving, activating and previewing compile strictly and reject deprecated fields; the run of an active version does not. If saving the version would change the definition in any way, the request is rejected.
 
 **Field validation.** Saving a version, and previewing an unsaved draft, additionally check every source or target field the selector, steps (installed-step inputs included) and outputs reference against the author's current field permissions and the field group declared for it. If the author may not read one of those groups the request fails with `INVALID_INPUT`; the offending reference is recorded in the private cause. Nothing at evaluation time depends on a human reader's rights, so this check is the only place an author's readable groups constrain a definition. Previewing a saved version is not re-validated here: its result is instead authorized against the previewer's field permissions when it is rechecked after evaluation.
 
@@ -360,7 +371,7 @@ All failures use the platform error codes. Messages are internal and never part 
 
 | Code | Raised for |
 | --- | --- |
-| `INVALID_INPUT` | `schemaVersion` ≠ 1; unknown or duplicate JSON properties; unknown step `kind` or mismatched step configuration; duplicate or empty step `id`; invalid output name; unknown field reference or field outside lexical scope; malformed predicate operands (for example `not` with ≠ 1 arg, `in` without `values`, `contains` on a non-string, ordered comparison on a non-numeric field); literal not matching the schema; incompatible assignment or undeclared conversion; required output unmapped; mapping to an undeclared output; extraction input not a string; capture group missing or ambiguous; invalid capture conversion; unparseable regex; installed step without `instanceId` or with revision ≤ 0; installed `outputSchema` differing from the manifest's `resultSchema`; a selector, step or output referencing a source field whose field group the author may not read (save and draft preview); runtime: required value absent, conversion failure, plugin failure. |
+| `INVALID_INPUT` | `schemaVersion` ≠ 1; unknown or duplicate JSON properties; unknown step `kind` or mismatched step configuration; duplicate or empty step `id`; invalid output name; unknown field reference or field outside lexical scope; malformed predicate operands (for example `not` with ≠ 1 arg, `in` without `values`, `contains` on a non-string, ordered comparison on a non-numeric field); literal not matching the schema; incompatible assignment or undeclared conversion; required step output unmapped; mapping to an undeclared step output; an `outputs` key that is not a `message` Attribute schema, or a field the schema does not declare; a deprecated Attribute schema or field in `outputs` (save, activate and draft preview); extraction input not a string; capture group missing or ambiguous; invalid capture conversion; unparseable regex; installed step without `instanceId` or with revision ≤ 0; installed `outputSchema` differing from the manifest's `resultSchema`; a selector, step or output referencing a source field whose field group the author may not read (save and draft preview); runtime: required value absent, conversion failure, plugin failure. |
 | `RESOURCE_LIMIT` | More than 128 steps; branch depth > 32; JSON/schema/value/predicate nesting > 32; collection > 1000; predicate args/values > 1024; encoded input > 1 MiB; regex bounds; CEL cost or memory; aggregate run input/intermediate > 1 MiB; result > 256 KiB; accumulated built-in compute > 1 s; installed call > 30 s; plugin reports `resource-limit`. |
 | `AUTHORITY_UNAVAILABLE` | Instance disabled, missing artifact root, or preview requested for a plugin that does not support preview; plugin uses secret or user-scoped configuration; plugin reports `capability-unavailable`; execution principal no longer resolvable or authorized. |
 | `INCOMPATIBLE_VERSION` | Plugin manifest schema or SDK version not supported (see [Plugins](plugins.md)). |
@@ -625,7 +636,7 @@ Result metadata returns `{"id", "revision", "completedAt"}`. Source identity, ex
 | JSON, schema, value, predicate, field path nesting | 32 | `RESOURCE_LIMIT` / `INVALID_INPUT` |
 | Steps per definition (total, nested included) | 128 | `RESOURCE_LIMIT` |
 | Branch nesting depth | 32 | `RESOURCE_LIMIT` |
-| Schema properties, step/final outputs, object and list elements | 1000 | `RESOURCE_LIMIT` |
+| Schema properties, step outputs, final `outputs` fields in total, object and list elements | 1000 | `RESOURCE_LIMIT` |
 | Predicate `args` / `values`; targets per transmission | 1024 | `RESOURCE_LIMIT` |
 | Scope Agencies / narrowing references | 1–256 / 1–1024 | `INVALID_INPUT` |
 | CEL cost / tracked memory / wall time per predicate | 2 000 000 / 2 MiB / 1 s | `RESOURCE_LIMIT` |

@@ -10,9 +10,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/assignments"
+	"github.com/gopager/gopager/internal/attributes"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
+	"github.com/gopager/gopager/internal/processing/declarations"
 	"github.com/gopager/gopager/internal/protocols"
 	"github.com/gopager/gopager/internal/units"
 )
@@ -278,12 +280,9 @@ func TestSyntheticUnionDeclarationsRemainAvailableAcrossForms(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	declarations, err := processing.NewSyntheticDeclarationOwner().ProcessingDeclarations(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, ref := range processing.SyntheticSourceDeclarationRefs() {
-		expected, err := declarations.FieldSchema(ref)
+	set := declarations.FromSchemas(nil, false)
+	for _, ref := range declarations.BuiltinSourceRefs() {
+		expected, err := set.Source.FieldSchema(ref)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -300,9 +299,9 @@ func TestSyntheticUnionDeclarationsRemainAvailableAcrossForms(t *testing.T) {
 	ref := processing.FieldRef{Namespace: "source", Path: []string{"payload", "binary"}}
 	yes, _ := processing.Literal(processing.BooleanValue, true)
 	definition := processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "present", Field: &ref, Value: &yes},
-		OutputSchema: map[string]processing.FieldSchema{}, Outputs: map[string]processing.Assignment{}}
-	program, err := processing.CompileWorkflow(t.Context(), definition, declarations, nil)
+		Selector: processing.Predicate{Op: "present", Field: &ref, Value: &yes},
+		Outputs:  map[string]map[string]processing.Assignment{}}
+	program, err := processing.CompileWorkflow(t.Context(), definition, set.Source, set.Outputs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -394,17 +393,14 @@ func TestSyntheticUnitScopeDoesNotReturnSiblingTargetContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	declarations, err := processing.NewSyntheticDeclarationOwner().ProcessingDeclarations(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
+	set := declarations.FromSchemas([]attributes.Schema{{Key: "unit-ref", Subject: attributes.SubjectMessage,
+		Fields: map[string]attributes.Field{"unit": {Kind: processing.StringValue}}}}, false)
 	ref := processing.FieldRef{Namespace: "target", Path: []string{"unit", "id"}}
 	yes, _ := processing.Literal(processing.BooleanValue, true)
 	definition := processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "present", Field: &ref, Value: &yes},
-		OutputSchema: map[string]processing.FieldSchema{"unit": {Kind: processing.StringValue, Optional: true}},
-		Outputs:      map[string]processing.Assignment{"unit": {Field: &ref}}}
-	program, err := processing.CompileWorkflow(t.Context(), definition, declarations, nil)
+		Selector: processing.Predicate{Op: "present", Field: &ref, Value: &yes},
+		Outputs:  map[string]map[string]processing.Assignment{"unit-ref": {"unit": {Field: &ref}}}}
+	program, err := processing.CompileWorkflow(t.Context(), definition, set.Source, set.Outputs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

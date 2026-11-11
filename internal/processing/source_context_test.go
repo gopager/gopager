@@ -37,9 +37,8 @@ func TestSourceContextClassificationSurvivesWorkflowDerivation(t *testing.T) {
 			t.Parallel()
 			reference := FieldRef{Namespace: "source", Path: test.path}
 			definition := selectedDefinition()
-			definition.OutputSchema["context"] = FieldSchema{Kind: StringValue}
-			definition.Outputs["context"] = Assignment{Field: &reference}
-			program, err := CompileWorkflow(t.Context(), definition, source, nil)
+			setOutput(&definition, "context", Assignment{Field: &reference})
+			program, err := CompileWorkflow(t.Context(), definition, source, testOutputs, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -47,11 +46,11 @@ func TestSourceContextClassificationSurvivesWorkflowDerivation(t *testing.T) {
 			if err != nil || !evaluation.Selected {
 				t.Fatalf("context evaluation: %+v err=%v", evaluation, err)
 			}
-			field := evaluation.Fields["context"]
+			field := evaluation.Fields["t"]["context"]
 			if field.State != FieldPresent || field.Value == nil {
 				t.Fatalf("missing context value: %+v", field)
 			}
-			value, err := field.Value.Native(definition.OutputSchema["context"])
+			value, err := field.Value.Native(FieldSchema{Kind: StringValue})
 			dependencies, dependencyErr := evaluation.Dependencies()
 			if err != nil || dependencyErr != nil || value != test.value || len(field.Dependencies) != 0 || len(dependencies) != 1 {
 				t.Fatalf("context projection: %+v err=%v, %v", field, err, dependencyErr)

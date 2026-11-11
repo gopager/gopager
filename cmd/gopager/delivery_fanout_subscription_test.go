@@ -78,16 +78,15 @@ func (f *deliveryFixture) subRecipients(listed []delivery.Delivery) map[string]s
 	return recipients
 }
 
-// levelWorkflow stores a Workflow whose active version outputs the integer "level".
+// levelWorkflow stores a Workflow whose active version writes the integer attribute levels.level.
 func (f *deliveryFixture) levelWorkflow() uuid.UUID {
 	f.t.Helper()
 	protocol := processing.FieldRef{Namespace: "source", Path: []string{"protocol"}}
 	pocsag := processing.Value{Kind: processing.StringValue, Value: json.RawMessage(`"pocsag"`)}
 	three := processing.Value{Kind: processing.IntegerValue, Value: json.RawMessage(`"3"`)}
 	definition, err := json.Marshal(processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "eq", Field: &protocol, Value: &pocsag},
-		OutputSchema: map[string]processing.FieldSchema{"level": {Kind: processing.IntegerValue}},
-		Outputs:      map[string]processing.Assignment{"level": {Literal: &three}}})
+		Selector: processing.Predicate{Op: "eq", Field: &protocol, Value: &pocsag},
+		Outputs:  map[string]map[string]processing.Assignment{"levels": {"level": {Literal: &three}}}})
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -118,27 +117,20 @@ func (f *deliveryFixture) publishLevelClassified(workflow, message uuid.UUID, le
 		FROM transmissions t, processing_workflows w WHERE t.message_id = $3 AND w.id = $2`, candidate, workflow, message)
 	f.exec(`INSERT INTO processing_results (id, candidate_id, producing_fence, evaluation, field_groups, completed_at, published_at, message_id)
 		VALUES ($1, $2, 1, $3::jsonb, $5::jsonb, now(), now(), $4)`, result, candidate,
-		`{"selected":true,"fields":{"incident":{"level":{"state":"present","value":{"kind":"integer","value":"`+level+`"}}}}}`, message, groups)
+		`{"selected":true,"fields":{"levels":{"level":{"state":"present","value":{"kind":"integer","value":"`+level+`"}}}}}`, message, groups)
 	return result
 }
 
-// levelAtLeast is the typed predicate "result.<workflow>.level >= minimum".
-func levelAtLeast(workflow uuid.UUID, minimum string) map[string]any {
-	return map[string]any{"op": "gte", "field": map[string]any{"namespace": "result", "path": []string{workflow.String(), "level"}},
-		"value": map[string]any{"kind": "integer", "value": minimum}}
-}
-
-// TestSubscriptionProcessingCompletedSelectionDependsOnPublishedResult proves that a Subscription on
-// processing.completed with a result filter delivers only facts whose published result is
-// visible and satisfies the filter, and that handling the fact twice creates one Delivery.
-func TestSubscriptionProcessingCompletedSelectionDependsOnPublishedResult(t *testing.T) {
+// TestSubscriptionProcessingCompletedDeliversFactsWithPublishedResult proves that a Subscription on
+// processing.completed delivers the facts whose published result is visible, only for the
+// subscribed event type, and that handling the fact twice creates one Delivery per fact.
+func TestSubscriptionProcessingCompletedDeliversFactsWithPublishedResult(t *testing.T) {
 	t.Parallel()
 	f := newDeliveryFixture(t, delivery.AdmissionLimits{})
 	bearer, _ := f.subscriber(fanOutGroups...)
 	instance := f.instance(true)
 	workflow := f.levelWorkflow()
-	f.subCreated(bearer, subInput(instance, map[string]any{"eventTypes": []string{"processing.completed"},
-		"filter": levelAtLeast(workflow, "2")}))
+	f.subCreated(bearer, subInput(instance, map[string]any{"eventTypes": []string{"processing.completed"}}))
 	unit := f.unit("Engine 1", nil)
 	high := f.message(f.now().Add(-time.Minute), "HIGH", unit)
 	low := f.message(f.now().Add(-time.Minute), "LOW", unit)
@@ -150,16 +142,26 @@ func TestSubscriptionProcessingCompletedSelectionDependsOnPublishedResult(t *tes
 		t.Fatalf("message.created created %d Deliveries for a processing.completed Subscription", len(listed))
 	}
 	completed := f.messageFact("processing.completed", high, map[string]any{"resultId": highResult})
-	f.messageFact("processing.completed", low, map[string]any{"resultId": lowResult})
+	completedLow := f.messageFact("processing.completed", low, map[string]any{"resultId": lowResult})
 	f.fanOutAll()
 	listed := f.deliveries(bearer, "")
-	if len(listed) != 1 || listed[0].DomainEventID != completed || listed[0].MessageID == nil || *listed[0].MessageID != high {
-		t.Fatalf("Deliveries = %+v, want exactly the level-3 fact", listed)
+	if len(listed) != 2 {
+		t.Fatalf("Deliveries = %+v, want one per processing.completed fact", listed)
+	}
+	byEvent := map[uuid.UUID]uuid.UUID{}
+	for _, item := range listed {
+		if item.MessageID == nil {
+			t.Fatalf("Delivery %+v has no Message", item)
+		}
+		byEvent[item.DomainEventID] = *item.MessageID
+	}
+	if byEvent[completed] != high || byEvent[completedLow] != low {
+		t.Fatalf("Deliveries = %+v, want the facts of the high and the low Message", listed)
 	}
 
 	f.exec(`DELETE FROM consumer_offsets WHERE consumer = $1`, delivery.FanOutConsumerName)
 	f.fanOutAll()
-	if again := f.deliveries(bearer, ""); len(again) != 1 {
+	if again := f.deliveries(bearer, ""); len(again) != 2 {
 		t.Fatalf("handling the fact twice left %d Deliveries", len(again))
 	}
 }
