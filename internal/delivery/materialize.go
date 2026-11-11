@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/events"
+	"github.com/gopager/gopager/internal/fields"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
@@ -29,16 +30,17 @@ type Dependencies struct {
 	Store     Store
 	Instances Instances
 	Targets   Targets
-	Layouts   processing.LayoutResolver
+	Layouts   Layouts
 	Projector Projector
-	Results   ResultSchemas
+	Fields    FieldRegistry
+	Facts     events.SubscriptionAppender
 	Authority PrincipalAuthority
 }
 
 // validate fails with authz.ErrInvalidInput when a port is missing.
 func (d Dependencies) validate() error {
 	if d.Store == nil || d.Instances == nil || d.Targets == nil || d.Layouts == nil || d.Projector == nil ||
-		d.Results == nil || d.Authority == nil {
+		d.Fields == nil || d.Facts == nil || d.Authority == nil {
 		return authz.ErrInvalidInput
 	}
 	return nil
@@ -76,7 +78,18 @@ func absentAuthority(err error) bool {
 // without error when the subscriber has no current authority or may not see the fact's data.
 func observe(ctx context.Context, tx platform.TransactionContext, deps Dependencies, now time.Time,
 	subscription Subscription, event eventView) (*subject, error) {
-	authority, err := deps.Authority.ResolvePrincipalAuthority(ctx, tx, subscription.SubscriberID)
+	current, err := resolveSubject(ctx, tx, deps, event, subscription.SubscriberID)
+	if err != nil || current == nil {
+		return nil, err
+	}
+	return current.project(ctx, tx, deps, now, subscription)
+}
+
+// resolveSubject resolves the subscriber's current authority and readable field groups. It
+// returns nil without error when the subscriber cannot act now.
+func resolveSubject(ctx context.Context, tx platform.TransactionContext, deps Dependencies, event eventView,
+	subscriber uuid.UUID) (*subject, error) {
+	authority, err := deps.Authority.ResolvePrincipalAuthority(ctx, tx, subscriber)
 	if err != nil {
 		if absentAuthority(err) {
 			return nil, nil
@@ -94,12 +107,19 @@ func observe(ctx context.Context, tx platform.TransactionContext, deps Dependenc
 	for _, group := range readable {
 		current.groups[group] = true
 	}
-	entry, _ := events.LookupType(event.Type)
+	return current, nil
+}
+
+// project reads the authorized data of the fact: the Message with its splits or the Gateway. It
+// returns nil without error when the subscriber may not see the data.
+func (s *subject) project(ctx context.Context, tx platform.TransactionContext, deps Dependencies, now time.Time,
+	subscription Subscription) (*subject, error) {
+	entry, _ := events.LookupType(s.event.Type)
 	switch entry.Projection {
 	case events.ProjectionMessage:
-		return current.observeMessage(ctx, tx, deps, now, subscription)
+		return s.observeMessage(ctx, tx, deps, now, subscription)
 	case events.ProjectionGateway:
-		return current.observeGateway(ctx, tx, deps, now)
+		return s.observeGateway(ctx, tx, deps, now)
 	}
 	return nil, nil
 }
@@ -191,26 +211,14 @@ func appendUnique(ids []uuid.UUID, id uuid.UUID) []uuid.UUID {
 }
 
 // view returns the field view of one split.
-func (s *subject) view(part split, fields *fieldSet) *view {
-	return &view{event: s.event, message: s.message, units: part.units, gateway: s.gateway, groups: s.groups, fields: fields}
+func (s *subject) view(part split, declarations fields.Declarations) *view {
+	return &view{event: s.event, message: s.message, units: part.units, gateway: s.gateway, groups: s.groups,
+		declarations: declarations}
 }
 
-// matches evaluates the Subscription filter on a split; no filter matches everything. An
-// evaluation failure of a stored filter (for example a cost limit) counts as no match.
-func matches(ctx context.Context, filter *processing.PredicateProgram, current *view) bool {
-	if filter == nil {
-		return true
-	}
-	ok, err := filter.Evaluate(ctx, current)
-	return err == nil && ok
-}
-
-// compileFilter compiles a Subscription's filter against the catalog.
-func compileFilter(ctx context.Context, subscription Subscription, fields *fieldSet) (*processing.PredicateProgram, error) {
-	if subscription.Filter == nil {
-		return nil, nil
-	}
-	return processing.CompilePredicate(ctx, *subscription.Filter, fields)
+// matches evaluates the compiled filter on a split; no filter matches everything.
+func matches(filter *fields.Filter, current *view) bool {
+	return filter == nil || filter.Match(current)
 }
 
 // rendering is the input of one Delivery or the failure code that replaces it.
@@ -268,7 +276,7 @@ func render(ctx context.Context, tx platform.TransactionContext, deps Dependenci
 		result.code = CodeInputInvalid
 		return result, nil
 	}
-	program, err := processing.CompileLayout(ctx, resolved.Layout, current.fields)
+	program, err := processing.CompileLayout(ctx, resolved.Layout, current.declarations)
 	if err == nil {
 		var rendered processing.RenderedLayout
 		rendered, err = program.Render(ctx, current)
@@ -428,19 +436,23 @@ func newRecord(subscription Subscription, current *subject, part split, target T
 }
 
 // materialize builds the Deliveries one Subscription creates for a fact now: one per split and
-// target whose filter matches and whose expiry lies ahead.
+// target whose filter matches and whose expiry lies ahead. A Subscription whose filter or Layout
+// does not compile now, or whose subscriber can no longer read their fields, becomes invalid
+// and creates none.
 func materialize(ctx context.Context, tx platform.TransactionContext, deps Dependencies, now time.Time,
 	subscription Subscription, event eventView) ([]DeliveryRecord, error) {
-	current, err := observe(ctx, tx, deps, now, subscription, event)
+	current, err := resolveSubject(ctx, tx, deps, event, subscription.SubscriberID)
 	if err != nil || current == nil {
 		return nil, err
 	}
-	fields := newFieldSet(ctx, tx, deps.Results)
-	filter, err := compileFilter(ctx, subscription, fields)
+	check, reason, err := healthCheck(ctx, tx, deps, subscription, current.groups)
 	if err != nil {
-		if platform.FailureCode(err) == platform.CodeInvalidInput || platform.FailureCode(err) == platform.CodeResourceLimit {
-			return nil, nil
-		}
+		return nil, err
+	}
+	if reason != "" {
+		return nil, markInvalid(ctx, tx, deps, subscription, reason, now)
+	}
+	if current, err = current.project(ctx, tx, deps, now, subscription); err != nil || current == nil {
 		return nil, err
 	}
 	var records []DeliveryRecord
@@ -449,8 +461,8 @@ func materialize(ctx context.Context, tx platform.TransactionContext, deps Depen
 		if !expires.After(now) {
 			continue
 		}
-		partView := current.view(part, fields)
-		if !matches(ctx, filter, partView) {
+		partView := current.view(part, check.declarations)
+		if !matches(check.filter, partView) {
 			continue
 		}
 		for _, target := range subscription.Targets {

@@ -220,7 +220,7 @@ The layering rules that the code follows:
 | `internal/events` | Domain event fact types, envelope construction and validation, appender interfaces |
 | `internal/protocols` | Protocol enum, address/target model and ranges, payload forms, payload identity |
 | `internal/messages` | Grouping decision type and the pure grouping function `Decide` |
-| `internal/delivery` | Subscriptions (management, save-time checks), the field catalog of filters and layouts, the `delivery-fanout` consumer, materialization, the Delivery runner (claims, start check, attempts, retry, uncertainty), sending admission, Delivery management (list, read, retry, redelivery), the Core target port and built-in layouts |
+| `internal/delivery` | Subscriptions (management, save-time checks, health), field resolution of filters and layouts against the field registry, the `delivery-fanout` consumer, materialization, the Delivery runner (claims, start check, attempts, retry, uncertainty), sending admission, Delivery management (list, read, retry, redelivery), the Core target port and built-in layouts |
 | `internal/processing/presentation` | Layout definitions with immutable versions, assigned to Agencies (`presentation.manage`), and the `LayoutResolver` used by Delivery |
 | `internal/attributes` | Attribute schemas: model, validation, compatibility, service (`attribute-schema.manage`) and the store and catalog ports |
 | `internal/readmodel` | Message read side: feed/detail/filter-option service, filter parsing and canonical encoding, page tokens and positions, field-group projection; ports for the store, token key and Workflow classification |
@@ -437,6 +437,7 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 | `gateway.state-changed` | Effective gateway state change from a report, a Submission or the contact-loss monitor; one per Gateway revision, with a matching `gateway_state_history` row |
 | `operation.submission-rejected`, `operation.observation-time-implausible`, `operation.network-ambiguous` | Operational problems at intake; the ambiguity fact carries the chosen Network and the resolution `address-priority` |
 | `configuration.changed` | Account/group/grant, Unit/collection/Organization/template, rule, workflow, processing-instance or Subscription configuration changed (Subscriptions: `created`, `updated`, `paused`, `deleted`) |
+| `subscription.health-changed` | A Subscription became `invalid` (fan-out or start check found its filter or Layout no longer usable) or valid again (a save that compiles); data `health`, `reason`, `revision`; producer `delivery`, aggregate `subscription`, not deliverable |
 | `principal.access-changed`, `principal.deleted` | Effective access of a principal changed or the account is being deleted |
 | `processing.completed` | A processing result was published |
 

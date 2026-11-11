@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: GoPager API
-  version: 1.8.0
+  version: 1.9.0
   description: |
     GoPager application API. Human guide: docs/http-api.md.
 
@@ -9058,7 +9058,7 @@ components:
               description: Number of rows the caller may read, independent of paging.
     DeliveryFieldRef:
       type: object
-      description: Reference to a field of the Delivery field catalog, for Subscription filters and layouts. See
+      description: Reference to a field of the Delivery field registry, for Subscription filters and layouts. See
         docs/http-api.md (Subscriptions) for the fields and their field groups.
       required:
       - namespace
@@ -9071,7 +9071,7 @@ components:
           - message
           - unit
           - gateway
-          - result
+          - attributes
         path:
           type: array
           minItems: 1
@@ -9079,8 +9079,8 @@ components:
           items:
             type: string
             minLength: 1
-          description: One element for the fixed fields (for example `["occurredAt"]` in `event`); `result` takes the
-            Workflow ID and the output name.
+          description: One element for the fixed fields (for example `["occurredAt"]` in `event`); `attributes` takes
+            the Attribute schema key, the field and, for an object field, the property names below it.
       additionalProperties: false
     DeliveryPredicate:
       type: object
@@ -9241,6 +9241,7 @@ components:
       - eventTypes
       - targets
       - splitByUnit
+      - health
       - createdAt
       - updatedAt
       properties:
@@ -9275,12 +9276,30 @@ components:
           type: boolean
         maxAgeSeconds:
           type: integer
+        health:
+          $ref: '#/components/schemas/SubscriptionHealth'
+        healthReason:
+          $ref: '#/components/schemas/SubscriptionHealthReason'
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
+    SubscriptionHealth:
+      type: string
+      description: '`invalid` Subscriptions create no Deliveries until a save that compiles sets them `valid`.'
+      enum:
+      - valid
+      - invalid
+    SubscriptionHealthReason:
+      type: string
+      description: Why the Subscription is invalid; omitted while it is valid.
+      enum:
+      - filter-invalid
+      - field-unavailable
+      - layout-invalid
+      - resource-limit
     SubscriptionResponse:
       type: object
       required:

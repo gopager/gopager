@@ -1082,9 +1082,11 @@ targets on behalf of a subscriber. Properties and limits are in the OpenAPI sche
   checked against the subscriber's field groups, not the caller's, and every Delivery is
   materialized and re-checked under the subscriber's current authority just before it is sent.
   A field group the subscriber cannot read is `400 INVALID_INPUT` on save (unlike
-  [saved views](#saved-views), which answer `403`).
-- **Filter.** `filter` is the same predicate tree as in [workflows](workflows.md), over the catalog
-  below.
+  [saved views](#saved-views), which answer `403`). If the subscriber loses the right later, the
+  Subscription becomes `invalid` ([Health](#subscription-health)); a field never reads as absent for
+  that reason.
+- **Filter.** `filter` is the same predicate tree as in [workflows](workflows.md), over the registry
+  fields below. A save compiles it strictly: an unknown or deprecated field is `400 INVALID_INPUT`.
 - **Targets.** 1 to 8 distinct instances with the Delivery capability. `revision` is 0 (or absent)
   or the instance's current revision, and the response always shows the revision that was saved.
   A different `revision` is `409 REVISION_CONFLICT`. `inputs` are typed constants for inputs
@@ -1092,7 +1094,9 @@ targets on behalf of a subscriber. Properties and limits are in the OpenAPI sche
   that is missing, disabled or without an available provider makes the request
   `503 AUTHORITY_UNAVAILABLE` with `parameters.status` `unavailable` and `parameters.instanceId`
   ([Errors](#errors)). If the Subscription has a layout, every target must support the layout's output kind.
-- **Layout.** `layoutId` names a [layout](#layouts); an unknown layout is `400`. Without one, the built-in layout of
+- **Layout.** `layoutId` names a [layout](#layouts). The author (for a global Subscription, the caller who saves
+  it, not the technical account) must hold `presentation.manage` or `message.read` in one Agency the Layout is
+  assigned to; an unknown or unusable Layout is `400 INVALID_INPUT`. Without one, the built-in layout of
   the output kind is used: the event type, the Message text (else its numeric text or form), the Unit names, the
   Gateway name and state, and the Message time; fields the subscriber cannot read are left out.
 - **Split by Unit.** With `splitByUnit` a Message creates one Delivery per relevant Unit instead of one per
@@ -1115,9 +1119,31 @@ targets on behalf of a subscriber. Properties and limits are in the OpenAPI sche
 - `GET /subscriptions` uses [offset paging](#pagination).
 - Every change records a configuration fact.
 
-Field catalog of filters and layouts. A reference is `{"namespace","path"}` (schema `DeliveryFieldRef`).
+#### Subscription health
+
+`health` is `valid` or `invalid`; `healthReason` names why while it is `invalid` and is omitted otherwise. A
+Subscription is valid when it is saved. Event fan-out and the start check of a Delivery compile the filter and the
+Layout against the current field registry, strictly, and require the subscriber's current field groups to cover
+every field they read and `unit` for `splitByUnit`. If that fails, the Subscription becomes `invalid` in the same
+transaction, creates no Delivery from then on, and the start check cancels the Delivery it was checking
+(`no-longer-matching`). A redelivery for an invalid Subscription is `409 DEPENDENCY_UNAVAILABLE` with
+`parameters.dependency` `subscription`. A save that compiles makes it `valid` again. Health changes never change
+`revision`.
+
+| `healthReason` | Cause |
+| --- | --- |
+| `field-unavailable` | A field is unknown, deprecated or outside the Delivery scope, or the subscriber can no longer read its field group |
+| `filter-invalid` | The filter fails for another reason (for example an operand of the wrong kind) |
+| `layout-invalid` | The Layout fails to compile for a reason other than a field |
+| `resource-limit` | A bound of the filter or Layout is exceeded |
+
+Each change appends the non-deliverable fact `subscription.health-changed` ([Events](architecture.md)).
+
+#### Field registry of filters and layouts
+
+A reference is `{"namespace","path"}` (schema `DeliveryFieldRef`).
 Every field is optional, because not every event type supplies it. A field in a group the subscriber
-cannot read is absent when evaluated and rejected when saved.
+cannot read is rejected when saved and makes the Subscription invalid when the right is lost later.
 
 | Reference | Type | Field group |
 | --- | --- | --- |
@@ -1131,7 +1157,14 @@ cannot read is absent when evaluated and rejected when saved.
 | `unit.id`, `unit.name` | string | `unit` |
 | `gateway.id`, `gateway.name`, `gateway.oldState`, `gateway.newState` | string | `gateway` |
 | `gateway.contactTime` | timestamp | `gateway` |
-| `result` with path `[workflowId, output]` | the output's declared type | `derived`; the result counts only when all field groups stored with it are readable |
+| `attributes` with path `[schemaKey, field, property…]` | the Attribute schema's declared type of the field or object property | `derived` |
+
+A filter on a field holds when any candidate value satisfies it (a list contributes its elements). For
+`attributes` the candidates are the Message's untargeted effective value and the effective values of target positions
+assigned to a Unit relevant to the Delivery (with `splitByUnit` that Delivery's Unit, otherwise all of the Message's
+Units the subscriber may see); a value that does not match the declared type is ignored. A Layout `field`, `chip` or
+`when` reads one value: the untargeted effective value, else the one of the lowest relevant target position. A
+published result counts only when all field groups stored with it are readable.
 
 ### Deliveries
 
@@ -1200,7 +1233,7 @@ schemas `Delivery` and `DeliveryAttempt`.
 | DELETE | `/layouts/{id}` | `presentation.manage` | 200 | Delete at `expectedRevision`; returns `{"id","revision"}` |
 | GET | `/layouts/{id}/versions/{version}` | see below | 200 | Read one immutable version |
 
-A layout is a named, versioned arrangement of catalog fields that a Subscription renders a Domain event with. It is
+A layout is a named, versioned arrangement of registry fields that a Subscription renders a Domain event with. It is
 data, not a template: it has no expressions, loops or markup. Schemas: `Layout`, `LayoutDefinition`, `LayoutBlock`.
 
 - **Agencies.** Every layout is assigned to 1 to 256 distinct Agencies (`agencies`, required on create and update and in
@@ -1215,7 +1248,7 @@ data, not a template: it has no expressions, loops or markup. Schemas: `Layout`,
   `url` built from a template with the placeholders `{0}` to `{9}` over up to 10 `fields`), `section` (an optional
   `title` and nested `blocks`), `conditional` (a `when` predicate, `then` blocks and optional `else` blocks) and
   `fallback` (2 to 8 alternative `blocks`; the first one that renders something is used; a present but empty, unlabelled value renders nothing, and an alternative without content never fails the 64 KiB output limit, while everything a chosen alternative emits counts; independently, one render holds at most 1 MiB of rendered output and looked-up values, including those of discarded alternatives). A property that does
-  not belong to the block kind is `400`. Fields use the [catalog](#subscriptions); an unknown field is `400`. A
+  not belong to the block kind is `400`. Fields use the [registry](#field-registry-of-filters-and-layouts) in scope `delivery`; an unknown or deprecated field is `400`. A
   definition may hold at most 256 blocks, nested at most 8 levels; text is limited to 4096 bytes and labels
   and titles to 256 bytes. Exceeding such a limit is `413 RESOURCE_LIMIT`. A name is 1 to 256 bytes, valid UTF-8 and
   not blank (`400` otherwise).

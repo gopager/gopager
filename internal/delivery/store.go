@@ -95,8 +95,13 @@ type Store interface {
 	UpdateSubscription(ctx context.Context, tx platform.TransactionContext, subscription Subscription, expected int64) error
 	// DeleteSubscription removes it at the expected revision, else authz.ErrRevisionConflict.
 	DeleteSubscription(ctx context.Context, tx platform.TransactionContext, id uuid.UUID, expected int64) error
-	// ActiveSubscriptions returns the active Subscriptions selecting the type that were created
-	// at or before recordedAt, ordered by ID, each share-locked against a concurrent change.
+	// SetSubscriptionHealth records a Subscription's health (HealthValid with an empty reason, or
+	// HealthInvalid with a reason) without changing its revision. It reports whether the stored
+	// health or reason differed.
+	SetSubscriptionHealth(ctx context.Context, tx platform.TransactionContext, id uuid.UUID, health, reason string,
+		now time.Time) (bool, error)
+	// ActiveSubscriptions returns the active, valid Subscriptions selecting the type that were
+	// created at or before recordedAt, ordered by ID, each share-locked against a concurrent change.
 	ActiveSubscriptions(ctx context.Context, tx platform.TransactionContext, eventType string, recordedAt time.Time) ([]Subscription, error)
 
 	// InsertDelivery stores a Delivery. An automatic Delivery whose identity exists already is

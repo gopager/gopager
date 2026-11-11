@@ -4,7 +4,6 @@
 package deliverystore
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -14,7 +13,6 @@ import (
 	"github.com/gopager/gopager/internal/delivery"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
-	"github.com/gopager/gopager/internal/processing"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -30,8 +28,7 @@ func New(primary *postgres.Store) (*Store, error) {
 }
 
 var (
-	_ delivery.Store         = (*Store)(nil)
-	_ delivery.ResultSchemas = (*Store)(nil)
+	_ delivery.Store = (*Store)(nil)
 )
 
 // executor resolves the caller's transaction.
@@ -67,29 +64,4 @@ func notFound(err error) error {
 		return authz.ErrNotFound
 	}
 	return err
-}
-
-// ResultFieldSchema implements delivery.ResultSchemas from the Workflow's active version.
-func (s *Store) ResultFieldSchema(ctx context.Context, tx platform.TransactionContext, workflow uuid.UUID,
-	output string) (processing.FieldSchema, error) {
-	executor, err := s.executor(tx)
-	if err != nil {
-		return processing.FieldSchema{}, err
-	}
-	var stored []byte
-	err = executor.QueryRowContext(ctx, `SELECT v.definition FROM processing_workflows w
-		JOIN processing_workflow_versions v ON v.id = w.active_version_id
-		WHERE w.id = $1 AND NOT w.deleted`, workflow).Scan(&stored)
-	if err != nil {
-		return processing.FieldSchema{}, notFound(err)
-	}
-	var definition processing.Definition
-	if err := processing.Decode(stored, &definition); err != nil {
-		return processing.FieldSchema{}, platform.NewFailure(platform.CodeInternalError, err)
-	}
-	schema, ok := definition.OutputSchema[output]
-	if !ok {
-		return processing.FieldSchema{}, authz.ErrNotFound
-	}
-	return schema, nil
 }
