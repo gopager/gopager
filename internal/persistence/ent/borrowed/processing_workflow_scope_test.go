@@ -13,6 +13,7 @@ import (
 	"github.com/gopager/gopager/internal/ingest"
 	"github.com/gopager/gopager/internal/persistence/ent/eventstore"
 	"github.com/gopager/gopager/internal/persistence/ent/ingeststore"
+	"github.com/gopager/gopager/internal/persistence/ent/processingstore"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
 	"github.com/gopager/gopager/internal/protocols"
@@ -313,5 +314,155 @@ func TestAdmissionSelectsWorkflowsOfTheNetworkAgencyAndNarrowing(t *testing.T) {
 		if selected[w.id] != w.selected {
 			t.Errorf("fixture %d (agencies=%d narrowing=%q): selected=%v want %v", i, len(w.agencies), w.narrowing, selected[w.id], w.selected)
 		}
+	}
+}
+
+// TestAdmissionAdmitsAUnitNarrowedWorkflowForAMatchedUnitAndScopesItsTargets expects a Workflow
+// narrowed to a Unit to be admitted when a target of the Transmission matches that Unit, a
+// Workflow narrowed to another Unit not, and the evaluation scope of the admitted candidate to
+// hold only the positions of the matched Unit's targets.
+func TestAdmissionAdmitsAUnitNarrowedWorkflowForAMatchedUnitAndScopesItsTargets(t *testing.T) {
+	t.Parallel()
+	f := newMatcherFixture(t)
+	intakeRepository, err := ingeststore.New(f.store, f.facts, f.facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	processingRepository, err := processingstore.New(f.store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := processing.NewPluginHost()
+	t.Cleanup(func() {
+		if err := host.Close(t.Context()); err != nil {
+			t.Error(err)
+		}
+	})
+	principals := ingestTestPrincipalResolver{}
+	executions, err := processing.NewInstanceExecutions(host, nil, f.store, processingRepository, principals)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := executions.Close(t.Context()); err != nil {
+			t.Error(err)
+		}
+	})
+	owner, err := ingeststore.NewProcessingSourceOwner(intakeRepository, f.rules, processingRepository,
+		f.facts, f.store, ingestTestArtifacts{}, executions, principals)
+	if err != nil {
+		t.Fatal(err)
+	}
+	network, gateway := f.networks[0], uuid.New()
+	exec := func(query string, args ...any) {
+		t.Helper()
+		if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+			executor, err := f.store.Resolve(tx)
+			if err != nil {
+				return err
+			}
+			_, err = executor.ExecContext(tx.Context(), query, args...)
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	createUnit := func(name string) uuid.UUID {
+		t.Helper()
+		unit, err := f.units.CreateUnit(t.Context(), f.proof, uuid.New(),
+			units.UnitInput{AgencyID: f.agency, Name: name, CollectionIDs: []uuid.UUID{}}, checkedMutation)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return unit.ID
+	}
+	matched, other := createUnit("Matched"), createUnit("Other")
+	if _, err := f.rules.CreateRule(t.Context(), f.proof, uuid.New(), ruleInput(network, matched, 10, 20, 1), checkedMutation); err != nil {
+		t.Fatal(err)
+	}
+	definition, err := json.Marshal(protocolSelectorDefinition(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	narrowedTo, notNarrowed := uuid.New(), uuid.New()
+	exec(`INSERT INTO gateways(id,state) VALUES($1,'active')`, gateway)
+	exec(`INSERT INTO gateway_networks(id,gateway_id,gateway_network_identifier,network_id,priority)
+		VALUES($1,$2,'default',$3,0)`, uuid.New(), gateway, network)
+	workflows := map[uuid.UUID]uuid.UUID{narrowedTo: matched, notNarrowed: other}
+	for workflow, unit := range workflows {
+		version := uuid.New()
+		exec(`INSERT INTO processing_workflows(id,name,narrowing_kind,enabled,created_at,updated_at)
+			VALUES($1,'unit narrowed','unit',true,$2,$2)`, workflow, now)
+		exec(`INSERT INTO processing_workflow_agencies(workflow_id,agency_id) VALUES($1,$2)`, workflow, f.agency)
+		exec(`INSERT INTO processing_workflow_versions(id,workflow_id,definition,created_at,created_by)
+			VALUES($1,$2,$3,$4,$5)`, version, workflow, definition, now, uuid.New())
+		exec(`UPDATE processing_workflows SET active_version_id=$2 WHERE id=$1`, workflow, version)
+		exec(`INSERT INTO processing_workflow_scope_references(id,workflow_id,unit_id) VALUES($1,$2,$3)`,
+			uuid.New(), workflow, unit)
+	}
+
+	function := uint8(1)
+	submission := ingest.Submission{SchemaVersion: 1, SubmissionID: "unit-narrowing", Protocol: protocols.POCSAG,
+		ObservationTime: now.Format(time.RFC3339), GatewayNetworkIdentifier: "default",
+		Payload: json.RawMessage(`{"form":"tone-only"}`), TransmissionTargets: []protocols.Target{
+			{Address: protocols.NumericAddress(500), Function: &function},
+			{Address: protocols.NumericAddress(15), Function: &function},
+		}}
+	var receipt ingest.Receipt
+	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		acceptedAt, err := f.store.Now(tx.Context(), tx)
+		if err != nil {
+			return err
+		}
+		validated, err := submission.Validate(4096, acceptedAt)
+		if err != nil {
+			return err
+		}
+		validated.ResolvedNetwork, validated.Resolution = network, "declared"
+		result, err := f.rules.MatchTargets(tx.Context(), tx, network, protocols.POCSAG, validated.ObservedAt, validated.TransmissionTargets)
+		if err != nil {
+			return err
+		}
+		receipt, err = intakeRepository.AcceptTransmission(tx.Context(), tx, gateway, validated, acceptedAt, result)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var admitted []processing.Candidate
+	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		due, err := processingRepository.SelectDueWork(tx.Context(), tx, 10)
+		for _, candidate := range due {
+			if candidate.TransmissionID == receipt.TransmissionID {
+				admitted = append(admitted, candidate)
+			}
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(admitted) != 1 || admitted[0].WorkflowID != narrowedTo {
+		t.Fatalf("admitted candidates = %+v, want exactly the Workflow narrowed to the matched Unit (%s)", admitted, narrowedTo)
+	}
+	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		capture, err := owner.CaptureCandidate(tx.Context(), tx, admitted[0])
+		if err != nil {
+			return err
+		}
+		defer func() {
+			if capture.Release != nil {
+				if err := capture.Release(); err != nil {
+					t.Error(err)
+				}
+			}
+		}()
+		// Position 0 targets an address no rule assigns, position 1 the matched Unit.
+		if !capture.Scope.SourceEligible || !slices.Equal(capture.Scope.TargetPositions, []uint32{1}) {
+			t.Errorf("evaluation scope = %+v, want only the matched Unit's position 1", capture.Scope)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
