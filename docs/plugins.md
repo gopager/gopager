@@ -878,7 +878,7 @@ Plugins that call a destination an administrator configures should use `pluginsd
 - resolves the host itself, checks **every** resolved address and dials the address it checked, so a changing DNS answer cannot redirect the connection afterwards; it uses no proxy;
 - denies loopback, unspecified, multicast, link-local, private (RFC 1918 and RFC 4193) and carrier-grade NAT addresses, the cloud metadata addresses `169.254.169.254` and `fd00:ec2::254`, the reserved ranges `0.0.0.0/8`, `192.0.0.0/24`, `198.18.0.0/15` and `240.0.0.0/4`, and the IPv6 transition ranges that tunnel an IPv4 destination (`64:ff9b:1::/48`, `2002::/16`, `2001::/32`, `::/96`); IPv4-mapped and NAT64 (`64:ff9b::/96`) addresses are judged by the IPv4 address they carry;
 - denies ports below 1024 other than 80 and 443, and verifies TLS (1.2 or later) against the URL host;
-- follows no redirect unless `FollowRedirects` is set; then at most 3, never from HTTPS to HTTP, each hop checked again, and `Authorization` plus the headers named in `SensitiveHeaders` dropped when the scheme, host or port changes;
+- follows no redirect unless `FollowRedirects` is set; then only redirects that keep the request (307 and 308, or any redirect of a GET or HEAD) — a 301, 302 or 303 of a POST would turn it into a GET without its body and is returned unfollowed — at most 3, never from HTTPS to HTTP, each hop checked again, and `Authorization` plus the headers named in `SensitiveHeaders` dropped when the scheme, host or port changes;
 - bounds the call (`Timeout`, default 10 s) and the stored response body (`MaxResponseBytes`, default 64 KiB; `Response.Truncated` tells), and reports through `RequestError.Written` whether the request was completely written.
 
 `Policy.AllowPrivate` (a plugin ties it to an administrator-set `allowPrivateDestinations` property, default `false`) lifts the address rules, including the cloud-metadata rule, and the port rule, for intended internal infrastructure; the other protections stay. `SecureURL` accepts only `https` URLs, or `http` when `AllowPrivate` is set. `ErrorResult` classifies a `Do` error (denied: permanent `destination-denied`; failure before the request was written: transient `connection-failed`; failure after: uncertain `response-lost`) and `RateLimitedResult` turns an HTTP 429 into transient `rate-limited` with the `Retry-After` value (default 60 s, at most 3600 s). A third-party plugin that does not use `safehttp` applies its own policy; that is explicit trust, not a server-side SSRF guarantee.
@@ -941,7 +941,7 @@ Posts every notification as a JSON document to a URL.
 | `url` | admin | no | Required. An `https` URL. `http` is accepted only with `allowPrivateDestinations`. |
 | `bearerToken` | admin | yes | Optional. Sent as `Authorization: Bearer <token>`. |
 | `hmacSecret` | admin | yes | Optional. Signs every request, see [Verifying the signature](#verifying-the-signature). |
-| `followRedirects` | admin | no | Optional, default `false`. Follows at most 3 redirects, never from HTTPS to HTTP; `Authorization`, `X-GoPager-Signature` and `X-GoPager-Timestamp` are dropped when a redirect changes the scheme, host or port. |
+| `followRedirects` | admin | no | Optional, default `false`. Follows at most 3 redirects of status 307 or 308 (which keep the POST and its body), never from HTTPS to HTTP; a 301, 302 or 303 is not followed, because it would deliver a GET without the payload; `Authorization`, `X-GoPager-Signature` and `X-GoPager-Timestamp` are dropped when a redirect changes the scheme, host or port. |
 | `allowPrivateDestinations` | admin | no | Optional, default `false`. Permits private, loopback and other internal destinations and `http` URLs (also lifts the cloud-metadata and port rules). Enable it only for intended internal infrastructure. |
 
 Output kinds: `json`, `text`, `markdown`. Input: `topic` (string, optional, at most 256 bytes); like every input it is sent in the `inputs` object of the payload, and the plugin does not interpret it. Dependencies: network, secret. It declares no sending limit of its own and is not idempotent.
@@ -983,7 +983,7 @@ The body:
 | 2xx | `accepted` | `accepted` |
 | 429 | `transient` | `rate-limited`, with `Retry-After` seconds (default 60, at most 3600) |
 | 408, 503 | `transient` | `provider-unavailable` |
-| 3xx while `followRedirects` is off | `permanent` | `redirect-refused` |
+| 3xx that is not followed (`followRedirects` off, or a 301, 302 or 303 that would drop the payload) | `permanent` | `redirect-refused` |
 | other 4xx | `permanent` | `rejected` |
 | anything else (for example 500, 502, 504 or an unexpected 1xx/3xx) | `uncertain` | `unexpected-response` |
 | Destination refused by the address, port or scheme rules; too many redirects | `permanent` | `destination-denied` |

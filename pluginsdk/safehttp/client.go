@@ -124,7 +124,8 @@ func (c *Client) Do(req *http.Request) (*Response, error) {
 		if err != nil {
 			return nil, c.classify(err, wrote.Load())
 		}
-		if !c.policy.FollowRedirects || !isRedirect(resp.StatusCode) || resp.Header.Get("Location") == "" {
+		if !c.policy.FollowRedirects || !isRedirect(resp.StatusCode) || resp.Header.Get("Location") == "" ||
+			!keepsRequest(current.Method, resp.StatusCode) {
 			return c.readResponse(resp, wrote.Load())
 		}
 		next, err := c.nextHop(current, resp, hops)
@@ -192,25 +193,30 @@ func (c *Client) nextHop(current *http.Request, resp *http.Response, hops int) (
 	return next, nil
 }
 
-// rewriteForRedirect applies the method and body rules of the redirect status to req.
-func rewriteForRedirect(req *http.Request, status int) error {
-	switch {
-	case status == http.StatusSeeOther && req.Method != http.MethodHead,
-		(status == http.StatusMovedPermanently || status == http.StatusFound) && req.Method == http.MethodPost:
-		req.Method = http.MethodGet
-		req.Body, req.GetBody, req.ContentLength = nil, nil, 0
-		req.Header.Del("Content-Type")
-		req.Header.Del("Content-Length")
-	case req.Body != nil && req.Body != http.NoBody:
-		if req.GetBody == nil {
-			return &DeniedError{Reason: "redirect cannot replay the request body"}
-		}
-		body, err := req.GetBody()
-		if err != nil {
-			return &DeniedError{Reason: "redirect cannot replay the request body"}
-		}
-		req.Body = body
+// keepsRequest reports whether following a redirect with status keeps the request's method and
+// body: 307 and 308 always do, and every redirect of a GET or HEAD has no body to lose. Other
+// redirects (301, 302 and 303 of a POST or PUT) would turn the request into a GET without its
+// body, so the target would see a request without the payload while the caller counted a 2xx
+// answer as delivered; such a redirect is returned to the caller unfollowed instead.
+func keepsRequest(method string, status int) bool {
+	return status == http.StatusTemporaryRedirect || status == http.StatusPermanentRedirect ||
+		method == http.MethodGet || method == http.MethodHead
+}
+
+// rewriteForRedirect replays the request body for the next hop of a redirect that keeps the
+// request (see keepsRequest).
+func rewriteForRedirect(req *http.Request, _ int) error {
+	if req.Body == nil || req.Body == http.NoBody {
+		return nil
 	}
+	if req.GetBody == nil {
+		return &DeniedError{Reason: "redirect cannot replay the request body"}
+	}
+	body, err := req.GetBody()
+	if err != nil {
+		return &DeniedError{Reason: "redirect cannot replay the request body"}
+	}
+	req.Body = body
 	return nil
 }
 

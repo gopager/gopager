@@ -154,7 +154,9 @@ func classify(response *safehttp.Response, cfg config) pluginsdk.DeliveryResult 
 		result = safehttp.RateLimitedResult(response.Header)
 	case status == http.StatusRequestTimeout, status == http.StatusServiceUnavailable:
 		result = failure(pluginsdk.StatusTransient, "provider-unavailable")
-	case status >= 300 && status < 400 && !cfg.FollowRedirects:
+	case status >= 300 && status < 400:
+		// A redirect comes back only when it is not followed: following is off, or it would have
+		// turned the POST into a GET without the payload. The receiver did not take the payload.
 		result = failure(pluginsdk.StatusPermanent, "redirect-refused")
 	case status >= 400 && status < 500:
 		result = failure(pluginsdk.StatusPermanent, "rejected")

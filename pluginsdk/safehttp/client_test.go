@@ -315,25 +315,44 @@ func TestTimeoutAfterWriteIsWritten(t *testing.T) {
 	}
 }
 
-func TestSeeOtherRedirectBecomesGetWithoutBody(t *testing.T) {
+func TestRedirectThatWouldDropTheBodyIsNotFollowed(t *testing.T) {
 	t.Parallel()
-	var method, body string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/start" {
-			http.Redirect(w, r, "/end", http.StatusSeeOther)
-			return
+	for _, status := range []int{http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther} {
+		var reached atomic.Int32
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/start" {
+				http.Redirect(w, r, "/end", status)
+				return
+			}
+			reached.Add(1)
+		}))
+		req, _ := http.NewRequest(http.MethodPost, server.URL+"/start", strings.NewReader("data"))
+		resp, err := NewClient(Policy{AllowPrivate: true, FollowRedirects: true}).Do(req)
+		server.Close()
+		if err != nil || resp.StatusCode != status || reached.Load() != 0 {
+			t.Fatalf("%d: a redirect that turns the POST into a GET was followed: %v %v reached=%d", status, resp, err, reached.Load())
 		}
-		method = r.Method
-		buf := make([]byte, 16)
-		n, _ := r.Body.Read(buf)
-		body = string(buf[:n])
-	}))
-	defer server.Close()
-	req, _ := http.NewRequest(http.MethodPost, server.URL+"/start", strings.NewReader("data"))
-	if _, err := NewClient(Policy{AllowPrivate: true, FollowRedirects: true}).Do(req); err != nil {
-		t.Fatal(err)
 	}
-	if method != http.MethodGet || body != "" {
-		t.Fatalf("got %s %q", method, body)
+}
+
+func TestRedirectThatKeepsTheRequestIsFollowedWithBody(t *testing.T) {
+	t.Parallel()
+	for _, status := range []int{http.StatusTemporaryRedirect, http.StatusPermanentRedirect} {
+		var method, body string
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/start" {
+				http.Redirect(w, r, "/end", status)
+				return
+			}
+			method = r.Method
+			raw, _ := io.ReadAll(r.Body)
+			body = string(raw)
+		}))
+		req, _ := http.NewRequest(http.MethodPost, server.URL+"/start", strings.NewReader("data"))
+		resp, err := NewClient(Policy{AllowPrivate: true, FollowRedirects: true}).Do(req)
+		server.Close()
+		if err != nil || resp.StatusCode != http.StatusOK || method != http.MethodPost || body != "data" {
+			t.Fatalf("%d: got %v %v %s %q", status, resp, err, method, body)
+		}
 	}
 }

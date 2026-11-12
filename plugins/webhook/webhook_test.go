@@ -221,8 +221,29 @@ func TestRedirectFollowedWhenEnabled(t *testing.T) {
 	if result := deliver(t, plugin(time.Now()), req); result.Status != pluginsdk.StatusAccepted {
 		t.Fatalf("%+v", result)
 	}
-	if len(rec.requests) != 2 {
-		t.Fatalf("%d requests", len(rec.requests))
+	if len(rec.requests) != 2 || len(rec.requests[1].body) == 0 || string(rec.requests[1].body) != string(rec.requests[0].body) {
+		t.Fatalf("the followed redirect did not carry the payload: %d requests", len(rec.requests))
+	}
+}
+
+// TestRedirectThatWouldDropThePayloadIsRefused checks that with redirects enabled a 301, 302 or
+// 303 is not followed, because it would turn the POST into a GET without the payload, and that
+// the attempt is a permanent redirect-refused instead of an accepted delivery.
+func TestRedirectThatWouldDropThePayloadIsRefused(t *testing.T) {
+	t.Parallel()
+	for _, code := range []int{http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther} {
+		rec := newReceiver(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/start" {
+				http.Redirect(w, r, "/end", code)
+				return
+			}
+			w.WriteHeader(200)
+		})
+		req := request(t, map[string]any{"url": rec.URL + "/start", "allowPrivateDestinations": true, "followRedirects": true}, "text", "b", nil)
+		result := deliver(t, plugin(time.Now()), req)
+		if result.Status != pluginsdk.StatusPermanent || result.Code != "redirect-refused" || len(rec.requests) != 1 {
+			t.Fatalf("%d: %+v after %d requests", code, result, len(rec.requests))
+		}
 	}
 }
 
