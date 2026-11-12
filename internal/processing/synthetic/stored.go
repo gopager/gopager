@@ -45,11 +45,12 @@ type StoredTransmissionReader interface {
 
 // TransmissionAccess decides whether an authority may read a Transmission of a Message.
 type TransmissionAccess interface {
-	// CheckTransmissionReadable returns nil when the Transmission is a supporting readable
-	// Transmission of the Message for the authority, and authz.ErrNotFound otherwise, so a hidden
-	// Transmission is indistinguishable from a missing one.
+	// CheckTransmissionReadable returns the original positions of the Transmission's targets that
+	// the authority sees, when the Transmission is a supporting readable Transmission of the
+	// Message for it, and authz.ErrNotFound otherwise, so a hidden Transmission is
+	// indistinguishable from a missing one.
 	CheckTransmissionReadable(ctx context.Context, tx platform.TransactionContext, authority authz.Authority,
-		now time.Time, messageID, transmissionID uuid.UUID) error
+		now time.Time, messageID, transmissionID uuid.UUID) ([]int, error)
 }
 
 // WithStoredTransmissions makes previews of stored Transmissions available. Without it
@@ -83,7 +84,7 @@ func (o *Owner) CaptureStoredPreview(ctx context.Context, tx platform.Transactio
 	if err != nil {
 		return management.PreviewCapture{}, err
 	}
-	if err := o.access.CheckTransmissionReadable(ctx, tx, authority, now, record.MessageID, transmission); err != nil {
+	if err := o.checkStoredVisible(ctx, tx, authority, now, record.MessageID, transmission, len(record.Targets)); err != nil {
 		return management.PreviewCapture{}, err
 	}
 	if err := authz.AuthorizeFields(authority, storedGroups); err != nil {
@@ -94,7 +95,46 @@ func (o *Owner) CaptureStoredPreview(ctx context.Context, tx platform.Transactio
 		return management.PreviewCapture{}, err
 	}
 	// Matching works on whole seconds, like the observation time of a synthetic sample.
-	return o.captureInput(ctx, tx, workflow, definition, input, record.ObservedAt.UTC().Truncate(time.Second))
+	capture, err := o.captureInput(ctx, tx, workflow, definition, input, record.ObservedAt.UTC().Truncate(time.Second))
+	if err != nil {
+		return management.PreviewCapture{}, err
+	}
+	o.mu.Lock()
+	if active, ok := o.active[capture.Projection.TransmissionID]; ok {
+		active.stored = &storedOrigin{message: record.MessageID, transmission: transmission, targets: len(record.Targets)}
+		o.active[capture.Projection.TransmissionID] = active
+	}
+	o.mu.Unlock()
+	return capture, nil
+}
+
+// storedOrigin identifies the stored Transmission a captured preview was taken from, so that its
+// readability can be checked again before the result is released.
+type storedOrigin struct {
+	message, transmission uuid.UUID
+	targets               int
+}
+
+// checkStoredVisible requires the Transmission to be readable and every one of its original
+// targets to be visible to the authority. A hidden or suppressed target is never dropped
+// silently, because an extracted output could expose it: the preview is refused with
+// authz.ErrForbidden instead.
+func (o *Owner) checkStoredVisible(ctx context.Context, tx platform.TransactionContext, authority authz.Authority,
+	now time.Time, message, transmission uuid.UUID, targets int) error {
+	visible, err := o.access.CheckTransmissionReadable(ctx, tx, authority, now, message, transmission)
+	if err != nil {
+		return err
+	}
+	seen := make(map[int]bool, len(visible))
+	for _, position := range visible {
+		seen[position] = true
+	}
+	for position := range targets {
+		if !seen[position] {
+			return authz.ErrForbidden
+		}
+	}
+	return nil
 }
 
 // input converts the stored evidence into the synthetic input it is evaluated as: the form and

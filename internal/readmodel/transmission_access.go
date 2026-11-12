@@ -9,31 +9,37 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
-// CheckTransmissionReadable returns nil when the Transmission is a supporting readable
+// CheckTransmissionReadable returns the original positions of the Transmission's targets that the
+// authority sees (the visible, unsuppressed ones the detail lists) when the Transmission is a supporting readable
 // Transmission of the Message for the authority: one of the Transmissions the Message's detail
 // lists under the authority's current grants. Everything else, a Message without an eligible
 // appearance included, is authz.ErrNotFound, so a hidden Transmission is indistinguishable from
 // a missing one. It runs in the caller's transaction, in which authority was resolved at now.
 func (s *Service) CheckTransmissionReadable(ctx context.Context, tx platform.TransactionContext, authority authz.Authority,
-	now time.Time, messageID, transmissionID uuid.UUID) error {
+	now time.Time, messageID, transmissionID uuid.UUID) ([]int, error) {
 	if messageID == uuid.Nil || transmissionID == uuid.Nil {
-		return authz.ErrInvalidInput
+		return nil, authz.ErrInvalidInput
 	}
 	current, err := newAccess(authority, now)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !current.rows.Read.Granted() || !current.rows.Detail.Granted() {
-		return authz.ErrNotFound
+		return nil, authz.ErrNotFound
 	}
 	record, err := s.store.Detail(ctx, tx, DetailQuery{Access: current.rows, MessageID: messageID})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, transmission := range record.Transmissions {
-		if transmission.ID == transmissionID {
-			return nil
+		if transmission.ID != transmissionID {
+			continue
 		}
+		positions := make([]int, 0, len(transmission.Targets))
+		for _, target := range transmission.Targets {
+			positions = append(positions, target.Position)
+		}
+		return positions, nil
 	}
-	return authz.ErrNotFound
+	return nil, authz.ErrNotFound
 }

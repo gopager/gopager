@@ -123,6 +123,8 @@ type captured struct {
 	units         map[uuid.UUID]units.Context
 	identity      processing.SourceIdentity
 	eligibleUnits []uuid.UUID
+	// stored is set for a preview of a stored Transmission.
+	stored *storedOrigin
 }
 
 // NewOwner returns an Owner. matcher and clock are required and an invalid-input
@@ -297,6 +299,12 @@ func (o *Owner) CheckInstalledSource(ctx context.Context, tx platform.Transactio
 	for _, unitID := range unitIDs {
 		if err := o.scope.CheckSyntheticPreviewScope(ctx, tx, authority, binding.WorkflowID,
 			network.ID, unitID, now); err != nil {
+			return err
+		}
+	}
+	if record.stored != nil {
+		if err := o.checkStoredVisible(ctx, tx, authority, now, record.stored.message, record.stored.transmission,
+			record.stored.targets); err != nil {
 			return err
 		}
 	}

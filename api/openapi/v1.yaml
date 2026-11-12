@@ -3359,9 +3359,10 @@ paths:
         with the current matching and Unit attributes, like a synthetic sample. The caller must be able
         to read the Transmission (a supporting readable Transmission of its Message, else 404
         `NOT_FOUND`) and every field group the projection carries and the definition reads (else 403
-        `FORBIDDEN`), so a preview never shows a hidden field; nothing is written.
+        `FORBIDDEN`; also 403 when an original target of the Transmission is not visible to the caller), so a
+        preview never shows a hidden field; nothing is written.
         An `installed` step is called in preview mode; a plugin whose manifest does not declare
-        `supportsPreview` is not called and the request is 503 `AUTHORITY_UNAVAILABLE`. A failed
+        `supportsPreview` is not called and its step fails with `AUTHORITY_UNAVAILABLE`. A failed
         evaluation (a failing step, a processing limit) is answered with 200 and a `failure` instead of
         an evaluation; request, authorization and infrastructure errors stay HTTP errors.
          The body is limited to 1 MiB and is decoded strictly: unknown fields, duplicate object keys and trailing data are 400.

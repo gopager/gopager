@@ -45,9 +45,24 @@ func TestCheckTransmissionReadableFollowsTheDetail(t *testing.T) {
 		"no grant at all":      {&Service{store: detailStub{record: record}}, authz.Authority{PrincipalID: id, Revision: 1, Active: true}, member, authz.ErrNotFound},
 		"invalid transmission": {&Service{store: detailStub{record: record}}, grant("message.read", "message.detail"), uuid.Nil, authz.ErrInvalidInput},
 	} {
-		err := test.service.CheckTransmissionReadable(context.Background(), stubTx{}, test.authority, now, record.MessageID, test.transmission)
+		_, err := test.service.CheckTransmissionReadable(context.Background(), stubTx{}, test.authority, now, record.MessageID, test.transmission)
 		if !errors.Is(err, test.want) || (test.want == nil && err != nil) {
 			t.Errorf("%s: err = %v, want %v", name, err, test.want)
 		}
+	}
+}
+
+func TestCheckTransmissionReadableReportsTheVisibleTargets(t *testing.T) {
+	t.Parallel()
+	member := uuid.New()
+	record := DetailRecord{FeedRecord: sampleRecord(), Transmissions: []TransmissionRecord{{ID: member,
+		Targets: []TargetRecord{{Position: 0}, {Position: 2}}}}}
+	id := uuid.NewString()
+	authority := authz.Authority{PrincipalID: id, Revision: 1, Active: true, Grants: []authz.Grant{{ID: uuid.NewString(), SubjectID: id,
+		SubjectKind: "principal", Actions: []string{"message.read", "message.detail"}, Scope: authz.Scope{Kind: "all"}}}}
+	positions, err := (&Service{store: detailStub{record: record}}).CheckTransmissionReadable(context.Background(), stubTx{},
+		authority, time.Now(), record.MessageID, member)
+	if err != nil || len(positions) != 2 || positions[0] != 0 || positions[1] != 2 {
+		t.Fatalf("positions = %v, err = %v", positions, err)
 	}
 }

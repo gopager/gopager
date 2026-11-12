@@ -26,12 +26,17 @@ func (s storedReader) ReadStoredTransmission(context.Context, platform.Transacti
 type storedAccess struct {
 	err    error
 	called int
+	// visible are the target positions the editor sees; nil means all of the first n.
+	visible *[]int
 }
 
 func (s *storedAccess) CheckTransmissionReadable(context.Context, platform.TransactionContext, authz.Authority,
-	time.Time, uuid.UUID, uuid.UUID) error {
+	time.Time, uuid.UUID, uuid.UUID) ([]int, error) {
 	s.called++
-	return s.err
+	if s.visible != nil {
+		return *s.visible, s.err
+	}
+	return []int{0}, s.err
 }
 
 func storedOwner(t *testing.T, network Network, record StoredTransmission, access *storedAccess) *Owner {
@@ -129,5 +134,61 @@ func TestStoredPreviewIsUnavailableWithoutAStoredSource(t *testing.T) {
 	_, err := owner.CaptureStoredPreview(context.Background(), tx, testAuthority("payload"), testWorkflow(nil), processing.Definition{}, uuid.New())
 	if platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
 		t.Fatalf("err = %v, want unavailable", err)
+	}
+}
+
+func TestStoredPreviewRefusesATransmissionWithTargetsTheEditorCannotSee(t *testing.T) {
+	t.Parallel()
+	network := Network{ID: uuid.New(), Name: "Dispatch", Protocol: protocols.POCSAG, AgencyID: testAgency}
+	record := storedRecord(network)
+	record.Targets = append(record.Targets, protocols.Target{Address: protocols.NumericAddress(124), Function: record.Targets[0].Function})
+	visible := []int{0}
+	owner := storedOwner(t, network, record, &storedAccess{visible: &visible})
+	_, err := owner.CaptureStoredPreview(context.Background(), testTx{ctx: context.Background()},
+		testAuthority("payload", "gateway", "address", "unit"), testWorkflow(nil), processing.Definition{}, uuid.New())
+	if !errors.Is(err, authz.ErrForbidden) {
+		t.Fatalf("err = %v, want forbidden", err)
+	}
+	visible = []int{0, 1}
+	owner = storedOwner(t, network, record, &storedAccess{visible: &visible})
+	if _, err = owner.CaptureStoredPreview(context.Background(), testTx{ctx: context.Background()},
+		testAuthority("payload", "gateway", "address", "unit"), testWorkflow(nil), processing.Definition{}, uuid.New()); err != nil {
+		t.Fatalf("all targets visible: %v", err)
+	}
+}
+
+func TestStoredPreviewRecheckFencesALostReadGrant(t *testing.T) {
+	t.Parallel()
+	network := Network{ID: uuid.New(), Name: "Dispatch", Protocol: protocols.POCSAG, AgencyID: testAgency}
+	access := &storedAccess{}
+	owner := storedOwner(t, network, storedRecord(network), access)
+	authority := testAuthority("payload", "gateway", "address", "unit")
+	tx := testTx{ctx: context.Background()}
+	capture, err := owner.CaptureStoredPreview(context.Background(), tx, authority, testWorkflow(nil), processing.Definition{}, uuid.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := processing.CaptureSource(context.Background(), capture.Projection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := source.Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding := processing.ExecutionBinding{WorkflowID: uuid.New(), Source: identity}
+	call := processing.InvocationContext{Source: identity}
+	if err := owner.CheckInstalledSource(context.Background(), tx, binding, authority, call, nil, true); err != nil {
+		t.Fatalf("unchanged grants: %v", err)
+	}
+	access.err = authz.ErrNotFound
+	if err := owner.CheckInstalledSource(context.Background(), tx, binding, authority, call, nil, true); !errors.Is(err, authz.ErrNotFound) {
+		t.Fatalf("lost read grant not fenced: %v", err)
+	}
+	access.err = nil
+	none := []int{}
+	access.visible = &none
+	if err := owner.CheckInstalledSource(context.Background(), tx, binding, authority, call, nil, true); !errors.Is(err, authz.ErrForbidden) {
+		t.Fatalf("target hidden after capture not fenced: %v", err)
 	}
 }

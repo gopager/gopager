@@ -88,3 +88,22 @@ func TestStoredPreviewHidesUnreadableTransmissionsAndDeniesUnreadableGroups(t *t
 		}
 	})
 }
+
+// TestStoredPreviewRefusesATransmissionWithAnInvisibleTarget proves that a readable Transmission
+// one of whose original targets the editor cannot see (here a suppressed one) is not evaluated, so
+// the preview cannot expose the hidden target through an extracted output.
+func TestStoredPreviewRefusesATransmissionWithAnInvisibleTarget(t *testing.T) {
+	t.Parallel()
+	f := newPreviewHTTPFixture(t, []string{"unit", "address", "payload", "gateway", "derived"})
+	version := f.saveVersion(storedTextDefinition(t, "x"))
+	stored := f.storedTransmission("x", f.seed.unit("Engine 1", nil), f.seed.unit("Engine 2", nil))
+	f.preview(storedBody(version, stored), http.StatusOK)
+
+	f.seed.exec(`INSERT INTO target_suppressions (id, transmission_id, target_position, created_at, created_by)
+		VALUES ($1, $2, 1, now(), $3)`, uuid.New(), stored, managementOperatorID(t, f.store))
+	before := processingPreviewSideEffects(t, f.store)
+	f.preview(storedBody(version, stored), http.StatusForbidden)
+	if after := processingPreviewSideEffects(t, f.store); after != before {
+		t.Fatalf("refused preview wrote rows: before=%v after=%v", before, after)
+	}
+}
