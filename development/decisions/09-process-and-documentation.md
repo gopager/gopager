@@ -151,3 +151,12 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Decision:** CI failed `TestLiveStreamRequestRules` on the AP-12 pull request because its counted requests straddled a minute boundary of the search admission window. The user required that the test must not ship flaky. Every `cmd/gopager` test whose outcome depends on several requests in one admission window (search and live admission of AP-10, Delivery sending admission of AP-11) reads the primary clock before the first counted request and after the last relevant one, applies its assertions only when both readings lie in the same minute, and otherwise repeats the sequence on fresh state (at most three attempts). Freezing the clock was rejected because the same clock drives authorization. Test-only change outside the AP-12 write scope; no production behaviour changes.
 - **Rationale:** The check uses the limiters' own clock, so it is exact rather than a timing margin.
 - **Consequences:** Follow-ups in the [AP-10](../execution/ap-10.md) and [AP-11](../execution/ap-11.md) records; the AP-12 record links this decision under Blockers and Deviations. No open AP changes.
+
+<a id="d-162"></a>
+## D-162 Documentation-only commits need no new Copilot review
+
+- **Status:** accepted
+- **Date:** 2026-11-12
+- **Decision:** The user decided that only code changes require a new Copilot review in the pull-request loop. The review gate applies to the **last code commit**, the newest commit that changes any file other than Markdown (`*.md`); a later commit that changes only Markdown (execution records, contracts, decisions, `docs/`) is pushed without re-requesting a review. The required checks still run and must pass on the head commit. Recorded in the [shared rules](../work-packages/shared-rules.md#pull-request-and-review) and the `execute-work-package` skill.
+- **Rationale:** Recording a clean review in the execution record changed the head and restarted the review loop although no reviewed code changed.
+- **Consequences:** Applies to every open AP from now on, first to the AP-12 pull request ([AP-12 record](../execution/ap-12.md)).

@@ -126,23 +126,25 @@ When ending incomplete, record in the execution record: the reason (with the use
 
 ## Handover
 
-The package is complete when every task is `verified` with evidence, the diff is within scope, documentation matches the delivered behavior, the record's **Handover** lists: artifact/API/schema/test paths, consuming APs, evidence E-IDs, checked documentation sections, unresolved discrepancies and the pull request, and that [pull request](#pull-request-and-review) is open against `main` with passing required checks and a Copilot review of its head commit without annotations. The user accepts the result by merging the pull request; the agent never merges it.
+The package is complete when every task is `verified` with evidence, the diff is within scope, documentation matches the delivered behavior, the record's **Handover** lists: artifact/API/schema/test paths, consuming APs, evidence E-IDs, checked documentation sections, unresolved discrepancies and the pull request, and that [pull request](#pull-request-and-review) is open against `main` with passing required checks and a Copilot review of its [last code commit](#pull-request-and-review) without annotations. The user accepts the result by merging the pull request; the agent never merges it.
 
 The **Handover** section always describes the current state and is updated by later follow-ups. Evidence entries are never rewritten. Report to the user only the task states, evidence and open points; no separate summary documents.
 
 ## Pull Request and Review
 
-An AP is always delivered as an open pull request from `ap-NN-<slug>` against `main`. Run this loop after the [handover](#handover) checks (`make`, `go test ./...`, `make docs-check`, diff within scope) pass:
+An AP is always delivered as an open pull request from `ap-NN-<slug>` against `main`. Run this loop after the [handover](#handover) checks (`make`, `go test ./...`, `make docs-check`, diff within scope) pass.
+
+The review applies to code, not to documentation. The **last code commit** is the newest commit on the branch that changes any file other than Markdown (`*.md`); find it with `git log -1 --format=%H -- . ':(exclude)*.md'`. Code includes tests, SQL, OpenAPI and proto files, manifests, scripts, Makefile and CI configuration. A commit that changes only Markdown files (execution records, contracts, decisions, `docs/`) needs no new Copilot review: push it without re-requesting one; the required checks still run and must pass on the head commit.
 
 1. Push the branch (`git push -u origin ap-NN-<slug>`) and open the pull request with `gh pr create --base main --head ap-NN-<slug>`, or continue the existing one (`gh pr view ap-NN-<slug>`). The title follows [Conventional Commits](../../CONTRIBUTING.md#commit-messages) and describes the whole AP, since it becomes the squash commit on `main`; the body names the AP, the task states, the evidence E-IDs and links the execution record.
-2. Request a Copilot review if none was requested automatically: when `gh pr view <n> --json reviewRequests,latestReviews` shows Copilot neither requested nor reviewed on the head commit, run `gh pr edit <n> --add-reviewer @copilot`.
-3. Wait for Copilot's review of the current head: poll `gh api repos/{owner}/{repo}/pulls/<n>/reviews` until a review by `copilot-pull-request-reviewer` has `commit_id` equal to `git rev-parse HEAD`.
+2. Request a Copilot review if none was requested automatically: when `gh pr view <n> --json reviewRequests,latestReviews` shows Copilot neither requested nor reviewed on the last code commit, run `gh pr edit <n> --add-reviewer @copilot`.
+3. Wait for Copilot's review of the last code commit: poll `gh api repos/{owner}/{repo}/pulls/<n>/reviews` until a review by `copilot-pull-request-reviewer` has a `commit_id` equal to the last code commit or to a later, documentation-only commit.
 4. Check every annotation of that review (its inline comments from `gh api repos/{owner}/{repo}/pulls/<n>/reviews/<review-id>/comments` and the open issues listed in its body) against the user stories and acceptance criteria of the AP's REQ IDs, the AP's tasks and done criteria, the decisions and these rules:
    - valid and within scope: fix it (with a test where behavior changes), update documentation and evidence, rerun the handover checks;
    - valid but outside the scope: [scope change](#scope-change);
    - contradicts the requirements, decisions or rules: change nothing and state why, citing the REQ ID or decision.
 
    Reply to each inline comment with the fixing commit or the reason (`gh api repos/{owner}/{repo}/pulls/<n>/comments/<comment-id>/replies -f body=…`).
-5. Push the fixes, re-request the review with `gh pr edit <n> --add-reviewer @copilot` and continue with step 3.
+5. Push the fixes. If they include a code commit, re-request the review with `gh pr edit <n> --add-reviewer @copilot` and continue with step 3; documentation-only fixes need no new review.
 
-Repeat until Copilot's review of the current head commit has no annotations (no inline comments, no open issues) and the required checks pass; a failing required check is fixed like an annotation. If Copilot repeats an annotation that was rejected with a reason, ask the user as for an item that [cannot proceed](#mandatory-continuation-and-stop-conditions). Report points that Copilot leaves to human judgment to the user together with the pull request link.
+Repeat until Copilot's review of the last code commit has no annotations (no inline comments, no open issues) and the required checks pass on the head commit; a failing required check is fixed like an annotation. If Copilot repeats an annotation that was rejected with a reason, ask the user as for an item that [cannot proceed](#mandatory-continuation-and-stop-conditions). Report points that Copilot leaves to human judgment to the user together with the pull request link.
