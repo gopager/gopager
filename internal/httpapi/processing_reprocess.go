@@ -20,6 +20,8 @@ type workflowReprocessMutation struct {
 	MessageTimeTo    time.Time `json:"messageTimeTo"`
 }
 
+// registerReprocess adds the routes that request a historical Reprocess of a Workflow and read
+// its requests to mux.
 func (api processingWorkflowAPI) registerReprocess(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/workflows/{id}/reprocess", api.route(func(r *http.Request, proof identity.Proof, check func(identity.Authentication) error) (any, error) {
 		var input workflowReprocessMutation

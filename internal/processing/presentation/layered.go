@@ -142,7 +142,7 @@ func (b *layoutBatch) lookUpUnits(requests []processing.LayoutRequest) error {
 		for id := range set {
 			ids = append(ids, id)
 		}
-		slices.SortFunc(ids, func(a, c uuid.UUID) int { return slices.Compare(a[:], c[:]) })
+		slices.SortFunc(ids, compareUUID)
 		values, err := b.resolver.layers.UnitLayouts(b.ctx, b.tx, ids, kind)
 		if err != nil {
 			return err
@@ -152,6 +152,7 @@ func (b *layoutBatch) lookUpUnits(requests []processing.LayoutRequest) error {
 	return nil
 }
 
+// installationDefault returns the installation default Layout, read at most once per batch.
 func (b *layoutBatch) installationDefault() (DefaultLayout, error) {
 	if b.installation == nil {
 		installation, err := b.resolver.layers.InstallationDefault(b.ctx, b.tx)
@@ -179,6 +180,10 @@ func (b *layoutBatch) load(id uuid.UUID, outputKind string, conflict bool) Layou
 	return resolution
 }
 
+// resolve returns the Layout for one request: the explicit Layout, else the one the Units' layers
+// agree on, else the installation default of the output kind (flagged as a conflict when the
+// Units disagree), else the built-in default. The error is an infrastructure failure; a Layout
+// that cannot be loaded is reported in the resolution.
 func (b *layoutBatch) resolve(request processing.LayoutRequest) (LayoutResolution, error) {
 	if request.LayoutID != nil {
 		return b.load(*request.LayoutID, request.OutputKind, false), nil
@@ -210,7 +215,7 @@ func (b *layoutBatch) unitChoice(request processing.LayoutRequest) []uuid.UUID {
 			distinct = append(distinct, layout)
 		}
 	}
-	slices.SortFunc(distinct, func(a, c uuid.UUID) int { return slices.Compare(a[:], c[:]) })
+	slices.SortFunc(distinct, compareUUID)
 	return slices.Compact(distinct)
 }
 
@@ -220,3 +225,6 @@ func (r *LayeredResolver) CheckUse(ctx context.Context, tx platform.TransactionC
 	layoutID uuid.UUID, now time.Time) error {
 	return r.inner.CheckUse(ctx, tx, authority, layoutID, now)
 }
+
+// compareUUID orders UUIDs by their bytes, so every resolution sorts Units and Layouts alike.
+func compareUUID(a, b uuid.UUID) int { return slices.Compare(a[:], b[:]) }

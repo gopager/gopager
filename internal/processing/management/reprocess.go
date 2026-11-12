@@ -33,6 +33,7 @@ type ReprocessView struct {
 	Attempts int `json:"attempts"`
 }
 
+// reprocessView returns the API view of a stored request; the requester and the lease stay internal.
 func reprocessView(request processing.ReprocessRequest) ReprocessView {
 	return ReprocessView{ID: request.ID, WorkflowID: request.WorkflowID, VersionID: request.DefinitionVersionID,
 		MessageTimeFrom: request.MessageTimeFrom.UTC(), MessageTimeTo: request.MessageTimeTo.UTC(),
