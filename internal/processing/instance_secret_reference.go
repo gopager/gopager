@@ -28,19 +28,22 @@ const (
 const SecretEnvPrefix = "GOPAGER_PLUGIN_SECRET_"
 
 // SecretEnvPluginPrefix is the prefix of the environment variables a plugin may reference:
-// GOPAGER_PLUGIN_SECRET_<ID>__, where <ID> is the plugin ID in upper case with every character
-// outside [A-Z0-9] replaced by an underscore. The double underscore ends the plugin part, so the
+// GOPAGER_PLUGIN_SECRET_<ID>__, where <ID> is the canonical plugin ID (see ValidDeliveryPluginID)
+// in upper case with hyphens as underscores. The double underscore ends the plugin part, so the
 // namespace of one plugin is never a prefix of another plugin's names (pushover and pushover-x).
 func SecretEnvPluginPrefix(pluginID string) string {
-	var id strings.Builder
-	for _, char := range strings.ToUpper(pluginID) {
-		if (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') {
-			id.WriteRune(char)
-			continue
-		}
-		id.WriteByte('_')
-	}
-	return SecretEnvPrefix + id.String() + "__"
+	return SecretEnvPrefix + strings.ToUpper(strings.ReplaceAll(pluginID, "-", "_")) + "__"
+}
+
+// deliveryPluginIDPattern is the canonical form of a Delivery plugin ID: lowercase letters and
+// digits in groups joined by single hyphens. It keeps the mapping to Secret namespaces one-to-one:
+// the ID is one file path segment, and its environment prefix (hyphens become underscores, then a
+// double underscore) can neither equal nor contain the prefix of another canonical ID.
+var deliveryPluginIDPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
+// ValidDeliveryPluginID reports whether id is a canonical Delivery plugin ID.
+func ValidDeliveryPluginID(id string) bool {
+	return deliveryPluginIDPattern.MatchString(id)
 }
 
 // maxSecretPathBytes bounds a file reference's path.
@@ -62,12 +65,15 @@ type SecretReference struct {
 // plugin's instance at another plugin's Secret and send it to a destination of their choice. A
 // stored reference is bound to its instance and owner by its row instead.
 func (r SecretReference) BelongsTo(pluginID string) bool {
+	if r.Source != SecretStored && !ValidDeliveryPluginID(pluginID) {
+		return false
+	}
 	switch r.Source {
 	case SecretStored:
 		return true
 	case SecretFile:
 		rest, found := strings.CutPrefix(r.Path, pluginID+"/")
-		return pluginID != "" && found && rest != ""
+		return found && rest != ""
 	case SecretEnv:
 		prefix := SecretEnvPluginPrefix(pluginID)
 		return len(r.Name) > len(prefix) && strings.HasPrefix(r.Name, prefix)

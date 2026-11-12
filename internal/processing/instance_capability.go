@@ -123,6 +123,9 @@ func validateCapabilityDeclaration(m InstalledManifest, capability string) error
 	if len(m.RequiredCoreFields) != 0 || len(m.RequiredOperations) != 0 {
 		return &CapabilityUndeclaredError{Capability: CapabilityDelivery}
 	}
+	if !ValidDeliveryPluginID(m.PluginID) {
+		return invalid(errors.New("delivery plugin ID is not canonical"))
+	}
 	if m.SDKMinor != sdkMinorDelivery || m.Pure || m.SupportsPreview || len(m.InputSchema) != 0 ||
 		len(m.ResultSchema) != 0 || len(m.HostCapabilities) != 0 || m.Delivery == nil {
 		return invalid(errors.New("invalid delivery manifest shape"))

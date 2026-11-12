@@ -49,6 +49,7 @@ func TestDeliveryManifestValidation(t *testing.T) {
 		{name: "required operations", undecl: true, mutate: func(m *InstalledManifest) { m.RequiredOperations = []string{"x"} }},
 		{name: "unknown sdk minor", code: platform.CodeIncompatibleVersion, mutate: func(m *InstalledManifest) { m.SDKMinor = 2 }},
 		{name: "delivery needs minor 1", code: platform.CodeInvalidInput, mutate: func(m *InstalledManifest) { m.SDKMinor = 0 }},
+		{name: "non-canonical plugin ID", code: platform.CodeInvalidInput, mutate: func(m *InstalledManifest) { m.PluginID = "my_hook" }},
 		{name: "unknown capability", code: platform.CodeInvalidInput, mutate: func(m *InstalledManifest) { m.Capability = "other" }},
 		{name: "missing delivery object", code: platform.CodeInvalidInput, mutate: func(m *InstalledManifest) { m.Delivery = nil }},
 		{name: "pure", code: platform.CodeInvalidInput, mutate: func(m *InstalledManifest) { m.Pure = true }},
@@ -112,6 +113,7 @@ func TestDeliveryManifestValidation(t *testing.T) {
 			t.Parallel()
 			manifest, pin := deliveryManifestFixture()
 			tc.mutate(&manifest)
+			pin.PluginID = manifest.PluginID // the pin follows the manifest; only its rules are under test
 			err := validateManifest(manifest, pin)
 			if tc.undecl {
 				var undeclared *CapabilityUndeclaredError

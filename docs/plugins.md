@@ -364,7 +364,7 @@ JSON, UTF-8, at most 1 MiB. Unknown members and duplicate keys are rejected.
 | `sdkMajor` | number | yes | `2` |
 | `sdkMinor` | number | yes | `0` or `1`. A `delivery` manifest requires `1`. A `processing` manifest may declare either. An unknown minor or another `sdkMajor` is `INCOMPATIBLE_VERSION`. |
 | `capability` | string | no | `"processing"` (default when absent) or `"delivery"`. Any other value is `INVALID_INPUT`. |
-| `pluginId` | string | yes | Non-empty, no NUL. Must equal the instance pin. |
+| `pluginId` | string | yes | Non-empty, no NUL. Must equal the instance pin. A `delivery` plugin ID must be canonical: lowercase letters and digits in groups joined by single hyphens (`^[a-z0-9]+(-[a-z0-9]+)*$`), so its Secret directory and variable prefix are unique. |
 | `version` | string | yes | Non-empty, no NUL. Must equal the instance pin. |
 | `capabilityId` | string | yes | Non-empty, no NUL. Must equal the instance pin; sent as `capabilityId`. |
 | `artifact.path` | string | yes | Relative path (forward slashes) of the executable inside the root. |
