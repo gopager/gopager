@@ -116,8 +116,15 @@ type cachedArtifact struct {
 // are cheap to rebuild and instances rarely pin more than a handful of distinct executables.
 const maxCachedArtifacts = 256
 
+// ErrCapabilityUnavailable marks an AUTHORITY_UNAVAILABLE failure caused by a plugin capability
+// (a missing, disabled, unloadable or preview-incapable plugin) rather than by an authority
+// outage, so a preview can explain it as a property of the Workflow.
+var ErrCapabilityUnavailable = errors.New("plugin capability unavailable")
+
+// capabilityUnavailable is the AUTHORITY_UNAVAILABLE failure of an unavailable plugin capability,
+// marked with ErrCapabilityUnavailable.
 func capabilityUnavailable(cause error) error {
-	return platform.NewFailure(platform.CodeAuthorityUnavailable, cause)
+	return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.Join(ErrCapabilityUnavailable, cause))
 }
 
 func validateConfigurationPolicy(schema FieldSchema, policy ConfigurationPolicy, depth int) error {

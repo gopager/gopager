@@ -16,7 +16,8 @@ import (
 func TestEvaluationFailureIsExplainedWithoutRawText(t *testing.T) {
 	t.Parallel()
 	secret := errors.New("dial tcp 10.0.0.7: secret-host refused")
-	step := &processing.StepFailure{StepID: "lookup", Err: platform.NewFailure(platform.CodeAuthorityUnavailable, secret)}
+	step := &processing.StepFailure{StepID: "lookup", Err: platform.NewFailure(platform.CodeAuthorityUnavailable,
+		errors.Join(processing.ErrCapabilityUnavailable, secret))}
 	failure, ok := previewFailure(context.Background(), step)
 	if !ok || failure.Code != "AUTHORITY_UNAVAILABLE" || failure.Reason != "capability-unavailable" || failure.StepID != "lookup" {
 		t.Fatalf("failure = %+v, %v", failure, ok)
@@ -72,8 +73,7 @@ func TestWrappedRequestFailuresOfAStepStayErrors(t *testing.T) {
 			t.Fatalf("%s inside a step became the explanation %+v", code, failure)
 		}
 	}
-	for _, code := range []platform.ErrorCode{platform.CodeInvalidInput, platform.CodeIncompatibleVersion,
-		platform.CodeAuthorityUnavailable} {
+	for _, code := range []platform.ErrorCode{platform.CodeInvalidInput, platform.CodeIncompatibleVersion} {
 		err := &processing.StepFailure{StepID: "lookup", Err: platform.NewFailure(code, errors.New("cause"))}
 		if failure, ok := previewFailure(context.Background(), err); !ok || failure.StepID != "lookup" {
 			t.Fatalf("%s inside a step = %+v, %v, want an explanation", code, failure, ok)
@@ -118,5 +118,21 @@ func TestAFailureIsExplainedOnlyAfterTheFinalRecheck(t *testing.T) {
 	}
 	if rechecks != 2 {
 		t.Fatalf("rechecks = %d, want one per explained failure", rechecks)
+	}
+}
+
+// TestOnlyAnUnavailableCapabilityIsExplainedAsAuthorityUnavailable expects AUTHORITY_UNAVAILABLE
+// inside a step to be explained only when a plugin capability caused it; an authority outage
+// stays a retryable error.
+func TestOnlyAnUnavailableCapabilityIsExplainedAsAuthorityUnavailable(t *testing.T) {
+	t.Parallel()
+	outage := &processing.StepFailure{StepID: "lookup", Err: platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("resolver down"))}
+	if failure, ok := previewFailure(context.Background(), outage); ok {
+		t.Fatalf("an authority outage became the explanation %+v", failure)
+	}
+	capability := &processing.StepFailure{StepID: "lookup", Err: platform.NewFailure(platform.CodeAuthorityUnavailable,
+		errors.Join(processing.ErrCapabilityUnavailable, errors.New("plugin does not support preview")))}
+	if failure, ok := previewFailure(context.Background(), capability); !ok || failure.Reason != "capability-unavailable" {
+		t.Fatalf("an unavailable capability = %+v, %v, want the explanation", failure, ok)
 	}
 }

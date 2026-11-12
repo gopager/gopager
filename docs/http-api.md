@@ -1091,7 +1091,8 @@ A failed evaluation is not an HTTP error: the preview answers `200` with
 `{"failure":{"code","reason","stepId"}}` instead of the result, where `reason` is
 `resource-limit`, `capability-unavailable`, `conversion-failed` or `evaluation-failed` and `stepId` (omitted when no step
 failed) names the failing step. No raw error text is returned. Only `INVALID_INPUT`, `RESOURCE_LIMIT`,
-`INCOMPATIBLE_VERSION` and `AUTHORITY_UNAVAILABLE` are explained (an `INTERNAL_ERROR` stays an HTTP error); request, authorization,
+`INCOMPATIBLE_VERSION` and, for an unavailable plugin capability, `AUTHORITY_UNAVAILABLE` are explained (an authority
+outage and an `INTERNAL_ERROR` stay HTTP errors); request, authorization,
 session, storage and concurrency errors keep their HTTP status, also when a step raised them, and an explanation
 follows the same final rights check as a result.
 

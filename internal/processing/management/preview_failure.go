@@ -52,21 +52,24 @@ func previewFailure(caller context.Context, err error) (*PreviewFailure, bool) {
 	step, failedStep := processing.FailedStep(err)
 	code := platform.FailureCode(err)
 	var failure *platform.Failure
-	if errors.Is(err, context.Canceled) || !errors.As(err, &failure) || !explainedCode(code) ||
+	if errors.Is(err, context.Canceled) || !errors.As(err, &failure) || !explained(code, err) ||
 		(!failedStep && code != platform.CodeResourceLimit) {
 		return nil, false
 	}
 	return &PreviewFailure{Code: string(code), Reason: processing.FailureReason(string(code)), StepID: step}, true
 }
 
-// explainedCode reports whether a failure code describes the evaluated Workflow: invalid or
-// unconvertible data, a limit, or an unavailable or incompatible capability. An internal error is
-// a fault of the server, not of the Workflow, and stays an error so that it is logged and reported.
-func explainedCode(code platform.ErrorCode) bool {
+// explained reports whether a failure describes the evaluated Workflow: invalid or unconvertible
+// data, a limit, an incompatible version, or an unavailable plugin capability. AUTHORITY_UNAVAILABLE
+// counts only with processing.ErrCapabilityUnavailable; without it the authority itself is out and
+// the request must fail retryably. An internal error is a fault of the server, not of the Workflow,
+// and stays an error so that it is logged and reported.
+func explained(code platform.ErrorCode, err error) bool {
 	switch code {
-	case platform.CodeInvalidInput, platform.CodeResourceLimit, platform.CodeIncompatibleVersion,
-		platform.CodeAuthorityUnavailable:
+	case platform.CodeInvalidInput, platform.CodeResourceLimit, platform.CodeIncompatibleVersion:
 		return true
+	case platform.CodeAuthorityUnavailable:
+		return errors.Is(err, processing.ErrCapabilityUnavailable)
 	}
 	return false
 }
