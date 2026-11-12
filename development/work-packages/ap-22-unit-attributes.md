@@ -40,9 +40,9 @@ None. D-150 fixes inheritance, no rights effect and no automatic reprocessing.
 
 ## Tasks
 
-- [ ] T095 [AP-22] Implement Unit attribute values with Organization inheritance, templates, bulk update and Agency checks.
+- [x] T095 [AP-22] Implement Unit attribute values with Organization inheritance, templates, bulk update and Agency checks.
   - **Done when:** values validate against `unit` schemas assigned to the Unit's Agency; `inherit | value | unset` resolve like Unit settings, including Organization deletion and template copy; bulk update sets attributes all-or-nothing; a Unit's Agency change with values of unassigned schemas is rejected; removing a schema's Agency or deleting a schema used by Unit values is `409`; edits change no grants and create no correction or Processing work.
-- [ ] T096 [AP-22] Expose Unit attributes to search, Subscriptions, Layouts, Workflows and Delivery target inputs.
+- [x] T096 [AP-22] Expose Unit attributes to search, Subscriptions, Layouts, Workflows and Delivery target inputs.
   - **Done when:** feed, saved views and Subscription filters select by `unit.attributes…` correlated with the same Unit appearance; Layouts render Unit attributes with their labels and icons; Workflows read `target.unit.attributes…` with group `unit` and results keep the values of their run; a target input bound to a Unit attribute receives the Delivery Unit's effective value; the new F-cases pass.
 
 ## Documentation to Update
