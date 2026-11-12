@@ -88,7 +88,7 @@ func newManagementStoreWithFields(t *testing.T, fields []string) *postgres.Store
 		t.Fatal(err)
 	}
 	if _, err := identity.Bootstrap(t.Context(), store, repository, store, facts, "Operator", "initial-password",
-		identity.BootstrapPermissions{Actions: authz.Actions(), Fields: fields}); err != nil {
+		identity.BootstrapPermissions{Actions: authz.Actions(), Fields: fields}, identityOptions...); err != nil {
 		t.Fatal(err)
 	}
 	return store

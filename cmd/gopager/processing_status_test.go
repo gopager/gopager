@@ -22,6 +22,7 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
 	"github.com/gopager/gopager/internal/processing"
+	"github.com/gopager/gopager/internal/testutil/passwords"
 )
 
 type processingReadFixture struct {
@@ -98,7 +99,7 @@ func createReadReviewer(t *testing.T, store *postgres.Store) (uuid.UUID, string,
 		t.Fatal(err)
 	}
 	password := "reviewer-password"
-	passwordHash, err := identity.HashPassword(password)
+	passwordHash, err := passwords.Hasher().Hash(password)
 	if err != nil {
 		t.Fatal(err)
 	}

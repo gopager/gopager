@@ -63,7 +63,8 @@ func runBootstrap(ctx context.Context, args []string, getenv func(string) string
 	if err != nil {
 		return err
 	}
-	id, err := identity.Bootstrap(ctx, store, repository, store, facts, *username, password, permissions)
+	id, err := identity.Bootstrap(ctx, store, repository, store, facts, *username, password, permissions,
+		identityOptions...)
 	if err != nil {
 		switch {
 		case errors.Is(err, authz.ErrRevisionConflict):
