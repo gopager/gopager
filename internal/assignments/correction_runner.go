@@ -17,10 +17,10 @@ import (
 const (
 	// DefaultCorrectionBatchSize is the number of Transmissions one correction transaction moves.
 	DefaultCorrectionBatchSize = 100
-	correctionLease     = 30 * time.Second
-	correctionPoll      = 500 * time.Millisecond
-	correctionMaxRetry  = 30 * time.Second
-	retryLimitCode      = "RETRY_LIMIT"
+	correctionLease            = 30 * time.Second
+	correctionPoll             = 500 * time.Millisecond
+	correctionMaxRetry         = 30 * time.Second
+	retryLimitCode             = "RETRY_LIMIT"
 )
 
 // CorrectionMatcher re-matches stored targets against current rules inside the
