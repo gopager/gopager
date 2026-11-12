@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/identity"
+	"github.com/gopager/gopager/internal/persistence/rowcheck"
 	"github.com/gopager/gopager/internal/platform"
 )
 
@@ -46,17 +46,7 @@ func (s *Store) SavePreferences(ctx context.Context, tx platform.TransactionCont
 			time_gap_minutes = $5, revision = revision + 1, updated_at = $6 WHERE account_id = $1 AND revision = $2`,
 			account, expected, input.Locale, input.TimeZone, input.TimeGapMinutes, now)
 	}
-	if err != nil {
-		return err
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected != 1 {
-		return authz.ErrRevisionConflict
-	}
-	return nil
+	return rowcheck.RequireOne(result, err)
 }
 
 // DeleteAccountPreferences removes the account's preferences in the caller's transaction, for the
