@@ -62,7 +62,7 @@ func TestAScopeDeletedDuringAnAssignmentLeavesNoAssignment(t *testing.T) {
 		if err := <-deleted; err != nil {
 			t.Fatalf("%s deletion: %v", scope.kind, err)
 		}
-		var left []presentation.Assignment
+		var left []presentation.ListedAssignment
 		if err := w.within(func(tx platform.TransactionContext) error {
 			var err error
 			left, err = w.layers.List(tx.Context(), tx, scope.kind, scope.id)

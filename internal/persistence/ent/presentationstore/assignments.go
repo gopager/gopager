@@ -3,17 +3,20 @@ package presentationstore
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"slices"
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
+	"github.com/gopager/gopager/internal/persistence/rowcheck"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing/presentation"
 )
 
 const assignmentColumns = `scope_kind, scope_id, output_kind, layout_id, revision, updated_at`
 
+// scanAssignment reads one assignment row in the order of assignmentColumns from row and returns it.
 func scanAssignment(row interface{ Scan(...any) error }) (presentation.Assignment, error) {
 	var assignment presentation.Assignment
 	err := row.Scan(&assignment.ScopeKind, &assignment.ScopeID, &assignment.OutputKind, &assignment.LayoutID,
@@ -22,7 +25,7 @@ func scanAssignment(row interface{ Scan(...any) error }) (presentation.Assignmen
 }
 
 // List implements presentation.AssignmentStore.
-func (s *Store) List(ctx context.Context, tx platform.TransactionContext, scopeKind string, scopeID uuid.UUID) ([]presentation.Assignment, error) {
+func (s *Store) List(ctx context.Context, tx platform.TransactionContext, scopeKind string, scopeID uuid.UUID) ([]presentation.ListedAssignment, error) {
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {
 		return nil, err
@@ -35,20 +38,39 @@ func (s *Store) List(ctx context.Context, tx platform.TransactionContext, scopeK
 	if scopeID != uuid.Nil {
 		scope = scopeID
 	}
-	rows, err := executor.QueryContext(ctx, `SELECT `+assignmentColumns+` FROM layout_assignments
-		WHERE ($1::text IS NULL OR scope_kind = $1) AND ($2::uuid IS NULL OR scope_id = $2)
-		ORDER BY scope_kind, scope_id, output_kind`, kind, scope)
+	rows, err := executor.QueryContext(ctx, `SELECT a.scope_kind, a.scope_id, a.output_kind, a.layout_id, a.revision, a.updated_at,
+		(SELECT COALESCE(json_agg(la.agency_id ORDER BY la.agency_id), '[]'::json)
+			FROM layout_definition_agencies la WHERE la.layout_id = a.layout_id)::text,
+		u.agency_id,
+		(SELECT COALESCE(json_agg(m.collection_id ORDER BY m.collection_id), '[]'::json)
+			FROM unit_collection_memberships m WHERE m.unit_id = u.id)::text
+		FROM layout_assignments a
+		LEFT JOIN units u ON a.scope_kind = 'unit' AND u.id = a.scope_id AND NOT u.deleted
+		LEFT JOIN organizations o ON a.scope_kind = 'organization' AND o.id = a.scope_id AND NOT o.deleted
+		WHERE ($1::text IS NULL OR a.scope_kind = $1) AND ($2::uuid IS NULL OR a.scope_id = $2)
+			AND (u.id IS NOT NULL OR o.id IS NOT NULL)
+		ORDER BY a.scope_kind, a.scope_id, a.output_kind`, kind, scope)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	var result []presentation.Assignment
+	var result []presentation.ListedAssignment
 	for rows.Next() {
-		assignment, err := scanAssignment(rows)
-		if err != nil {
+		var listed presentation.ListedAssignment
+		var agencies, collections string
+		var unitAgency uuid.NullUUID
+		if err := rows.Scan(&listed.ScopeKind, &listed.ScopeID, &listed.OutputKind, &listed.LayoutID, &listed.Revision,
+			&listed.UpdatedAt, &agencies, &unitAgency, &collections); err != nil {
 			return nil, err
 		}
-		result = append(result, assignment)
+		if err := json.Unmarshal([]byte(agencies), &listed.LayoutAgencies); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(collections), &listed.Unit.CollectionIDs); err != nil {
+			return nil, err
+		}
+		listed.Unit.AgencyID = unitAgency.UUID
+		result = append(result, listed)
 	}
 	return result, rows.Err()
 }
@@ -86,12 +108,12 @@ func (s *Store) Put(ctx context.Context, tx platform.TransactionContext, assignm
 		result, err := executor.ExecContext(ctx, `INSERT INTO layout_assignments (`+assignmentColumns+`)
 			VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`, assignment.ScopeKind, assignment.ScopeID,
 			assignment.OutputKind, assignment.LayoutID, assignment.Revision, assignment.UpdatedAt)
-		return requireOneRow(result, err)
+		return rowcheck.RequireOne(result, err)
 	}
 	result, err := executor.ExecContext(ctx, `UPDATE layout_assignments SET layout_id = $4, revision = revision + 1, updated_at = $5
 		WHERE scope_kind = $1 AND scope_id = $2 AND output_kind = $3 AND revision = $6`, assignment.ScopeKind,
 		assignment.ScopeID, assignment.OutputKind, assignment.LayoutID, assignment.UpdatedAt, expected)
-	return requireOneRow(result, err)
+	return rowcheck.RequireOne(result, err)
 }
 
 // Delete implements presentation.AssignmentStore.
@@ -102,7 +124,7 @@ func (s *Store) Delete(ctx context.Context, tx platform.TransactionContext, scop
 	}
 	result, err := executor.ExecContext(ctx, `DELETE FROM layout_assignments
 		WHERE scope_kind = $1 AND scope_id = $2 AND output_kind = $3 AND revision = $4`, scopeKind, scopeID, outputKind, expected)
-	if err := requireOneRow(result, err); err != nil {
+	if err := rowcheck.RequireOne(result, err); err != nil {
 		if !errors.Is(err, authz.ErrRevisionConflict) {
 			return err
 		}

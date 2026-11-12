@@ -27,16 +27,18 @@ type memoryAssignments struct {
 	orgs  map[uuid.UUID]bool
 	// getErr, when set, is the failure of every Get.
 	getErr error
+	// layouts supplies the Layout Agencies of listed assignments.
+	layouts *memoryStore
 }
 
-func (m *memoryAssignments) List(_ context.Context, _ platform.TransactionContext, kind string, id uuid.UUID) ([]Assignment, error) {
-	var result []Assignment
+func (m *memoryAssignments) List(ctx context.Context, _ platform.TransactionContext, kind string, id uuid.UUID) ([]ListedAssignment, error) {
+	var rows []Assignment
 	for _, row := range m.rows {
 		if (kind == "" || row.ScopeKind == kind) && (id == uuid.Nil || row.ScopeID == id) {
-			result = append(result, row)
+			rows = append(rows, row)
 		}
 	}
-	slices.SortFunc(result, func(a, b Assignment) int {
+	slices.SortFunc(rows, func(a, b Assignment) int {
 		if a.ScopeKind != b.ScopeKind {
 			return map[bool]int{true: -1, false: 1}[a.ScopeKind < b.ScopeKind]
 		}
@@ -45,6 +47,21 @@ func (m *memoryAssignments) List(_ context.Context, _ platform.TransactionContex
 		}
 		return map[bool]int{true: -1, false: 1}[a.OutputKind < b.OutputKind]
 	})
+	result := make([]ListedAssignment, 0, len(rows))
+	for _, row := range rows {
+		listed := ListedAssignment{Assignment: row, Unit: m.units[row.ScopeID]}
+		if row.ScopeKind == ScopeUnit {
+			if _, ok := m.units[row.ScopeID]; !ok {
+				continue
+			}
+		} else if !m.orgs[row.ScopeID] {
+			continue
+		}
+		if layout, err := m.layouts.Get(ctx, nil, row.LayoutID); err == nil {
+			listed.LayoutAgencies = layout.Agencies
+		}
+		result = append(result, listed)
+	}
 	return result, nil
 }
 
@@ -105,6 +122,7 @@ func newAssignmentFixture(t *testing.T) *assignmentFixture {
 	t.Helper()
 	f := &assignmentFixture{rows: &memoryAssignments{rows: map[assignmentKey]Assignment{}, units: map[uuid.UUID]UnitContext{},
 		orgs: map[uuid.UUID]bool{}}, layouts: newMemoryStore(), agencyA: uuid.New(), agencyB: uuid.New(), unit: uuid.New(), org: uuid.New()}
+	f.rows.layouts = f.layouts
 	f.rows.units[f.unit] = UnitContext{AgencyID: f.agencyA}
 	f.rows.orgs[f.org] = true
 	authority := authz.Authority{PrincipalID: uuid.NewString(), Revision: 1, Active: true,

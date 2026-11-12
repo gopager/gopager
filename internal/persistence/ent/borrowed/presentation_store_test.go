@@ -200,7 +200,7 @@ func TestAssignmentRevisions(t *testing.T) {
 	} else if fieldError := new(authz.FieldError); !errors.As(err, &fieldError) || fieldError.Field != "layoutId" {
 		t.Fatalf("missing Layout: %v", err)
 	}
-	var listed []presentation.Assignment
+	var listed []presentation.ListedAssignment
 	var read presentation.Assignment
 	if err := w.within(func(tx platform.TransactionContext) error {
 		var err error
@@ -277,7 +277,7 @@ func TestDeletingAUnitOrOrganizationRemovesItsAssignments(t *testing.T) {
 	}
 	w.exec(`UPDATE units SET deleted = true WHERE id = $1`, unit)
 	w.exec(`UPDATE organizations SET deleted = true WHERE id = $1`, org)
-	var left []presentation.Assignment
+	var left []presentation.ListedAssignment
 	if err := w.within(func(tx platform.TransactionContext) error {
 		var err error
 		left, err = w.layers.List(tx.Context(), tx, "", uuid.Nil)

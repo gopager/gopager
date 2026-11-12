@@ -33,6 +33,14 @@ type Assignment struct {
 	UpdatedAt  time.Time `json:"updatedAt"`
 }
 
+// ListedAssignment is an assignment with what authorizing it needs: the Agencies of its Layout
+// and, for a Unit scope, the Unit's Agency and collections.
+type ListedAssignment struct {
+	Assignment
+	LayoutAgencies []uuid.UUID
+	Unit           UnitContext
+}
+
 // UnitContext is what authorization needs to know about a Unit.
 type UnitContext struct {
 	AgencyID      uuid.UUID
@@ -43,8 +51,10 @@ type UnitContext struct {
 // caller's transaction.
 type AssignmentStore interface {
 	// List returns the assignments of the scope kind and scope ID (either may be empty or
-	// uuid.Nil to not filter), ordered by scope kind, scope ID and output kind.
-	List(ctx context.Context, tx platform.TransactionContext, scopeKind string, scopeID uuid.UUID) ([]Assignment, error)
+	// uuid.Nil to not filter) whose Unit or Organization is not deleted, each with what its
+	// authorization needs, ordered by scope kind, scope ID and output kind. It reads in one
+	// statement and takes no row locks.
+	List(ctx context.Context, tx platform.TransactionContext, scopeKind string, scopeID uuid.UUID) ([]ListedAssignment, error)
 	// Get returns one assignment, or authz.ErrNotFound.
 	Get(ctx context.Context, tx platform.TransactionContext, scopeKind string, scopeID uuid.UUID, outputKind string) (Assignment, error)
 	// Put stores the assignment: expected 0 inserts and expected > 0 replaces at that revision.
@@ -148,11 +158,11 @@ func (s *AssignmentService) List(ctx context.Context, proof identity.Proof, scop
 			return err
 		}
 		manageable := make([]Assignment, 0, len(all))
-		for _, assignment := range all {
-			err := s.authorizeAssignment(tx.Context(), tx, who, now, assignment)
+		for _, listed := range all {
+			err := authorizeListed(who, now, listed)
 			if err == nil {
-				manageable = append(manageable, assignment)
-			} else if !errors.Is(err, authz.ErrForbidden) && !errors.Is(err, authz.ErrNotFound) {
+				manageable = append(manageable, listed.Assignment)
+			} else if !errors.Is(err, authz.ErrForbidden) {
 				return err
 			}
 		}
@@ -163,6 +173,16 @@ func (s *AssignmentService) List(ctx context.Context, proof identity.Proof, scop
 		return nil
 	})
 	return result, err
+}
+
+// authorizeListed applies the rule of authorizeScope to a listed assignment, whose context the
+// store already read: every Agency of the Layout for an Organization, the Unit for a Unit.
+func authorizeListed(who caller, now time.Time, listed ListedAssignment) error {
+	if listed.ScopeKind == ScopeOrganization {
+		return requireManage(who.authority, now, listed.LayoutAgencies)
+	}
+	target := authz.Target{AgencyID: listed.Unit.AgencyID, UnitID: listed.ScopeID, UnitCollections: listed.Unit.CollectionIDs}
+	return authz.Authorize(who.authority, ManageAction, nil, target, now)
 }
 
 // authorizeAssignment requires the right to manage an existing assignment.
