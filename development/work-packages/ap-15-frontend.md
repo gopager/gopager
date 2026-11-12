@@ -14,7 +14,7 @@
   - [AP-10 handover](ap-10-query-live.md#handover): Query/SSE API, personal and global saved views with their visibility contract.
   - [D-145](../decisions/03-assignment-and-correction.md#d-145): Address rules carry the `encrypted` marker (rule create, update and read), projected as a label on assigned targets.
   - [AP-11 handover](ap-11-events-delivery.md#handover): Subscription and Delivery APIs, domain event listing.
-  - [AP-12 handover](ap-12-plugin-host.md#handover): plugin instance configuration API, per-Unit value API (REQ-129).
+  - [AP-12 handover](ap-12-plugin-host.md#handover): plugin instance configuration API (`/instances`, `/instances/inspection`, Secret `secrets` writes, `/instances/{id}/personal-configuration`), per-Unit value API (`/instances/{id}/unit-parameters`, REQ-129), see [HTTP API: Processing plugin instances](../../docs/http-api.md#processing-plugin-instances).
   - [AP-13 handover](ap-13-processing-presentation-integration.md#handover): Workflow, presentation, layout-definition, preference and banner APIs.
   - [AP-14 handover](ap-14-identity-lifecycle.md#handover): account, grant, User group, field group, session, recovery and deletion APIs.
   - [AP-21 handover](ap-21-attribute-schemas.md#handover): Attribute-schema, Agency-assignment, typed filter, provenance and Subscription-health APIs.

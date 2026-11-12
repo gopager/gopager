@@ -444,7 +444,8 @@ Before the instance is stored:
 
 - The manifests are loaded from the operator's artifact root and the artifact digests are verified. The plugin is not started.
 - The configuration is validated.
-- A secret or user-scoped configuration policy is rejected with `AUTHORITY_UNAVAILABLE`.
+- A secret or user-scoped configuration policy is rejected with `AUTHORITY_UNAVAILABLE`: a Workflow step has no owner for a Secret or a personal value. Plugins with the `delivery` capability may have both; see [Plugins](plugins.md#configuration-policy).
+- An instance of a `delivery` plugin cannot be used by an `installed` step (the step fails with `AUTHORITY_UNAVAILABLE`); such an instance is a Delivery target for [Subscriptions](http-api.md#subscriptions).
 
 A successful save:
 
