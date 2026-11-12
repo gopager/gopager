@@ -87,6 +87,9 @@ func (s *Store) AdmitCandidate(ctx context.Context, tx platform.TransactionConte
 		if err != nil {
 			return processing.Candidate{}, err
 		}
+		if err := s.inheritReprocessMark(ctx, tx, row.ID, false); err != nil {
+			return processing.Candidate{}, err
+		}
 		return candidateState(row)
 	}
 	if err != nil {
@@ -120,6 +123,9 @@ func (s *Store) AdmitCandidate(ctx context.Context, tx platform.TransactionConte
 	if updated != 1 {
 		return processing.Candidate{}, platform.NewFailure(platform.CodeRevisionConflict,
 			errors.New("candidate changed before reselection"))
+	}
+	if err := s.inheritReprocessMark(ctx, tx, current.ID, terminalState(current.State)); err != nil {
+		return processing.Candidate{}, err
 	}
 	return next, nil
 }

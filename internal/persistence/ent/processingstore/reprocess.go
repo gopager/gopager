@@ -167,29 +167,33 @@ func (s *Store) NextReprocessTransmission(ctx context.Context, tx platform.Trans
 	return id, err == nil, err
 }
 
-// IsFreshIntake reports whether the Transmission has a non-superseded candidate of the request's
-// Workflow at the pinned revision created at or after the request. Candidates that existed
-// before, and ones the runner's own readmission creates, are not fresh: the former carry an older
-// revision and the latter do not exist yet when this is asked.
-func (s *Store) IsFreshIntake(ctx context.Context, tx platform.TransactionContext,
-	request processing.ReprocessRequest, transmission uuid.UUID) (bool, error) {
+// SnapshotTransmission reads the Transmission's candidates before readmission. It is fresh when
+// a non-superseded candidate of the request's Workflow carries the pinned revision and was
+// created at or after the request. Candidates that existed before carry an older revision, and
+// ones the runner's own readmission creates do not exist yet when this is asked.
+func (s *Store) SnapshotTransmission(ctx context.Context, tx platform.TransactionContext,
+	request processing.ReprocessRequest, transmission uuid.UUID) (processing.ReprocessSnapshot, error) {
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {
-		return false, err
+		return processing.ReprocessSnapshot{}, err
 	}
-	var fresh bool
+	var snapshot processing.ReprocessSnapshot
 	err = executor.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM processing_candidates
 		WHERE transmission_id=$1 AND workflow_id=$2 AND state <> 'superseded'
 			AND workflow_revision=$3 AND created_at >= $4)`,
-		transmission, request.WorkflowID, request.WorkflowRevision, request.CreatedAt).Scan(&fresh)
-	return fresh, err
+		transmission, request.WorkflowID, request.WorkflowRevision, request.CreatedAt).Scan(&snapshot.Fresh)
+	if err != nil {
+		return processing.ReprocessSnapshot{}, err
+	}
+	snapshot.Others, err = s.otherCandidates(ctx, tx, transmission, request.WorkflowID)
+	return snapshot, err
 }
 
 // ApplyReprocessStep marks the Transmission's current candidates of the Workflow, or, when the
-// readmission left none, retracts the Workflow's published results of the Transmission, and
-// advances the fenced request's cursor and counts.
+// readmission left none, retracts the Workflow's published results of the Transmission, marks the
+// re-runs of other Workflows as historical and advances the fenced request's cursor and counts.
 func (s *Store) ApplyReprocessStep(ctx context.Context, tx platform.TransactionContext,
-	request processing.ReprocessRequest, transmission uuid.UUID, fresh bool) error {
+	request processing.ReprocessRequest, transmission uuid.UUID, snapshot processing.ReprocessSnapshot) error {
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {
 		return err
@@ -199,9 +203,12 @@ func (s *Store) ApplyReprocessStep(ctx context.Context, tx platform.TransactionC
 		return err
 	}
 	var readmitted, retracted int64
-	if !fresh {
+	if !snapshot.Fresh {
 		readmitted, retracted, err = s.markOrRetract(ctx, tx, request, transmission)
 		if err != nil {
+			return err
+		}
+		if err := s.markCompanionReruns(ctx, tx, request, transmission, snapshot.Others); err != nil {
 			return err
 		}
 	}

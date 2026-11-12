@@ -97,6 +97,21 @@ type WorkflowPins struct {
 	Usable bool
 }
 
+// ReprocessCandidateState is a candidate of another Workflow as it stood before a readmission.
+type ReprocessCandidateState struct {
+	ID       uuid.UUID
+	State    string
+	Revision int64
+}
+
+// ReprocessSnapshot is what a Reprocess step reads about a Transmission before readmitting it.
+// Fresh is true for work intake admitted after the request; Others lists the non-superseded
+// candidates of the other Workflows.
+type ReprocessSnapshot struct {
+	Fresh  bool
+	Others []ReprocessCandidateState
+}
+
 // ReprocessWorkRepository is the runner's view of the request table and of the data it scans.
 // Every write is fenced by the claim: it fails with a revision conflict once the lease was lost.
 type ReprocessWorkRepository interface {
@@ -108,14 +123,17 @@ type ReprocessWorkRepository interface {
 	// NextReprocessTransmission returns the first Transmission after the cursor, in ID order, that
 	// the request covers; the bool is false when none is left.
 	NextReprocessTransmission(ctx context.Context, tx platform.TransactionContext, request ReprocessRequest) (uuid.UUID, bool, error)
-	// IsFreshIntake reports whether intake admitted the Transmission's candidate of the Workflow
-	// at the request's pinned revision after the request was made. Such work is new, not history.
-	IsFreshIntake(ctx context.Context, tx platform.TransactionContext, request ReprocessRequest, transmission uuid.UUID) (bool, error)
+	// SnapshotTransmission reads, before the Transmission is readmitted, whether intake admitted its
+	// candidate of the Workflow at the request's pinned revision after the request was made (new
+	// work, not history) and the state of its candidates of other Workflows.
+	SnapshotTransmission(ctx context.Context, tx platform.TransactionContext, request ReprocessRequest, transmission uuid.UUID) (ReprocessSnapshot, error)
 	// ApplyReprocessStep marks the Transmission's current candidate of the Workflow with the
 	// request, or, without one, retracts the Workflow's published results of the Transmission,
-	// and advances the cursor and counts, all in the caller's transaction. With fresh set it only
-	// advances the cursor and counts the Transmission as scanned.
-	ApplyReprocessStep(ctx context.Context, tx platform.TransactionContext, request ReprocessRequest, transmission uuid.UUID, fresh bool) error
+	// and advances the cursor and counts, all in the caller's transaction. Candidates of other
+	// Workflows that the readmission re-pended or created and that have history for the
+	// Transmission get the mark as well, because their re-run is historical too. With a fresh
+	// snapshot it only advances the cursor and counts the Transmission as scanned.
+	ApplyReprocessStep(ctx context.Context, tx platform.TransactionContext, request ReprocessRequest, transmission uuid.UUID, snapshot ReprocessSnapshot) error
 	// FinishReprocess ends the claimed request as completed or superseded.
 	FinishReprocess(ctx context.Context, tx platform.TransactionContext, request ReprocessRequest, state string) error
 	// RescheduleReprocess releases the claim and makes the request due again at the given time,

@@ -39,6 +39,8 @@ type reprocessFixture struct {
 	secret     string
 	workflow   uuid.UUID
 	revision   int64
+	// schema is the Attribute schema key the Workflow's versions write; empty means "incident".
+	schema string
 }
 
 // newReprocessFixture seeds one Agency, Network and Gateway, an Attribute schema "incident" with
@@ -99,6 +101,67 @@ func newReprocessFixture(t *testing.T) *reprocessFixture {
 		t.Fatal(err)
 	}
 	return f
+}
+
+// schemaKey is the Attribute schema the Workflow writes.
+func (f *reprocessFixture) schemaKey() string {
+	if f.schema == "" {
+		return "incident"
+	}
+	return f.schema
+}
+
+// otherWorkflow creates a second enabled Workflow on the same Agency that writes the integer
+// field "level" of its own Attribute schema, and returns a fixture view that manages it. The view
+// shares the database, HTTP session and worker with f.
+func (f *reprocessFixture) otherWorkflow(name, schema string) *reprocessFixture {
+	f.t.Helper()
+	attributeschemas.Insert(f.t, f.store, schema, map[string]attributes.Field{"level": {Kind: processing.IntegerValue}})
+	other := *f
+	other.schema = schema
+	created := f.post("/api/v1/workflows", `{"schemaVersion":1,"commandId":"`+uuid.NewString()+
+		`","name":"`+name+`","scope":`+workflowScopeJSON(f.agency)+`,"enabled":true}`, http.StatusCreated)
+	other.workflow, other.revision = f.reference(created)
+	return &other
+}
+
+// replayModesOf lists the replay modes of the Workflow's processing.completed facts of the Transmission in order.
+func (f *reprocessFixture) replayModesOf(transmission uuid.UUID) []string {
+	f.t.Helper()
+	return f.queryStrings(`SELECT envelope->>'replayMode' FROM domain_events
+		WHERE type='processing.completed' AND envelope->'data'->>'transmissionId'=$1
+			AND envelope->'data'->>'workflowId'=$2 ORDER BY seq`, transmission.String(), f.workflow.String())
+}
+
+// resultsOf counts the Workflow's results of the Transmission by publication state.
+func (f *reprocessFixture) resultsOf(transmission uuid.UUID) (published, retracted int) {
+	f.t.Helper()
+	published = f.count(`SELECT count(*) FROM processing_results r JOIN processing_candidates c ON c.id=r.candidate_id
+		WHERE c.transmission_id=$1 AND c.workflow_id=$2 AND r.published_at IS NOT NULL`, transmission, f.workflow)
+	retracted = f.count(`SELECT count(*) FROM processing_results r JOIN processing_candidates c ON c.id=r.candidate_id
+		WHERE c.transmission_id=$1 AND c.workflow_id=$2 AND r.retracted_at IS NOT NULL`, transmission, f.workflow)
+	return published, retracted
+}
+
+// runWorkerFor executes the due candidates of this Workflow only, leaving others pending.
+func (f *reprocessFixture) runWorkerFor() {
+	f.t.Helper()
+	var due []processing.Candidate
+	if err := f.store.WithinTransaction(f.t.Context(), func(tx platform.TransactionContext) error {
+		page, err := f.repository.SelectDueWork(tx.Context(), tx, 50)
+		due = page
+		return err
+	}); err != nil {
+		f.t.Fatal(err)
+	}
+	for _, candidate := range due {
+		if candidate.WorkflowID != f.workflow {
+			continue
+		}
+		if err := f.worker.ExecuteWork(f.t.Context(), candidate); err != nil {
+			f.t.Fatalf("candidate run failed: %s", causeChain(err))
+		}
+	}
 }
 
 // exec runs one statement in its own transaction.
@@ -194,7 +257,7 @@ func (f *reprocessFixture) definition(level string) processing.Definition {
 	}
 	return processing.Definition{SchemaVersion: 1,
 		Selector: processing.Predicate{Op: "eq", Field: &field, Value: &protocol},
-		Outputs:  map[string]map[string]processing.Assignment{"incident": {"level": {Literal: &literal}}}}
+		Outputs:  map[string]map[string]processing.Assignment{f.schemaKey(): {"level": {Literal: &literal}}}}
 }
 
 // saveVersion saves a version writing the level and returns its ID.

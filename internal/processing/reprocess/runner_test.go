@@ -57,11 +57,11 @@ func (w *fakeWork) NextReprocessTransmission(_ context.Context, _ platform.Trans
 	return uuid.Nil, false, nil
 }
 
-func (w *fakeWork) IsFreshIntake(context.Context, platform.TransactionContext, processing.ReprocessRequest, uuid.UUID) (bool, error) {
-	return false, nil
+func (w *fakeWork) SnapshotTransmission(context.Context, platform.TransactionContext, processing.ReprocessRequest, uuid.UUID) (processing.ReprocessSnapshot, error) {
+	return processing.ReprocessSnapshot{}, nil
 }
 
-func (w *fakeWork) ApplyReprocessStep(_ context.Context, _ platform.TransactionContext, _ processing.ReprocessRequest, id uuid.UUID, _ bool) error {
+func (w *fakeWork) ApplyReprocessStep(_ context.Context, _ platform.TransactionContext, _ processing.ReprocessRequest, id uuid.UUID, _ processing.ReprocessSnapshot) error {
 	w.applied = append(w.applied, id)
 	return nil
 }
