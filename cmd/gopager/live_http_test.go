@@ -703,6 +703,8 @@ func TestLiveStreamMergesResynchronizeWithoutDisclosingIDs(t *testing.T) {
 				!known[data.MessageID] || slices.Contains(want, data.MessageID) {
 				return event
 			}
+			// One replay per Message is tolerated; a second upsert of it is returned and fails.
+			known[data.MessageID] = false
 		}
 	}
 	open := func() *sseClient {
@@ -832,14 +834,16 @@ func holdTransaction(t *testing.T, store *postgres.Store) func() {
 			return errors.New("release the held transaction")
 		})
 	}()
-	if err := <-started; err != nil {
-		t.Fatal(err)
-	}
 	var once sync.Once
-	return func() {
+	release := func() {
 		once.Do(func() {
 			close(done)
 			<-finished
 		})
 	}
+	if err := <-started; err != nil {
+		release()
+		t.Fatal(err)
+	}
+	return release
 }
