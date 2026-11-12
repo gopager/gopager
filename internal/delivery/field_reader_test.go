@@ -11,6 +11,7 @@ import (
 )
 
 func TestMessageFieldReaderReadsTheMessageWithoutEventFields(t *testing.T) {
+	t.Parallel()
 	unit := readmodel.UnitRecord{UnitID: uuid.New(), Name: "Engine 1"}
 	text := `{"form":"text","text":"FIRE"}`
 	projection := readmodel.DeliveryProjection{
