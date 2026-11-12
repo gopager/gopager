@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 2,
+  "sdkMajor": 2,
+  "sdkMinor": 1,
+  "capability": "delivery",
+  "pluginId": "echo",
+  "version": "1.0.0",
+  "capabilityId": "echo",
+  "artifact": {"path": "echo/1.0.0/echo", "digest": "@DIGEST@"},
+  "delivery": {
+    "outputKinds": ["text", "json"],
+    "inputs": [{"name": "priority", "kind": "integer", "required": false, "maxBytes": 20}],
+    "dependencies": [{"kind": "secret", "description": "token and user key"}],
+    "sendsPerMinute": 30,
+    "idempotent": true
+  },
+  "configurationSchema": {
+    "kind": "object",
+    "properties": {
+      "title": {"kind": "string"},
+      "token": {"kind": "string"},
+      "userKey": {"kind": "string", "optional": true}
+    }
+  },
+  "configurationPolicy": {
+    "configurationScope": "admin",
+    "secret": false,
+    "properties": {
+      "title": {"configurationScope": "admin", "secret": false},
+      "token": {"configurationScope": "admin", "secret": true},
+      "userKey": {"configurationScope": "user", "secret": true}
+    }
+  }
+}
