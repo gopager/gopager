@@ -130,7 +130,7 @@ func organizationPlan(authority authz.Authority, action string, now time.Time) (
 }
 
 // unitDTO projects the supported public configuration without exposing Ent entities.
-func unitDTO(row *ent.Unit) units.Unit {
+func unitDTO(row *ent.Unit, assigned func(schemaKey string) bool) units.Unit {
 	result := units.Unit{ID: row.ID, Revision: row.Revision, Name: row.Name, AgencyID: row.AgencyID, Deleted: row.Deleted,
 		OrganizationID: row.OrganizationID, Settings: row.Settings, CollectionIDs: []uuid.UUID{}}
 	var defaults *units.Defaults
@@ -138,7 +138,7 @@ func unitDTO(row *ent.Unit) units.Unit {
 		value := row.Edges.Organization.Defaults
 		defaults = &value
 	}
-	result.EffectiveSettings = units.ResolveSettings(row.Settings, defaults)
+	result.EffectiveSettings = units.ResolveSettings(row.Settings, defaults, assigned)
 	for _, collection := range row.Edges.Collections {
 		result.CollectionIDs = append(result.CollectionIDs, collection.ID)
 	}
@@ -182,7 +182,7 @@ func templateDTO(row *ent.UnitTemplate) units.UnitTemplate {
 		value := row.Edges.Organization.Defaults
 		defaults = &value
 	}
-	result.EffectiveSettings = units.ResolveSettings(row.Settings, defaults)
+	result.EffectiveSettings = units.ResolveSettings(row.Settings, defaults, nil)
 	return result
 }
 
@@ -526,7 +526,11 @@ func (s *Store) ReadUnit(ctx context.Context, tx platform.TransactionContext, au
 	if err != nil {
 		return units.Unit{}, err
 	}
-	return unitDTO(row), nil
+	result, err := s.unitDTOs(ctx, tx, []*ent.Unit{row})
+	if err != nil {
+		return units.Unit{}, err
+	}
+	return result[0], nil
 }
 
 // LockUnits applies authorization before taking stable-order row locks for bulk changes.
@@ -568,11 +572,7 @@ func (s *Store) LockUnits(ctx context.Context, tx platform.TransactionContext, a
 	if len(rows) != len(ordered) {
 		return nil, authz.ErrNotFound
 	}
-	result := make([]units.Unit, len(rows))
-	for i, row := range rows {
-		result[i] = unitDTO(row)
-	}
-	return result, nil
+	return s.unitDTOs(ctx, tx, rows)
 }
 
 // ListUnits filters rows and fields before the count, stable order and bounded page.
@@ -603,11 +603,11 @@ func (s *Store) ListUnits(ctx context.Context, tx platform.TransactionContext, a
 	if err != nil {
 		return units.Page[units.Unit]{}, err
 	}
-	result := units.Page[units.Unit]{Items: make([]units.Unit, len(rows)), Total: total}
-	for i, row := range rows {
-		result.Items[i] = unitDTO(row)
+	items, err := s.unitDTOs(ctx, tx, rows)
+	if err != nil {
+		return units.Page[units.Unit]{}, err
 	}
-	return result, nil
+	return units.Page[units.Unit]{Items: items, Total: total}, nil
 }
 
 // SaveUnit mutates only supported columns/membership, preserving future owner configuration.
@@ -802,11 +802,7 @@ func (s *Store) CollectionUnits(ctx context.Context, tx platform.TransactionCont
 	if err != nil {
 		return nil, err
 	}
-	result := make([]units.Unit, len(rows))
-	for i, row := range rows {
-		result[i] = unitDTO(row)
-	}
-	return result, nil
+	return s.unitDTOs(ctx, tx, rows)
 }
 
 // DeleteCollection rechecks native member scope, advances member revisions and detaches atomically.

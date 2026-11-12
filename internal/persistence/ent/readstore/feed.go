@@ -128,6 +128,17 @@ func (b *feedBuilder) targetVisibility(appearance func(condition string) string,
 		OR (tt.resolution_status IN ('pending', 'failed', 'unresolved') AND ` + context + `)))`
 }
 
+// appearanceExists renders the existence of an eligible appearance of the Message m that meets
+// the simple Unit filters and, when given, the extra condition, which may read the appearance
+// (mu) and its Unit (u).
+func (b *feedBuilder) appearanceExists(extra string) string {
+	if extra != "" {
+		extra = " AND " + extra
+	}
+	return `EXISTS (SELECT 1 FROM message_units mu LEFT JOIN units u ON u.id = mu.unit_id
+		WHERE mu.message_id = m.id AND ` + b.eligible("mu") + b.appearanceFilters() + extra + `)`
+}
+
 // pageCTE renders the selection of the page's Messages.
 func (b *feedBuilder) pageCTE() string {
 	filters := b.query.Filters
@@ -152,9 +163,13 @@ func (b *feedBuilder) pageCTE() string {
 	if filters.Text != "" {
 		conditions = append(conditions, textMatch(b.params.add(filters.Text)))
 	}
-	conditions = append(conditions, `EXISTS (SELECT 1 FROM message_units mu LEFT JOIN units u ON u.id = mu.unit_id
-		WHERE mu.message_id = m.id AND `+b.eligible("mu")+b.appearanceFilters()+`)`)
+	conditions = append(conditions, b.appearanceExists(""))
 	narrowing, exact := b.selectionFilter()
+	if exact != "" && usesUnitAttributes(b.query.Selection.Root()) {
+		// The whole predicate has to hold on one appearance. It stays in the outer condition,
+		// because the lateral aggregates of Message attributes are not visible inside the fence.
+		exact = b.appearanceExists(exact)
+	}
 	where := strings.Join(conditions, "\n\t\tAND ")
 	source := "messages m"
 	if narrowing != "" {
@@ -207,7 +222,8 @@ func (b *feedBuilder) statement() string {
 ` + page + `,
 app AS (
 	SELECT mu.message_id, mu.unit_id, mu.agency_id, mu.first_observed_at, mu.age_anchor, mu.correction_status,
-		u.name AS unit_name, u.organization_id
+		u.name AS unit_name, u.organization_id,
+		CASE WHEN u.id IS NULL THEN '[]'::jsonb ELSE ` + unitAttributesColumn("u") + ` END AS unit_attributes
 	FROM page p JOIN message_units mu ON mu.message_id = p.id LEFT JOIN units u ON u.id = mu.unit_id
 	WHERE ` + b.eligible("mu") + `),
 sup AS (
@@ -225,7 +241,7 @@ result_rows AS (
 		COALESCE((SELECT bool_or(a.correction_status = 'correcting') FROM app a WHERE a.message_id = p.id), false) AS correcting,
 		r.payload, r.protocol, r.incomplete,
 		COALESCE((SELECT jsonb_agg(jsonb_build_object('unitId', a.unit_id, 'name', a.unit_name, 'agencyId', a.agency_id,
-				'organizationId', a.organization_id, 'firstObservedAt', a.first_observed_at,
+				'organizationId', a.organization_id, 'firstObservedAt', a.first_observed_at, 'attributes', a.unit_attributes,
 				'encrypted', EXISTS (SELECT 1 FROM sup s2 JOIN transmission_targets tt ON tt.transmission_id = s2.id
 					JOIN address_rules rule ON rule.id = tt.matched_rule_id
 					WHERE s2.message_id = a.message_id AND tt.resolution_status = 'assigned' AND tt.unit_id = a.unit_id
@@ -345,12 +361,13 @@ func (r feedRow) record() (readmodel.FeedRecord, []readmodel.TransmissionRecord,
 			Incomplete: *r.incomplete}
 	}
 	var units []struct {
-		UnitID          uuid.UUID  `json:"unitId"`
-		Name            string     `json:"name"`
-		AgencyID        uuid.UUID  `json:"agencyId"`
-		OrganizationID  *uuid.UUID `json:"organizationId"`
-		FirstObservedAt time.Time  `json:"firstObservedAt"`
-		Encrypted       bool       `json:"encrypted"`
+		UnitID          uuid.UUID                 `json:"unitId"`
+		Name            string                    `json:"name"`
+		AgencyID        uuid.UUID                 `json:"agencyId"`
+		OrganizationID  *uuid.UUID                `json:"organizationId"`
+		FirstObservedAt time.Time                 `json:"firstObservedAt"`
+		Encrypted       bool                      `json:"encrypted"`
+		Attributes      []readmodel.UnitAttribute `json:"attributes"`
 	}
 	var withoutUnit []struct {
 		AgencyID        uuid.UUID `json:"agencyId"`
@@ -377,7 +394,8 @@ func (r feedRow) record() (readmodel.FeedRecord, []readmodel.TransmissionRecord,
 	}
 	for _, unit := range units {
 		record.Units = append(record.Units, readmodel.UnitRecord{UnitID: unit.UnitID, Name: unit.Name, AgencyID: unit.AgencyID,
-			OrganizationID: unit.OrganizationID, Encrypted: unit.Encrypted, FirstObservedAt: unit.FirstObservedAt.UTC()})
+			OrganizationID: unit.OrganizationID, Encrypted: unit.Encrypted, FirstObservedAt: unit.FirstObservedAt.UTC(),
+			Attributes: sortedUnitAttributes(unit.Attributes)})
 	}
 	record.ResultVisible = r.resultVisible != nil && *r.resultVisible
 	for _, entry := range withoutUnit {

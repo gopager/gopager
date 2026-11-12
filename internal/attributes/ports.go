@@ -24,12 +24,14 @@ type Store interface {
 	List(ctx context.Context, tx platform.TransactionContext, visibility authz.AgencyVisibility, agency *uuid.UUID,
 		offset, limit int) ([]Schema, int, error)
 	// Update replaces label, description, fields, deprecation and Agencies of the schema at the
-	// expected revision and bumps the revision, otherwise authz.ErrRevisionConflict. An unknown
-	// Agency is authz.ErrInvalidInput.
+	// expected revision and bumps the revision, otherwise authz.ErrRevisionConflict, which also
+	// reports an Agency removed from the schema while an undeleted Unit of that Agency stores
+	// an entry of it. An unknown Agency is authz.ErrInvalidInput.
 	Update(ctx context.Context, tx platform.TransactionContext, schema Schema, expected int64) error
 	// Delete removes the schema at the expected revision. A stale revision or a schema that an
 	// active Workflow version, a current Layout version, a Subscription filter or a saved view
-	// references is authz.ErrRevisionConflict.
+	// references, or that an undeleted Unit, Unit template or Organization stores an entry of, is
+	// authz.ErrRevisionConflict. The entries of deleted ones are removed in the same transaction.
 	Delete(ctx context.Context, tx platform.TransactionContext, key string, expected int64) error
 }
 

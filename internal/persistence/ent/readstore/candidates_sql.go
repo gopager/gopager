@@ -19,6 +19,9 @@ func (b *feedBuilder) candidates(field *fields.Field) string {
 	if field.Ref.Namespace == "attributes" {
 		return b.attributeCandidates(field)
 	}
+	if isUnitAttribute(field) {
+		return b.unitAttributeCandidates(field)
+	}
 	return b.messageCandidates(field.Path())
 }
 
@@ -28,18 +31,8 @@ func (b *feedBuilder) candidates(field *fields.Field) string {
 // so that every leaf on the field reuses one computation.
 func (b *feedBuilder) attributeCandidates(field *fields.Field) string {
 	path := field.Ref.Path
-	value := "el.x"
-	for _, property := range path[2:] {
-		value = "(" + value + "->'value'->" + b.params.add(property) + "::text)"
-	}
-	values := "SELECT " + value + " AS x FROM jsonb_array_elements(" + b.fieldValues(path[0], path[1]) + ") el(x)"
-	scalar := scalarSchema(field.Type)
-	if field.Type.Kind != processing.ListValue {
-		return "SELECT r.x FROM (" + values + ") r WHERE " + admissible("r.x", scalar)
-	}
-	return `SELECT el.x FROM (` + values + `) r CROSS JOIN LATERAL jsonb_array_elements(
-			CASE WHEN r.x->>'kind' = 'list' AND jsonb_typeof(r.x->'value') = 'array' THEN r.x->'value' ELSE '[]'::jsonb END
-		) AS el(x) WHERE ` + admissible("el.x", scalar)
+	value := b.descend("el.x", path[2:])
+	return b.scalarCandidates("SELECT "+value+" AS x FROM jsonb_array_elements("+b.fieldValues(path[0], path[1])+") el(x)", field)
 }
 
 // fieldValues returns the jsonb array of the effective typed values of an attribute field of the

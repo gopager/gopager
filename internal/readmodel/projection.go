@@ -37,6 +37,8 @@ type UnitItem struct {
 	OrganizationID  *uuid.UUID `json:"organizationId,omitempty"`
 	Encrypted       bool       `json:"encrypted"`
 	FirstObservedAt *time.Time `json:"firstObservedAt,omitempty"`
+	// Attributes are the Unit's effective attribute values, sorted by schema key and field.
+	Attributes []UnitAttribute `json:"attributes"`
 }
 
 // WithoutUnitItem is an eligible Unit-less appearance of a detail.
@@ -148,7 +150,8 @@ func (v viewer) feedItem(record FeedRecord, detail bool) FeedItem {
 		units := make([]UnitItem, 0, len(record.Units))
 		for _, unit := range record.Units {
 			entry := UnitItem{UnitID: unit.UnitID, Name: unit.Name, AgencyID: unit.AgencyID,
-				OrganizationID: unit.OrganizationID, Encrypted: unit.Encrypted}
+				OrganizationID: unit.OrganizationID, Encrypted: unit.Encrypted,
+				Attributes: append([]UnitAttribute{}, unit.Attributes...)}
 			if detail {
 				first := unit.FirstObservedAt.UTC()
 				entry.FirstObservedAt = &first

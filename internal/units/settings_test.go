@@ -54,7 +54,7 @@ func TestResolveAndMaterializeSettings(t *testing.T) {
 		Icon:             FieldSetting[string]{Mode: "value", Value: &unitColor},
 		FunctionMeanings: FieldSetting[map[int]string]{Mode: "unset"},
 	}
-	effective := ResolveSettings(settings, &defaults)
+	effective := ResolveSettings(settings, &defaults, nil)
 	if effective.Color.Source != "organization" || effective.Color.Value == nil || *effective.Color.Value != orgColor {
 		t.Fatalf("effective color = %+v", effective.Color)
 	}
@@ -65,12 +65,12 @@ func TestResolveAndMaterializeSettings(t *testing.T) {
 		t.Fatalf("effective meanings = %+v", effective.FunctionMeanings)
 	}
 
-	materialized := MaterializeSettings(settings, defaults)
+	materialized := MaterializeSettings(settings, defaults, nil)
 	if materialized.Color.Mode != "value" || materialized.Color.Value == nil || *materialized.Color.Value != orgColor ||
 		materialized.FunctionMeanings.Mode != "unset" {
 		t.Fatalf("materialized settings = %+v", materialized)
 	}
-	if got := ResolveSettings(materialized, nil); got.Color.Source != "unit" || *got.Color.Value != orgColor {
+	if got := ResolveSettings(materialized, nil, nil); got.Color.Source != "unit" || *got.Color.Value != orgColor {
 		t.Fatalf("materialized value did not survive detachment: %+v", got.Color)
 	}
 }

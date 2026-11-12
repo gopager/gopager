@@ -180,6 +180,17 @@ func (s *Store) Update(ctx context.Context, tx platform.TransactionContext, sche
 	if err != nil {
 		return err
 	}
+	// The catalog row lock first serializes this update with Unit writes holding the shared lock.
+	if err := touchCatalog(ctx, executor); err != nil {
+		return err
+	}
+	removed, err := removedAgencies(ctx, executor, schema.Key, schema.Agencies)
+	if err != nil {
+		return err
+	}
+	if err := requireNoEntriesOf(ctx, executor, schema.Key, removed); err != nil {
+		return err
+	}
 	result, err := executor.ExecContext(ctx, `UPDATE attribute_schemas SET label = $3, description = $4, fields = $5::jsonb,
 		deprecated = $6, revision = revision + 1, updated_at = $7 WHERE key = $1 AND revision = $2`,
 		schema.Key, expected, schema.Label, schema.Description, fields, schema.Deprecated, schema.UpdatedAt)
@@ -189,10 +200,7 @@ func (s *Store) Update(ctx context.Context, tx platform.TransactionContext, sche
 	if _, err := executor.ExecContext(ctx, `DELETE FROM attribute_schema_agencies WHERE schema_key = $1`, schema.Key); err != nil {
 		return err
 	}
-	if err := insertAgencies(ctx, executor, schema.Key, schema.Agencies); err != nil {
-		return err
-	}
-	return touchCatalog(ctx, executor)
+	return insertAgencies(ctx, executor, schema.Key, schema.Agencies)
 }
 
 // referenced reports whether anything refers to the key. A field reference is an object with
@@ -222,8 +230,17 @@ func (s *Store) Delete(ctx context.Context, tx platform.TransactionContext, key 
 	if inUse {
 		return authz.ErrRevisionConflict
 	}
+	if inUse, err = entriesInUse(ctx, executor, key); err != nil {
+		return err
+	}
+	if inUse {
+		return authz.ErrRevisionConflict
+	}
 	result, err := executor.ExecContext(ctx, `DELETE FROM attribute_schemas WHERE key = $1 AND revision = $2`, key, expected)
-	return requireOneRow(result, err)
+	if err := requireOneRow(result, err); err != nil {
+		return err
+	}
+	return stripDeletedEntries(ctx, executor, key)
 }
 
 // Catalog implements attributes.CatalogSource. The revision is read first, so the schemas are

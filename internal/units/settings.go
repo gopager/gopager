@@ -120,7 +120,11 @@ func (settings Settings) Canonical() (Settings, error) {
 		value := copyFunctionMeanings(*meanings.Value)
 		meanings.Value = &value
 	}
-	return Settings{Color: color, Icon: icon, FunctionMeanings: meanings}, nil
+	attributes, err := settings.Attributes.Canonical()
+	if err != nil {
+		return Settings{}, err
+	}
+	return Settings{Color: color, Icon: icon, FunctionMeanings: meanings, Attributes: attributes}, nil
 }
 
 // Canonical validates complete Organization defaults and copies their values.
@@ -145,7 +149,11 @@ func (defaults Defaults) Canonical() (Defaults, error) {
 		value := copyFunctionMeanings(*meanings.Value)
 		meanings.Value = &value
 	}
-	return Defaults{Color: color, Icon: icon, FunctionMeanings: meanings}, nil
+	attributes, err := defaults.Attributes.Canonical()
+	if err != nil {
+		return Defaults{}, err
+	}
+	return Defaults{Color: color, Icon: icon, FunctionMeanings: meanings, Attributes: attributes}, nil
 }
 
 func effectiveValue[T any](setting FieldSetting[T], fallback DefaultSetting[T], hasOrganization bool) EffectiveValue[T] {
@@ -174,8 +182,10 @@ func materializeSetting[T any](setting FieldSetting[T], fallback DefaultSetting[
 	return FieldSetting[T]{Mode: "unset"}
 }
 
-// ResolveSettings computes effective values without changing stored Unit overrides.
-func ResolveSettings(settings Settings, defaults *Defaults) EffectiveSettings {
+// ResolveSettings computes effective values without changing stored Unit overrides. defaults is
+// nil without an Organization. assigned restricts inherited attribute defaults as in
+// ResolveAttributes: a Unit passes the assignment test of its Agency, a template nil.
+func ResolveSettings(settings Settings, defaults *Defaults, assigned func(schemaKey string) bool) EffectiveSettings {
 	var org Defaults
 	hasOrganization := defaults != nil
 	if hasOrganization {
@@ -185,15 +195,19 @@ func ResolveSettings(settings Settings, defaults *Defaults) EffectiveSettings {
 		Color:            effectiveValue(settings.Color, org.Color, hasOrganization),
 		Icon:             effectiveValue(settings.Icon, org.Icon, hasOrganization),
 		FunctionMeanings: effectiveValue(settings.FunctionMeanings, org.FunctionMeanings, hasOrganization),
+		Attributes:       ResolveAttributes(settings.Attributes, org.Attributes, assigned),
 	}
 }
 
-// MaterializeSettings replaces inherited values with the current Organization value or unset.
-func MaterializeSettings(settings Settings, defaults Defaults) Settings {
+// MaterializeSettings replaces inherited values with the current Organization value or unset,
+// and inherited attribute values with "value" entries (see MaterializeAttributes, whose
+// assigned has the same meaning).
+func MaterializeSettings(settings Settings, defaults Defaults, assigned func(schemaKey string) bool) Settings {
 	result := Settings{
 		Color:            materializeSetting(settings.Color, defaults.Color),
 		Icon:             materializeSetting(settings.Icon, defaults.Icon),
 		FunctionMeanings: materializeSetting(settings.FunctionMeanings, defaults.FunctionMeanings),
+		Attributes:       MaterializeAttributes(settings.Attributes, defaults.Attributes, assigned),
 	}
 	if result.FunctionMeanings.Value != nil {
 		value := copyFunctionMeanings(*result.FunctionMeanings.Value)

@@ -27,7 +27,13 @@ func providerSchemas() []Schema {
 			"code": {Kind: processing.StringValue},
 		}},
 		{Key: "unitdata", Subject: SubjectUnit, Fields: map[string]Field{
-			"badge": {Kind: processing.StringValue},
+			"badge": {Kind: processing.StringValue, Label: "Badge", Description: "Station badge", Icon: "tag"},
+			"tags":  {Kind: processing.ListValue, Element: &Field{Kind: processing.StringValue}},
+			"site": {Kind: processing.ObjectValue, Deprecated: true, Properties: map[string]Field{
+				"town": {Kind: processing.StringValue},
+				"items": {Kind: processing.ListValue, Element: &Field{Kind: processing.ObjectValue,
+					Properties: map[string]Field{"hidden": {Kind: processing.StringValue}}}},
+			}},
 		}},
 	}
 }
@@ -76,21 +82,20 @@ func TestProviderFields(t *testing.T) {
 	}
 }
 
-func TestProviderDoesNotDescendIntoListsOrUnitSchemas(t *testing.T) {
+func TestProviderDoesNotDescendIntoLists(t *testing.T) {
 	t.Parallel()
 	provider := NewProvider(providerSchemas(), 1)
 	for _, path := range [][]string{
 		{"vehicle", "owner", "items", "hidden"},
 		{"vehicle", "tags", "x"},
 		{"vehicle", "missing"},
-		{"unitdata", "badge"},
 	} {
 		if _, ok := provider.Field(ref(path...)); ok {
 			t.Fatalf("%v must not be declared", path)
 		}
 	}
-	if got := len(provider.Fields()); got != 10 {
-		t.Fatalf("fields = %d, want 10", got)
+	if got := len(provider.Fields()); got != 20 {
+		t.Fatalf("fields = %d, want 20", got)
 	}
 }
 
@@ -113,5 +118,76 @@ func TestProviderInRegistry(t *testing.T) {
 		if field.Deprecated {
 			t.Fatalf("%s is deprecated", field.Path())
 		}
+	}
+}
+
+func TestProviderUnitFields(t *testing.T) {
+	t.Parallel()
+	provider := NewProvider(providerSchemas(), 1)
+	tests := []struct {
+		path       []string
+		kind       processing.ValueKind
+		label      string
+		deprecated bool
+	}{
+		{[]string{"unitdata", "badge"}, processing.StringValue, "Badge", false},
+		{[]string{"unitdata", "tags"}, processing.ListValue, "tags", false},
+		{[]string{"unitdata", "site"}, processing.ObjectValue, "site", true},
+		{[]string{"unitdata", "site", "town"}, processing.StringValue, "town", true},
+	}
+	for _, test := range tests {
+		for _, shape := range []struct {
+			namespace string
+			prefix    []string
+			scope     fields.Scope
+		}{
+			{"unit", []string{"attributes"}, fields.ScopeMessage},
+			{"unit", []string{"attributes"}, fields.ScopeDelivery},
+			{"target", []string{"unit", "attributes"}, fields.ScopeWorkflow},
+		} {
+			path := append(append([]string{}, shape.prefix...), test.path...)
+			field, ok := provider.Field(processing.FieldRef{Namespace: shape.namespace, Path: path})
+			if !ok {
+				t.Fatalf("%s %v missing", shape.namespace, path)
+			}
+			if field.Type.Kind != test.kind || !field.Type.Optional || field.Label != test.label ||
+				field.Deprecated != test.deprecated || field.Group != "unit" || !field.In(shape.scope) ||
+				field.Filterable != fields.FilterableType(field.Type) {
+				t.Fatalf("%s %v: unexpected %+v", shape.namespace, path, field)
+			}
+		}
+	}
+	badge, _ := provider.Field(processing.FieldRef{Namespace: "unit", Path: []string{"attributes", "unitdata", "badge"}})
+	if badge.Description != "Station badge" || badge.Icon != "tag" || badge.Path() != "unit.attributes.unitdata.badge" {
+		t.Fatalf("metadata = %+v", badge)
+	}
+	if badge.In(fields.ScopeWorkflow) {
+		t.Fatal("unit.attributes is not a Workflow field")
+	}
+	if _, ok := provider.Field(processing.FieldRef{Namespace: "unit", Path: []string{"attributes", "unitdata", "site", "items", "hidden"}}); ok {
+		t.Fatal("list elements must not be declared")
+	}
+	if _, ok := provider.Field(ref("unitdata", "badge")); ok {
+		t.Fatal("a unit schema declares no Message attribute")
+	}
+	// 10 Message fields, 5 Unit fields (badge, tags, site, site.town, site.items) in two namespaces.
+	if got := len(provider.Fields()); got != 20 {
+		t.Fatalf("fields = %d, want 20", got)
+	}
+}
+
+func TestProviderUnitFieldsInRegistry(t *testing.T) {
+	t.Parallel()
+	registry := fields.New(NewProvider(providerSchemas(), 2), fields.Builtin())
+	badge := processing.FieldRef{Namespace: "unit", Path: []string{"attributes", "unitdata", "badge"}}
+	target := processing.FieldRef{Namespace: "target", Path: []string{"unit", "attributes", "unitdata", "badge"}}
+	if _, err := registry.Lookup(fields.ScopeMessage, badge, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := registry.Lookup(fields.ScopeWorkflow, target, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := registry.Lookup(fields.ScopeMessage, target, false); err == nil {
+		t.Fatal("target.unit.attributes is a Workflow field only")
 	}
 }
