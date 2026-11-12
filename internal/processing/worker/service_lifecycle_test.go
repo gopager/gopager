@@ -36,6 +36,7 @@ type lifecycleRepository struct {
 	pending       processing.Candidate
 	completeCalls int
 	failCalls     int
+	failedStep    string
 }
 
 func (r *lifecycleRepository) AdmitCandidate(context.Context, platform.TransactionContext,
@@ -58,9 +59,10 @@ func (r *lifecycleRepository) RenewCandidate(context.Context, platform.Transacti
 	return processing.Candidate{}, errors.New("unexpected candidate renewal")
 }
 
-func (r *lifecycleRepository) FailCandidate(context.Context, platform.TransactionContext,
-	processing.CandidateLease, platform.ErrorCode, bool) (processing.Candidate, error) {
+func (r *lifecycleRepository) FailCandidate(_ context.Context, _ platform.TransactionContext,
+	_ processing.CandidateLease, _ platform.ErrorCode, step string, _ bool) (processing.Candidate, error) {
 	r.failCalls++
+	r.failedStep = step
 	return processing.Candidate{}, nil
 }
 

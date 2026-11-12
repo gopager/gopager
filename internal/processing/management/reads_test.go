@@ -74,3 +74,33 @@ func TestProcessingStatusPageBoundsAndDetachesMutableFields(t *testing.T) {
 		t.Fatal("candidate status retained caller-owned pointers")
 	}
 }
+
+func TestCandidateStatusExplainsTheFailureWithReasonAndStep(t *testing.T) {
+	t.Parallel()
+	step := "extract-level"
+	for code, reason := range map[platform.ErrorCode]string{
+		platform.CodeResourceLimit:        "resource-limit",
+		platform.CodeAuthorityUnavailable: "capability-unavailable",
+		platform.CodeInvalidInput:         "conversion-failed",
+		platform.CodeInternalError:        "evaluation-failed",
+	} {
+		status := CandidateStatus{ID: uuid.New(), Revision: 2, State: "failed", FailureCode: &code, FailureStep: &step,
+			UpdatedAt: time.Now().UTC()}
+		if err := validateCandidateStatus(status); err != nil {
+			t.Fatal(err)
+		}
+		explained := detachCandidateStatus(status)
+		if explained.FailureReason != reason || explained.FailureStep == nil || *explained.FailureStep != step {
+			t.Fatalf("%s: reason %q step %v", code, explained.FailureReason, explained.FailureStep)
+		}
+		encoded, err := json.Marshal(explained)
+		if err != nil || !strings.Contains(string(encoded), `"failureReason":"`+reason+`"`) ||
+			!strings.Contains(string(encoded), `"failureStep":"extract-level"`) {
+			t.Fatalf("encoded = %s, %v", encoded, err)
+		}
+	}
+	orphan := CandidateStatus{ID: uuid.New(), Revision: 1, State: "failed", FailureStep: &step, UpdatedAt: time.Now().UTC()}
+	if err := validateCandidateStatus(orphan); err == nil {
+		t.Fatal("a failing step without a failure code was accepted")
+	}
+}

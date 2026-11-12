@@ -94,13 +94,26 @@ func (input PreviewInput) validate() (previewSourceMode, error) {
 }
 
 // Preview authorizes the editor, captures trusted input, compiles/evaluates outside SQL, and always drains the run.
+// A failed evaluation is a result that explains the failure; request, authorization and
+// infrastructure errors are returned as errors.
 func (s *PreviewService) Preview(ctx context.Context, proof identity.Proof, input PreviewInput,
-	checks ...func(identity.Authentication) error) (result processing.Evaluation, err error) {
+	checks ...func(identity.Authentication) error) (PreviewResult, error) {
+	evaluation, failure, err := s.preview(ctx, proof, input, checks...)
+	if err != nil {
+		return PreviewResult{}, err
+	}
+	return PreviewResult{Evaluation: evaluation, Failure: failure}, nil
+}
+
+// preview runs the preview; it returns the explanation of a failed evaluation in place of the
+// evaluation.
+func (s *PreviewService) preview(ctx context.Context, proof identity.Proof, input PreviewInput,
+	checks ...func(identity.Authentication) error) (result processing.Evaluation, failure *PreviewFailure, err error) {
 	if s == nil || s.management == nil || s.compiler == nil || s.executions == nil || ctx == nil {
-		return processing.Evaluation{}, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing Processing preview participant"))
+		return processing.Evaluation{}, nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing Processing preview participant"))
 	}
 	if len(checks) > 1 || (len(checks) == 1 && checks[0] == nil) {
-		return processing.Evaluation{}, authz.ErrInvalidInput
+		return processing.Evaluation{}, nil, authz.ErrInvalidInput
 	}
 	var transportCheck func(identity.Authentication) error
 	if len(checks) == 1 {
@@ -108,22 +121,22 @@ func (s *PreviewService) Preview(ctx context.Context, proof identity.Proof, inpu
 	}
 	mode, err := input.validate()
 	if err != nil {
-		return processing.Evaluation{}, err
+		return processing.Evaluation{}, nil, err
 	}
 	input.SyntheticJSON = append(json.RawMessage(nil), input.SyntheticJSON...)
 	if input.Definition != nil {
 		encoded, encodeErr := json.Marshal(*input.Definition)
 		if encodeErr != nil {
-			return processing.Evaluation{}, encodeErr
+			return processing.Evaluation{}, nil, encodeErr
 		}
 		var detached processing.Definition
 		if decodeErr := processing.Decode(encoded, &detached); decodeErr != nil {
-			return processing.Evaluation{}, decodeErr
+			return processing.Evaluation{}, nil, decodeErr
 		}
 		input.Definition = &detached
 	}
 	if err := ctx.Err(); err != nil {
-		return processing.Evaluation{}, err
+		return processing.Evaluation{}, nil, err
 	}
 	var workflow processing.WorkflowConfiguration
 	var definition processing.Definition
@@ -170,55 +183,58 @@ func (s *PreviewService) Preview(ctx context.Context, proof identity.Proof, inpu
 		return readErr
 	})
 	if err != nil {
-		return processing.Evaluation{}, err
+		return processing.Evaluation{}, nil, err
 	}
 	source, err := processing.CaptureSource(ctx, capture.Projection)
 	if err != nil {
-		return processing.Evaluation{}, err
+		return processing.Evaluation{}, nil, err
 	}
 	sourceIdentity, err := source.Identity()
 	if err != nil {
-		return processing.Evaluation{}, err
+		return processing.Evaluation{}, nil, err
 	}
 	editor, err := execution.NewPreviewAuthority(s.management.resolver, proof)
 	if err != nil {
-		return processing.Evaluation{}, err
+		return processing.Evaluation{}, nil, err
 	}
 	binding := processing.ExecutionBinding{WorkflowID: workflow.ID,
 		DefinitionVersionID: versionID, RunID: uuid.New(), Source: sourceIdentity,
 		PreviewEditor: editor}
 	run, err := s.executions.Begin(ctx, binding, s.sourceOwner)
 	if err != nil {
-		return processing.Evaluation{}, err
+		return processing.Evaluation{}, nil, err
 	}
 	defer func() {
 		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
 		defer cancel()
 		err = errors.Join(err, run.Close(closeCtx))
 		if err != nil {
-			result = processing.Evaluation{}
+			result, failure = processing.Evaluation{}, nil
 		}
 	}()
 	program, err := s.compiler.CompileWorkflow(run.Context(), definition, run)
 	if err != nil {
-		return processing.Evaluation{}, err
+		return processing.Evaluation{}, nil, err
 	}
 	// A saved version was validated when it was saved; an unsaved draft has not been, and its
 	// result is shown to the editor, so it is judged by the editor's current field permissions
 	// exactly like a save.
 	if input.Definition != nil {
 		if err = authorizeReferences(editorAuthority, program.SourceReferences()); err != nil {
-			return processing.Evaluation{}, err
+			return processing.Evaluation{}, nil, err
 		}
 	}
 	result, err = program.EvaluateScoped(run.Context(), source, capture.Scope, run)
 	if err != nil {
-		return processing.Evaluation{}, err
+		if explained, ok := previewFailure(err); ok {
+			return processing.Evaluation{}, explained, nil
+		}
+		return processing.Evaluation{}, nil, err
 	}
 	if err = s.recheckPreview(ctx, proof, workflow, binding, result); err != nil {
-		return processing.Evaluation{}, err
+		return processing.Evaluation{}, nil, err
 	}
-	return result, nil
+	return result, nil, nil
 }
 
 // recheckPreview fences a detached result with current editor, Workflow and source authority.
