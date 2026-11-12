@@ -80,9 +80,13 @@ func (r *CardRenderer) RenderCards(ctx context.Context, tx platform.TransactionC
 	}
 	run := &cardRun{renderer: r, tx: tx, declarations: registry.Declarations(fields.ScopeDelivery, false),
 		programs: map[programKey]cardProgram{}}
+	resolutions, err := r.resolveLayouts(ctx, tx, projections)
+	if err != nil {
+		return nil, err
+	}
 	cards := make([]*readmodel.Card, 0, len(projections))
-	for _, projection := range projections {
-		card, err := run.card(ctx, projection)
+	for i, projection := range projections {
+		card, err := run.card(ctx, projection, resolutions[i])
 		if err != nil {
 			return nil, err
 		}
@@ -91,14 +95,32 @@ func (r *CardRenderer) RenderCards(ctx context.Context, tx platform.TransactionC
 	return cards, nil
 }
 
-// card renders one Message, falling back to the built-in default when its Layout cannot render.
-func (c *cardRun) card(ctx context.Context, projection readmodel.DeliveryProjection) (*readmodel.Card, error) {
-	reader := delivery.MessageFieldReader(projection, c.declarations)
-	unitIDs := make([]uuid.UUID, 0, len(projection.Units))
-	for _, unit := range projection.Units {
-		unitIDs = append(unitIDs, unit.UnitID)
+// resolveLayouts resolves the Layout of every projection. A resolver that can resolve a batch
+// reads each layer once for the page; any other resolver is asked per Message.
+func (r *CardRenderer) resolveLayouts(ctx context.Context, tx platform.TransactionContext,
+	projections []readmodel.DeliveryProjection) ([]LayoutResolution, error) {
+	requests := make([]processing.LayoutRequest, len(projections))
+	for i, projection := range projections {
+		unitIDs := make([]uuid.UUID, 0, len(projection.Units))
+		for _, unit := range projection.Units {
+			unitIDs = append(unitIDs, unit.UnitID)
+		}
+		requests[i] = processing.LayoutRequest{OutputKind: processing.LayoutJSON, UnitIDs: unitIDs}
 	}
-	resolved, err := c.renderer.layouts.ResolveLayout(ctx, c.tx, processing.LayoutRequest{OutputKind: processing.LayoutJSON, UnitIDs: unitIDs})
+	if batch, ok := r.layouts.(BatchLayoutResolver); ok {
+		return batch.ResolveLayouts(ctx, tx, requests)
+	}
+	resolutions := make([]LayoutResolution, len(requests))
+	for i, request := range requests {
+		resolutions[i].Layout, resolutions[i].Err = r.layouts.ResolveLayout(ctx, tx, request)
+	}
+	return resolutions, nil
+}
+
+// card renders one Message, falling back to the built-in default when its Layout cannot render.
+func (c *cardRun) card(ctx context.Context, projection readmodel.DeliveryProjection, resolution LayoutResolution) (*readmodel.Card, error) {
+	reader := delivery.MessageFieldReader(projection, c.declarations)
+	resolved, err := resolution.Layout, resolution.Err
 	if err == nil && resolved.Layout.OutputKind == processing.LayoutJSON {
 		var card *readmodel.Card
 		if card, err = c.render(ctx, resolved, reader); err == nil && card != nil {
