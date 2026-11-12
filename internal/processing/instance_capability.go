@@ -177,7 +177,9 @@ func (d DeliveryCapability) validate() error {
 // validateDeliveryConfiguration enforces the declaration rules that make Delivery configuration
 // safe to store and merge: the root is administrative; Secrets are string properties outside lists;
 // containers are never Secrets; user properties are optional and their subtree stays personal; list
-// elements share their list's scope; property names contain no '.' so dotted Secret paths are
+// elements share their list's scope and an administrative list holds no personal property at any
+// depth; a nullable administrative container holds no personal property, because an administrative
+// null would hide personal values with no unambiguous merge; property names contain no '.' so dotted Secret paths are
 // unambiguous.
 func validateDeliveryConfiguration(schema FieldSchema, policy ConfigurationPolicy) error {
 	if policy.Scope != "admin" {
@@ -197,6 +199,9 @@ func validateDeliveryNode(schema FieldSchema, policy ConfigurationPolicy, inList
 	}
 	switch schema.Kind {
 	case ObjectValue:
+		if schema.Nullable && policy.Scope == "admin" && hasDescendantScope(policy, "user") {
+			return invalid(errors.New("nullable administrative container with personal properties"))
+		}
 		for name, child := range schema.Properties {
 			if strings.Contains(name, ".") {
 				return invalid(errors.New("configuration property names cannot contain a dot"))
@@ -212,6 +217,9 @@ func validateDeliveryNode(schema FieldSchema, policy ConfigurationPolicy, inList
 	case ListValue:
 		if policy.Element.Scope != policy.Scope {
 			return invalid(errors.New("list element scope differs from its list"))
+		}
+		if policy.Scope == "admin" && hasDescendantScope(policy, "user") {
+			return invalid(errors.New("personal property below an administrative list"))
 		}
 		return validateDeliveryNode(*schema.Element, *policy.Element, true, policy.Scope)
 	}
@@ -241,4 +249,14 @@ func (m InstalledManifest) validateInstance(configuration InstanceConfiguration)
 	}
 	_, err := m.ConfigurationSecretReferences(configuration.Configuration)
 	return err
+}
+
+// hasDescendantScope reports whether any node below the policy's own node has the scope.
+func hasDescendantScope(policy ConfigurationPolicy, scope string) bool {
+	for _, child := range policy.Properties {
+		if hasScope(child, scope) {
+			return true
+		}
+	}
+	return policy.Element != nil && hasScope(*policy.Element, scope)
 }

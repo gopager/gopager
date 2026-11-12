@@ -258,7 +258,7 @@ func (p *PersonalService) complete(ctx context.Context, instance processing.Inst
 		kept = previousReferences(manifest, existing.Configuration)
 	}
 	plan, err := planSecrets(p.instances.secrets, manifest, secretScope{scope: "user", instanceID: instance.ID,
-		owner: &principal}, kept, input.Secrets)
+		owner: &principal}, manifest.RetainableSecretReferences(kept, input.Configuration), input.Secrets)
 	if err != nil {
 		return processing.Value{}, secretPlan{}, err
 	}

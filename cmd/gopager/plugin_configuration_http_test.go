@@ -201,6 +201,18 @@ func TestPluginPersonalConfigurationStaysPerOwner(t *testing.T) {
 	}
 	f.userRequest(bob, http.MethodGet, path, "", http.StatusOK)
 
+	// Revisions never repeat: a client holding revision 1 or 2 cannot touch the re-created values.
+	f.userRequest(alice, http.MethodDelete, path, mustJSON(t, map[string]any{"schemaVersion": 1, "commandId": uuid.New(),
+		"expectedRevision": "2"}), http.StatusConflict)
+	recreated := f.userRequest(alice, http.MethodPut, path, write("0", map[string]any{"nick": typedString("again")}, nil), http.StatusOK)
+	if _, revision := managementResultID(t, recreated); revision != "4" {
+		t.Fatalf("re-created revision = %s, want 4", revision)
+	}
+	f.userRequest(alice, http.MethodPut, path, write("1", map[string]any{"nick": typedString("stale")}, nil), http.StatusConflict)
+	f.userRequest(alice, http.MethodDelete, path, mustJSON(t, map[string]any{"schemaVersion": 1, "commandId": uuid.New(),
+		"expectedRevision": "1"}), http.StatusConflict)
+	f.userRequest(alice, http.MethodPut, path, write("4", map[string]any{"nick": typedString("current")}, nil), http.StatusOK)
+
 	disabled := f.instanceBody("2", false, nil, everyone)
 	f.adminRequest(http.MethodPut, "/api/v1/instances/"+id.String(), disabled, http.StatusOK)
 	f.userRequest(bob, http.MethodGet, path, "", http.StatusNotFound)
@@ -316,6 +328,14 @@ func TestPluginInstanceLifecycle(t *testing.T) {
 	f.writeManifest("manifest.json", func(manifest map[string]any) { manifest["sdkMajor"] = 3 })
 	if state, configuration := lifecycle(); state != "incompatible" || configuration != "" {
 		t.Fatalf("incompatible instance: %s %q", state, configuration)
+	}
+	f.writeManifest("manifest.json", func(manifest map[string]any) {
+		manifest["configurationSchema"].(map[string]any)["properties"].(map[string]any)["title"] = map[string]any{"kind": "string", "optional": true}
+		manifest["configurationPolicy"].(map[string]any)["properties"].(map[string]any)["title"] =
+			map[string]any{"configurationScope": "user", "secret": false}
+	})
+	if state, configuration := lifecycle(); state != "failed" || configuration != "" {
+		t.Fatalf("instance whose stored configuration the host would reject: %s %q", state, configuration)
 	}
 	f.writeManifest("manifest.json", nil)
 	if err := removePlugin(f.directory); err != nil {

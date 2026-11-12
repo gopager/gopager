@@ -1110,16 +1110,21 @@ instance inspection returns `503 AUTHORITY_UNAVAILABLE`. Plugin and manifest det
   instance must be current, enabled, a `delivery` instance and admit the caller by its target use;
   otherwise, and when the caller holds no values, the routes answer `404 NOT_FOUND`. `PUT` takes
   `{schemaVersion, commandId, expectedRevision, configuration, secrets}`: `expectedRevision` is
-  `"0"` to create or the stored revision; `configuration` replaces the user-scoped non-Secret
+  `"0"` to create (when the caller holds no values) or the current revision, and any other value
+  is `REVISION_CONFLICT`. Revisions never restart: a deletion advances the revision and a later
+  creation continues from it, so a client holding an older revision can neither update nor delete
+  the new values; `configuration` replaces the user-scoped non-Secret
   values; `secrets` maps the dotted path of a user-scoped Secret property to `{"value": …}` or
-  `null`, and a path left out keeps its Secret. Personal Secrets are always stored values owned by
+  `null`, and a path left out keeps its Secret, except that a Secret below an optional object the
+  `configuration` omits is not kept (the object stays absent). Personal Secrets are always stored values owned by
   the caller: `{"reference": "file:…"}` or `"env:…"` in a personal write is `INVALID_INPUT`, while
   administrative writes keep accepting both. An `admin` or unknown property, a Secret inside
   `configuration` or a reference makes the whole request `INVALID_INPUT`. Administrative values and
   other owners' rows are never touched. `GET` returns `{instanceId, revision, configuration}` with
   the same redacted view as above, restricted to user-scoped properties. `DELETE` takes
-  `{schemaVersion, commandId, expectedRevision}` and also removes the caller's Secrets of the
-  instance. Results of `PUT` and `DELETE` are `{id (the instance), revision}`.
+  `{schemaVersion, commandId, expectedRevision}` at the current revision and also removes the
+  caller's Secrets of the instance; afterwards `GET` is `404 NOT_FOUND` and `DELETE` is
+  `REVISION_CONFLICT`. Results of `PUT` and `DELETE` are `{id (the instance), revision}`.
 - **Per-Unit values.** Under the global `plugin.configure`, for `delivery` instances only. `PUT`
   takes `{schemaVersion, commandId, values}`, a map from Delivery input name to a typed value, and
   replaces all of the Unit's values; every key must be an input the current manifest declares and

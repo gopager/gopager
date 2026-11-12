@@ -227,6 +227,62 @@ func TestPersonalConfigurationRevisionsAndOwners(t *testing.T) {
 	})
 }
 
+func TestPersonalRevisionsNeverReset(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	value := processing.EmptyConfiguration()
+	save := func(expected int64) (int64, error) {
+		var revision int64
+		err := w.primary.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+			var err error
+			revision, err = w.store.SavePersonalConfiguration(tx.Context(), tx, w.instance, w.alice, expected, value)
+			return err
+		})
+		return revision, err
+	}
+	remove := func(expected int64) error {
+		return w.primary.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+			return w.store.DeletePersonalConfiguration(tx.Context(), tx, w.instance, w.alice, expected)
+		})
+	}
+	if revision, err := save(0); err != nil || revision != 1 {
+		t.Fatalf("create = %d, %v", revision, err)
+	}
+	if err := remove(1); err != nil {
+		t.Fatalf("delete = %v", err)
+	}
+	w.within(func(tx platform.TransactionContext) error {
+		if _, err := w.store.ReadPersonalConfiguration(tx.Context(), tx, w.instance, w.alice); !errors.Is(err, authz.ErrNotFound) {
+			t.Fatalf("tombstone read = %v, want not found", err)
+		}
+		return nil
+	})
+	if _, err := save(2); !errors.Is(err, authz.ErrRevisionConflict) {
+		t.Fatalf("update of a tombstone = %v, want revision conflict", err)
+	}
+	if err := remove(2); !errors.Is(err, authz.ErrRevisionConflict) {
+		t.Fatalf("delete of a tombstone = %v, want revision conflict", err)
+	}
+	if revision, err := save(0); err != nil || revision != 3 {
+		t.Fatalf("re-create = %d, %v, want revision 3", revision, err)
+	}
+	if _, err := save(1); !errors.Is(err, authz.ErrRevisionConflict) {
+		t.Fatalf("stale update = %v, want revision conflict", err)
+	}
+	if err := remove(1); !errors.Is(err, authz.ErrRevisionConflict) {
+		t.Fatalf("stale delete = %v, want revision conflict", err)
+	}
+	if err := remove(3); err != nil {
+		t.Fatalf("delete = %v", err)
+	}
+	w.within(func(tx platform.TransactionContext) error {
+		return w.store.DeleteAccountData(tx.Context(), tx, w.alice)
+	})
+	if revision, err := save(0); err != nil || revision != 1 {
+		t.Fatalf("create after account data removal = %d, %v, want revision 1", revision, err)
+	}
+}
+
 func TestUnitParameters(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)

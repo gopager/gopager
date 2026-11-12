@@ -30,7 +30,7 @@ func (s *InstanceService) completeConfiguration(ctx context.Context, configurati
 		}
 	}
 	plan, err := planSecrets(s.secrets, manifest, secretScope{scope: "admin", instanceID: configuration.ID,
-		allowReference: true}, kept, input.Secrets)
+		allowReference: true}, manifest.RetainableSecretReferences(kept, input.Configuration), input.Secrets)
 	if err != nil {
 		return secretPlan{}, err
 	}

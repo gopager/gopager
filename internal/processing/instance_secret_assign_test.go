@@ -150,3 +150,33 @@ func TestSecretCipherFingerprintIsKeyedAndStable(t *testing.T) {
 		t.Fatal("unexpected fingerprint shape")
 	}
 }
+
+// TestRetainableSecretReferencesNeedPresentParents checks that a previous Secret reference is
+// carried over only while every parent object of its path is present in the submitted
+// configuration, so omitting an optional branch removes the branch instead of recreating it.
+func TestRetainableSecretReferencesNeedPresentParents(t *testing.T) {
+	t.Parallel()
+	manifest := assignManifest()
+	manifest.ConfigurationSchema.Properties["auth"].Properties["token"] = FieldSchema{Kind: StringValue}
+	previous := map[string]string{"auth.token": "file:token", "userKey": "file:key"}
+	title := stringsObject(t, map[string]string{"title": "T"})
+
+	omitted := manifest.RetainableSecretReferences(previous, title)
+	if _, carried := omitted["auth.token"]; carried || omitted["userKey"] != "file:key" {
+		t.Fatalf("omitted branch: %v", omitted)
+	}
+	configuration, err := manifest.WithSecretReferences(title, omitted)
+	if err != nil || strings.Contains(string(configuration.Value), "auth") {
+		t.Fatalf("the omitted branch came back: %s, %v", configuration.Value, err)
+	}
+
+	empty := objectOf(t, map[string]Value{"title": stringLeaf(t, "T"), "auth": objectOf(t, nil)})
+	present := manifest.RetainableSecretReferences(previous, empty)
+	if present["auth.token"] != "file:token" {
+		t.Fatalf("present branch lost its Secret: %v", present)
+	}
+	null := objectOf(t, map[string]Value{"title": stringLeaf(t, "T"), "auth": {Kind: NullValue, Value: []byte("null")}})
+	if _, carried := manifest.RetainableSecretReferences(previous, null)["auth.token"]; carried {
+		t.Fatal("a null branch kept its Secret")
+	}
+}

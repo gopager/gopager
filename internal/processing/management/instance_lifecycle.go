@@ -55,10 +55,14 @@ func lifecycleOf(enabled bool, loadErr error) string {
 	return LifecycleActive
 }
 
-// loadForView verifies the pinned artifact and projects the configuration; it fails with the
-// reason the instance cannot be shown in full.
+// loadForView verifies the pinned artifact and the stored configuration with the rules the
+// Delivery host applies, then projects the configuration; it fails with the reason the instance
+// cannot be shown in full.
 func (s *InstanceService) loadForView(ctx context.Context, configuration processing.InstanceConfiguration) (
 	processing.InstalledManifest, processing.InstanceConfigurationView, error) {
+	if err := s.inspector.InspectInstance(ctx, configuration); err != nil {
+		return processing.InstalledManifest{}, processing.InstanceConfigurationView{}, err
+	}
 	manifest, err := s.inspector.InspectManifest(ctx, configuration.Main)
 	if err != nil {
 		return processing.InstalledManifest{}, processing.InstanceConfigurationView{}, err

@@ -261,11 +261,11 @@ func render(ctx context.Context, tx platform.TransactionContext, deps Dependenci
 	if err != nil {
 		return rendering{}, err
 	}
-	if !instance.Enabled {
-		return rendering{instanceRevision: instance.Revision}, nil
-	}
 	if !instance.AllowsTargetUse(subscription.SubscriberID) {
 		return rendering{instanceRevision: instance.Revision, denied: true}, nil
+	}
+	if !instance.Enabled {
+		return rendering{instanceRevision: instance.Revision}, nil
 	}
 	descriptor, err := deps.Targets.Describe(ctx, instance)
 	if err == nil {

@@ -3787,8 +3787,9 @@ paths:
       - Processing instances
       summary: Create or replace the caller's personal plugin configuration
       description: 'Under `subscription.manage-own` on the caller''s account; the instance must admit the caller as
-        for the read (404 otherwise). `expectedRevision` is "0" to create, else the stored revision (409 `REVISION_CONFLICT`
-        on a mismatch). `configuration` replaces the user-scoped non-Secret values; `secrets` maps the dotted path
+        for the read (404 otherwise). `expectedRevision` is "0" to create (when the caller holds no values), else the current
+        revision (409 `REVISION_CONFLICT` on a mismatch). Revisions never restart: a creation after a deletion continues
+        from the revision the deletion left, so a client holding an older revision cannot change the new values. `configuration` replaces the user-scoped non-Secret values; `secrets` maps the dotted path
         of a user-scoped Secret property to `{"value": ...}` (sealed into a new row owned by the caller) or null
         (removes it), and a path left out keeps its Secret. An administrative or undeclared property anywhere, a Secret
         inside `configuration`, and a `reference` (file or environment) in `secrets` are 400 `INVALID_INPUT` for the
@@ -3833,7 +3834,8 @@ paths:
       - Processing instances
       summary: Delete the caller's personal plugin configuration
       description: 'Removes the caller''s values and their Secret rows for the instance at `expectedRevision` (409
-        `REVISION_CONFLICT` on a mismatch). The instance must admit the caller as for the read. Idempotent per (caller,
+        `REVISION_CONFLICT` on a mismatch or when the caller holds no values). The deletion advances the revision, which
+        a later creation continues from; afterwards the read is 404. The instance must admit the caller as for the read. Idempotent per (caller,
         `commandId`).'
       security:
       - sessionCookie: []

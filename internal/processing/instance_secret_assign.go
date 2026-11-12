@@ -116,3 +116,33 @@ func validatePersonalNode(schema FieldSchema, policy ConfigurationPolicy, value 
 	}
 	return nil
 }
+
+// RetainableSecretReferences returns the previous references that may be carried over into the
+// submitted configuration: a reference qualifies only when every parent object of its path is
+// present in the submitted value, so omitting an optional branch removes its Secrets with it
+// instead of recreating the branch. Top-level Secrets always qualify.
+func (m InstalledManifest) RetainableSecretReferences(previous map[string]string, submitted Value) map[string]string {
+	retained := make(map[string]string, len(previous))
+	for path, reference := range previous {
+		if parentsPresent(submitted, strings.Split(path, ".")[:strings.Count(path, ".")]) {
+			retained[path] = reference
+		}
+	}
+	return retained
+}
+
+// parentsPresent reports whether the object has a nested object at each name of the path in turn.
+func parentsPresent(object Value, parents []string) bool {
+	if object.Kind != ObjectValue {
+		return false
+	}
+	if len(parents) == 0 {
+		return true
+	}
+	members, err := decodeObject(object)
+	if err != nil {
+		return false
+	}
+	child, found := members[parents[0]]
+	return found && parentsPresent(child, parents[1:])
+}

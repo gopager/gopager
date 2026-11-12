@@ -83,6 +83,25 @@ func TestDeliveryManifestValidation(t *testing.T) {
 			m.ConfigurationSchema.Properties["userKey"] = FieldSchema{Kind: StringValue}
 		}},
 		{name: "user root", code: platform.CodeInvalidInput, mutate: func(m *InstalledManifest) { m.ConfigurationPolicy.Scope = "user" }},
+		{name: "personal property below an administrative list", code: platform.CodeInvalidInput, mutate: func(m *InstalledManifest) {
+			element := FieldSchema{Kind: ObjectValue, Properties: map[string]FieldSchema{"nick": {Kind: StringValue, Optional: true}}}
+			m.ConfigurationSchema.Properties["routes"] = FieldSchema{Kind: ListValue, Optional: true, Element: &element}
+			m.ConfigurationPolicy.Properties["routes"] = ConfigurationPolicy{Scope: "admin", Secret: boolPtr(false),
+				Element: &ConfigurationPolicy{Scope: "admin", Secret: boolPtr(false), Properties: map[string]ConfigurationPolicy{
+					"nick": {Scope: "user", Secret: boolPtr(false)}}}}
+		}},
+		{name: "nullable administrative container with personal descendants", code: platform.CodeInvalidInput, mutate: func(m *InstalledManifest) {
+			m.ConfigurationSchema.Properties["me"] = FieldSchema{Kind: ObjectValue, Optional: true, Nullable: true,
+				Properties: map[string]FieldSchema{"nick": {Kind: StringValue, Optional: true}}}
+			m.ConfigurationPolicy.Properties["me"] = ConfigurationPolicy{Scope: "admin", Secret: boolPtr(false),
+				Properties: map[string]ConfigurationPolicy{"nick": {Scope: "user", Secret: boolPtr(false)}}}
+		}},
+		{name: "non-nullable administrative container with personal descendants", mutate: func(m *InstalledManifest) {
+			m.ConfigurationSchema.Properties["me"] = FieldSchema{Kind: ObjectValue, Optional: true,
+				Properties: map[string]FieldSchema{"nick": {Kind: StringValue, Optional: true}}}
+			m.ConfigurationPolicy.Properties["me"] = ConfigurationPolicy{Scope: "admin", Secret: boolPtr(false),
+				Properties: map[string]ConfigurationPolicy{"nick": {Scope: "user", Secret: boolPtr(false)}}}
+		}},
 		{name: "dotted property name", code: platform.CodeInvalidInput, mutate: func(m *InstalledManifest) {
 			m.ConfigurationSchema.Properties["a.b"] = FieldSchema{Kind: StringValue, Optional: true}
 			m.ConfigurationPolicy.Properties["a.b"] = ConfigurationPolicy{Scope: "admin", Secret: boolPtr(false)}

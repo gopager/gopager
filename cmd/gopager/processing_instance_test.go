@@ -155,10 +155,10 @@ func TestProcessingInstanceHTTPUsesRootAndRedactsCurrentConfiguration(t *testing
 	if strings.Contains(string(redacted.Data), "secret-value") || strings.Contains(string(redacted.Data), "personal-value") {
 		t.Fatalf("redacted configuration values leaked: %s", redacted.Data)
 	}
-	for _, classification := range []string{`"secret":true`, `"scope":"user"`} {
-		if !strings.Contains(string(redacted.Data), classification) {
-			t.Fatalf("classified configuration status %s missing from %s", classification, redacted.Data)
-		}
+	// A processing instance cannot hold Secrets, so the host would reject this record: the view
+	// reports it as failed instead of projecting its configuration.
+	if !strings.Contains(string(redacted.Data), `"lifecycle":"failed"`) || strings.Contains(string(redacted.Data), `"configuration"`) {
+		t.Fatalf("an instance the host rejects was not reported as failed: %s", redacted.Data)
 	}
 
 	pathFailure := managementRequest(t, client, origin, http.MethodPost, "/api/v1/instances",
