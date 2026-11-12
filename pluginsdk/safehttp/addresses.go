@@ -3,12 +3,23 @@ package safehttp
 import "net/netip"
 
 // forbiddenPrefixes are the ranges that netip's predicates do not cover: the "this network"
-// block, carrier-grade NAT and the documented cloud metadata addresses.
+// block, carrier-grade NAT, IETF protocol assignments, benchmarking and reserved IPv4 space,
+// the documented cloud metadata addresses, and IPv6 transition ranges that tunnel an IPv4
+// destination (local-use NAT64, 6to4, Teredo and the deprecated IPv4-compatible form). The
+// transition ranges are denied outright because the IPv4 address they reach is chosen by
+// relays outside this host, so it cannot be checked here.
 var forbiddenPrefixes = []netip.Prefix{
 	netip.MustParsePrefix("0.0.0.0/8"),
 	netip.MustParsePrefix("100.64.0.0/10"),
+	netip.MustParsePrefix("192.0.0.0/24"),
+	netip.MustParsePrefix("198.18.0.0/15"),
+	netip.MustParsePrefix("240.0.0.0/4"),
 	netip.MustParsePrefix("169.254.169.254/32"),
 	netip.MustParsePrefix("fd00:ec2::254/128"),
+	netip.MustParsePrefix("64:ff9b:1::/48"),
+	netip.MustParsePrefix("2002::/16"),
+	netip.MustParsePrefix("2001::/32"),
+	netip.MustParsePrefix("::/96"),
 }
 
 // nat64Prefix is the well-known NAT64 prefix whose low 32 bits embed an IPv4 address.
