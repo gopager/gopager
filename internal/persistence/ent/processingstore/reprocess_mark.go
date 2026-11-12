@@ -123,12 +123,36 @@ func (s *Store) inheritReprocessMark(ctx context.Context, tx platform.Transactio
 	if err != nil {
 		return err
 	}
-	_, err = executor.ExecContext(ctx, `UPDATE processing_candidates c SET reprocess_id = m.reprocess_id
+	if _, err = executor.ExecContext(ctx, `UPDATE processing_candidates c SET reprocess_id = m.reprocess_id
 		FROM (SELECT o.reprocess_id, o.transmission_id, o.workflow_id FROM processing_candidates o
 			WHERE o.id <> $1 AND o.reprocess_id IS NOT NULL AND o.state <> 'superseded'
 				AND o.transmission_id = (SELECT transmission_id FROM processing_candidates WHERE id = $1)
 				AND o.workflow_id <> (SELECT workflow_id FROM processing_candidates WHERE id = $1)
 			LIMIT 1) m
+		WHERE c.id = $1 AND c.reprocess_id IS NULL AND ($2 OR `+workflowHistory+`)`, candidate, repended); err != nil {
+		return err
+	}
+	return s.markCoveredByRequest(ctx, tx, candidate, repended)
+}
+
+// markCoveredByRequest marks a candidate that was just created or re-pended with the newest
+// active Reprocess request of its Workflow that covers its Transmission, when the Workflow has
+// history for the Transmission. The runner may not have reached the Transmission yet, so without
+// this a readmission by a correction or by another Workflow's dispatch would make the re-run
+// look like fresh intake. A request covers a Transmission accepted by its cutoff whose Message
+// time lies in its range.
+func (s *Store) markCoveredByRequest(ctx context.Context, tx platform.TransactionContext, candidate uuid.UUID, repended bool) error {
+	executor, err := s.primary.Resolve(tx)
+	if err != nil {
+		return err
+	}
+	_, err = executor.ExecContext(ctx, `UPDATE processing_candidates c SET reprocess_id = (
+			SELECT r.id FROM processing_reprocess_requests r
+				JOIN transmissions t ON t.id = c.transmission_id JOIN messages m ON m.id = t.message_id
+			WHERE r.workflow_id = c.workflow_id AND r.state IN ('pending', 'running')
+				AND t.accepted_at <= r.cutoff_at
+				AND m.first_observed_at >= r.message_time_from AND m.first_observed_at < r.message_time_to
+			ORDER BY r.created_at DESC, r.id DESC LIMIT 1)
 		WHERE c.id = $1 AND c.reprocess_id IS NULL AND ($2 OR `+workflowHistory+`)`, candidate, repended)
 	return err
 }

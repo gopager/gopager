@@ -168,8 +168,9 @@ func (s *Store) NextReprocessTransmission(ctx context.Context, tx platform.Trans
 }
 
 // SnapshotTransmission reads the Transmission's candidates before readmission. It is fresh when
-// a non-superseded candidate of the request's Workflow carries the pinned revision and was
-// created at or after the request. Candidates that existed before carry an older revision, and
+// a non-superseded candidate of the request's Workflow carries the pinned revision, was created
+// at or after the request and is the Workflow's first work on the Transmission: a candidate that
+// replaced earlier work is a historical re-run, however recently it was admitted. Candidates that existed before carry an older revision, and
 // ones the runner's own readmission creates do not exist yet when this is asked.
 func (s *Store) SnapshotTransmission(ctx context.Context, tx platform.TransactionContext,
 	request processing.ReprocessRequest, transmission uuid.UUID) (processing.ReprocessSnapshot, error) {
@@ -178,9 +179,9 @@ func (s *Store) SnapshotTransmission(ctx context.Context, tx platform.Transactio
 		return processing.ReprocessSnapshot{}, err
 	}
 	var snapshot processing.ReprocessSnapshot
-	err = executor.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM processing_candidates
-		WHERE transmission_id=$1 AND workflow_id=$2 AND state <> 'superseded'
-			AND workflow_revision=$3 AND created_at >= $4)`,
+	err = executor.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM processing_candidates c
+		WHERE c.transmission_id=$1 AND c.workflow_id=$2 AND c.state <> 'superseded'
+			AND c.workflow_revision=$3 AND c.created_at >= $4 AND NOT `+workflowHistory+`)`,
 		transmission, request.WorkflowID, request.WorkflowRevision, request.CreatedAt).Scan(&snapshot.Fresh)
 	if err != nil {
 		return processing.ReprocessSnapshot{}, err
