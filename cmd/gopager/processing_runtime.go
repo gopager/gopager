@@ -102,7 +102,11 @@ func composeProcessingAPIRuntime(ctx context.Context, c *core, artifactRoot stri
 	if err != nil {
 		return nil, err
 	}
-	sourceOwner, err := synthetic.NewOwner(matcher, networks, store, workflows)
+	unitAttributes, err := ingeststore.NewUnitAttributeReader(c.intake)
+	if err != nil {
+		return nil, err
+	}
+	sourceOwner, err := synthetic.NewOwner(matcher, networks, store, workflows, synthetic.WithUnitAttributes(unitAttributes))
 	if err != nil {
 		return nil, err
 	}

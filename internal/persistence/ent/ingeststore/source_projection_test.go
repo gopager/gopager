@@ -8,7 +8,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/assignments"
+	"github.com/gopager/gopager/internal/attributes"
+	"github.com/gopager/gopager/internal/fields"
 	"github.com/gopager/gopager/internal/processing"
+	"github.com/gopager/gopager/internal/processing/declarations"
 	"github.com/gopager/gopager/internal/protocols"
 	"github.com/gopager/gopager/internal/units"
 )
@@ -27,7 +30,7 @@ func TestProjectProcessingSourcePreservesOriginalTargetContexts(t *testing.T) {
 	observed := time.Date(2026, time.November, 4, 12, 0, 0, 0, time.UTC)
 
 	projection, err := projectProcessingSource(context.Background(), uuid.New(), uuid.New(), "Network",
-		protocols.POCSAG, payload, observed, 1, matched, targets)
+		protocols.POCSAG, payload, observed, 1, matched, targets, declarations.UnitAttributes{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,4 +83,58 @@ func findCapturedField(t *testing.T, fields []processing.CapturedField, namespac
 	}
 	t.Fatalf("missing captured field %s.%v", namespace, path)
 	return processing.FieldValue{}
+}
+
+func TestProjectProcessingSourceCapturesUnitAttributes(t *testing.T) {
+	t.Parallel()
+	registry := fields.New(fields.Builtin(), attributes.NewProvider([]attributes.Schema{{
+		Key: "station", Subject: attributes.SubjectUnit,
+		Fields: map[string]attributes.Field{"town": {Kind: processing.StringValue}},
+	}}, 1))
+	var payload protocols.TransmissionPayload
+	if err := json.Unmarshal([]byte(`{"form":"numeric","value":"123"}`), &payload); err != nil {
+		t.Fatal(err)
+	}
+	unit := uuid.New()
+	function := uint8(2)
+	targets := []protocols.Target{{Address: protocols.NumericAddress(1), Function: &function},
+		{Address: protocols.NumericAddress(2), Function: &function}}
+	matched := assignments.MatchResult{Revision: 7, Resolutions: []assignments.Resolution{
+		{TargetPosition: 0, Status: "assigned", UnitID: &unit}, {TargetPosition: 1, Status: "unassigned"},
+	}, UnitContext: map[uuid.UUID]units.Context{unit: {ID: unit, Revision: 1}}}
+	town, err := processing.Literal(processing.StringValue, "A")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := declarations.UnitAttributes{Declared: declarations.UnitAttributeDeclarations(registry),
+		Effective: map[uuid.UUID]units.EffectiveAttributes{unit: {"station": {
+			"town": {Value: &town, Source: units.SourceUnit}}}}}
+
+	projection, err := projectProcessingSource(context.Background(), uuid.New(), uuid.New(), "Network",
+		protocols.POCSAG, payload, time.Date(2026, time.November, 4, 12, 0, 0, 0, time.UTC), 1, matched, targets, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	captured, err := processing.CaptureSource(context.Background(), projection)
+	if err != nil {
+		t.Fatalf("CaptureSource rejected projection: %v", err)
+	}
+	identity, err := captured.Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if identity.ContextRevision != matched.Revision {
+		t.Fatalf("Unit attributes changed the context revision: %+v", identity)
+	}
+	assigned := findCapturedField(t, projection.Targets[0].Fields, "target", "unit", "attributes", "station", "town")
+	if assigned.State != processing.FieldPresent || assigned.Value == nil || string(assigned.Value.Value) != `"A"` {
+		t.Fatalf("assigned target field=%+v", assigned)
+	}
+	if len(assigned.Dependencies) != 1 || assigned.Dependencies[0].TargetPosition == nil ||
+		*assigned.Dependencies[0].TargetPosition != 0 || assigned.Dependencies[0].Groups[0] != "unit" {
+		t.Fatalf("dependencies=%+v", assigned.Dependencies)
+	}
+	if free := findCapturedField(t, projection.Targets[1].Fields, "target", "unit", "attributes", "station", "town"); free.State != processing.FieldAbsent {
+		t.Fatalf("unassigned target field=%+v", free)
+	}
 }

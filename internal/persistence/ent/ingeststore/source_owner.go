@@ -46,6 +46,8 @@ type ProcessingSourceOwner struct {
 	publication *publication.Service
 	// registries yields the field registry of the catalog visible in a transaction.
 	registries *attributes.RegistrySource
+	// unitAttributes reads the Unit attributes captured with each target.
+	unitAttributes *UnitAttributeReader
 }
 
 type sourceSnapshot struct {
@@ -102,7 +104,11 @@ func NewProcessingSourceOwner(store *Store, matcher *assignments.Service, reposi
 	if err != nil {
 		return nil, err
 	}
-	owner := &ProcessingSourceOwner{registries: registries, store: store, matcher: matcher, repository: repository,
+	unitAttributes, err := NewUnitAttributeReader(store)
+	if err != nil {
+		return nil, err
+	}
+	owner := &ProcessingSourceOwner{registries: registries, unitAttributes: unitAttributes, store: store, matcher: matcher, repository: repository,
 		facts: facts, clock: clock, artifacts: artifacts, executions: executions, principals: principals}
 	publisher, err := publication.New(repository, owner, facts, clock)
 	if err != nil {
@@ -566,8 +572,13 @@ func (o *ProcessingSourceOwner) readSource(ctx context.Context, tx platform.Tran
 			projectedMatch.Resolutions[position].AddressRuleID = nil
 		}
 	}
+	unitAttributes, err := o.readUnitAttributes(ctx, tx, projectedMatch)
+	if err != nil {
+		return sourceSnapshot{}, err
+	}
 	snapshot.projection, err = projectProcessingSource(ctx, transmission, snapshot.network, snapshot.networkName,
-		snapshot.protocol, snapshot.payload, snapshot.observedAt, snapshot.sourceRevision, projectedMatch, snapshot.targets)
+		snapshot.protocol, snapshot.payload, snapshot.observedAt, snapshot.sourceRevision, projectedMatch, snapshot.targets,
+		unitAttributes)
 	if err != nil {
 		return sourceSnapshot{}, err
 	}
