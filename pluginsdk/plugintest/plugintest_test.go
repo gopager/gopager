@@ -103,14 +103,13 @@ func TestReconfigurationIncrementsTheRevisionAndChangesSecretVersions(t *testing
 	}
 }
 
-func TestFileAndEnvironmentSecretsAreReadPerAttempt(t *testing.T) {
+func TestFileSecretsAreReadPerAttempt(t *testing.T) {
 	t.Parallel()
 	h := newEcho(t)
 	h.WriteSecretFile("token.txt", "first-token\n")
-	h.SetEnv("GOPAGER_PLUGIN_SECRET_USER", "env-user")
 	h.Configure(map[string]any{"title": "T"}, map[string]plugintest.Secret{"token": plugintest.SecretFile("token.txt")})
 	subscriber := h.Subscriber()
-	h.Personal(subscriber, nil, map[string]plugintest.Secret{"userKey": plugintest.SecretEnv("GOPAGER_PLUGIN_SECRET_USER")})
+	h.Personal(subscriber, nil, map[string]plugintest.Secret{"userKey": plugintest.SecretValue("usr-key")})
 	var versions []string
 	for _, content := range []string{"first-token\n", "other-token\n"} {
 		h.WriteSecretFile("token.txt", content)
@@ -119,13 +118,32 @@ func TestFileAndEnvironmentSecretsAreReadPerAttempt(t *testing.T) {
 			t.Fatal(err)
 		}
 		receipt := receiptOf(t, outcome)
-		if receipt["tokenHead"] != content[:3] || receipt["userKeyHead"] != "env" {
+		if receipt["tokenHead"] != content[:3] || receipt["userKeyHead"] != "usr" {
 			t.Fatalf("got %v", receipt)
 		}
 		versions = append(versions, receipt["versions"].(map[string]any)["token"].(string))
 	}
 	if versions[0] == versions[1] || !strings.HasPrefix(versions[0], "file:") {
 		t.Fatalf("versions %v", versions)
+	}
+}
+
+func TestEnvironmentSecretsServeAdministrativeButNotPersonalValues(t *testing.T) {
+	t.Parallel()
+	h := newEcho(t)
+	h.SetEnv("GOPAGER_PLUGIN_SECRET_TOKEN", "env-token")
+	h.SetEnv("GOPAGER_PLUGIN_SECRET_USER", "env-user")
+	h.Configure(map[string]any{"title": "T"}, map[string]plugintest.Secret{"token": plugintest.SecretEnv("GOPAGER_PLUGIN_SECRET_TOKEN")})
+	h.Personal(h.Subscriber(), nil, map[string]plugintest.Secret{"userKey": plugintest.SecretValue("usr-key")})
+	outcome, err := h.Attempt(plugintest.AttemptInput{Body: "echo"})
+	if err != nil || receiptOf(t, outcome)["tokenHead"] != "env" {
+		t.Fatalf("administrative environment Secret: %+v %v", outcome, err)
+	}
+	subscriber := h.NewSubscriber()
+	h.Personal(subscriber, nil, map[string]plugintest.Secret{"userKey": plugintest.SecretEnv("GOPAGER_PLUGIN_SECRET_USER")})
+	outcome, err = h.Attempt(plugintest.AttemptInput{SubscriberID: subscriber, Body: "echo"})
+	if err != nil || outcome.Status != processing.AttemptTransient || outcome.Code != processing.CodeConfigurationUnavailable {
+		t.Fatalf("personal environment Secret must be refused: %+v %v", outcome, err)
 	}
 }
 
