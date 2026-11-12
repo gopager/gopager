@@ -12,7 +12,7 @@ Add a decision to the ADR file of its topic with status, date, supersession, the
 | [02-intake-and-grouping.md](02-intake-and-grouping.md) | Intake and Grouping | 34 (D-17..D-139) |
 | [03-assignment-and-correction.md](03-assignment-and-correction.md) | Assignment and correction | 10 (D-08..D-145) |
 | [04-processing-and-plugins.md](04-processing-and-plugins.md) | Processing and plugins | 36 (D-05..D-159) |
-| [05-events-and-delivery.md](05-events-and-delivery.md) | Events and Delivery | 15 (D-06..D-158) |
+| [05-events-and-delivery.md](05-events-and-delivery.md) | Events and Delivery | 16 (D-06..D-160) |
 | [06-identity-and-authorization.md](06-identity-and-authorization.md) | Identity and authorization | 18 (D-07..D-151) |
 | [07-query-and-live.md](07-query-and-live.md) | Query and live | 4 (D-16..D-152) |
 | [08-operations-and-http.md](08-operations-and-http.md) | Operations and HTTP | 3 (D-52..D-133) |
@@ -182,3 +182,4 @@ Add a decision to the ADR file of its topic with status, date, supersession, the
 | D-157 | AP-22 runs before AP-12 on the AP-11 target-input port | accepted | 2026-11-12 | [05-events-and-delivery](05-events-and-delivery.md#d-157) |
 | D-158 | AP-22 write scope: target-input bindings in `00013_events_delivery.sql` | accepted | 2026-11-12 | [05-events-and-delivery](05-events-and-delivery.md#d-158) |
 | D-159 | AP-22 review: schema Agency facts and reading references | accepted | 2026-11-12 | [04-processing-and-plugins](04-processing-and-plugins.md#d-159) |
+| D-160 | AP-12 write scope: target use, personal values and placement in the Delivery Core | accepted | 2026-11-12 | [05-events-and-delivery](05-events-and-delivery.md#d-160) |
