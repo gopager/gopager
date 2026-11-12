@@ -175,24 +175,26 @@ func (s *Store) CancelOpen(ctx context.Context, tx platform.TransactionContext, 
 	return err
 }
 
-// ClaimDue implements delivery.Store.
+// ClaimDue implements delivery.Store. An unrestricted filter claims every due Delivery; a restricted
+// one claims those of the listed instances and those overdue.
 func (s *Store) ClaimDue(ctx context.Context, tx platform.TransactionContext, now time.Time, lease time.Duration, limit int,
-	instances []uuid.UUID) ([]delivery.DeliveryRecord, error) {
+	filter delivery.ClaimFilter) ([]delivery.DeliveryRecord, error) {
 	executor, err := s.executor(tx)
 	if err != nil {
 		return nil, err
 	}
+	instances := filter.Instances
 	if instances == nil {
 		instances = []uuid.UUID{}
 	}
 	rows, err := executor.QueryContext(ctx, `WITH due AS (
 			SELECT id FROM deliveries WHERE state IN ('prepared', 'retry-pending') AND next_attempt_at <= $1
 			AND (claim_expires_at IS NULL OR claim_expires_at <= $1)
-			AND (cardinality($4::uuid[]) = 0 OR target_instance_id = ANY($4::uuid[]))
+			AND (NOT $4::boolean OR target_instance_id = ANY($5::uuid[]) OR next_attempt_at <= $6)
 			ORDER BY next_attempt_at, id LIMIT $3 FOR UPDATE SKIP LOCKED)
 		UPDATE deliveries d SET claim_token = d.claim_token + 1, claim_expires_at = $2
 		FROM due WHERE d.id = due.id RETURNING `+deliveryColumns,
-		now.UTC(), now.Add(lease).UTC(), limit, instances)
+		now.UTC(), now.Add(lease).UTC(), limit, filter.Restricted, instances, filter.OverdueBefore.UTC())
 	if err != nil {
 		return nil, err
 	}

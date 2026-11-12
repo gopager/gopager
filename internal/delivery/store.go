@@ -79,6 +79,16 @@ type AttemptRecord struct {
 	AccessRevision int64
 }
 
+// ClaimFilter selects which due Deliveries a claim may take. The zero value is unrestricted: every
+// due Delivery. A restricted filter admits Deliveries of the listed target instances and, so that
+// a Delivery no node can serve is not stranded, any Delivery whose next attempt is due at or
+// before OverdueBefore. A restricted filter with no instances admits only overdue Deliveries.
+type ClaimFilter struct {
+	Restricted    bool
+	Instances     []uuid.UUID
+	OverdueBefore time.Time
+}
+
 // Store is the persistence port of Subscriptions and Deliveries. Every method runs in the
 // caller's transaction. Claimed writes need the claim's current token and an unexpired lease on
 // the primary clock and fail with ErrLeaseLost otherwise.
@@ -109,10 +119,10 @@ type Store interface {
 	InsertDelivery(ctx context.Context, tx platform.TransactionContext, record DeliveryRecord) (bool, error)
 	// CancelOpen ends every unstarted Delivery of a Subscription as cancelled with code.
 	CancelOpen(ctx context.Context, tx platform.TransactionContext, subscriptionID uuid.UUID, code string, now time.Time) error
-	// ClaimDue claims up to limit due, unclaimed open Deliveries, optionally only of the given
-	// target instances, with a new token and a lease until now plus lease.
+	// ClaimDue claims up to limit due, unclaimed open Deliveries that the filter admits, with a
+	// new token and a lease until now plus lease.
 	ClaimDue(ctx context.Context, tx platform.TransactionContext, now time.Time, lease time.Duration, limit int,
-		instances []uuid.UUID) ([]DeliveryRecord, error)
+		filter ClaimFilter) ([]DeliveryRecord, error)
 	// ReclaimLost ends started Deliveries whose lease expired as uncertain with lease-lost and
 	// finishes their open attempt the same way. It returns how many it ended.
 	ReclaimLost(ctx context.Context, tx platform.TransactionContext, now time.Time, limit int) (int, error)
