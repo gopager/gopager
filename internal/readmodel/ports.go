@@ -50,8 +50,9 @@ type FeedQuery struct {
 	// derived results. A result contributes attributes, shown or matched by the predicate, only
 	// when all of its stored field groups are among them.
 	DerivedGroups []string
-	// WithPublishedResults asks for FeedRecord.PublishedResults, which the feed itself does not need.
-	WithPublishedResults bool
+	// PublishedResult, when non-nil, asks for FeedRecord.ResultVisible of this one result, which
+	// the feed itself does not need.
+	PublishedResult *uuid.UUID
 }
 
 // FeedResult is one page of the feed.
@@ -135,10 +136,10 @@ type FeedRecord struct {
 	UnresolvedAgencies []uuid.UUID
 	// Attributes are the effective attribute values the caller's readable field groups allow.
 	Attributes []AttributeRecord
-	// PublishedResults are the IDs of the published results of the supporting Transmissions that
-	// the caller's readable field groups allow, whether or not they hold an effective value.
-	// They are filled only when FeedQuery.WithPublishedResults is set.
-	PublishedResults []uuid.UUID
+	// ResultVisible reports whether the result asked for by FeedQuery.PublishedResult is a
+	// published result of a supporting Transmission whose stored field groups the caller may
+	// read, whether or not it holds an effective value. It is false without that query input.
+	ResultVisible bool
 }
 
 // TargetRecord is a visible, unsuppressed target of a Transmission.

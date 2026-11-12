@@ -316,3 +316,12 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Decision:** The user approved two additions to the [AP-21](../work-packages/ap-21-attribute-schemas.md) write scope, already implemented: `internal/persistence/ent/ingeststore` for the Workflow selection of intake admission and of the candidate source owner (`store.go`, `source_owner.go`, `workflow_selection.go`), the built-in source declarations (`source_projection.go`) and the Network's Agency of synthetic previews (`synthetic_network.go`); and `internal/persistence/ent/eventstore/subscription.go` for persisting `subscription.health-changed`.
 - **Rationale:** Admission by assigned Agency ([D-151](06-identity-and-authorization.md#d-151)) is the SQL in the intake store, and the Domain event store persists every fact; the AP listed neither path. Staying within the scope would have left T092 (admission follows assigned Agencies) and T093 (health fact) unreachable.
 - **Consequences:** [AP-07](../execution/ap-07.md) receives a follow-up with the rerun evidence; the AP-21 record links this decision under Blockers and Deviations. No open AP's assignment changes ([AP-22](../work-packages/ap-22-unit-attributes.md) already reads the intake store as context).
+
+<a id="d-156"></a>
+## D-156 AP-21 follow-ups after the merge
+
+- **Status:** accepted
+- **Date:** 2026-11-12
+- **Decision:** After [AP-21](../work-packages/ap-21-attribute-schemas.md) was merged, the user accepted points the Copilot review had left to human judgment and the remedies for the known slow range filter: Delivery asks whether the event's one result is visible instead of loading every published result of the Message; the Delivery view builds its relevant-Unit set once; the upper timestamp boundary is checked and limited like the lower one if it breaks anything; the feed prefilter merges a range on one scalar field into one lookup; and the intake migration `00009_transmission_intake.sql` gets an index on `messages(first_observed_at, id)` in feed order, outside the AP-21 write scope.
+- **Rationale:** The published-result list grows with reprocessing; the Unit list was rebuilt for every attribute value; a broad range took about 400 ms at 100,000 Messages because each bound passed tens of thousands of candidates, and the feed could not stop after one page without an ordered index.
+- **Consequences:** Follow-up section in the [AP-21 record](../execution/ap-21.md); the [AP-07 record](../execution/ap-07.md) owns `messages` and its migration and receives a follow-up for the index.

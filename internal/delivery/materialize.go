@@ -22,7 +22,7 @@ import (
 // in the caller's transaction. *readmodel.Service implements it.
 type Projector interface {
 	ProjectForDelivery(ctx context.Context, tx platform.TransactionContext, authority authz.Authority, now time.Time,
-		messageID uuid.UUID) (readmodel.DeliveryProjection, bool, error)
+		messageID, resultID uuid.UUID) (readmodel.DeliveryProjection, bool, error)
 }
 
 // Dependencies are the ports the Delivery services share.
@@ -156,14 +156,14 @@ func (s *subject) projectMessage(ctx context.Context, tx platform.TransactionCon
 	if err != nil {
 		return nil, err
 	}
-	projection, ok, err := deps.Projector.ProjectForDelivery(ctx, tx, s.authority, now, message)
+	projection, ok, err := deps.Projector.ProjectForDelivery(ctx, tx, s.authority, now, message, s.event.Data.ResultID)
 	if err != nil {
 		if absentAuthority(err) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	if !ok || s.event.Type == "processing.completed" && !resultVisible(projection, s.event.Data.ResultID) {
+	if !ok || s.event.Type == "processing.completed" && (s.event.Data.ResultID == uuid.Nil || !projection.ResultVisible) {
 		return nil, nil
 	}
 	return &projection, nil
@@ -222,13 +222,6 @@ func (s *subject) observeGateway(ctx context.Context, tx platform.TransactionCon
 	s.gateway = &gateway
 	s.splits = []split{{key: "", agencies: slices.Clone(gateway.AgencyIDs), anchor: s.event.OccurredAt}}
 	return s, nil
-}
-
-// resultVisible reports whether the subscriber may read the published result. It does not
-// depend on the result's values being effective: a result without outputs, or one whose values a
-// later result replaced, is still a completed processing the subscriber may be told about.
-func resultVisible(projection readmodel.DeliveryProjection, result uuid.UUID) bool {
-	return result != uuid.Nil && slices.Contains(projection.PublishedResults, result)
 }
 
 func appendUnique(ids []uuid.UUID, id uuid.UUID) []uuid.UUID {

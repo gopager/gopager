@@ -21,11 +21,11 @@ type countingProjector struct {
 }
 
 func (c *countingProjector) ProjectForDelivery(ctx context.Context, tx platform.TransactionContext,
-	authority authz.Authority, now time.Time, message uuid.UUID) (readmodel.DeliveryProjection, bool, error) {
+	authority authz.Authority, now time.Time, message, result uuid.UUID) (readmodel.DeliveryProjection, bool, error) {
 	c.mu.Lock()
 	c.calls[authority.PrincipalID]++
 	c.mu.Unlock()
-	return c.Projector.ProjectForDelivery(ctx, tx, authority, now, message)
+	return c.Projector.ProjectForDelivery(ctx, tx, authority, now, message, result)
 }
 
 // TestFanOutProjectsOncePerSubscriberAndEvent proves that the Subscriptions of one subscriber
