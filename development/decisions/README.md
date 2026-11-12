@@ -186,3 +186,4 @@ Add a decision to the ADR file of its topic with status, date, supersession, the
 | D-161 | Minute-window admission tests verify their window | accepted | 2026-11-12 | [09-process-and-documentation](09-process-and-documentation.md#d-161) |
 | D-162 | Documentation-only commits need no new Copilot review | accepted | 2026-11-12 | [09-process-and-documentation](09-process-and-documentation.md#d-162) |
 | D-163 | Deliveries show the provider's safe code | accepted | 2026-11-12 | [05-events-and-delivery](05-events-and-delivery.md#d-163) |
+| D-164 | AP-13 write scope: Units in the layout request and a shared Message field reader | accepted | 2026-11-12 | [05-events-and-delivery](05-events-and-delivery.md#d-164) |

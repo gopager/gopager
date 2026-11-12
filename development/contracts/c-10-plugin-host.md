@@ -33,6 +33,10 @@ Decisions that remain binding:
 
 AP-11 owns the Core target descriptor (`delivery.TargetDescriptor`, version 1) and the attempt port (`delivery.Targets`: `Describe`, `Attempt`; `AttemptInvocation`, `AttemptResult`), implemented in `internal/delivery` ([C-09](c-09-delivery.md#ap-11-core-binding-planning-before-coding)). AP-12 implements the port with the plugin host (`cmd/gopager/delivery_targets.go`, `processing.DeliveryHost`). The only descriptor change is `configurationAuthority`: `admin`, or `admin-and-personal` when the manifest has `user`-scoped properties. An error from `Attempt` after the request was sent is uncertain; without a plugin directory the plugin host answers `Describe` with `AUTHORITY_UNAVAILABLE`.
 
+## AP-13 Installed-step Host Calls (binding)
+
+Recorded 2026-11-12 by AP-13 before coding. Stored-Transmission preview runs installed steps through the same host in preview mode as synthetic preview (no external effects, the editor's preview authority); historical Reprocess runs them through the ordinary worker path under the configured execution Principal, with the instance pins checked at capture, renewal and completion as for any candidate. No wire, manifest or SDK change.
+
 ## AP-12 Host, Manifest, Configuration and Secrets (binding decisions)
 
 Recorded 2026-11-12 by AP-12 before coding and implemented in AP-12 ([work package](../work-packages/ap-12-plugin-host.md)). The permanent documentation listed above specifies the behavior, wire formats, limits and error codes; this section keeps only the decisions that bind later work. Where it differs from the earlier planning of this contract, this section and the documentation win.
