@@ -83,7 +83,7 @@ func TestDecodeLiveFactConfigurationAggregates(t *testing.T) {
 	t.Parallel()
 	from := time.Now()
 	for aggregate, want := range map[string]liveOutcome{"unit": outcomeResync, "unitCollection": outcomeResync,
-		"organization": outcomeResync, "agency": outcomeResync, "addressRule": outcomeIgnore, "workflow": outcomeIgnore,
+		"organization": outcomeResync, "agency": outcomeResync, "attributeSchema": outcomeResync, "addressRule": outcomeIgnore, "workflow": outcomeIgnore,
 		"unitTemplate": outcomeIgnore} {
 		if _, outcome := decodeLiveFact(record(t, "configuration.changed", 1, aggregate, map[string]any{}), &from, nil); outcome != want {
 			t.Errorf("configuration.changed %s: got %v, want %v", aggregate, outcome, want)

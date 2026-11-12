@@ -43,3 +43,19 @@ func TestConfigurationFactsKeepSeparateTypedProducerAndNonsecretEnvelope(t *test
 		}
 	}
 }
+
+func TestMasterDataFactAcceptsAttributeSchemaAggregate(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 10, 28, 12, 0, 0, 123000, time.UTC)
+	fact := MasterDataFact{ID: uuid.New(), Aggregate: EntityRef{Type: "attributeSchema", ID: uuid.New()},
+		Revision: 2, OccurredAt: now, ChangeKind: "updated"}
+	envelope, err := fact.Envelope(now)
+	if err != nil || envelope.Type != ConfigurationChanged || envelope.Classification != "configuration" ||
+		envelope.AggregateRef.Type != "attributeSchema" || envelope.AggregateRevision != 2 {
+		t.Fatalf("envelope = %+v, %v", envelope, err)
+	}
+	fact.Aggregate.Type = "schema"
+	if _, err := fact.Envelope(now); !errors.Is(err, ErrInvalidFact) {
+		t.Fatal("master-data fact accepted an unknown aggregate")
+	}
+}

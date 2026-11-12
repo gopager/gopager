@@ -614,7 +614,7 @@ func (s *Service) SaveVersion(ctx context.Context, proof identity.Proof, command
 		if err := authorizeReferences(authority, references); err != nil {
 			return err
 		}
-		if err := s.authorizeNewOutputs(tx, authority, "workflow.update", parent, detached, now); err != nil {
+		if err := s.authorizeNewSchemaReferences(tx, authority, "workflow.update", parent, detached, references, now); err != nil {
 			return err
 		}
 		current.Revision, err = commands.NextRevision(current.Revision, expected)
@@ -683,7 +683,7 @@ func (s *Service) ActivateVersion(ctx context.Context, proof identity.Proof, par
 		if err := authorizeReferences(authority, references); err != nil {
 			return err
 		}
-		if err := s.authorizeNewOutputs(tx, authority, "workflow.activate", parent, definition, now); err != nil {
+		if err := s.authorizeNewSchemaReferences(tx, authority, "workflow.activate", parent, definition, references, now); err != nil {
 			return err
 		}
 		current.ActiveVersionID = &version
@@ -731,24 +731,47 @@ func authorizeReferences(authority authz.Authority, references []processing.Sour
 	return nil
 }
 
-// authorizeNewOutputs requires the author to hold the action in at least one Agency of every
-// Attribute schema the definition writes that no version of the Workflow wrote before. A
-// reference that an earlier version holds stays valid when its schema later loses an Agency, so
+// authorizeNewSchemaReferences requires the author to hold the action in at least one Agency of
+// every Attribute schema the definition writes, or whose Unit attributes it reads
+// (`target.unit.attributes.<key>…`), that no version of the Workflow referenced that way before.
+// A reference that an earlier version holds stays valid when its schema later loses an Agency, so
 // re-saving it needs no right. The failure is authz.ErrForbidden.
-func (s *Service) authorizeNewOutputs(tx platform.TransactionContext, authority authz.Authority, action string,
-	workflow uuid.UUID, definition processing.Definition, now time.Time) error {
-	keys := make([]string, 0, len(definition.Outputs))
+func (s *Service) authorizeNewSchemaReferences(tx platform.TransactionContext, authority authz.Authority, action string,
+	workflow uuid.UUID, definition processing.Definition, references []processing.SourceReference, now time.Time) error {
+	written := make([]string, 0, len(definition.Outputs))
 	for key := range definition.Outputs {
-		keys = append(keys, key)
+		written = append(written, key)
 	}
-	added, err := s.repository.NewOutputSchemaAgencies(tx.Context(), tx, workflow, keys)
+	added, err := s.repository.NewOutputSchemaAgencies(tx.Context(), tx, workflow, written)
 	if err != nil {
 		return err
 	}
-	for _, agencies := range added {
-		if err := authz.AuthorizeInAnyAgency(authority, action, agencies, now); err != nil {
-			return err
+	read, err := s.repository.NewReadSchemaAgencies(tx.Context(), tx, workflow, readSchemaKeys(references))
+	if err != nil {
+		return err
+	}
+	for _, set := range []map[string][]uuid.UUID{added, read} {
+		for _, agencies := range set {
+			if err := authz.AuthorizeInAnyAgency(authority, action, agencies, now); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
+}
+
+// readSchemaKeys returns the distinct Attribute schema keys of the Unit attributes the references
+// read (`target.unit.attributes.<key>…`).
+func readSchemaKeys(references []processing.SourceReference) []string {
+	var keys []string
+	for _, reference := range references {
+		path := reference.Field.Path
+		if reference.Field.Namespace != "target" || len(path) < 3 || path[0] != "unit" || path[1] != "attributes" {
+			continue
+		}
+		if !slices.Contains(keys, path[2]) {
+			keys = append(keys, path[2])
+		}
+	}
+	return keys
 }

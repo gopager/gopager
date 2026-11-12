@@ -3,6 +3,7 @@ package declarations
 import (
 	"encoding/json"
 	"slices"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/fields"
@@ -20,21 +21,85 @@ func isUnitAttributeRef(ref processing.FieldRef) bool {
 		ref.Path[0] == "unit" && ref.Path[1] == "attributes"
 }
 
-// UnitAttributeDeclarations returns the target declarations of every Unit attribute the registry
-// offers to Workflows, so that a source projection carries (possibly absent) every field a
-// Workflow may read. The result is empty when no `unit` Attribute schema declares a field.
-func UnitAttributeDeclarations(registry *fields.Registry) []processing.FieldDeclaration {
-	var result []processing.FieldDeclaration
-	for _, field := range registry.ListAll(fields.ScopeWorkflow) {
-		if !isUnitAttributeRef(field.Ref) {
-			continue
+// DefinitionUnitAttributeRefs returns the distinct Unit attributes a definition reads
+// (`target.unit.attributes.<key>…`), in order of appearance. Every field reference of a
+// definition is an explicit `{namespace, path}` object, so walking its JSON finds them without
+// compiling the definition or loading the plugins of its installed steps.
+func DefinitionUnitAttributeRefs(definition processing.Definition) ([]processing.FieldRef, error) {
+	encoded, err := json.Marshal(definition)
+	if err != nil {
+		return nil, err
+	}
+	var document any
+	if err := json.Unmarshal(encoded, &document); err != nil {
+		return nil, err
+	}
+	var result []processing.FieldRef
+	seen := map[string]bool{}
+	var walk func(value any)
+	walk = func(value any) {
+		switch typed := value.(type) {
+		case []any:
+			for _, element := range typed {
+				walk(element)
+			}
+		case map[string]any:
+			if ref, ok := fieldRef(typed); ok && isUnitAttributeRef(ref) {
+				key := strings.Join(ref.Path, "\x00")
+				if !seen[key] {
+					seen[key] = true
+					result = append(result, ref)
+				}
+				return
+			}
+			for _, child := range typed {
+				walk(child)
+			}
 		}
-		schema := field.Type
+	}
+	walk(document)
+	return result, nil
+}
+
+// fieldRef decodes a `{namespace, path}` object.
+func fieldRef(object map[string]any) (processing.FieldRef, bool) {
+	namespace, ok := object["namespace"].(string)
+	elements, isList := object["path"].([]any)
+	if !ok || !isList {
+		return processing.FieldRef{}, false
+	}
+	path := make([]string, 0, len(elements))
+	for _, element := range elements {
+		segment, ok := element.(string)
+		if !ok {
+			return processing.FieldRef{}, false
+		}
+		path = append(path, segment)
+	}
+	return processing.FieldRef{Namespace: namespace, Path: path}, true
+}
+
+// UnitAttributeDeclarations returns the target declarations of the given Unit attribute
+// references, typed by the registry, so that a source projection carries (possibly absent) exactly
+// the fields a Workflow reads and nothing else. Deprecated fields are declared too, because an
+// active version may still read them. A reference the registry does not offer is an error.
+func UnitAttributeDeclarations(registry *fields.Registry, refs []processing.FieldRef,
+) ([]processing.FieldDeclaration, error) {
+	if len(refs) == 0 {
+		return nil, nil
+	}
+	source := registry.Declarations(fields.ScopeWorkflow, false)
+	result := make([]processing.FieldDeclaration, 0, len(refs))
+	for _, ref := range refs {
+		schema, err := source.FieldSchema(ref)
+		if err != nil {
+			return nil, err
+		}
 		schema.Optional = true
-		result = append(result, processing.FieldDeclaration{Reference: field.Ref, Schema: schema,
+		result = append(result, processing.FieldDeclaration{Reference: ref, Schema: schema,
 			Groups: []string{unitGroup}})
 	}
-	return result
+	return result, nil
 }
 
 // UnitAttributeFields returns the captured fields of one target for the given declarations. An
@@ -92,7 +157,7 @@ func unitAttributeValue(effective units.EffectiveAttributes, path []string) (*pr
 // fields and the effective attributes of the Units the targets resolve to. The zero value
 // declares nothing.
 type UnitAttributes struct {
-	// Declared are the target declarations, see UnitAttributeDeclarations.
+	// Declared are the target declarations of the read attributes, see UnitAttributeDeclarations.
 	Declared []processing.FieldDeclaration
 	// Effective are the effective attributes by Unit.
 	Effective map[uuid.UUID]units.EffectiveAttributes

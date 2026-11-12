@@ -15,6 +15,7 @@ import (
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/persistence/ent/attributestore"
 	"github.com/gopager/gopager/internal/persistence/ent/commandstore"
+	"github.com/gopager/gopager/internal/persistence/ent/eventstore"
 	"github.com/gopager/gopager/internal/persistence/migrations"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
@@ -66,8 +67,12 @@ func (w *world) service(t *testing.T, scope authz.Scope, actions ...string) *att
 	principal := uuid.NewString()
 	authority := authz.Authority{PrincipalID: principal, Revision: 1, Active: true, Grants: []authz.Grant{{
 		ID: uuid.NewString(), SubjectID: principal, SubjectKind: "principal", Actions: actions, Scope: scope}}}
+	facts, err := eventstore.New(w.store)
+	if err != nil {
+		t.Fatal(err)
+	}
 	service, err := attributes.NewService(w.store, staticResolver{identity.Authentication{Authority: authority,
-		Kind: identity.SessionProof}}, fixedClock{}, w.schemas, receipts)
+		Kind: identity.SessionProof}}, fixedClock{}, w.schemas, receipts, facts)
 	if err != nil {
 		t.Fatal(err)
 	}

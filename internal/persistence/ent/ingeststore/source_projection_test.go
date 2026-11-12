@@ -106,7 +106,12 @@ func TestProjectProcessingSourceCapturesUnitAttributes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source := declarations.UnitAttributes{Declared: declarations.UnitAttributeDeclarations(registry),
+	declared, err := declarations.UnitAttributeDeclarations(registry,
+		[]processing.FieldRef{{Namespace: "target", Path: []string{"unit", "attributes", "station", "town"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := declarations.UnitAttributes{Declared: declared,
 		Effective: map[uuid.UUID]units.EffectiveAttributes{unit: {"station": {
 			"town": {Value: &town, Source: units.SourceUnit}}}}}
 

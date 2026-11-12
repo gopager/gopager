@@ -12,7 +12,8 @@ import (
 // MasterDataFact is the producer input for a configuration.changed fact emitted
 // by master-data management when a unit, unit collection, organization or unit
 // template is created, updated, deleted, has its membership or defaults
-// changed, or is bulk-updated.
+// changed, or is bulk-updated. The Attribute schema service also records it with
+// aggregate type attributeSchema when the Agencies of a unit schema change.
 type MasterDataFact struct {
 	ID            uuid.UUID
 	Aggregate     EntityRef
@@ -58,7 +59,7 @@ type MasterDataAppender interface {
 // ErrInvalidFact when validation fails.
 func (fact MasterDataFact) Envelope(recordedAt time.Time) (MasterDataEnvelope, error) {
 	if fact.ID == uuid.Nil || fact.Aggregate.ID == uuid.Nil || fact.Revision <= 0 ||
-		!slices.Contains([]string{"unit", "unitCollection", "organization", "unitTemplate", "agency"}, fact.Aggregate.Type) ||
+		!slices.Contains([]string{"unit", "unitCollection", "organization", "unitTemplate", "agency", "attributeSchema"}, fact.Aggregate.Type) ||
 		!slices.Contains([]string{"created", "updated", "deleted", "membership-changed", "defaults-changed", "bulk-updated"}, fact.ChangeKind) ||
 		fact.OccurredAt.IsZero() || recordedAt.IsZero() ||
 		fact.OccurredAt.Nanosecond()%1000 != 0 || recordedAt.Nanosecond()%1000 != 0 ||

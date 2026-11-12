@@ -10,7 +10,7 @@ import (
 
 // composeAttributeSchemas builds the Attribute-schema service over the core's catalog store.
 func composeAttributeSchemas(c *core) (*attributes.Service, error) {
-	return attributes.NewService(c.store, c.resolver, c.store, c.attributes, c.receipts)
+	return attributes.NewService(c.store, c.resolver, c.store, c.attributes, c.receipts, c.facts)
 }
 
 // registerAttributeRoutes binds the Attribute-schema routes.

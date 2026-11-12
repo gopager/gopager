@@ -80,5 +80,9 @@ type ConfigurationRepository interface {
 	// of the Workflow references yet and that exist, the Agencies each schema is assigned to. It
 	// holds the schema catalog against deletion for the rest of the transaction.
 	NewOutputSchemaAgencies(ctx context.Context, tx platform.TransactionContext, workflow uuid.UUID, keys []string) (map[string][]uuid.UUID, error)
+	// NewReadSchemaAgencies is NewOutputSchemaAgencies for schemas whose Unit attributes a version
+	// reads as `target.unit.attributes.<key>…`: keys among keys that no version of the Workflow
+	// reads yet and that exist, with their Agencies.
+	NewReadSchemaAgencies(ctx context.Context, tx platform.TransactionContext, workflow uuid.UUID, keys []string) (map[string][]uuid.UUID, error)
 	RecordChange(context.Context, platform.TransactionContext, uuid.UUID, uuid.UUID, string, time.Time) error
 }

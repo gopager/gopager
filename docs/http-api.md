@@ -731,7 +731,7 @@ previous Message time meets the loaded range.
   merge's joining Transmission, also after later merges) is readable for the caller, and nothing
   otherwise. It never produces `remove` events for the absorbed Messages: the fact does not say
   which of them the caller could read, and naming the others would disclose them.
-- A configuration change of a Unit, Unit collection, Organization or Agency produces
+- A configuration change of a Unit, Unit collection, Organization, Agency or an Agency assignment of a `unit` Attribute schema produces
   `resync-required`, because it can change membership, names and Agencies of every view. Address
   rule changes are current at the next read. Gateway state, operation and identity facts produce no
   Message event.
@@ -1341,8 +1341,9 @@ Workflows) or of Units (`subject` `unit`, maintained by managers). Schemas: `Att
 - **Deprecation.** `deprecated` on a schema or a field hides it from new references; stored values stay readable and
   existing references keep working.
 - **Referencing.** Adding a reference to a schema needs the right of the referencing resource in one of the schema's
-  Agencies: `workflow.update` to save a Workflow version that writes a schema no earlier version writes, and
-  `presentation.manage` to add a schema to a layout; otherwise `403 FORBIDDEN`. Existing references stay valid when the
+  Agencies: `workflow.update` to save a Workflow version that writes a schema, or reads its Unit attributes
+  (`target.unit.attributes.<key>…`), where no earlier version does so, and `presentation.manage` to add a schema to a
+  layout through `attributes.<key>…` or `unit.attributes.<key>…`; otherwise `403 FORBIDDEN`. Existing references stay valid when the
   schema loses that Agency, but not when the schema was deleted and re-created under the same key since the
   referencing version was saved: that is a different schema.
 - **Delete.** A schema that an active Workflow version (as an output or a `target.unit.attributes` source field), the
@@ -1355,6 +1356,11 @@ Workflows) or of Units (`subject` `unit`, maintained by managers). Schemas: `Att
   undeleted Unit of that Agency stores an entry of the schema; inherited values of such Units simply stop resolving.
   Schema changes and Unit, template or Organization writes with attribute entries are serialized, so a concurrent write
   cannot slip an entry past the check.
+- **Configuration fact.** An update that changes the Agencies of a `unit` schema (adds or removes one) records one
+  `configuration.changed` fact with aggregate `attributeSchema` and `changeKind` `updated` in the same transaction,
+  because the Agencies decide which Units inherit Organization defaults of the schema, so inherited values and filter
+  membership change; live Message streams answer it with `resync-required`. Other updates, `message` schemas, creation and
+  deletion record no fact. The fact is not a Delivery trigger.
 - **Agencies and rights.** A schema is assigned to 1 to 256 distinct Agencies. Create, update and delete need
   `attribute-schema.manage` in every Agency involved (new set; stored and new set; stored set). A schema is visible to a
   caller holding any of `message.read`, `workflow.read`, `presentation.manage`, `subscription.manage-own`,

@@ -65,9 +65,11 @@ type ScopeAuthorizer interface {
 }
 
 // UnitAttributeOwner reads the Unit attributes a preview captures for its targets: the declared
-// target fields and the effective attributes of the given Units, inside the caller's transaction.
+// target fields the previewed definition reads and the effective attributes of the given Units,
+// inside the caller's transaction.
 type UnitAttributeOwner interface {
-	ReadUnitAttributes(context.Context, platform.TransactionContext, []uuid.UUID) (declarations.UnitAttributes, error)
+	ReadUnitAttributes(context.Context, platform.TransactionContext, processing.Definition, []uuid.UUID,
+	) (declarations.UnitAttributes, error)
 }
 
 // Option configures an Owner.
@@ -143,9 +145,11 @@ func NewOwner(matcher Matcher, networks NetworkOwner, clock platform.Clock, scop
 // every field with its owner classification: evaluation runs as the system, and the editor's
 // field permissions are applied to the definition at save time and to the result when it is
 // rechecked, never by hiding inputs. The captured context is retained under the projection's
-// TransmissionID until ReleaseSyntheticPreview is called; the caller must release it.
+// TransmissionID until ReleaseSyntheticPreview is called; the caller must release it. Only the Unit
+// attributes that definition reads are captured.
 func (o *Owner) CaptureSyntheticPreview(ctx context.Context, tx platform.TransactionContext,
-	authority authz.Authority, workflow processing.WorkflowConfiguration, raw json.RawMessage) (management.PreviewCapture, error) {
+	authority authz.Authority, workflow processing.WorkflowConfiguration, definition processing.Definition,
+	raw json.RawMessage) (management.PreviewCapture, error) {
 	if o == nil || ctx == nil || tx == nil || o.matcher == nil || o.clock == nil {
 		return management.PreviewCapture{}, invalid(errors.New("missing synthetic capture participant"))
 	}
@@ -187,7 +191,7 @@ func (o *Owner) CaptureSyntheticPreview(ctx context.Context, tx platform.Transac
 	}
 	var unitAttributes declarations.UnitAttributes
 	if o.unitAttributes != nil {
-		unitAttributes, err = o.unitAttributes.ReadUnitAttributes(ctx, tx, assignedUnits(matched.Resolutions))
+		unitAttributes, err = o.unitAttributes.ReadUnitAttributes(ctx, tx, definition, assignedUnits(matched.Resolutions))
 		if err != nil {
 			return management.PreviewCapture{}, err
 		}

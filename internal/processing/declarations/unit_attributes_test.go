@@ -22,6 +22,23 @@ func unitRegistry() *fields.Registry {
 	return fields.New(fields.Builtin(), attributes.NewProvider(schemas, 1))
 }
 
+// declareAll declares every Unit attribute path the registry offers, which is what a Workflow
+// reading all of them would need.
+func declareAll(t *testing.T, registry *fields.Registry) []processing.FieldDeclaration {
+	t.Helper()
+	var refs []processing.FieldRef
+	for _, field := range registry.ListAll(fields.ScopeWorkflow) {
+		if len(field.Ref.Path) >= 4 && field.Ref.Path[0] == "unit" && field.Ref.Path[1] == "attributes" {
+			refs = append(refs, field.Ref)
+		}
+	}
+	declared, err := declarations.UnitAttributeDeclarations(registry, refs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return declared
+}
+
 func typedValue(t *testing.T, kind processing.ValueKind, value any) processing.Value {
 	t.Helper()
 	typed, err := processing.Literal(kind, value)
@@ -37,7 +54,7 @@ func effective(value processing.Value, field string) units.EffectiveAttributes {
 
 func TestUnitAttributeDeclarationsCoverFieldsAndProperties(t *testing.T) {
 	t.Parallel()
-	declared := declarations.UnitAttributeDeclarations(unitRegistry())
+	declared := declareAll(t, unitRegistry())
 	got := map[string]bool{}
 	for _, declaration := range declared {
 		if declaration.Reference.Namespace != "target" || !declaration.Schema.Optional ||
@@ -51,14 +68,65 @@ func TestUnitAttributeDeclarationsCoverFieldsAndProperties(t *testing.T) {
 			t.Errorf("missing %s in %v", want, got)
 		}
 	}
-	if len(declarations.UnitAttributeDeclarations(fields.New(fields.Builtin()))) != 0 {
+	if len(declareAll(t, fields.New(fields.Builtin()))) != 0 {
 		t.Fatal("builtin registry declares Unit attributes")
+	}
+}
+
+// TestUnitAttributeDeclarationsCoverOnlyTheReadPaths shows that a catalog with many Unit fields
+// declares just the references a Workflow reads, and none for a Workflow reading none.
+func TestUnitAttributeDeclarationsCoverOnlyTheReadPaths(t *testing.T) {
+	t.Parallel()
+	registry := unitRegistry()
+	town := processing.FieldRef{Namespace: "target", Path: []string{"unit", "attributes", "station", "town"}}
+	declared, err := declarations.UnitAttributeDeclarations(registry, []processing.FieldRef{town})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(declared) != 1 || declared[0].Reference.Path[3] != "town" || !declared[0].Schema.Optional ||
+		declared[0].Schema.Kind != processing.StringValue {
+		t.Fatalf("declared=%+v", declared)
+	}
+	if none, err := declarations.UnitAttributeDeclarations(registry, nil); err != nil || len(none) != 0 {
+		t.Fatalf("declared=%+v err=%v for a Workflow reading no Unit attribute", none, err)
+	}
+	unknown := processing.FieldRef{Namespace: "target", Path: []string{"unit", "attributes", "station", "nope"}}
+	if _, err := declarations.UnitAttributeDeclarations(registry, []processing.FieldRef{unknown}); err == nil {
+		t.Fatal("unknown reference was declared")
+	}
+}
+
+// TestDefinitionUnitAttributeRefsFindEveryRead expects every Unit-attribute reference of a
+// definition, wherever it appears, once each, and no other field.
+func TestDefinitionUnitAttributeRefsFindEveryRead(t *testing.T) {
+	t.Parallel()
+	town := processing.FieldRef{Namespace: "target", Path: []string{"unit", "attributes", "station", "town"}}
+	floor := processing.FieldRef{Namespace: "target", Path: []string{"unit", "attributes", "station", "site", "floor"}}
+	unitID := processing.FieldRef{Namespace: "target", Path: []string{"unit", "id"}}
+	empty, err := processing.Literal(processing.StringValue, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition := processing.Definition{SchemaVersion: 1,
+		Selector: processing.Predicate{Op: "and", Args: []processing.Predicate{
+			{Op: "eq", Field: &town, Value: &empty}, {Op: "present", Field: &unitID}}},
+		Outputs: map[string]map[string]processing.Assignment{"routing": {"town": {Field: &town}, "floor": {Field: &floor}}}}
+	refs, err := declarations.DefinitionUnitAttributeRefs(definition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, ref := range refs {
+		got[ref.String()] = true
+	}
+	if len(refs) != 2 || !got[town.String()] || !got[floor.String()] {
+		t.Fatalf("refs=%v, want town and site.floor once each", refs)
 	}
 }
 
 func TestUnitAttributeFieldsDescendAndAbsent(t *testing.T) {
 	t.Parallel()
-	declared := declarations.UnitAttributeDeclarations(unitRegistry())
+	declared := declareAll(t, unitRegistry())
 	site := typedValue(t, processing.ObjectValue, map[string]processing.Value{
 		"floor": typedValue(t, processing.IntegerValue, "3")})
 	tags := typedValue(t, processing.ListValue, []processing.Value{typedValue(t, processing.StringValue, "a")})
@@ -118,7 +186,7 @@ func TestUnitAttributeDeclarationsKeepDeprecatedFields(t *testing.T) {
 	schemas := []attributes.Schema{{Key: "station", Subject: attributes.SubjectUnit, Fields: map[string]attributes.Field{
 		"town": {Kind: processing.StringValue, Deprecated: true},
 	}}}
-	declared := declarations.UnitAttributeDeclarations(fields.New(fields.Builtin(), attributes.NewProvider(schemas, 1)))
+	declared := declareAll(t, fields.New(fields.Builtin(), attributes.NewProvider(schemas, 1)))
 	if len(declared) != 1 || declared[0].Reference.Path[3] != "town" {
 		t.Fatalf("declared=%+v, want the deprecated town field", declared)
 	}

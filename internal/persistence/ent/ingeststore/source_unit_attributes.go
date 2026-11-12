@@ -10,12 +10,15 @@ import (
 	"github.com/gopager/gopager/internal/attributes"
 	"github.com/gopager/gopager/internal/persistence/ent/attributestore"
 	"github.com/gopager/gopager/internal/platform"
+	"github.com/gopager/gopager/internal/processing"
 	"github.com/gopager/gopager/internal/processing/declarations"
 	"github.com/gopager/gopager/internal/units"
 )
 
-// UnitAttributeReader reads the Unit attributes a Workflow can read from its targets, for the
-// source of a run and for a synthetic preview.
+// UnitAttributeReader reads the Unit attributes a Workflow reads from its targets, for the
+// source of a run and for a synthetic preview. Only the attributes the Workflow's definition
+// reads are declared and loaded, so a growing Unit schema never inflates the source of a
+// Workflow that ignores it.
 type UnitAttributeReader struct {
 	store      *Store
 	registries *attributes.RegistrySource
@@ -24,7 +27,7 @@ type UnitAttributeReader struct {
 // NewUnitAttributeReader returns a UnitAttributeReader over the store's catalog.
 func NewUnitAttributeReader(store *Store) (*UnitAttributeReader, error) {
 	if store == nil {
-		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing Unit attribute store"))
+		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing Unit attribute reader dependency"))
 	}
 	catalog, err := attributestore.New(store.primary)
 	if err != nil {
@@ -35,13 +38,6 @@ func NewUnitAttributeReader(store *Store) (*UnitAttributeReader, error) {
 		return nil, err
 	}
 	return &UnitAttributeReader{store: store, registries: registries}, nil
-}
-
-// readUnitAttributes reads the attributes of the Units the matched targets resolve to.
-func (o *ProcessingSourceOwner) readUnitAttributes(ctx context.Context, tx platform.TransactionContext,
-	matched assignments.MatchResult,
-) (declarations.UnitAttributes, error) {
-	return o.unitAttributes.ReadUnitAttributes(ctx, tx, matchedUnits(matched.Resolutions))
 }
 
 // matchedUnits returns the Units the resolutions assign.
@@ -55,21 +51,40 @@ func matchedUnits(resolutions []assignments.Resolution) []uuid.UUID {
 	return ids
 }
 
-// ReadUnitAttributes declares the Unit attributes of the catalog visible in tx and loads the
-// effective attributes of the given Units in one query. It queries nothing when no Unit
-// attribute is declared or no Unit is given.
+// ReadUnitAttributes declares the Unit attributes the definition reads, typed by the catalog
+// visible in tx, and loads the effective attributes of the given Units in one query. It queries
+// nothing when the definition reads no Unit attribute or no Unit is given.
 func (r *UnitAttributeReader) ReadUnitAttributes(ctx context.Context, tx platform.TransactionContext,
-	ids []uuid.UUID,
+	definition processing.Definition, ids []uuid.UUID,
 ) (declarations.UnitAttributes, error) {
 	registry, err := r.registries.Registry(ctx, tx)
 	if err != nil {
 		return declarations.UnitAttributes{}, err
 	}
-	source := declarations.UnitAttributes{Declared: declarations.UnitAttributeDeclarations(registry),
-		Effective: map[uuid.UUID]units.EffectiveAttributes{}}
+	refs, err := declarations.DefinitionUnitAttributeRefs(definition)
+	if err != nil {
+		return declarations.UnitAttributes{}, err
+	}
+	declared, err := declarations.UnitAttributeDeclarations(registry, refs)
+	if platform.FailureCode(err) == platform.CodeInvalidInput {
+		// A reference the catalog does not offer cannot compile; the worker fails the run with the
+		// compile error, as for any other invalid definition.
+		return declarations.UnitAttributes{Effective: map[uuid.UUID]units.EffectiveAttributes{}}, nil
+	}
+	if err != nil {
+		return declarations.UnitAttributes{}, err
+	}
+	source := declarations.UnitAttributes{Declared: declared, Effective: map[uuid.UUID]units.EffectiveAttributes{}}
 	if len(source.Declared) == 0 || len(ids) == 0 {
 		return source, nil
 	}
+	return r.loadEffective(ctx, tx, source, ids)
+}
+
+// loadEffective fills source.Effective for the given Units.
+func (r *UnitAttributeReader) loadEffective(ctx context.Context, tx platform.TransactionContext,
+	source declarations.UnitAttributes, ids []uuid.UUID,
+) (declarations.UnitAttributes, error) {
 	executor, err := r.store.primary.Resolve(tx)
 	if err != nil {
 		return declarations.UnitAttributes{}, err

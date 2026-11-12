@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/commands"
+	"github.com/gopager/gopager/internal/events"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
@@ -53,7 +54,16 @@ func (r *fakeReceipts) SaveCommandReceipt(_ context.Context, _ platform.Transact
 }
 
 // memoryStore keeps schemas in memory; visibility is matched on Agency scopes only.
-type memoryStore struct{ schemas map[string]Schema }
+type memoryStore struct {
+	schemas map[string]Schema
+	facts   []events.MasterDataFact
+}
+
+// AppendMasterDataFact records the fact so tests can inspect what a service appended.
+func (m *memoryStore) AppendMasterDataFact(_ context.Context, _ platform.TransactionContext, fact events.MasterDataFact) (uuid.UUID, error) {
+	m.facts = append(m.facts, fact)
+	return fact.ID, nil
+}
 
 func matches(filter authz.AgencyFilter, agencies []uuid.UUID) bool {
 	return filter.All || slices.ContainsFunc(agencies, func(a uuid.UUID) bool { return slices.Contains(filter.Agencies, a) })
@@ -111,7 +121,7 @@ func serviceFor(t *testing.T, scope authz.Scope, actions ...string) (*Service, *
 	authority := authz.Authority{PrincipalID: principal, Revision: 1, Active: true, Grants: []authz.Grant{{
 		ID: uuid.NewString(), SubjectID: principal, SubjectKind: "principal", Actions: actions, Scope: scope}}}
 	service, err := NewService(fakeTransactions{}, fakeResolver{identity.Authentication{Authority: authority, Kind: identity.SessionProof}},
-		fakeClock{}, store, &fakeReceipts{stored: map[[2]uuid.UUID]commands.Receipt{}})
+		fakeClock{}, store, &fakeReceipts{stored: map[[2]uuid.UUID]commands.Receipt{}}, store)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -82,3 +82,30 @@ func TestLayoutReferenceToARecreatedSchemaIsNew(t *testing.T) {
 		t.Fatalf("update keeping a reference to a re-created schema of Agency B only returned %d, want 403", response.status)
 	}
 }
+
+// TestLayoutUnitAttributeReferenceNeedsTheRightInOneSchemaAgency expects a reference to a Unit
+// attribute (`unit.attributes.<key>…`) to count like one to a Message attribute: a layout manager
+// restricted to Agency A cannot add a field of a `unit` schema assigned only to Agency B.
+func TestLayoutUnitAttributeReferenceNeedsTheRightInOneSchemaAgency(t *testing.T) {
+	t.Parallel()
+	f := newDeliveryFixture(t, delivery.AdmissionLimits{})
+	other := uuid.New()
+	f.exec(`INSERT INTO agencies (id, name) VALUES ($1, 'Agency B')`, other)
+	f.exec(`INSERT INTO attribute_schemas (key, revision, label, subject, fields, created_by, created_at, updated_at)
+		VALUES ('station', 1, 'Station', 'unit', '{"town":{"kind":"string"}}'::jsonb, $1, now(), now())`, uuid.New())
+	f.exec(`INSERT INTO attribute_schema_agencies (schema_key, agency_id) VALUES ('station', $1)`, other)
+	f.exec(`UPDATE attribute_catalog SET revision = revision + 1 WHERE id = 1`)
+	manager, _ := f.caller([]string{"presentation.manage"}, authz.Scope{Kind: "agency", References: []string{f.agency.String()}},
+		[]string{"payload", "unit"})
+	town := layoutBody("text", []any{map[string]any{"kind": "field", "label": "Town",
+		"field": map[string]any{"namespace": "unit", "path": []string{"attributes", "station", "town"}}}})
+
+	if response := f.subCall(manager, http.MethodPost, "/api/v1/layouts", withAgency(town, f.agency)); response.status != http.StatusForbidden {
+		t.Fatalf("create with a Unit attribute of Agency B only returned %d, want 403", response.status)
+	}
+	f.exec(`INSERT INTO attribute_schema_agencies (schema_key, agency_id) VALUES ('station', $1)`, f.agency)
+	f.exec(`UPDATE attribute_catalog SET revision = revision + 1 WHERE id = 1`)
+	if response := f.subCall(manager, http.MethodPost, "/api/v1/layouts", withAgency(town, f.agency)); response.status != http.StatusCreated {
+		t.Fatalf("create with a Unit attribute of Agencies A and B returned %d, want 201", response.status)
+	}
+}
