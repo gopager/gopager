@@ -333,6 +333,8 @@ Give every `api` and `worker` process the same key. The key is read once at star
 
 **Never logged.** Secret values and the key do not appear in logs, errors, API responses or command fingerprints (a replayed write is fingerprinted with a keyed digest only). Views show a Secret only as `secret`, `configured`, `redacted` and its source (`stored`, `file` or `env`), never the value, file path or variable name. Startup errors about the key or the file root name only the variable. The plaintext exists only in the request to the plugin during an attempt and in the plugin process itself; the server clears it when the call ends. A trusted plugin that deliberately leaks a Secret cannot be stopped: plugins are trusted code ([Plugins: Runtime model](plugins.md#1-runtime-model)). A plugin receipt that contains a Secret of the attempt is dropped.
 
+**Administrators are trusted with an instance's Secrets.** Whoever holds `plugin.configure` can change an instance's non-Secret settings, including its destination (Webhook `url`, Pushover `endpoint`), while its stored Secrets carry over; the plugin then sends them to the new destination, also when another administrator entered them. GoPager never shows a stored Secret, but it does not stop an administrator from redirecting one. Grant `plugin.configure` only to people you trust with every plugin Secret, and replace a Secret after removing such a grant.
+
 ## Security
 
 - **Public origin.** `--public-origin` is the single source for cookie and CSRF origin policy. `Host` and `X-Forwarded-*` headers are ignored. Set it to the exact origin users type into the browser (e.g. `https://pager.example.org`); default ports `80`/`443` are normalized away.
