@@ -12,7 +12,7 @@ Referenced contracts (follow only when relevant): [C-02](c-02-protocol-payload.m
 
 ## Implemented behavior (specified in `docs/` and OpenAPI)
 
-The routes and schemas are defined by [OpenAPI v1](../../api/openapi/v1.yaml) (`info.version` 1.7.0), tags `Ingest` and `Gateways`. Semantics:
+The routes and schemas are defined by [OpenAPI v1](../../api/openapi/v1.yaml) (`info.version` 1.9.0), tags `Ingest` and `Gateways`. Semantics:
 
 - Submission fields, size limits, Network resolution order and priorities, Observation-time rules (offset, truncation, 15-minute plausibility tolerance), idempotency, receipt and rejected submissions: [HTTP API: Ingest, Gateway credential](../../docs/http-api.md#ingest-gateway-credential).
 - Protocol targets and Payload identity: [HTTP API: Protocols, targets and payload identity](../../docs/http-api.md#protocols-targets-and-payload-identity).

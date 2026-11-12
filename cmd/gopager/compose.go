@@ -2,8 +2,10 @@ package main
 
 import (
 	"github.com/gopager/gopager/internal/assignments"
+	"github.com/gopager/gopager/internal/attributes"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/persistence/ent/assignmentstore"
+	"github.com/gopager/gopager/internal/persistence/ent/attributestore"
 	"github.com/gopager/gopager/internal/persistence/ent/commandstore"
 	"github.com/gopager/gopager/internal/persistence/ent/eventstore"
 	"github.com/gopager/gopager/internal/persistence/ent/identitystore"
@@ -29,6 +31,11 @@ type core struct {
 	intake      *ingeststore.Store
 	processing  *processingstore.Store
 	reads       *readstore.Store
+	attributes  *attributestore.Store
+
+	// fields is the field registry of the built-in fields and the Attribute schemas, shared by
+	// every consumer so that one cache follows the catalog revision.
+	fields *attributes.RegistrySource
 
 	resolver *identity.Resolver
 	// unitService manages master data.
@@ -77,6 +84,12 @@ func composeCore(store *postgres.Store) (*core, error) {
 		return nil, err
 	}
 	if c.reads, err = readstore.New(store); err != nil {
+		return nil, err
+	}
+	if c.attributes, err = attributestore.New(store); err != nil {
+		return nil, err
+	}
+	if c.fields, err = attributes.NewRegistrySource(c.attributes); err != nil {
 		return nil, err
 	}
 	if c.resolver, err = identity.NewResolver(c.identity, store, applicationScopeOwners{

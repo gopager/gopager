@@ -3,7 +3,7 @@
   "private": true,
   "description": "Repository tooling: commit message linting and git hooks. The application is built with Go.",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=26.13.1"
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.4",

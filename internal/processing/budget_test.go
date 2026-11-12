@@ -100,7 +100,7 @@ func TestWorkflowComputeBudgetExpiryIsExplicitResourceLimit(t *testing.T) {
 
 func TestWorkflowEvaluationComputeExhaustionAndCallerCancellation(t *testing.T) { //nolint:paralleltest // swaps the package variable computeAllowance
 	_, source := sourceFixture(t)
-	program, err := CompileWorkflow(context.Background(), selectedDefinition(), source, nil)
+	program, err := CompileWorkflow(context.Background(), selectedDefinition(), source, testOutputs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

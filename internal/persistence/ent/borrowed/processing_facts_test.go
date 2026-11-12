@@ -7,6 +7,7 @@ import (
 	"entgo.io/ent/entql"
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/events"
+	"github.com/gopager/gopager/internal/fields"
 	"github.com/gopager/gopager/internal/persistence/ent"
 	"github.com/gopager/gopager/internal/persistence/ent/borrowed"
 	"github.com/gopager/gopager/internal/persistence/ent/eventstore"
@@ -48,8 +49,8 @@ func TestProcessingFactParticipantUsesCallerTransactionAndRejectsExpiredCapabili
 		completion := events.ProcessingCompletionFact{ID: resultFactID, WorkflowID: workflowID,
 			ResultID: resultID, ResultRevision: 1, TransmissionID: uuid.New(), MessageID: uuid.New(), MessageTime: now,
 			DefinitionVersionID: uuid.New(), SourceRevision: 1, ContextRevision: 1, OccurredAt: now,
-			OutputSchema: map[string]processing.FieldSchema{},
-			Result:       processing.Evaluation{Selected: true, Fields: map[string]processing.FieldValue{}}}
+			Outputs: fields.New().Declarations(fields.ScopeMessage, false),
+			Result:  processing.Evaluation{Selected: true, Fields: map[string]map[string]processing.FieldValue{}}}
 		if fail {
 			completion.MessageID = uuid.Nil
 		}

@@ -151,8 +151,9 @@ func (f *processingSourceFixture) seedWorkflow(t *testing.T, name string, defini
 		t.Fatal(err)
 	}
 	workflow, version := uuid.New(), uuid.New()
-	f.exec(t, `INSERT INTO processing_workflows(id,name,scope_kind,enabled,created_at,updated_at)
-		VALUES($1,$2,'all',true,$3,$3)`, workflow, name, f.now)
+	f.exec(t, `INSERT INTO processing_workflows(id,name,enabled,created_at,updated_at)
+		VALUES($1,$2,true,$3,$3)`, workflow, name, f.now)
+	f.exec(t, `INSERT INTO processing_workflow_agencies(workflow_id,agency_id) SELECT $1, id FROM agencies`, workflow)
 	f.exec(t, `INSERT INTO processing_workflow_versions(id,workflow_id,definition,created_at,created_by)
 		VALUES($1,$2,$3,$4,$5)`, version, workflow, encoded, f.now, uuid.New())
 	f.exec(t, `UPDATE processing_workflows SET active_version_id=$2 WHERE id=$1`, workflow, version)
@@ -237,8 +238,8 @@ func protocolSelectorDefinition(t *testing.T) processing.Definition {
 		t.Fatal(err)
 	}
 	return processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "eq", Field: &field, Value: &value},
-		OutputSchema: map[string]processing.FieldSchema{}, Outputs: map[string]processing.Assignment{}}
+		Selector: processing.Predicate{Op: "eq", Field: &field, Value: &value},
+		Outputs:  map[string]map[string]processing.Assignment{}}
 }
 
 // undeclaredFieldDefinition references a source field that no source declares, so compiling it
@@ -251,8 +252,8 @@ func undeclaredFieldDefinition(t *testing.T) processing.Definition {
 		t.Fatal(err)
 	}
 	return processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "eq", Field: &field, Value: &value},
-		OutputSchema: map[string]processing.FieldSchema{}, Outputs: map[string]processing.Assignment{}}
+		Selector: processing.Predicate{Op: "eq", Field: &field, Value: &value},
+		Outputs:  map[string]map[string]processing.Assignment{}}
 }
 
 const toneOnlyPayload = `{"form":"tone-only"}`

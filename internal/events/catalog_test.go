@@ -31,7 +31,7 @@ func TestCatalogCoversDeliverableTypes(t *testing.T) {
 		}
 	}
 	for _, eventType := range []string{"configuration.changed", "principal.deleted", "correction.failed",
-		"operation.network-ambiguous"} {
+		"operation.network-ambiguous", "subscription.health-changed"} {
 		if entry, ok := LookupType(eventType); !ok || entry.Deliverable {
 			t.Fatalf("%s must be catalogued and not deliverable", eventType)
 		}
@@ -59,6 +59,40 @@ func TestSubscriptionFactEnvelope(t *testing.T) {
 		{ID: uuid.New(), Subscription: uuid.New(), Revision: 1, OccurredAt: now, ChangeKind: "resumed"},
 		{ID: uuid.New(), Subscription: uuid.Nil, Revision: 1, OccurredAt: now, ChangeKind: "created"},
 		{ID: uuid.New(), Subscription: uuid.New(), Revision: 0, OccurredAt: now, ChangeKind: "created"},
+	} {
+		if _, err := broken.Envelope(now); !errors.Is(err, ErrInvalidFact) {
+			t.Fatalf("%+v: err = %v", broken, err)
+		}
+	}
+}
+
+func TestSubscriptionHealthFactEnvelope(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 11, 11, 10, 0, 0, 0, time.UTC)
+	fact := SubscriptionHealthFact{ID: uuid.New(), Subscription: uuid.New(), Revision: 3, OccurredAt: now,
+		Health: "invalid", Reason: "field-unavailable"}
+	envelope, err := fact.Envelope(now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Type != SubscriptionHealthChanged || envelope.Producer.Domain != "delivery" ||
+		envelope.AggregateRef.Type != SubscriptionAggregate || envelope.AggregateRevision != 3 ||
+		envelope.Data != (SubscriptionHealthData{Health: "invalid", Reason: "field-unavailable", Revision: 3}) {
+		t.Fatalf("envelope = %+v", envelope)
+	}
+	entry, ok := LookupType(string(SubscriptionHealthChanged))
+	if !ok || entry.Producer != "delivery" || entry.SchemaVersion != 1 || entry.Deliverable || entry.Projection != ProjectionNone {
+		t.Fatalf("catalog entry = %+v", entry)
+	}
+	valid := SubscriptionHealthFact{ID: uuid.New(), Subscription: uuid.New(), Revision: 1, OccurredAt: now, Health: "valid"}
+	if _, err := valid.Envelope(now); err != nil {
+		t.Fatal(err)
+	}
+	for _, broken := range []SubscriptionHealthFact{
+		{ID: uuid.New(), Subscription: uuid.New(), Revision: 1, OccurredAt: now, Health: "valid", Reason: "filter-invalid"},
+		{ID: uuid.New(), Subscription: uuid.New(), Revision: 1, OccurredAt: now, Health: "invalid"},
+		{ID: uuid.New(), Subscription: uuid.New(), Revision: 1, OccurredAt: now, Health: "invalid", Reason: "other"},
+		{ID: uuid.New(), Subscription: uuid.New(), Revision: 0, OccurredAt: now, Health: "valid"},
 	} {
 		if _, err := broken.Envelope(now); !errors.Is(err, ErrInvalidFact) {
 			t.Fatalf("%+v: err = %v", broken, err)

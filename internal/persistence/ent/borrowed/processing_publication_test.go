@@ -69,8 +69,7 @@ func (s *publicationSourceFixture) CheckItem(ctx context.Context, tx platform.Tr
 			return err
 		}
 		if s.mutate {
-			item.Result.Evaluation.Fields["injected"] = processing.FieldValue{State: processing.FieldAbsent}
-			item.Definition.OutputSchema["injected"] = processing.FieldSchema{Kind: processing.StringValue, Optional: true}
+			item.Result.Evaluation.Fields["injected"] = map[string]processing.FieldValue{"field": {State: processing.FieldAbsent}}
 		}
 	}
 	return nil
@@ -137,7 +136,7 @@ func TestProcessingPublicationAtomicEvidenceAndFences(t *testing.T) {
 		}
 		for range 2 {
 			configuration := processing.WorkflowConfiguration{ID: uuid.New(), Revision: 1,
-				Name: uuid.NewString(), Scope: authz.Scope{Kind: "all"}, Enabled: true,
+				Name: uuid.NewString(), Scope: seedAgencyScope(t, primary), Enabled: true,
 				CreatedAt: now, UpdatedAt: now}
 			version := processing.Version{ID: uuid.New(), WorkflowID: configuration.ID,
 				CreatedAt: now, CreatedBy: actor, Definition: preparedProcessingDefinition(t)}
@@ -206,7 +205,7 @@ func TestProcessingPublicationAtomicEvidenceAndFences(t *testing.T) {
 						selected := name != "false" && i == 0
 						evaluation := processing.Evaluation{Selected: selected}
 						if selected {
-							evaluation.Fields = map[string]processing.FieldValue{}
+							evaluation.Fields = map[string]map[string]processing.FieldValue{}
 						}
 						candidate, _, err = repository.CompleteCandidate(tx.Context(), tx, lease, 0, evaluation)
 						if err != nil {

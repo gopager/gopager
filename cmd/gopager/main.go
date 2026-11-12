@@ -311,7 +311,7 @@ func composeApplicationAPI(publicOrigin string, limits identity.LoginRateLimits,
 	if err != nil {
 		return nil, err
 	}
-	login, err := identity.NewLoginService(c.store, c.resolver, c.identity, c.facts, limits)
+	login, err := identity.NewLoginService(c.store, c.resolver, c.identity, c.facts, limits, identityOptions...)
 	if err != nil {
 		return nil, err
 	}
@@ -352,6 +352,9 @@ func composeApplicationAPI(publicOrigin string, limits identity.LoginRateLimits,
 		return nil, err
 	}
 	if err := registerDeliveryRoutes(mux, transport, preauthenticator, c); err != nil {
+		return nil, err
+	}
+	if err := registerAttributeRoutes(mux, transport, preauthenticator, c); err != nil {
 		return nil, err
 	}
 	httpapi.RegisterIngestRoutes(mux, intakeService)

@@ -212,7 +212,8 @@ What callers can do depends on these concepts:
   grant can carry a maximum data age. Grants from the account and from its user groups
   add up.
 - **Field permissions** are global (unscoped) and cover the field groups `payload`,
-  `address`, `unit`, `gateway`, `quality`, `derived` and `extension.<plugin>.<field>`.
+  `address`, `unit`, `gateway`, `quality` and `derived`; the set is closed (Message attributes
+  belong to `derived`).
   They make no rows readable on their own. Reads of Units, Organizations and Unit
   collections also require the `unit` field group. Address-rule reads require both
   `address` and `unit`.
@@ -234,6 +235,7 @@ Scope kinds each action accepts (`internal/authz/grants.go` is the source; a gra
 | `gateway.diagnostics.read`, `gateway.credential.rotate` | `all`, `agency`, `gateway` |
 | `delivery.read`, `delivery.retry`, `delivery.redeliver` | `all`, `agency`, `unit`, `unitCollection`, `account` |
 | `workflow.*`, `presentation.manage` | `all`, `agency`, `unit` |
+| `attribute-schema.manage` | `all`, `agency` |
 | `audit.read` | `all`, `agency`, `account` |
 
 Grant semantics:
@@ -270,11 +272,12 @@ Scope evaluation per resource:
 | Network | The Network's Agency. Protocol and Agency are fixed at creation. |
 | Gateway administration | The Agency of every Network currently assigned to the Gateway, and for creation and network replacement of every proposed Network; a replacement also needs the Agency of every Network that the Gateway's accepted Transmissions of a changed Protocol reference, because its correction can move them. A Gateway without Networks needs an `all` grant. Lists show only Gateways whose every Agency is readable. |
 | Gateway delegation | `gateway.diagnostics.read` and `gateway.credential.rotate` with a `gateway` scope reach exactly the listed Gateways; with `agency` scope they need every Agency of the Gateway. Diagnostics grant only the diagnostics and history routes; rotation grants only credential status, issue and revoke. Neither implies the other, any Message or Payload access, or Gateway administration. A grant on a deleted Gateway stops applying. |
-| Workflow | The workflow's own selection scope (`all`, `network` or `unit`), with each Network resolved to its Agency and each Unit to its Agency and collections. |
+| Workflow | The workflow's own selection scope: its assigned Agencies, or with a narrowing each referenced Network resolved to its Agency and each referenced Unit to its Agency and collections. Reading needs one assigned Agency (or one referenced Unit); managing needs all of them. |
 | Processing instance | The global `plugin.configure` right. |
 | Subscription | `subscription.manage-own` on the caller's own account for personal Subscriptions; `subscription.manage-global` on the technical subscriber's account for global ones. See [Subscriptions](#subscriptions). |
 | Delivery | `delivery.read`, `delivery.retry` and `delivery.redeliver`, each matched against the subscriber's account, the Agencies and Units the Delivery concerns and their Unit collections, within the grant's maximum data age. See [Deliveries](#deliveries). |
-| Layout | Reads need `presentation.manage`, `subscription.manage-own` or `subscription.manage-global`; changes need `presentation.manage`. See [Layouts](#layouts). |
+| Layout | The Agencies the layout is assigned to: visible with `presentation.manage` or `message.read` in one of them; changes need `presentation.manage` in every one. See [Layouts](#layouts). |
+| Attribute schema | The Agencies the schema is assigned to: visible through any right that picks or fills attributes; changes need `attribute-schema.manage` in every one. See [Attribute schemas](#attribute-schemas). |
 
 ## Conventions
 
@@ -445,7 +448,7 @@ mutating routes reached via session also require Origin + `X-CSRF-Token`.
 | POST | `/agencies` | `agency.create` (`all`) | 201 | Create (`commandId`, `name`) |
 | GET | `/agencies/{id}` | `agency.read` | 200 | Read |
 | PUT | `/agencies/{id}` | `agency.update` | 200 | Rename |
-| DELETE | `/agencies/{id}` | `agency.delete` (`all`) | 200 | Delete; `409 REVISION_CONFLICT` while Units or Networks still belong to it |
+| DELETE | `/agencies/{id}` | `agency.delete` (`all`) | 200 | Delete; `409 REVISION_CONFLICT` while Units or Networks still belong to it or while it is the only Agency of an undeleted Workflow, a Layout or an Attribute schema; other definitions lose the assignment |
 | GET | `/organizations` | `organization.read` | 200 | List |
 | POST | `/organizations` | `organization.create` | 201 | Create (`commandId`, `name`, `defaults`) |
 | GET | `/organizations/{id}` | `organization.read` | 200 | Read |
@@ -545,12 +548,12 @@ reads its group:
 
 | Group | Projection | Filters |
 | --- | --- | --- |
-| `payload` | `payload`, `protocol`, `incomplete` | `text`, `protocol` |
-| `unit` | `units` (`unitId`, `name`, `agencyId`, `organizationId`, `encrypted`), `withoutUnit`, targets' `unitId` and `encrypted`, Unit, Organization and Agency options | `unit`, `organization`, `agency`, `withoutUnit` |
+| `payload` | `payload`, `protocol`, `incomplete` | `text`, `protocol`, `filter` fields `message.protocol`, `message.form`, `message.text`, `message.numeric` |
+| `unit` | `units` (`unitId`, `name`, `agencyId`, `organizationId`, `encrypted`), `withoutUnit`, targets' `unitId` and `encrypted`, Unit, Organization and Agency options | `unit`, `organization`, `agency`, `withoutUnit`, `filter` fields `message.unitIds`, `message.unitNames` |
 | `address` | targets' `address` and `function` | none |
 | `gateway` | Transmissions' `observedAt`, `networkId`, `networkName`, Network options | `network` |
 | `quality` | `qualityMetrics` | none |
-| `derived` | `derived` | `derived` |
+| `derived` | `attributes` | `filter` fields in the `attributes` namespace |
 
 A filter that needs an unreadable group is `403 FORBIDDEN`; it is never dropped or widened.
 `networkUnresolved: true` appears only where the caller's `network.read` reaches the Network's Agency.
@@ -564,7 +567,7 @@ A filter that needs an unreadable group is `403 FORBIDDEN`; it is never dropped 
 | `text` | literal substring of the text or numeric Payload value; empty means no filter; invalid UTF-8 or more than 1024 bytes is `INVALID_INPUT` |
 | `unit`, `organization`, `agency`, `network` | repeatable UUIDs |
 | `protocol` | repeatable `pocsag`, `flex`, `zvei`, `eas` |
-| `derived` | repeatable `<outputName>=<value>` |
+| `filter` | at most once: a typed predicate as JSON, at most 32 KiB (see below) |
 | `withoutUnit` | `true` adds Unit-less appearances as an alternative of the Unit dimension |
 | `pageSize` | 1–200, default 50 |
 | `pageToken` | the previous `nextPageToken` |
@@ -573,9 +576,41 @@ At most 100 values per dimension. Values of one dimension are alternatives; dime
 with AND on the same eligible appearance: Unit, Organization and Agency on the appearance itself,
 Network and Protocol through a Transmission that supports that appearance (an unsuppressed
 assigned target of that Unit, or for a Unit-less row a targetless or unassigned Transmission of a
-Network of that Agency). `derived` matches an output of the latest published result of a
-Workflow, among the supporting readable Transmissions, that equals the value as a string, a
-decimal number or `true`/`false`; conditions with the same name are alternatives.
+Network of that Agency). The `filter` combines with the other parameters by AND on the Message.
+
+**Selection predicate (`filter`).** The value is the [typed predicate](workflows.md#predicates) of
+the Subscription filters (`and`, `or`, `not`, `present`, `eq`, `in`, `lt`, `lte`, `gt`, `gte`,
+`contains`; schema `MessagePredicate`) over these fields. Timestamp comparisons (`eq`, `in`, ordered)
+use microsecond precision: candidates and operands are truncated to microseconds first, so values that
+differ only below a microsecond are equal.
+
+| Field | Type | Group | Source |
+| --- | --- | --- | --- |
+| `message.id`, `message.time` | string, timestamp | none | the Message |
+| `message.processingStatus`, `message.correctionStatus` | string | none | as in the feed item |
+| `message.protocol`, `message.form` | string | `payload` | the Representative Transmission |
+| `message.text`, `message.numeric` | string | `payload` | its Payload value, when its form is `text` or `numeric` |
+| `message.unitIds`, `message.unitNames` | list of string | `unit` | the caller's eligible Unit appearances |
+| `attributes.<schemaKey>.<field>[.<property>…]` | the declared type | `derived` | effective attribute values (below) |
+
+Each field reference resolves to a set of candidate scalars: an absent value contributes nothing, a
+list its elements, an attribute the effective value of every position the caller may see. A
+comparison holds when one candidate satisfies it; `present: true` holds when there is a candidate
+and `present: false` when there is none; `and`, `or` and `not` are two-valued, so `not` of a
+comparison also holds for a Message without the field. `contains` is a case-sensitive substring
+test (`text` stays case-insensitive). Only scalars and lists of scalars can be compared, and
+a candidate of another type than declared is ignored. A malformed predicate, an unknown,
+deprecated or non-filterable field, a mistyped operand or an exceeded bound is `400 INVALID_INPUT`
+(`RESOURCE_LIMIT` for bounds); a predicate that reads a field group the caller cannot read is
+`403 FORBIDDEN`. The Query side compiles the predicate to SQL; the same rules run in Go for
+Subscription filters, and one test checks both.
+
+**Effective attribute values.** The candidates of an attribute are the published results of the
+Message's supporting readable Transmissions whose stored field groups the caller can read all of.
+For each schema field and position (a Transmission-level result, or an original target position of
+a target the caller may see) the effective value is the present value of the latest result, by
+publication time and then result ID, whichever Workflow wrote it. A property path descends into
+object values.
 
 Text search is evaluated in PostgreSQL: both sides are normalized to NFC, case-folded with full
 Unicode case folding (`casefold` with the `pg_unicode_fast` collation) and normalized again, then
@@ -600,12 +635,14 @@ Transmission is pending, else `failed`, else `completed`, else `none`), `correct
 (`correcting` if an eligible appearance is correcting, else `current`), and per group the
 properties above. `payload` is the original Payload of the Representative Transmission: the
 readable supporting Transmission that is not `incomplete`, then the earliest acceptance, then the
-lowest ID. `derived` lists, per Workflow, the latest published result among the supporting
-readable Transmissions (`workflowId`, `resultId`, `fields` with each output's `state` and `value`;
-`targetResults` only for visible targets). A result appears only if the caller reads `derived` and
-every field group stored with the result: the groups its Workflow definition version reads,
-recorded when the worker wrote the result. Reads never evaluate Workflows, and a result stays
-visible when a plugin instance it used is later disabled, updated or removed.
+lowest ID. `attributes` lists the effective attribute values with their provenance:
+`schemaKey`, `field`, `targetPosition` (target-level values only), `unitId` (the Unit the target
+is assigned to, with the `unit` group), the typed `value`, and `workflowId`,
+`definitionVersionId`, `resultId` and `publishedAt` of the result it comes from, sorted by schema
+key, field and position (the Transmission-level value first). A value appears only if the caller
+reads `derived` and every field group stored with its result: the groups its Workflow definition
+version reads, recorded when the worker wrote the result. Reads never evaluate Workflows, and a
+result stays visible when a plugin instance it used is later disabled, updated or removed.
 
 **Detail (`GET /messages/{id}`).** A Message that is absent, merged away or without a
 detail-eligible appearance is `404 NOT_FOUND`. The feed item is extended by `firstObservedAt` on
@@ -711,7 +748,8 @@ A view is `{"id","revision","ownership":"personal"|"global","name","definition",
 in the data envelope. `name` is 1–256 Unicode scalars, valid UTF-8 and not blank. The
 `definition` is `{"schemaVersion":1,"filters":{…},"from"?,"until"?}`; `filters` takes the feed
 dimensions as arrays `units`, `agencies`, `organizations`, `networks`, `protocols` and
-`derived` (`[{"name","value"}]`), the string `text` and the boolean `withoutUnit`, with the
+the predicate `filter` (the [selection predicate](#messages-query-and-detail)), the string `text`
+and the boolean `withoutUnit`, with the
 limits of the [feed filters](#messages-query-and-detail). Unknown fields are `400 INVALID_INPUT`.
 A view stores no Message and no snapshot; opening it runs its filters through `GET /messages`.
 
@@ -724,9 +762,11 @@ A view stores no Message and no snapshot; opening it runs its filters through `G
   `saved-view.manage-global`, who could not maintain them otherwise; reading a definition grants
   no Message access.
 - **Field groups.** A save whose filters need a field group the author cannot read is
-  `403 FORBIDDEN` and stores nothing. `unavailableFilters` lists, sorted, the filter dimensions
+  `403 FORBIDDEN` and stores nothing; a `filter` that does not compile against the author's
+  field registry (unknown or deprecated field, mistyped operand) is `400 INVALID_INPUT`.
+  `unavailableFilters` lists, sorted, the filter dimensions
   (named like the feed parameters: `text`, `unit`, `organization`, `agency`, `network`,
-  `protocol`, `derived`, `withoutUnit`) whose field group the *caller* cannot read now, `[]`
+  `protocol`, `filter`, `withoutUnit`) whose field group the *caller* cannot read now, `[]`
   if none, so a client marks the view unavailable instead of dropping them. Running such a
   view through `GET /messages` is `403`; filters of readable groups work alone.
 - `POST` takes a `commandId` ([Command IDs](#command-ids-idempotent-creation)); an identical
@@ -980,7 +1020,7 @@ Network replacement body:
 | GET | `/workflows/{id}/candidates/{candidate}/result` | `workflow.read` | 200 | Result metadata only (`id`, `revision`, `completedAt`) |
 | POST | `/workflows/{id}/candidates/{candidate}/retry` | `workflow.reprocess` | 200 | Retry a failed candidate (`expectedRevision`) |
 
-Workflow `scope.kind` is `all`, `network` or `unit`. Creating, updating and deleting a
+Workflow `scope` is `{"agencies": [...], "narrowing": null | {"kind": "network" | "unit", "references": [...]}}`; see [Workflows](workflows.md#workflow-configuration). Creating, updating and deleting a
 workflow, saving a version and activating one all advance the workflow revision.
 
 Preview body:
@@ -989,7 +1029,8 @@ Preview body:
 - exactly one of `syntheticJson` (raw input document) or `storedTransmissionId`
 
 The result is `{"selected","fields","targetResults"}`, restricted to fields the caller
-may read. A `syntheticJson` input is evaluated against the current network named by its
+may read. `fields` (and each `targetResults[].fields`) is keyed by Attribute schema key and then
+field name; an output without a value is omitted ([Workflows](workflows.md#outputs)). A `syntheticJson` input is evaluated against the current network named by its
 `networkId`: an unknown network returns `404 NOT_FOUND`, and a deleted network or one
 whose protocol differs from the input returns `503 AUTHORITY_UNAVAILABLE`.
 `storedTransmissionId` is not supported and returns `503 AUTHORITY_UNAVAILABLE`.
@@ -1045,9 +1086,11 @@ targets on behalf of a subscriber. Properties and limits are in the OpenAPI sche
   checked against the subscriber's field groups, not the caller's, and every Delivery is
   materialized and re-checked under the subscriber's current authority just before it is sent.
   A field group the subscriber cannot read is `400 INVALID_INPUT` on save (unlike
-  [saved views](#saved-views), which answer `403`).
-- **Filter.** `filter` is the same predicate tree as in [workflows](workflows.md), over the catalog
-  below.
+  [saved views](#saved-views), which answer `403`). If the subscriber loses the right later, the
+  Subscription becomes `invalid` ([Health](#subscription-health)); a field never reads as absent for
+  that reason.
+- **Filter.** `filter` is the same predicate tree as in [workflows](workflows.md), over the registry
+  fields below. A save compiles it strictly: an unknown or deprecated field is `400 INVALID_INPUT`.
 - **Targets.** 1 to 8 distinct instances with the Delivery capability. `revision` is 0 (or absent)
   or the instance's current revision, and the response always shows the revision that was saved.
   A different `revision` is `409 REVISION_CONFLICT`. `inputs` are typed constants for inputs
@@ -1055,7 +1098,9 @@ targets on behalf of a subscriber. Properties and limits are in the OpenAPI sche
   that is missing, disabled or without an available provider makes the request
   `503 AUTHORITY_UNAVAILABLE` with `parameters.status` `unavailable` and `parameters.instanceId`
   ([Errors](#errors)). If the Subscription has a layout, every target must support the layout's output kind.
-- **Layout.** `layoutId` names a [layout](#layouts); an unknown layout is `400`. Without one, the built-in layout of
+- **Layout.** `layoutId` names a [layout](#layouts). The author (for a global Subscription, the caller who saves
+  it, not the technical account) must hold `presentation.manage` or `message.read` in one Agency the Layout is
+  assigned to; an unknown or unusable Layout is `400 INVALID_INPUT`. Without one, the built-in layout of
   the output kind is used: the event type, the Message text (else its numeric text or form), the Unit names, the
   Gateway name and state, and the Message time; fields the subscriber cannot read are left out.
 - **Split by Unit.** With `splitByUnit` a Message creates one Delivery per relevant Unit instead of one per
@@ -1078,9 +1123,31 @@ targets on behalf of a subscriber. Properties and limits are in the OpenAPI sche
 - `GET /subscriptions` uses [offset paging](#pagination).
 - Every change records a configuration fact.
 
-Field catalog of filters and layouts. A reference is `{"namespace","path"}` (schema `DeliveryFieldRef`).
+#### Subscription health
+
+`health` is `valid` or `invalid`; `healthReason` names why while it is `invalid` and is omitted otherwise. A
+Subscription is valid when it is saved. Event fan-out and the start check of a Delivery compile the filter and the
+Layout against the current field registry, strictly, and require the subscriber's current field groups to cover
+every field they read and `unit` for `splitByUnit`. If that fails, the Subscription becomes `invalid` in the same
+transaction, creates no Delivery from then on, and the start check cancels the Delivery it was checking
+(`no-longer-matching`). A redelivery for an invalid Subscription is `409 DEPENDENCY_UNAVAILABLE` with
+`parameters.dependency` `subscription`. A save that compiles makes it `valid` again. Health changes never change
+`revision`.
+
+| `healthReason` | Cause |
+| --- | --- |
+| `field-unavailable` | A field is unknown, deprecated or outside the Delivery scope, or the subscriber can no longer read its field group |
+| `filter-invalid` | The filter fails for another reason (for example an operand of the wrong kind) |
+| `layout-invalid` | The Layout fails to compile for a reason other than a field |
+| `resource-limit` | A bound of the filter or Layout is exceeded |
+
+Each change appends the non-deliverable fact `subscription.health-changed` ([Events](architecture.md)).
+
+#### Field registry of filters and layouts
+
+A reference is `{"namespace","path"}` (schema `DeliveryFieldRef`).
 Every field is optional, because not every event type supplies it. A field in a group the subscriber
-cannot read is absent when evaluated and rejected when saved.
+cannot read is rejected when saved and makes the Subscription invalid when the right is lost later.
 
 | Reference | Type | Field group |
 | --- | --- | --- |
@@ -1094,7 +1161,16 @@ cannot read is absent when evaluated and rejected when saved.
 | `unit.id`, `unit.name` | string | `unit` |
 | `gateway.id`, `gateway.name`, `gateway.oldState`, `gateway.newState` | string | `gateway` |
 | `gateway.contactTime` | timestamp | `gateway` |
-| `result` with path `[workflowId, output]` | the output's declared type | `derived`; the result counts only when all field groups stored with it are readable |
+| `attributes` with path `[schemaKey, field, property…]` | the Attribute schema's declared type of the field or object property | `derived` |
+
+A filter on a field holds when any candidate value satisfies it (a list contributes its elements). For
+`attributes` the candidates are the Message's untargeted effective value and the effective values of target positions
+assigned to a Unit relevant to the Delivery (with `splitByUnit` that Delivery's Unit, otherwise all of the Message's
+Units the subscriber may see); a value that does not match the declared type is ignored. A Layout `field`, `chip` or
+`when` reads one value: the untargeted effective value, else the one of the lowest relevant target position. A
+published result counts only when all field groups stored with it are readable. A `processing.completed` fact
+creates a Delivery when its published result is readable that way, independent of whether the result holds an
+effective value (it may hold none, or a later result may have replaced its values).
 
 ### Deliveries
 
@@ -1157,27 +1233,40 @@ schemas `Delivery` and `DeliveryAttempt`.
 | Method | Path | Right | Success | Purpose |
 | --- | --- | --- | --- | --- |
 | GET | `/layouts` | see below | 200 | List, ordered by name, then ID |
-| POST | `/layouts` | `presentation.manage` | 201 | Create (`commandId`, `name`, `definition`) |
+| POST | `/layouts` | `presentation.manage` | 201 | Create (`commandId`, `name`, `agencies`, `definition`) |
 | GET | `/layouts/{id}` | see below | 200 | Read at the current version |
-| PUT | `/layouts/{id}` | `presentation.manage` | 200 | Replace `name` and `definition` at `expectedRevision`; appends a version |
+| PUT | `/layouts/{id}` | `presentation.manage` | 200 | Replace `name`, `agencies` and `definition` at `expectedRevision`; appends a version |
 | DELETE | `/layouts/{id}` | `presentation.manage` | 200 | Delete at `expectedRevision`; returns `{"id","revision"}` |
 | GET | `/layouts/{id}/versions/{version}` | see below | 200 | Read one immutable version |
 
-A layout is a named, versioned arrangement of catalog fields that a Subscription renders a Domain event with. It is
+A layout is a named, versioned arrangement of registry fields that a Subscription renders a Domain event with. It is
 data, not a template: it has no expressions, loops or markup. Schemas: `Layout`, `LayoutDefinition`, `LayoutBlock`.
 
-- **Rights.** Reads need `presentation.manage`, `subscription.manage-own` or `subscription.manage-global`, so
-  Subscription authors can pick a layout; a caller with none of them gets `403 FORBIDDEN`. Changes need
-  `presentation.manage`. Layouts are not scoped to an owner.
+- **Agencies.** Every layout is assigned to 1 to 256 distinct Agencies (`agencies`, required on create and update and in
+  every response); an unknown Agency is `400`. A layout is listed and readable for a caller who
+  holds `presentation.manage` or `message.read` in at least one of its Agencies: a grant of scope `all` or `agency`, or
+  of scope `unit` or `unitCollection` that covers a Unit of that Agency (`account` scope does not count). A layout in no
+  visible Agency is `404`; a caller with neither right anywhere gets `403 FORBIDDEN`. Create, update and delete need
+  `presentation.manage` in every Agency involved: the new set on create, the stored and the new set on update, the
+  stored set on delete. A field reference to an Attribute schema that the layout does not reference yet also needs
+  `presentation.manage` in one Agency of that schema, else `403 FORBIDDEN`; a reference the layout already holds stays
+  valid when the schema later loses that Agency. Built-in default layouts are global.
 - **Definition.** `{"schemaVersion":1,"outputKind","blocks":[…]}` with at least one block. Block kinds:
-  `text` (literal `text`), `field` and `chip` (a catalog `field` and an optional `label`), `link` (a `label` and a
+  `text` (literal `text`), `field` and `chip` (a catalog `field`, an optional `label` and an optional `icon`), `link` (a `label` and a
   `url` built from a template with the placeholders `{0}` to `{9}` over up to 10 `fields`), `section` (an optional
   `title` and nested `blocks`), `conditional` (a `when` predicate, `then` blocks and optional `else` blocks) and
   `fallback` (2 to 8 alternative `blocks`; the first one that renders something is used; a present but empty, unlabelled value renders nothing, and an alternative without content never fails the 64 KiB output limit, while everything a chosen alternative emits counts; independently, one render holds at most 1 MiB of rendered output and looked-up values, including those of discarded alternatives). A property that does
-  not belong to the block kind is `400`. Fields use the [catalog](#subscriptions); an unknown field is `400`. A
+  not belong to the block kind is `400`. Fields use the [registry](#field-registry-of-filters-and-layouts) in scope `delivery`; an unknown or deprecated field is `400`. A
   definition may hold at most 256 blocks, nested at most 8 levels; text is limited to 4096 bytes and labels
   and titles to 256 bytes. Exceeding such a limit is `413 RESOURCE_LIMIT`. A name is 1 to 256 bytes, valid UTF-8 and
   not blank (`400` otherwise).
+- **Label and icon.** A `field` or `chip` block without a `label` takes the label of its field in the field registry,
+  and without an `icon` the registry icon (the label and icon of an Attribute schema field, or the name of a built-in
+  field), where the field declares one; a `label` or `icon` of the block overrides it. `icon` is an icon identifier: 1 to
+  128 ASCII letters, digits, `.`, `_` or `-`; the server has no icon catalog and anything else is `400`. Icons are hints
+  for card output: `text` and `markdown` ignore them, `json` items carry an `icon` when one is set. The defaults are
+  resolved when the layout is rendered with its Subscription, so editing display metadata changes renderings without a
+  new layout version.
 - **Output kinds.** `text` renders plain lines, `markdown` renders Markdown and `json` renders a JSON array of typed
   items. The output kind is part of the definition and cannot change on update. Markdown escapes every
   interpolated value, including angle brackets, `~`, `=` and `&`, and escapes `&` in link destinations so entity-shaped text stays literal, and no layout ever produces HTML. Interpolated text drops
@@ -1191,6 +1280,53 @@ data, not a template: it has no expressions, loops or markup. Schemas: `Layout`,
 - `POST` takes a `commandId`; an identical replay returns the layout as it is now, or `404` if it was deleted
   since. `GET /layouts` uses [offset paging](#pagination).
 - Layouts write no domain event.
+
+### Attribute schemas
+
+| Method | Path | Right | Success | Purpose |
+| --- | --- | --- | --- | --- |
+| GET | `/attribute-schemas` | see below | 200 | List, ordered by key; `agency` narrows to one Agency |
+| POST | `/attribute-schemas` | `attribute-schema.manage` | 201 | Create (`commandId`, `key`, `label`, `description`, `subject`, `fields`, `agencies`, `deprecated`) |
+| GET | `/attribute-schemas/{key}` | see below | 200 | Read |
+| PUT | `/attribute-schemas/{key}` | `attribute-schema.manage` | 200 | Replace at `expectedRevision` (compatible changes only) |
+| DELETE | `/attribute-schemas/{key}` | `attribute-schema.manage` | 200 | Delete at `expectedRevision`; returns `{"key","revision"}` |
+
+An Attribute schema declares typed, nested fields for the attributes of Messages (`subject` `message`, written by
+Workflows) or of Units (`subject` `unit`, maintained by managers). Schemas: `AttributeSchema`, `AttributeField`.
+
+- **Key.** The identifier is the `key`: 1 to 64 lowercase ASCII letters, digits and `-`, starting with a letter. It is
+  fixed at creation, and the path parameter `{key}` is that key. Field and property names are 1 to 64 ASCII letters,
+  digits and `_`, starting with a letter, so dotted field paths stay unambiguous.
+- **Fields.** Each field has a `kind` (`string`, `boolean`, `integer`, `number`, `timestamp`, `bytes`, `object`, `list`;
+  `object` has `properties`, `list` an `element`) with `nullable`, `optional` (object properties only; top-level fields
+  are always optional) and display metadata `label` (at most 256 characters), `description` (at most 2048 characters),
+  `icon` (a Unit icon identifier) and `deprecated`. A schema has at least one field. Type limits (nesting depth,
+  properties per object, field count) are those of Processing field types; exceeding one is `413 RESOURCE_LIMIT`, any
+  other invalid content `400`.
+- **Compatibility.** An update may add top-level fields and optional object properties at any depth, change labels,
+  descriptions and icons, set or clear deprecation and change the Agencies. It may not change the subject, remove a
+  field or property, or change a type, nullability or optionality (`400`); such changes need a new schema.
+- **Deprecation.** `deprecated` on a schema or a field hides it from new references; stored values stay readable and
+  existing references keep working.
+- **Referencing.** Adding a reference to a schema needs the right of the referencing resource in one of the schema's
+  Agencies: `workflow.update` to save a Workflow version that writes a schema no earlier version writes, and
+  `presentation.manage` to add a schema to a layout; otherwise `403 FORBIDDEN`. Existing references stay valid when the
+  schema loses that Agency, but not when the schema was deleted and re-created under the same key since the
+  referencing version was saved: that is a different schema.
+- **Delete.** A schema that an active Workflow version (as an output), the current version of a layout, a Subscription
+  filter or a saved view references is `409 REVISION_CONFLICT`, like a stale revision. The conflict does not say which.
+- **Agencies and rights.** A schema is assigned to 1 to 256 distinct Agencies. Create, update and delete need
+  `attribute-schema.manage` in every Agency involved (new set; stored and new set; stored set). A schema is visible to a
+  caller holding any of `message.read`, `workflow.read`, `presentation.manage`, `subscription.manage-own`,
+  `subscription.manage-global`, `saved-view.manage-global`, `unit.update` or `attribute-schema.manage`: a grant of scope
+  `all` or `account` shows every schema, `agency` the schemas of that Agency, `unit` and `unitCollection` those of the
+  Agency of the Units. Metadata is not confidential, so the maximum data age is ignored. An invisible schema is `404`; a
+  caller with none of these rights gets `403 FORBIDDEN`.
+- `POST` takes a `commandId`; an existing key is `409 REVISION_CONFLICT`, an unknown Agency `400`. An identical replay
+  returns the schema as it is now, or `404` if it was deleted since. `GET /attribute-schemas` uses
+  [offset paging](#pagination); `agency` must be a UUID, any other parameter is `400`.
+- Every create, update and delete increments a catalog revision in the same transaction, which caches of the catalog use.
+- Schemas write no domain event.
 
 ### Delivery sending admission
 

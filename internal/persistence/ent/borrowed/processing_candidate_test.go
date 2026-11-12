@@ -29,7 +29,7 @@ func TestProcessingCandidateNativeReselectionRetainsResultsAndAttempts(t *testin
 	actor := uuid.New()
 	authority := processingAuthorityFixture(actor, authz.Scope{Kind: "all"})
 	configuration := processing.WorkflowConfiguration{ID: uuid.New(), Revision: 1, Name: "candidate",
-		Scope: authz.Scope{Kind: "all"}, Enabled: true}
+		Scope: seedAgencyScope(t, primary), Enabled: true}
 	version := processing.Version{ID: uuid.New(), WorkflowID: configuration.ID, CreatedBy: actor,
 		Definition: preparedProcessingDefinition(t)}
 	binding := processing.CandidateBinding{TransmissionID: uuid.New(), WorkflowID: configuration.ID,
@@ -84,7 +84,7 @@ func TestProcessingCandidateNativeReselectionRetainsResultsAndAttempts(t *testin
 		}
 		return client.ProcessingResult.Create().SetID(resultID).SetCandidateID(initial.ID).
 			SetRevision(1).SetProducingFence(8).SetFieldGroups([]string{"derived"}).SetCompletedAt(initial.CreatedAt).
-			SetEvaluation(processing.Evaluation{Selected: true, Fields: map[string]processing.FieldValue{}}).Exec(scope)
+			SetEvaluation(processing.Evaluation{Selected: true, Fields: map[string]map[string]processing.FieldValue{}}).Exec(scope)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -331,7 +331,7 @@ func TestProcessingCandidateNativeReselectionRetainsResultsAndAttempts(t *testin
 				return err
 			}
 			completed, result, err := store.CompleteCandidate(tx.Context(), tx, lease, 0,
-				processing.Evaluation{Selected: true, Fields: map[string]processing.FieldValue{}})
+				processing.Evaluation{Selected: true, Fields: map[string]map[string]processing.FieldValue{}})
 			if err != nil {
 				return err
 			}
@@ -349,7 +349,7 @@ func TestProcessingCandidateNativeReselectionRetainsResultsAndAttempts(t *testin
 				t.Fatalf("completion stored field groups %v, want %v", stored.FieldGroups, want)
 			}
 			if _, _, err := store.CompleteCandidate(tx.Context(), tx, lease, 0,
-				processing.Evaluation{Selected: true, Fields: map[string]processing.FieldValue{}}); !errors.Is(err, authz.ErrRevisionConflict) {
+				processing.Evaluation{Selected: true, Fields: map[string]map[string]processing.FieldValue{}}); !errors.Is(err, authz.ErrRevisionConflict) {
 				t.Fatalf("completed lease duplicated private evidence: %v", err)
 			}
 			falseBinding := binding

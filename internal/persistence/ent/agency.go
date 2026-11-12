@@ -33,9 +33,13 @@ type AgencyEdges struct {
 	Units []*Unit `json:"units,omitempty"`
 	// Networks holds the value of the networks edge.
 	Networks []*Network `json:"networks,omitempty"`
+	// Workflows holds the value of the workflows edge.
+	Workflows []*Workflow `json:"workflows,omitempty"`
+	// WorkflowAgencies holds the value of the workflow_agencies edge.
+	WorkflowAgencies []*WorkflowAgency `json:"workflow_agencies,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [4]bool
 }
 
 // UnitsOrErr returns the Units value or an error if the edge
@@ -54,6 +58,24 @@ func (e AgencyEdges) NetworksOrErr() ([]*Network, error) {
 		return e.Networks, nil
 	}
 	return nil, &NotLoadedError{edge: "networks"}
+}
+
+// WorkflowsOrErr returns the Workflows value or an error if the edge
+// was not loaded in eager-loading.
+func (e AgencyEdges) WorkflowsOrErr() ([]*Workflow, error) {
+	if e.loadedTypes[2] {
+		return e.Workflows, nil
+	}
+	return nil, &NotLoadedError{edge: "workflows"}
+}
+
+// WorkflowAgenciesOrErr returns the WorkflowAgencies value or an error if the edge
+// was not loaded in eager-loading.
+func (e AgencyEdges) WorkflowAgenciesOrErr() ([]*WorkflowAgency, error) {
+	if e.loadedTypes[3] {
+		return e.WorkflowAgencies, nil
+	}
+	return nil, &NotLoadedError{edge: "workflow_agencies"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -121,6 +143,16 @@ func (_m *Agency) QueryUnits() *UnitQuery {
 // QueryNetworks queries the "networks" edge of the Agency entity.
 func (_m *Agency) QueryNetworks() *NetworkQuery {
 	return NewAgencyClient(_m.config).QueryNetworks(_m)
+}
+
+// QueryWorkflows queries the "workflows" edge of the Agency entity.
+func (_m *Agency) QueryWorkflows() *WorkflowQuery {
+	return NewAgencyClient(_m.config).QueryWorkflows(_m)
+}
+
+// QueryWorkflowAgencies queries the "workflow_agencies" edge of the Agency entity.
+func (_m *Agency) QueryWorkflowAgencies() *WorkflowAgencyQuery {
+	return NewAgencyClient(_m.config).QueryWorkflowAgencies(_m)
 }
 
 // Update returns a builder for updating this Agency.

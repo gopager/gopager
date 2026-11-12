@@ -26,6 +26,7 @@ import (
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
+	"github.com/gopager/gopager/internal/processing/declarations"
 	"github.com/gopager/gopager/internal/processing/management"
 	"github.com/gopager/gopager/internal/protocols"
 	"github.com/gopager/gopager/internal/units"
@@ -165,7 +166,7 @@ func (o *Owner) CaptureSyntheticPreview(ctx context.Context, tx platform.Transac
 	if err != nil {
 		return management.PreviewCapture{}, err
 	}
-	scope, eligibleUnits, err := evaluateScope(workflow, network.ID, input.Targets, matched)
+	scope, eligibleUnits, err := evaluateScope(workflow, network, input.Targets, matched)
 	if err != nil {
 		return management.PreviewCapture{}, err
 	}
@@ -251,7 +252,7 @@ func (o *Owner) CheckInstalledSource(ctx context.Context, tx platform.Transactio
 		return err
 	}
 	unitIDs := record.eligibleUnits
-	if record.workflow.Scope.Kind != "unit" {
+	if record.workflow.Scope.Narrowing == nil || record.workflow.Scope.Narrowing.Kind != "unit" {
 		unitIDs = []uuid.UUID{uuid.Nil}
 	}
 	for _, unitID := range unitIDs {
@@ -573,18 +574,15 @@ func project(input Input, network Network, observed time.Time, match assignments
 		}
 		projection.Targets = append(projection.Targets, processing.TargetContext{Position: index, Fields: fields})
 	}
-	declarations, err := processing.NewSyntheticDeclarationOwner().ProcessingDeclarations(context.Background())
-	if err != nil {
-		return processing.SourceProjection{}, err
-	}
-	for _, ref := range processing.SyntheticSourceDeclarationRefs() {
+	declared := declarations.Builtin()
+	for _, ref := range declarations.BuiltinSourceRefs() {
 		exists := slices.ContainsFunc(projection.Fields, func(field processing.CapturedField) bool {
 			return field.Reference.Namespace == ref.Namespace && slices.Equal(field.Reference.Path, ref.Path)
 		})
 		if exists {
 			continue
 		}
-		schema, err := declarations.FieldSchema(ref)
+		schema, err := declared.FieldSchema(ref)
 		if err != nil || !schema.Optional {
 			return processing.SourceProjection{}, unavailable(errors.New("synthetic projection omitted required declaration"))
 		}
@@ -706,24 +704,29 @@ func addPayloadFields(projection *processing.SourceProjection, input Input,
 	return nil
 }
 
-func evaluateScope(workflow processing.WorkflowConfiguration, networkID uuid.UUID, targets []protocols.Target,
+func evaluateScope(workflow processing.WorkflowConfiguration, network Network, targets []protocols.Target,
 	match assignments.MatchResult) (processing.EvaluationScope, []uuid.UUID, error) {
 	scope := workflow.Scope
-	switch scope.Kind {
-	case "all":
-		return processing.EvaluationScope{SourceEligible: true, TargetPositions: allPositions(len(targets))}, nil, nil
+	if !slices.Contains(scope.Agencies, network.AgencyID) {
+		return processing.EvaluationScope{}, nil, authz.ErrForbidden
+	}
+	everything := processing.EvaluationScope{SourceEligible: true, TargetPositions: allPositions(len(targets))}
+	if scope.Narrowing == nil {
+		return everything, nil, nil
+	}
+	switch scope.Narrowing.Kind {
 	case "network":
-		if !containsUUID(scope.References, networkID) {
+		if !slices.Contains(scope.Narrowing.References, network.ID) {
 			return processing.EvaluationScope{}, nil, authz.ErrForbidden
 		}
-		return processing.EvaluationScope{SourceEligible: true, TargetPositions: allPositions(len(targets))}, nil, nil
+		return everything, nil, nil
 	case "unit":
 		positions := make([]uint32, 0)
 		units := make([]uuid.UUID, 0)
 		seen := make(map[uuid.UUID]bool)
 		for _, resolution := range match.Resolutions {
 			if resolution.TargetPosition < 0 || resolution.TargetPosition >= len(targets) ||
-				resolution.UnitID == nil || !containsUUID(scope.References, *resolution.UnitID) {
+				resolution.UnitID == nil || !slices.Contains(scope.Narrowing.References, *resolution.UnitID) {
 				continue
 			}
 			position := uint32(resolution.TargetPosition)
@@ -745,15 +748,6 @@ func allPositions(count int) []uint32 {
 		positions[i] = uint32(i)
 	}
 	return positions
-}
-
-func containsUUID(references []string, id uuid.UUID) bool {
-	for _, reference := range references {
-		if reference == id.String() {
-			return true
-		}
-	}
-	return false
 }
 
 func cloneUnits(values map[uuid.UUID]units.Context) map[uuid.UUID]units.Context {

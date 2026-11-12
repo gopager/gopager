@@ -386,7 +386,7 @@ The server keeps the process alive between calls and sends it one request at a t
 ```text
 module example.com/gopager-upper
 
-go 1.27.3
+go 1.27.4
 
 require github.com/gopager/gopager v0.0.0
 ```

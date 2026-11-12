@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/attributes"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/persistence/ent/identitystore"
 	"github.com/gopager/gopager/internal/persistence/ent/unitstore"
@@ -17,20 +18,21 @@ import (
 	processingmanagement "github.com/gopager/gopager/internal/processing/management"
 	"github.com/gopager/gopager/internal/processing/synthetic"
 	"github.com/gopager/gopager/internal/protocols"
+	"github.com/gopager/gopager/internal/testutil/attributeschemas"
 )
 
 func TestProcessingSyntheticPreviewUsesProductionNetworkOwner(t *testing.T) {
 	t.Parallel()
 	store := newManagementStoreWithFields(t,
 		[]string{"unit", "address", "payload", "gateway", "derived"})
-	live, deleted := uuid.New(), uuid.New()
+	live, deleted, agency := uuid.New(), uuid.New(), uuid.New()
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		executor, err := store.Resolve(tx)
 		if err != nil {
 			return err
 		}
-		_, err = executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id)
-			INSERT INTO networks(id,name,protocol,deleted,agency_id) SELECT v.id,v.name,v.protocol,v.deleted,a.id FROM (VALUES ($1::uuid,'Live POCSAG','pocsag',false),($2::uuid,'Deleted POCSAG','pocsag',true)) AS v(id,name,protocol,deleted), a`, live, deleted)
+		_, err = executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES($3,'Fixture agency') RETURNING id)
+			INSERT INTO networks(id,name,protocol,deleted,agency_id) SELECT v.id,v.name,v.protocol,v.deleted,a.id FROM (VALUES ($1::uuid,'Live POCSAG','pocsag',false),($2::uuid,'Deleted POCSAG','pocsag',true)) AS v(id,name,protocol,deleted), a`, live, deleted, agency)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -64,7 +66,7 @@ func TestProcessingSyntheticPreviewUsesProductionNetworkOwner(t *testing.T) {
 		`{"schemaVersion":1,"username":"operator","password":"initial-password"}`, "", "", http.StatusOK)
 	workflowResponse := managementRequest(t, client, origin, http.MethodPost, "/api/v1/workflows",
 		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Production Network",`+
-			`"scope":{"kind":"all"},"enabled":true}`,
+			`"scope":`+workflowScopeJSON(agency)+`,"enabled":true}`,
 		login.CSRFToken, "", http.StatusCreated)
 	workflowID, _ := managementResultID(t, workflowResponse)
 	versionInput, err := json.Marshal(workflowVersionMutation{SchemaVersion: 1,
@@ -130,9 +132,10 @@ func TestProcessingSyntheticPreviewUsesOnlyPreviewSupportingInstalledPlugins(t *
 		t.Fatal(err)
 	}
 	networkID := uuid.New()
+	agency := seedAgency(t, store)
 	networks := previewFixtureNetworks{
 		values: map[uuid.UUID]synthetic.Network{
-			networkID: {ID: networkID, Name: "Standalone POCSAG", Protocol: protocols.POCSAG},
+			networkID: {ID: networkID, Name: "Standalone POCSAG", Protocol: protocols.POCSAG, AgencyID: agency},
 		},
 		identity: identityRepository,
 		units:    unitRepository,
@@ -208,7 +211,7 @@ func TestProcessingSyntheticPreviewUsesOnlyPreviewSupportingInstalledPlugins(t *
 	withoutPreviewID := createInstance(unsupportingArtifact)
 	workflowResponse := managementRequest(t, client, origin, http.MethodPost, "/api/v1/workflows",
 		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Installed Preview",`+
-			`"scope":{"kind":"all"},"enabled":true}`,
+			`"scope":`+workflowScopeJSON(agency)+`,"enabled":true}`,
 		login.CSRFToken, "", http.StatusCreated)
 	workflowID, _ := managementResultID(t, workflowResponse)
 	protocolField := processing.FieldRef{Namespace: "source", Path: []string{"protocol"}}
@@ -217,6 +220,7 @@ func TestProcessingSyntheticPreviewUsesOnlyPreviewSupportingInstalledPlugins(t *
 		t.Fatal(err)
 	}
 	textField := processing.FieldRef{Namespace: "source", Path: []string{"payload", "text", "value"}}
+	attributeschemas.Insert(t, store, "plugin", map[string]attributes.Field{"text": {Kind: processing.StringValue}})
 	definition := processing.Definition{SchemaVersion: 1,
 		Selector: processing.Predicate{Op: "eq", Field: &protocolField, Value: &pocsag},
 		Steps: []processing.Step{{
@@ -224,10 +228,9 @@ func TestProcessingSyntheticPreviewUsesOnlyPreviewSupportingInstalledPlugins(t *
 			Installed: &processing.InstalledStep{InstanceID: instanceID, ConfigurationRevision: 1,
 				Input: map[string]processing.Assignment{"text": {Field: &textField}}},
 		}},
-		OutputSchema: map[string]processing.FieldSchema{"text": {Kind: processing.StringValue}},
-		Outputs: map[string]processing.Assignment{"text": {Field: &processing.FieldRef{
+		Outputs: map[string]map[string]processing.Assignment{"plugin": {"text": {Field: &processing.FieldRef{
 			Namespace: "step", Path: []string{"command", "text"},
-		}}}}
+		}}}}}
 	syntheticInput := synthetic.Input{SchemaVersion: 1, Protocol: protocols.POCSAG, Form: "text",
 		NetworkID: networkID, Payload: json.RawMessage(`{"value":"installed preview"}`),
 		Targets: []protocols.Target{}}
@@ -280,8 +283,8 @@ func TestProcessingSyntheticPreviewUsesOnlyPreviewSupportingInstalledPlugins(t *
 	if err := json.Unmarshal(response.Data, &evaluation); err != nil || !evaluation.Selected {
 		t.Fatalf("installed preview failed: %+v, %s, error=%v", evaluation, response.Data, err)
 	}
-	if evaluation.Fields["text"].Value == nil ||
-		string(evaluation.Fields["text"].Value.Value) != `"PREVIEW:installed preview"` {
+	if evaluation.Fields["plugin"]["text"].Value == nil ||
+		string(evaluation.Fields["plugin"]["text"].Value.Value) != `"PREVIEW:installed preview"` {
 		t.Fatalf("preview mode did not reach the plugin: %s", response.Data)
 	}
 	missing := managementRequest(t, client, origin, http.MethodPost,

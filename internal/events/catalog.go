@@ -50,6 +50,7 @@ var catalog = []CatalogEntry{
 	{Type: string(GatewayStateChanged), Producer: "intake", SchemaVersion: 1, Deliverable: true, Projection: ProjectionGateway},
 	{Type: "correction.failed", Producer: "assignment", SchemaVersion: 1},
 	{Type: string(ConfigurationChanged), Producer: "", SchemaVersion: 1},
+	{Type: string(SubscriptionHealthChanged), Producer: "delivery", SchemaVersion: 1},
 	{Type: string(PrincipalAccessChanged), Producer: "identity", SchemaVersion: 1},
 	{Type: string(PrincipalDeleted), Producer: "identity", SchemaVersion: 1},
 	{Type: string(SubmissionRejected), Producer: "intake", SchemaVersion: 1},

@@ -28,6 +28,27 @@ const (
 	StatePaused = "paused"
 )
 
+// Subscription health.
+const (
+	// HealthValid Subscriptions compile against the current field registry.
+	HealthValid = "valid"
+	// HealthInvalid Subscriptions create no Deliveries until a save that compiles.
+	HealthInvalid = "invalid"
+)
+
+// Reasons a Subscription is invalid.
+const (
+	// ReasonFilterInvalid means the filter fails to compile for another reason than below.
+	ReasonFilterInvalid = "filter-invalid"
+	// ReasonFieldUnavailable means a field is unknown, deprecated or in a group the subscriber
+	// can no longer read.
+	ReasonFieldUnavailable = "field-unavailable"
+	// ReasonLayoutInvalid means the Layout fails to compile.
+	ReasonLayoutInvalid = "layout-invalid"
+	// ReasonResourceLimit means a bound of the filter or Layout is exceeded.
+	ReasonResourceLimit = "resource-limit"
+)
+
 // CapabilityDelivery is the capability kind of a Delivery target reference.
 const CapabilityDelivery = "delivery"
 
@@ -120,8 +141,13 @@ type Subscription struct {
 	LayoutID      *uuid.UUID            `json:"layoutId,omitempty"`
 	SplitByUnit   bool                  `json:"splitByUnit"`
 	MaxAgeSeconds *int                  `json:"maxAgeSeconds,omitempty"`
-	CreatedAt     time.Time             `json:"createdAt"`
-	UpdatedAt     time.Time             `json:"updatedAt"`
+	// Health is HealthValid or HealthInvalid; HealthReason names why while invalid.
+	Health       string  `json:"health"`
+	HealthReason *string `json:"healthReason,omitempty"`
+	// HealthChangedAt is when the health last changed; it is not part of the API view.
+	HealthChangedAt *time.Time `json:"-"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	UpdatedAt       time.Time  `json:"updatedAt"`
 	// CreatedBy is the account that created the Subscription; it is not part of the API view.
 	CreatedBy uuid.UUID `json:"-"`
 }

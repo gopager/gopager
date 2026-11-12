@@ -9,7 +9,7 @@ GoPager is a single executable, `gopager`, backed by one PostgreSQL primary. It 
 
 | Component | Requirement |
 | --- | --- |
-| Go | The version in [go.mod](../go.mod) (`go 1.27.3`), only for building |
+| Go | The version in [go.mod](../go.mod) (`go 1.27.4`), only for building |
 | PostgreSQL | A writable primary. The test suite runs against PostgreSQL 18. Read replicas and hot standbys are rejected as not writable. |
 | Database privileges | `apply` mode needs privileges to create tables, indexes and functions in the connection's current schema |
 | Plugins (optional) | A local directory with plugin executables and manifests; see [Plugins](plugins.md) |
@@ -105,7 +105,7 @@ Fixed values (not configurable):
 | `GOPAGER_DATABASE_URL` (env) | — | yes | As in server mode. |
 | `--username` | — | yes | Initial account name: 1–128 characters, no leading/trailing whitespace, no control characters. |
 | `--actions` | — | yes | Comma-separated actions granted with scope `all`. Each must be a catalog action; no wildcards. |
-| `--fields` | — | — | Comma-separated readable fields: `payload`, `address`, `unit`, `gateway`, `quality`, `derived`, or `extension.<namespace>.<name>`. |
+| `--fields` | — | — | Comma-separated readable fields: `payload`, `address`, `unit`, `gateway`, `quality` or `derived`. |
 | `--delegable` | `false` | — | Allow the account to delegate the granted actions. |
 | `--migration-mode` | `check` | — | `check` or `apply`, as in server mode. |
 | `--allow-insecure-db` | `false` | — | As in server mode. |
@@ -190,6 +190,7 @@ Bootstrap opens no listener, completes within 30 s, and can succeed only once pe
 | Accounts | `account.read`, `account.create`, `account.update`, `account.delete`, `account.delete-own`, `grant.manage`, `password.local`, `recovery.request`, `recovery.issue`, `recovery.consume`, `session.manage-own`, `key.create-own`, `key.manage-own`, `key.manage-technical` |
 | Subscriptions and delivery | `subscription.manage-own`, `subscription.manage-global`, `delivery.read`, `delivery.retry`, `delivery.redeliver` |
 | Processing | `workflow.read`, `workflow.create`, `workflow.update`, `workflow.delete`, `workflow.preview`, `workflow.activate`, `workflow.reprocess`, `presentation.manage`, `plugin.configure` |
+| Attribute schemas | `attribute-schema.manage` |
 | Other | `notice.manage`, `operations.manage`, `saved-view.manage-global`, `audit.read` |
 
 The `*` notation above is shorthand for this table only; `--actions` requires each action spelled out.

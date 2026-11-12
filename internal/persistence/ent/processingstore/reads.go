@@ -49,6 +49,7 @@ func (s *Store) processingReadClient(ctx context.Context, tx platform.Transactio
 		"Workflow":               filter,
 		"WorkflowVersion":        entql.HasEdgeWith("workflow", filter),
 		"WorkflowScopeReference": entql.HasEdgeWith("workflow", filter),
+		"WorkflowAgency":         entql.HasEdgeWith("workflow", filter),
 		"ProcessingCandidate":    entql.FieldEQ("workflow_id", workflowID),
 	}
 	if candidateID != uuid.Nil {

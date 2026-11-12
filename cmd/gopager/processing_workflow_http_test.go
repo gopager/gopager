@@ -49,6 +49,7 @@ func TestProcessingWorkflowHTTPRequiresCurrentCSRFAndUsesSyntheticDeclarations(t
 	t.Parallel()
 	// The saved definitions select on a payload field, which the author must be able to read.
 	store := newManagementStoreWithFields(t, []string{"unit", "address", "payload"})
+	agency := seedAgency(t, store)
 	backend := httptest.NewUnstartedServer(nil)
 	t.Cleanup(backend.Close)
 	origin := "http://" + backend.Listener.Addr().String()
@@ -106,7 +107,7 @@ func TestProcessingWorkflowHTTPRequiresCurrentCSRFAndUsesSyntheticDeclarations(t
 		t.Fatalf("omitted artifact root failure = %q, want authority unavailable", unavailable.Code)
 	}
 	body := `{"schemaVersion":1,"commandId":"` + "6d881468-4f69-4d81-a08a-95ea30bb1653" +
-		`","name":"Rules","scope":{"kind":"all"},"enabled":true}`
+		`","name":"Rules","scope":` + workflowScopeJSON(agency) + `,"enabled":true}`
 	managementRequest(t, client, origin, http.MethodPost, "/api/v1/workflows", body, "", "", http.StatusForbidden)
 
 	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, origin+"/api/v1/workflows", strings.NewReader(body))
@@ -133,7 +134,7 @@ func TestProcessingWorkflowHTTPRequiresCurrentCSRFAndUsesSyntheticDeclarations(t
 	managementRequest(t, client, origin, http.MethodGet, "/api/v1/workflows?limit=1", "", "", "", http.StatusOK)
 	managementRequest(t, client, origin, http.MethodGet, "/api/v1/workflows/"+id.String(), "", "", "", http.StatusOK)
 	managementRequest(t, client, origin, http.MethodPut, "/api/v1/workflows/"+id.String(),
-		`{"schemaVersion":1,"expectedRevision":"`+revision+`","name":"Rules updated","scope":{"kind":"all"},"enabled":true}`,
+		`{"schemaVersion":1,"expectedRevision":"`+revision+`","name":"Rules updated","scope":`+workflowScopeJSON(agency)+`,"enabled":true}`,
 		login.CSRFToken, "", http.StatusOK)
 	managementRequest(t, client, origin, http.MethodGet, "/api/v1/workflows/"+id.String()+"/versions",
 		"", "", "", http.StatusOK)
@@ -143,8 +144,8 @@ func TestProcessingWorkflowHTTPRequiresCurrentCSRFAndUsesSyntheticDeclarations(t
 		t.Fatal(err)
 	}
 	definition := processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "eq", Field: &field, Value: &expectedProtocol},
-		OutputSchema: map[string]processing.FieldSchema{}, Outputs: map[string]processing.Assignment{}}
+		Selector: processing.Predicate{Op: "eq", Field: &field, Value: &expectedProtocol},
+		Outputs:  map[string]map[string]processing.Assignment{}}
 	versionInput, err := json.Marshal(workflowVersionMutation{SchemaVersion: 1,
 		CommandID: uuid.New(), ExpectedRevision: 2, Definition: definition})
 	if err != nil {

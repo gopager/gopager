@@ -16,9 +16,8 @@ func TestWorkflowExactResultAndStepBoundaries(t *testing.T) { //nolint:parallelt
 	_, source := sourceFixture(t)
 	definition := selectedDefinition()
 	text := Value{StringValue, json.RawMessage(`"x"`)}
-	definition.OutputSchema["blob"] = FieldSchema{Kind: StringValue}
-	definition.Outputs["blob"] = Assignment{Literal: &text}
-	program, err := CompileWorkflow(ctx, definition, source, nil)
+	setOutput(&definition, "blob", Assignment{Literal: &text})
+	program, err := CompileWorkflow(ctx, definition, source, testOutputs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +34,7 @@ func TestWorkflowExactResultAndStepBoundaries(t *testing.T) { //nolint:parallelt
 		if err != nil {
 			t.Fatal(err)
 		}
-		program, err = CompileWorkflow(ctx, definition, source, nil)
+		program, err = CompileWorkflow(ctx, definition, source, testOutputs, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -55,7 +54,7 @@ func TestWorkflowExactResultAndStepBoundaries(t *testing.T) { //nolint:parallelt
 			definition.Steps = append(definition.Steps, Step{ID: fmt.Sprintf("step%d", i), Kind: "map",
 				OutputSchema: map[string]FieldSchema{}, Map: map[string]Assignment{}})
 		}
-		program, err := CompileWorkflow(ctx, definition, source, nil)
+		program, err := CompileWorkflow(ctx, definition, source, testOutputs, nil)
 		if count > MaxSteps {
 			if platform.FailureCode(err) != platform.CodeResourceLimit {
 				t.Fatalf("step +1 accepted: %v", err)
@@ -88,7 +87,7 @@ func TestWorkflowAggregateIntermediateBoundaryAndLiteralOwnership(t *testing.T) 
 			OutputSchema: map[string]FieldSchema{"blob": {Kind: StringValue}},
 			Map:          map[string]Assignment{"blob": {Literal: &large}}})
 	}
-	program, err := CompileWorkflow(ctx, definition, source, nil)
+	program, err := CompileWorkflow(ctx, definition, source, testOutputs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,9 +96,8 @@ func TestWorkflowAggregateIntermediateBoundaryAndLiteralOwnership(t *testing.T) 
 	}
 	definition = selectedDefinition()
 	constant := Value{StringValue, json.RawMessage(`"constant"`)}
-	definition.OutputSchema["constant"] = FieldSchema{Kind: StringValue}
-	definition.Outputs["constant"] = Assignment{Literal: &constant}
-	program, err = CompileWorkflow(ctx, definition, source, nil)
+	setOutput(&definition, "constant", Assignment{Literal: &constant})
+	program, err = CompileWorkflow(ctx, definition, source, testOutputs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,9 +105,9 @@ func TestWorkflowAggregateIntermediateBoundaryAndLiteralOwnership(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	result.Fields["constant"].Value.Value[1] = 'X'
+	result.Fields["t"]["constant"].Value.Value[1] = 'X'
 	result, err = program.Evaluate(ctx, source)
-	if err != nil || string(result.Fields["constant"].Value.Value) != `"constant"` {
+	if err != nil || string(result.Fields["t"]["constant"].Value.Value) != `"constant"` {
 		t.Fatalf("result mutation changed immutable definition: %+v, %v", result, err)
 	}
 }

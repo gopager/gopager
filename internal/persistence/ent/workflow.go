@@ -22,8 +22,8 @@ type Workflow struct {
 	Revision int64 `json:"revision,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
-	// ScopeKind holds the value of the "scope_kind" field.
-	ScopeKind workflow.ScopeKind `json:"scope_kind,omitempty"`
+	// NarrowingKind holds the value of the "narrowing_kind" field.
+	NarrowingKind *workflow.NarrowingKind `json:"narrowing_kind,omitempty"`
 	// Enabled holds the value of the "enabled" field.
 	Enabled bool `json:"enabled,omitempty"`
 	// Deleted holds the value of the "deleted" field.
@@ -46,9 +46,13 @@ type WorkflowEdges struct {
 	Versions []*WorkflowVersion `json:"versions,omitempty"`
 	// ScopeReferences holds the value of the scope_references edge.
 	ScopeReferences []*WorkflowScopeReference `json:"scope_references,omitempty"`
+	// Agencies holds the value of the agencies edge.
+	Agencies []*Agency `json:"agencies,omitempty"`
+	// WorkflowAgencies holds the value of the workflow_agencies edge.
+	WorkflowAgencies []*WorkflowAgency `json:"workflow_agencies,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [4]bool
 }
 
 // VersionsOrErr returns the Versions value or an error if the edge
@@ -69,6 +73,24 @@ func (e WorkflowEdges) ScopeReferencesOrErr() ([]*WorkflowScopeReference, error)
 	return nil, &NotLoadedError{edge: "scope_references"}
 }
 
+// AgenciesOrErr returns the Agencies value or an error if the edge
+// was not loaded in eager-loading.
+func (e WorkflowEdges) AgenciesOrErr() ([]*Agency, error) {
+	if e.loadedTypes[2] {
+		return e.Agencies, nil
+	}
+	return nil, &NotLoadedError{edge: "agencies"}
+}
+
+// WorkflowAgenciesOrErr returns the WorkflowAgencies value or an error if the edge
+// was not loaded in eager-loading.
+func (e WorkflowEdges) WorkflowAgenciesOrErr() ([]*WorkflowAgency, error) {
+	if e.loadedTypes[3] {
+		return e.WorkflowAgencies, nil
+	}
+	return nil, &NotLoadedError{edge: "workflow_agencies"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*Workflow) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
@@ -80,7 +102,7 @@ func (*Workflow) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case workflow.FieldRevision:
 			values[i] = new(sql.NullInt64)
-		case workflow.FieldName, workflow.FieldScopeKind:
+		case workflow.FieldName, workflow.FieldNarrowingKind:
 			values[i] = new(sql.NullString)
 		case workflow.FieldCreatedAt, workflow.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -119,11 +141,12 @@ func (_m *Workflow) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Name = value.String
 			}
-		case workflow.FieldScopeKind:
+		case workflow.FieldNarrowingKind:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field scope_kind", values[i])
+				return fmt.Errorf("unexpected type %T for field narrowing_kind", values[i])
 			} else if value.Valid {
-				_m.ScopeKind = workflow.ScopeKind(value.String)
+				_m.NarrowingKind = new(workflow.NarrowingKind)
+				*_m.NarrowingKind = workflow.NarrowingKind(value.String)
 			}
 		case workflow.FieldEnabled:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -179,6 +202,16 @@ func (_m *Workflow) QueryScopeReferences() *WorkflowScopeReferenceQuery {
 	return NewWorkflowClient(_m.config).QueryScopeReferences(_m)
 }
 
+// QueryAgencies queries the "agencies" edge of the Workflow entity.
+func (_m *Workflow) QueryAgencies() *AgencyQuery {
+	return NewWorkflowClient(_m.config).QueryAgencies(_m)
+}
+
+// QueryWorkflowAgencies queries the "workflow_agencies" edge of the Workflow entity.
+func (_m *Workflow) QueryWorkflowAgencies() *WorkflowAgencyQuery {
+	return NewWorkflowClient(_m.config).QueryWorkflowAgencies(_m)
+}
+
 // Update returns a builder for updating this Workflow.
 // Note that you need to call Workflow.Unwrap() before calling this method if this Workflow
 // was returned from a transaction, and the transaction was committed or rolled back.
@@ -208,8 +241,10 @@ func (_m *Workflow) String() string {
 	builder.WriteString("name=")
 	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
-	builder.WriteString("scope_kind=")
-	builder.WriteString(fmt.Sprintf("%v", _m.ScopeKind))
+	if v := _m.NarrowingKind; v != nil {
+		builder.WriteString("narrowing_kind=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Enabled))

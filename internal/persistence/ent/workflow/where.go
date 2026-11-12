@@ -196,24 +196,34 @@ func NameContainsFold(v string) predicate.Workflow {
 	return predicate.Workflow(sql.FieldContainsFold(FieldName, v))
 }
 
-// ScopeKindEQ applies the EQ predicate on the "scope_kind" field.
-func ScopeKindEQ(v ScopeKind) predicate.Workflow {
-	return predicate.Workflow(sql.FieldEQ(FieldScopeKind, v))
+// NarrowingKindEQ applies the EQ predicate on the "narrowing_kind" field.
+func NarrowingKindEQ(v NarrowingKind) predicate.Workflow {
+	return predicate.Workflow(sql.FieldEQ(FieldNarrowingKind, v))
 }
 
-// ScopeKindNEQ applies the NEQ predicate on the "scope_kind" field.
-func ScopeKindNEQ(v ScopeKind) predicate.Workflow {
-	return predicate.Workflow(sql.FieldNEQ(FieldScopeKind, v))
+// NarrowingKindNEQ applies the NEQ predicate on the "narrowing_kind" field.
+func NarrowingKindNEQ(v NarrowingKind) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNEQ(FieldNarrowingKind, v))
 }
 
-// ScopeKindIn applies the In predicate on the "scope_kind" field.
-func ScopeKindIn(vs ...ScopeKind) predicate.Workflow {
-	return predicate.Workflow(sql.FieldIn(FieldScopeKind, vs...))
+// NarrowingKindIn applies the In predicate on the "narrowing_kind" field.
+func NarrowingKindIn(vs ...NarrowingKind) predicate.Workflow {
+	return predicate.Workflow(sql.FieldIn(FieldNarrowingKind, vs...))
 }
 
-// ScopeKindNotIn applies the NotIn predicate on the "scope_kind" field.
-func ScopeKindNotIn(vs ...ScopeKind) predicate.Workflow {
-	return predicate.Workflow(sql.FieldNotIn(FieldScopeKind, vs...))
+// NarrowingKindNotIn applies the NotIn predicate on the "narrowing_kind" field.
+func NarrowingKindNotIn(vs ...NarrowingKind) predicate.Workflow {
+	return predicate.Workflow(sql.FieldNotIn(FieldNarrowingKind, vs...))
+}
+
+// NarrowingKindIsNil applies the IsNil predicate on the "narrowing_kind" field.
+func NarrowingKindIsNil() predicate.Workflow {
+	return predicate.Workflow(sql.FieldIsNull(FieldNarrowingKind))
+}
+
+// NarrowingKindNotNil applies the NotNil predicate on the "narrowing_kind" field.
+func NarrowingKindNotNil() predicate.Workflow {
+	return predicate.Workflow(sql.FieldNotNull(FieldNarrowingKind))
 }
 
 // EnabledEQ applies the EQ predicate on the "enabled" field.
@@ -404,6 +414,52 @@ func HasScopeReferences() predicate.Workflow {
 func HasScopeReferencesWith(preds ...predicate.WorkflowScopeReference) predicate.Workflow {
 	return predicate.Workflow(func(s *sql.Selector) {
 		step := newScopeReferencesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasAgencies applies the HasEdge predicate on the "agencies" edge.
+func HasAgencies() predicate.Workflow {
+	return predicate.Workflow(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, false, AgenciesTable, AgenciesPrimaryKey...),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasAgenciesWith applies the HasEdge predicate on the "agencies" edge with a given conditions (other predicates).
+func HasAgenciesWith(preds ...predicate.Agency) predicate.Workflow {
+	return predicate.Workflow(func(s *sql.Selector) {
+		step := newAgenciesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasWorkflowAgencies applies the HasEdge predicate on the "workflow_agencies" edge.
+func HasWorkflowAgencies() predicate.Workflow {
+	return predicate.Workflow(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, true, WorkflowAgenciesTable, WorkflowAgenciesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasWorkflowAgenciesWith applies the HasEdge predicate on the "workflow_agencies" edge with a given conditions (other predicates).
+func HasWorkflowAgenciesWith(preds ...predicate.WorkflowAgency) predicate.Workflow {
+	return predicate.Workflow(func(s *sql.Selector) {
+		step := newWorkflowAgenciesStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

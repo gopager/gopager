@@ -133,3 +133,12 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Ownership repairs:** AP-11 owns layout definitions (block schema, validator, renderer, store, `presentation.manage` CRUD), the Subscription layout reference and the C-08 `replayMode` vocabulary; AP-13 adds the installation default and Organization/Unit layout assignments in its own table, the static installation title/banner and the GUI card model. AP-10 projects derived Processing result fields; AP-13 builds only the card model on top. Plugin hosting stays in `internal/processing/` (no `internal/pluginhost/`); plugin configuration authority is the global `plugin.configure` right ([D-100](04-processing-and-plugins.md#d-100)). AP-17 builds no new tooling and repairs no other AP's defect. Further repairs (inputs, write scopes, F-case ownership, stale references) are recorded inline in the affected APs.
 - **Consequences:** Changed: delivery scope, requirement mapping, AP-10..AP-17, C-06..C-13, reference cases, AP template.
 - **Owner detail:** [AP template](../work-packages/ap-template.md), [delivery scope](../authoritative-plan.md#delivery-scope)
+
+<a id="d-155"></a>
+## D-155 Test run time: test-only costs are configurable
+
+- **Status:** accepted
+- **Date:** 2026-11-12
+- **Decision:** At the user's order during the [AP-21](../work-packages/ap-21-attribute-schemas.md) pull request ("tests running about 9 minutes is absolutely inacceptable"; "make it configurable … we shouldn't make it harder for tests"; "check if we can mock very computing intensive tasks"), components expose test-relevant costs as construction options that production leaves at their defaults, and tests use reduced costs: the correction runner's batch size (`assignments.WithCorrectionBatchSize`), the password hashing cost of the command tests (`identityOptions` in `cmd/gopager`, set to `internal/testutil/passwords` in `TestMain`). CI runs the integration tests in parallel with the static checks.
+- **Rationale:** A CPU profile of the command tests under the race detector showed Argon2id at production cost on every started login service and login; the slowest test needed 150 sequential submissions only to exceed the fixed batch of 100. Reduced costs keep the same code paths.
+- **Consequences:** The AP-21 write scope extends to `internal/assignments/correction_runner.go`, the affected tests, `cmd/gopager/identity_options.go`, `.github/workflows/ci.yml` and `docs/development.md`. Evidence is in the [AP-21 record](../execution/ap-21.md).

@@ -3,8 +3,6 @@ package processing
 import (
 	"encoding/json"
 	"errors"
-	"strings"
-	"unicode/utf8"
 
 	"github.com/google/uuid"
 )
@@ -20,9 +18,10 @@ type EvaluationBinding struct {
 
 // ValidateEvaluation checks one whole private/public result without inventing a Message identity.
 // It validates all fields/dependencies and encoded size, including explicit not-selected outcomes.
-func ValidateEvaluation(result Evaluation, outputSchema map[string]FieldSchema, binding EvaluationBinding) error {
+// Every field must be a present value of an output declared by outputs, typed by its schema.
+func ValidateEvaluation(result Evaluation, outputs Declarations, binding EvaluationBinding) error {
 	if binding.TransmissionID == uuid.Nil || binding.SourceRevision <= 0 || binding.ContextRevision <= 0 ||
-		binding.TargetLimit > MaxArguments || outputSchema == nil {
+		binding.TargetLimit > MaxArguments || outputs == nil {
 		return invalid(errors.New("invalid evaluation binding"))
 	}
 	if !result.Selected {
@@ -34,7 +33,7 @@ func ValidateEvaluation(result Evaluation, outputSchema map[string]FieldSchema, 
 	if (result.Fields == nil) == (len(result.TargetResults) == 0) {
 		return invalid(errors.New("evaluation requires one result container"))
 	}
-	fieldSets := []map[string]FieldValue{result.Fields}
+	fieldSets := []map[string]map[string]FieldValue{result.Fields}
 	for i, target := range result.TargetResults {
 		if target.TargetPosition >= binding.TargetLimit || target.Fields == nil ||
 			(i > 0 && target.TargetPosition <= result.TargetResults[i-1].TargetPosition) {
@@ -46,17 +45,44 @@ func ValidateEvaluation(result Evaluation, outputSchema map[string]FieldSchema, 
 		if fields == nil {
 			continue
 		}
-		if len(fields) > MaxCollection {
-			return resource(errors.New("evaluation field collection boundary"))
+		if err := validateResultFields(fields, outputs, binding); err != nil {
+			return err
 		}
-		if len(fields) != len(outputSchema) {
-			return invalid(errors.New("evaluation fields differ from definition"))
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		return invalid(err)
+	}
+	if len(encoded) > MaxOutputBytes {
+		return resource(errors.New("whole evaluation output boundary"))
+	}
+	decodedBytes, err := decodedBytesInJSON(encoded)
+	if err != nil {
+		return err
+	}
+	if decodedBytes > MaxOutputBytes {
+		return resource(errors.New("whole evaluation decoded bytes boundary"))
+	}
+	return nil
+}
+
+func validateResultFields(fields map[string]map[string]FieldValue, outputs Declarations, binding EvaluationBinding) error {
+	total := 0
+	for key, values := range fields {
+		if len(values) == 0 {
+			return invalid(errors.New("evaluation schema has no field"))
 		}
-		for name, field := range fields {
-			schema, declared := outputSchema[name]
-			if name == "" || !utf8.ValidString(name) || strings.ContainsRune(name, '\x00') ||
-				!declared {
-				return invalid(errors.New("invalid evaluation field state"))
+		for name, field := range values {
+			total++
+			if total > MaxCollection {
+				return resource(errors.New("evaluation field collection boundary"))
+			}
+			schema, err := OutputFieldSchema(outputs, key, name)
+			if err != nil {
+				return err
+			}
+			if field.State != FieldPresent {
+				return invalid(errors.New("evaluation stores an absent field"))
 			}
 			if err := schema.Validate(); err != nil {
 				return err
@@ -73,20 +99,6 @@ func ValidateEvaluation(result Evaluation, outputSchema map[string]FieldSchema, 
 				}
 			}
 		}
-	}
-	encoded, err := json.Marshal(result)
-	if err != nil {
-		return invalid(err)
-	}
-	if len(encoded) > MaxOutputBytes {
-		return resource(errors.New("whole evaluation output boundary"))
-	}
-	decodedBytes, err := decodedBytesInJSON(encoded)
-	if err != nil {
-		return err
-	}
-	if decodedBytes > MaxOutputBytes {
-		return resource(errors.New("whole evaluation decoded bytes boundary"))
 	}
 	return nil
 }

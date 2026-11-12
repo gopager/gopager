@@ -200,6 +200,7 @@ This is the only delivery-phase classification. It does not repeat REQ acceptanc
 | REQ-135..137 | Acceptance refinements of already approved field/query goals; verify within AP-10 without broadening frozen authorization |
 | REQ-139 | Later; the event, Subscription and plugin model keeps reaction compatibility ([D-131](#managed-plugin-process-runtime), [D-135](#foundation-redesign-after-the-2026-11-06-re-evaluation)) |
 | REQ-140 | Phase 1 approved ([D-138](decisions/09-process-and-documentation.md#d-138)); AP-15 |
+| REQ-141..145 | Phase 1 approved ([D-150](decisions/04-processing-and-plugins.md#d-150), [D-151](decisions/06-identity-and-authorization.md#d-151), [D-152](decisions/07-query-and-live.md#d-152), 2026-11-11): server AP-21 (REQ-141, REQ-143..145) and AP-22 (REQ-142), screens AP-15 |
 | [D-30 comparison extension](#d-30) | Later, separately approved slice; not a current contract blocker |
 
 Resolve IDs in the [catalog](requirements-catalog.md), not in a parallel feature summary.

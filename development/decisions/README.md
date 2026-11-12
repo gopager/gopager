@@ -11,10 +11,10 @@ Add a decision to the ADR file of its topic with status, date, supersession, the
 | [01-platform-and-storage.md](01-platform-and-storage.md) | Platform and storage | 19 (D-01..D-128) |
 | [02-intake-and-grouping.md](02-intake-and-grouping.md) | Intake and Grouping | 34 (D-17..D-139) |
 | [03-assignment-and-correction.md](03-assignment-and-correction.md) | Assignment and correction | 10 (D-08..D-145) |
-| [04-processing-and-plugins.md](04-processing-and-plugins.md) | Processing and plugins | 34 (D-05..D-148) |
+| [04-processing-and-plugins.md](04-processing-and-plugins.md) | Processing and plugins | 35 (D-05..D-150) |
 | [05-events-and-delivery.md](05-events-and-delivery.md) | Events and Delivery | 13 (D-06..D-149) |
-| [06-identity-and-authorization.md](06-identity-and-authorization.md) | Identity and authorization | 17 (D-07..D-146) |
-| [07-query-and-live.md](07-query-and-live.md) | Query and live | 3 (D-16..D-28) |
+| [06-identity-and-authorization.md](06-identity-and-authorization.md) | Identity and authorization | 18 (D-07..D-151) |
+| [07-query-and-live.md](07-query-and-live.md) | Query and live | 4 (D-16..D-152) |
 | [08-operations-and-http.md](08-operations-and-http.md) | Operations and HTTP | 3 (D-52..D-133) |
 | [09-process-and-documentation.md](09-process-and-documentation.md) | Process and documentation | 14 (D-19..D-142) |
 | [10-foundation-redesign.md](10-foundation-redesign.md) | Foundation redesign | 2 (D-135..D-137) |
@@ -172,3 +172,9 @@ Add a decision to the ADR file of its topic with status, date, supersession, the
 | D-147 | Workflow classification without installed-step preparation | superseded by D-148 | 2026-11-10 | [04-processing-and-plugins](04-processing-and-plugins.md#d-147) |
 | D-148 | Result classification stored at result write | accepted | 2026-11-10 | [04-processing-and-plugins](04-processing-and-plugins.md#d-148) |
 | D-149 | Per-instance use of Delivery targets belongs to AP-12 | accepted | 2026-11-10 | [05-events-and-delivery](05-events-and-delivery.md#d-149) |
+| D-150 | Attribute schemas replace Workflow output schemas | accepted | 2026-11-11 | [04-processing-and-plugins](04-processing-and-plugins.md#d-150) |
+| D-151 | Agency-bound Workflows, Layouts and Attribute schemas | accepted | 2026-11-11 | [06-identity-and-authorization](06-identity-and-authorization.md#d-151) |
+| D-152 | Field registry, one selection predicate and Subscription health | accepted | 2026-11-11 | [07-query-and-live](07-query-and-live.md#d-152) |
+| D-153 | AP-21 write scope: Workflow selection in the intake store and the health fact store | accepted | 2026-11-11 | [04-processing-and-plugins](04-processing-and-plugins.md#d-153) |
+| D-154 | Everything on its latest version in the AP-21 pull request | accepted | 2026-11-12 | [01-platform-and-storage](01-platform-and-storage.md#d-154) |
+| D-155 | Test run time: test-only costs are configurable | accepted | 2026-11-12 | [09-process-and-documentation](09-process-and-documentation.md#d-155) |

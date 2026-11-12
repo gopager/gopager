@@ -2,7 +2,7 @@ package presentation
 
 import (
 	"context"
-	"errors"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -10,21 +10,24 @@ import (
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/commands"
+	"github.com/gopager/gopager/internal/fields"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
 	"github.com/gopager/gopager/internal/units"
 )
 
-// The actions that gate layouts.
+// The actions that gate layouts. Maintaining a layout needs ManageAction in every Agency the
+// layout is assigned to; seeing or using one needs ManageAction or ReadAction in one of them.
 const (
 	// ManageAction maintains layouts.
 	ManageAction = "presentation.manage"
-	// SubscriptionManageOwnAction and SubscriptionManageGlobalAction also allow reading layouts,
-	// so Subscription authors can pick one.
-	SubscriptionManageOwnAction    = "subscription.manage-own"
-	SubscriptionManageGlobalAction = "subscription.manage-global"
+	// ReadAction lets a reader of Messages in an Agency see and use its layouts.
+	ReadAction = "message.read"
 )
+
+// readerActions are the actions of which any one makes a layout visible.
+var readerActions = []string{ManageAction, ReadAction}
 
 // maxNameBytes bounds a layout name.
 const maxNameBytes = 256
@@ -39,13 +42,22 @@ type Service struct {
 	clock        platform.Clock
 	store        Store
 	receipts     commands.Repository
-	fields       processing.Declarations
+	fields       FieldRegistry
 }
 
-// NewService composes the layout service. fields resolves the field references of a layout
-// definition when it is saved. It fails with authz.ErrInvalidInput on a missing dependency.
+// FieldRegistry supplies the field registry visible in a transaction.
+type FieldRegistry interface {
+	Registry(ctx context.Context, tx platform.TransactionContext) (*fields.Registry, error)
+	// LockCatalog holds the Attribute schemas against deletion until the write transaction ends.
+	// Writes that save references call it before validating them; reads never do.
+	LockCatalog(ctx context.Context, tx platform.TransactionContext) error
+}
+
+// NewService composes the layout service. fields supplies the registry whose Delivery fields a
+// layout definition may reference when it is saved. It fails with authz.ErrInvalidInput on a
+// missing dependency.
 func NewService(transactions identity.Transactions, resolver identity.AuthorityResolver, clock platform.Clock,
-	store Store, receipts commands.Repository, fields processing.Declarations) (*Service, error) {
+	store Store, receipts commands.Repository, fields FieldRegistry) (*Service, error) {
 	if transactions == nil || resolver == nil || clock == nil || store == nil || receipts == nil || fields == nil {
 		return nil, authz.ErrInvalidInput
 	}
@@ -57,20 +69,13 @@ func NewService(transactions identity.Transactions, resolver identity.AuthorityR
 type caller struct {
 	principal uuid.UUID
 	guest     bool
-	manager   bool
-	reader    bool
+	authority authz.Authority
 }
 
-// has reports whether the authority holds the action, passing other failures on.
-func has(authority authz.Authority, action string, now time.Time) (bool, error) {
-	err := authz.Authorize(authority, action, nil, authz.Target{}, now)
-	switch {
-	case err == nil:
-		return true, nil
-	case errors.Is(err, authz.ErrForbidden):
-		return false, nil
-	}
-	return false, err
+// visibility returns the Agencies whose layouts the caller may see; authz.ErrForbidden when
+// the caller holds no right that shows layouts at all.
+func (c caller) visibility() (authz.AgencyVisibility, error) {
+	return authz.VisibleAgencies(c.authority, readerActions, false)
 }
 
 // within resolves the caller and runs operation in the same transaction.
@@ -92,24 +97,9 @@ func (s *Service) within(ctx context.Context, proof identity.Proof, mutation boo
 			if err != nil || principal == uuid.Nil {
 				return authz.ErrForbidden
 			}
-			who := caller{principal: principal, guest: authentication.Kind == identity.AnonymousProof}
+			who := caller{principal: principal, guest: authentication.Kind == identity.AnonymousProof, authority: authority}
 			if mutation && who.guest {
 				return identity.ErrLoginRequired
-			}
-			if who.manager, err = has(authority, ManageAction, now); err != nil {
-				return err
-			}
-			who.reader = who.manager
-			for _, action := range []string{SubscriptionManageOwnAction, SubscriptionManageGlobalAction} {
-				if who.reader {
-					break
-				}
-				if who.reader, err = has(authority, action, now); err != nil {
-					return err
-				}
-			}
-			if mutation && !who.manager || !mutation && !who.reader {
-				return authz.ErrForbidden
 			}
 			return operation(tx, who, now)
 		})
@@ -123,23 +113,93 @@ func validateName(name string) error {
 	return nil
 }
 
-// canonical validates a definition structurally and returns its canonical JSON.
-func (s *Service) canonical(ctx context.Context, name string, definition processing.Layout) ([]byte, error) {
+// canonical validates a definition structurally and returns its canonical JSON and the decoded
+// layout.
+func canonical(name string, definition processing.Layout) ([]byte, processing.Layout, error) {
 	if err := validateName(name); err != nil {
-		return nil, err
+		return nil, processing.Layout{}, err
 	}
 	encoded, err := encode(definition)
 	if err != nil {
-		return nil, authz.ErrInvalidInput
+		return nil, processing.Layout{}, authz.ErrInvalidInput
 	}
 	layout, err := processing.DecodeLayout(encoded)
 	if err != nil {
+		return nil, processing.Layout{}, err
+	}
+	return encoded, layout, nil
+}
+
+// checkFields requires every field a layout references to exist in the current registry's
+// Delivery scope and not to be deprecated.
+func (s *Service) checkFields(ctx context.Context, tx platform.TransactionContext, layout processing.Layout) error {
+	// Locking first keeps a schema from being deleted between this check and the commit.
+	if err := s.fields.LockCatalog(ctx, tx); err != nil {
+		return err
+	}
+	registry, err := s.fields.Registry(ctx, tx)
+	if err != nil {
+		return err
+	}
+	_, err = processing.CompileLayout(ctx, layout, registry.Declarations(fields.ScopeDelivery, true))
+	return err
+}
+
+// attributeKeys returns the Attribute schema keys the layout references, compiled against the
+// registry without the deprecation policy. A stored definition that no longer compiles yields
+// no keys, so that every reference of a new definition counts as new.
+func (s *Service) attributeKeys(ctx context.Context, tx platform.TransactionContext, layout processing.Layout) ([]string, error) {
+	registry, err := s.fields.Registry(ctx, tx)
+	if err != nil {
 		return nil, err
 	}
-	if _, err := processing.CompileLayout(ctx, layout, s.fields); err != nil {
-		return nil, err
+	program, err := processing.CompileLayout(ctx, layout, registry.Declarations(fields.ScopeDelivery, false))
+	if err != nil {
+		return nil, nil
 	}
-	return encoded, nil
+	var keys []string
+	for _, reference := range program.Fields() {
+		if reference.Namespace == "attributes" && len(reference.Path) > 0 && !slices.Contains(keys, reference.Path[0]) {
+			keys = append(keys, reference.Path[0])
+		}
+	}
+	return keys, nil
+}
+
+// authorizeNewReferences requires ManageAction in at least one Agency of every Attribute schema
+// that layout references and the previous version (nil for a new layout, saved at previousAt)
+// did not. A reference the layout already holds stays valid when its schema later loses an
+// Agency, but only if the current schema existed when that version was saved: a schema deleted
+// and re-created under the same key is a different one. The failure is authz.ErrForbidden.
+func (s *Service) authorizeNewReferences(ctx context.Context, tx platform.TransactionContext, who caller, now time.Time,
+	layout processing.Layout, previous []byte, previousAt time.Time) error {
+	keys, err := s.attributeKeys(ctx, tx, layout)
+	if err != nil || len(keys) == 0 {
+		return err
+	}
+	assignments, err := s.store.SchemaAssignments(ctx, tx, keys)
+	if err != nil {
+		return err
+	}
+	var held []string
+	if previous != nil {
+		old, err := processing.DecodeLayout(previous)
+		if err != nil {
+			return err
+		}
+		if held, err = s.attributeKeys(ctx, tx, old); err != nil {
+			return err
+		}
+	}
+	for key, assignment := range assignments {
+		if slices.Contains(held, key) && !previousAt.Before(assignment.CreatedAt) {
+			continue
+		}
+		if err := authz.AuthorizeInAnyAgency(who.authority, ManageAction, assignment.Agencies, now); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // view builds the response of a stored layout.
@@ -149,19 +209,23 @@ func view(record Record) (Layout, error) {
 		return Layout{}, platform.NewFailure(platform.CodeInternalError, err)
 	}
 	return Layout{ID: record.ID, Revision: record.Revision, Name: record.Name, OutputKind: record.OutputKind,
-		Definition: definition, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}, nil
+		Definition: definition, Agencies: record.Agencies, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}, nil
 }
 
-// List returns one page of layouts ordered by name then ID. The caller needs presentation.manage,
-// subscription.manage-own or subscription.manage-global.
+// List returns one page of the layouts visible to the caller, ordered by name then ID. A layout
+// is visible with presentation.manage or message.read in one of its Agencies.
 func (s *Service) List(ctx context.Context, proof identity.Proof, page units.PageInput) (units.Page[Layout], error) {
 	page, err := page.Validate()
 	if err != nil {
 		return units.Page[Layout]{}, err
 	}
 	result := units.Page[Layout]{Items: []Layout{}}
-	err = s.within(ctx, proof, false, nil, func(tx platform.TransactionContext, _ caller, _ time.Time) error {
-		records, total, err := s.store.List(tx.Context(), tx, page.Offset, page.Limit)
+	err = s.within(ctx, proof, false, nil, func(tx platform.TransactionContext, who caller, _ time.Time) error {
+		visibility, err := who.visibility()
+		if err != nil {
+			return err
+		}
+		records, total, err := s.store.List(tx.Context(), tx, visibility, page.Offset, page.Limit)
 		if err != nil {
 			return err
 		}
@@ -184,8 +248,8 @@ func (s *Service) Read(ctx context.Context, proof identity.Proof, id uuid.UUID) 
 		return Layout{}, authz.ErrInvalidInput
 	}
 	var result Layout
-	err := s.within(ctx, proof, false, nil, func(tx platform.TransactionContext, _ caller, _ time.Time) error {
-		record, err := s.store.Get(tx.Context(), tx, id)
+	err := s.within(ctx, proof, false, nil, func(tx platform.TransactionContext, who caller, _ time.Time) error {
+		record, err := s.visibleRecord(tx.Context(), tx, who, id)
 		if err != nil {
 			return err
 		}
@@ -201,7 +265,10 @@ func (s *Service) ReadVersion(ctx context.Context, proof identity.Proof, id uuid
 		return LayoutVersion{}, authz.ErrInvalidInput
 	}
 	var result LayoutVersion
-	err := s.within(ctx, proof, false, nil, func(tx platform.TransactionContext, _ caller, _ time.Time) error {
+	err := s.within(ctx, proof, false, nil, func(tx platform.TransactionContext, who caller, _ time.Time) error {
+		if _, err := s.visibleRecord(tx.Context(), tx, who, id); err != nil {
+			return err
+		}
 		record, err := s.store.Version(tx.Context(), tx, id, version)
 		if err != nil {
 			return err
@@ -225,19 +292,27 @@ func (s *Service) Create(ctx context.Context, proof identity.Proof, command uuid
 	if command == uuid.Nil {
 		return Layout{}, authz.ErrInvalidInput
 	}
-	encoded, err := s.canonical(ctx, input.Name, input.Definition)
+	if err := validateAgencies(input.Agencies); err != nil {
+		return Layout{}, err
+	}
+	encoded, layout, err := canonical(input.Name, input.Definition)
 	if err != nil {
 		return Layout{}, err
 	}
+	agencies := sortedAgencies(input.Agencies)
 	fingerprint, err := commands.Fingerprint(struct {
-		Name       string `json:"name"`
-		Definition string `json:"definition"`
-	}{input.Name, string(encoded)})
+		Name       string      `json:"name"`
+		Definition string      `json:"definition"`
+		Agencies   []uuid.UUID `json:"agencies"`
+	}{input.Name, string(encoded), agencies})
 	if err != nil {
 		return Layout{}, err
 	}
 	var result Layout
 	err = s.within(ctx, proof, true, check, func(tx platform.TransactionContext, who caller, now time.Time) error {
+		if err := requireManage(who.authority, now, agencies); err != nil {
+			return err
+		}
 		receipt, found, err := s.receipts.ReadCommandReceipt(tx.Context(), tx, who.principal, command)
 		if err != nil {
 			return err
@@ -254,8 +329,14 @@ func (s *Service) Create(ctx context.Context, proof identity.Proof, command uuid
 			result, err = view(record)
 			return err
 		}
+		if err := s.checkFields(tx.Context(), tx, layout); err != nil {
+			return err
+		}
+		if err := s.authorizeNewReferences(tx.Context(), tx, who, now, layout, nil, time.Time{}); err != nil {
+			return err
+		}
 		record := Record{ID: uuid.New(), Revision: 1, Name: input.Name, OutputKind: input.Definition.OutputKind,
-			Definition: encoded, CreatedBy: who.principal, CreatedAt: now, UpdatedAt: now}
+			Definition: encoded, Agencies: agencies, CreatedBy: who.principal, CreatedAt: now, UpdatedAt: now}
 		if err := s.store.Insert(tx.Context(), tx, record); err != nil {
 			return err
 		}
@@ -277,14 +358,27 @@ func (s *Service) Update(ctx context.Context, proof identity.Proof, id uuid.UUID
 	if id == uuid.Nil || expected <= 0 {
 		return Layout{}, authz.ErrInvalidInput
 	}
-	encoded, err := s.canonical(ctx, input.Name, input.Definition)
+	if err := validateAgencies(input.Agencies); err != nil {
+		return Layout{}, err
+	}
+	encoded, layout, err := canonical(input.Name, input.Definition)
 	if err != nil {
 		return Layout{}, err
 	}
+	agencies := sortedAgencies(input.Agencies)
 	var result Layout
 	err = s.within(ctx, proof, true, check, func(tx platform.TransactionContext, who caller, now time.Time) error {
-		record, err := s.store.Get(tx.Context(), tx, id)
+		record, err := s.visibleRecord(tx.Context(), tx, who, id)
 		if err != nil {
+			return err
+		}
+		if err := requireManage(who.authority, now, record.Agencies, agencies); err != nil {
+			return err
+		}
+		if err := s.checkFields(tx.Context(), tx, layout); err != nil {
+			return err
+		}
+		if err := s.authorizeNewReferences(tx.Context(), tx, who, now, layout, record.Definition, record.UpdatedAt); err != nil {
 			return err
 		}
 		next, err := commands.NextRevision(record.Revision, expected)
@@ -294,10 +388,10 @@ func (s *Service) Update(ctx context.Context, proof identity.Proof, id uuid.UUID
 		if input.Definition.OutputKind != record.OutputKind {
 			return authz.ErrInvalidInput
 		}
-		if err := s.store.Update(tx.Context(), tx, id, expected, input.Name, encoded, who.principal, now); err != nil {
+		if err := s.store.Update(tx.Context(), tx, id, expected, input.Name, agencies, encoded, who.principal, now); err != nil {
 			return err
 		}
-		record.Name, record.Definition, record.Revision, record.UpdatedAt = input.Name, encoded, next, now
+		record.Name, record.Agencies, record.Definition, record.Revision, record.UpdatedAt = input.Name, agencies, encoded, next, now
 		result, err = view(record)
 		return err
 	})
@@ -312,9 +406,12 @@ func (s *Service) Delete(ctx context.Context, proof identity.Proof, id uuid.UUID
 		return commands.Result{}, authz.ErrInvalidInput
 	}
 	var result commands.Result
-	err := s.within(ctx, proof, true, check, func(tx platform.TransactionContext, _ caller, _ time.Time) error {
-		record, err := s.store.Get(tx.Context(), tx, id)
+	err := s.within(ctx, proof, true, check, func(tx platform.TransactionContext, who caller, now time.Time) error {
+		record, err := s.visibleRecord(tx.Context(), tx, who, id)
 		if err != nil {
+			return err
+		}
+		if err := requireManage(who.authority, now, record.Agencies); err != nil {
 			return err
 		}
 		next, err := commands.NextRevision(record.Revision, expected)

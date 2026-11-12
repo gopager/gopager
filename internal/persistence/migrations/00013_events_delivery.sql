@@ -18,6 +18,13 @@ CREATE TABLE layout_definition_versions (
     created_at timestamptz NOT NULL,
     PRIMARY KEY (layout_id, version)
 );
+-- A layout belongs to one or more Agencies; they decide who may see, use and manage it.
+CREATE TABLE layout_definition_agencies (
+    layout_id uuid NOT NULL REFERENCES layout_definitions(id) ON DELETE CASCADE,
+    agency_id uuid NOT NULL REFERENCES agencies(id) ON DELETE CASCADE,
+    PRIMARY KEY (layout_id, agency_id)
+);
+CREATE INDEX layout_definition_agencies_agency ON layout_definition_agencies (agency_id);
 
 -- A Subscription selects Domain event types for one subscriber: the owning User of a personal
 -- Subscription or the technical account of a global one.
@@ -33,8 +40,14 @@ CREATE TABLE subscriptions (
     layout_id uuid REFERENCES layout_definitions(id),
     split_by_unit boolean NOT NULL,
     max_age_seconds integer CHECK (max_age_seconds BETWEEN 1 AND 86400),
+    -- A Subscription whose filter or Layout no longer compiles is invalid and creates no Deliveries
+    -- until a save that compiles; health changes never change the revision.
+    health varchar NOT NULL DEFAULT 'valid' CHECK (health IN ('valid', 'invalid')),
+    health_reason varchar CHECK (health_reason IN ('filter-invalid', 'field-unavailable', 'layout-invalid', 'resource-limit')),
+    health_changed_at timestamptz,
     created_at timestamptz NOT NULL,
-    updated_at timestamptz NOT NULL
+    updated_at timestamptz NOT NULL,
+    CHECK ((health = 'valid') = (health_reason IS NULL))
 );
 CREATE INDEX subscriptions_subscriber ON subscriptions (subscriber_id);
 CREATE INDEX subscriptions_active_types ON subscriptions USING gin (event_types) WHERE state = 'active';
@@ -142,5 +155,6 @@ DROP TABLE deliveries;
 DROP TABLE integration_unit_parameters;
 DROP TABLE subscription_targets;
 DROP TABLE subscriptions;
+DROP TABLE layout_definition_agencies;
 DROP TABLE layout_definition_versions;
 DROP TABLE layout_definitions;

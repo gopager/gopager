@@ -45,6 +45,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/unittemplate"
 	"github.com/gopager/gopager/internal/persistence/ent/usergroup"
 	"github.com/gopager/gopager/internal/persistence/ent/workflow"
+	"github.com/gopager/gopager/internal/persistence/ent/workflowagency"
 	"github.com/gopager/gopager/internal/persistence/ent/workflowscopereference"
 	"github.com/gopager/gopager/internal/persistence/ent/workflowversion"
 
@@ -1121,6 +1122,15 @@ func init() {
 	workflowDescID := workflowMixinFields0[0].Descriptor()
 	// workflow.DefaultID holds the default value on creation for the id field.
 	workflow.DefaultID = workflowDescID.Default.(func() uuid.UUID)
+	workflowagency.Policy = privacy.NewPolicies(schema.WorkflowAgency{})
+	workflowagency.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := workflowagency.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
 	workflowscopereference.Policy = privacy.NewPolicies(schema.WorkflowScopeReference{})
 	workflowscopereference.Hooks[0] = func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {

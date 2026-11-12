@@ -10,14 +10,17 @@ import (
 
 	"entgo.io/ent/entql"
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/attributes"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/persistence/ent"
+	"github.com/gopager/gopager/internal/persistence/ent/attributestore"
 	"github.com/gopager/gopager/internal/persistence/ent/borrowed"
 	"github.com/gopager/gopager/internal/persistence/ent/guard"
 	"github.com/gopager/gopager/internal/persistence/ent/identitystore"
 	"github.com/gopager/gopager/internal/persistence/ent/permissions"
 	"github.com/gopager/gopager/internal/persistence/ent/workflow"
+	"github.com/gopager/gopager/internal/persistence/ent/workflowagency"
 	"github.com/gopager/gopager/internal/persistence/ent/workflowscopereference"
 	"github.com/gopager/gopager/internal/persistence/ent/workflowversion"
 	"github.com/gopager/gopager/internal/platform"
@@ -28,14 +31,28 @@ import (
 // Store persists Processing state: Workflows and their versions and scope references,
 // plugin instances, candidates, results and publication participation. It holds no
 // transaction of its own: every method runs in the caller's active primary transaction.
-type Store struct{ primary *postgres.Store }
+type Store struct {
+	primary *postgres.Store
+	// catalog reads the Attribute schemas that Workflow outputs reference.
+	catalog *attributestore.Store
+	// registries yields the field registry of the catalog visible in a transaction.
+	registries *attributes.RegistrySource
+}
 
 // New binds this owner to the existing primary store, never an independent connection.
 func New(primary *postgres.Store) (*Store, error) {
 	if primary == nil {
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing Processing primary"))
 	}
-	return &Store{primary: primary}, nil
+	catalog, err := attributestore.New(primary)
+	if err != nil {
+		return nil, err
+	}
+	registries, err := attributes.NewRegistrySource(catalog)
+	if err != nil {
+		return nil, err
+	}
+	return &Store{primary: primary, catalog: catalog, registries: registries}, nil
 }
 
 func (s *Store) client(ctx context.Context, tx platform.TransactionContext, predicates map[string]entql.P, create map[string]bool) (*ent.Client, context.Context, error) {
@@ -79,39 +96,33 @@ func (s *Store) lockRevision(ctx context.Context, tx platform.TransactionContext
 	return row.Revision, nil
 }
 
-func scopeReference(kind string, references []uuid.UUID) (entql.P, error) {
+// grantScope translates one grant scope into a Workflow predicate: an Agency grant matches a
+// Workflow assigned to one of its Agencies, a Unit grant a Workflow narrowed to one of its Units.
+// Matching one assigned Agency suffices to see a Workflow; managing it needs full coverage, which
+// the service checks.
+func grantScope(kind string, references []uuid.UUID) (entql.P, error) {
 	values := make([]any, len(references))
 	for i, id := range references {
 		values[i] = id
 	}
 	switch kind {
 	case "agency":
-		return entql.Or(entql.HasEdgeWith("network", entql.FieldIn("agency_id", values...)),
-			entql.HasEdgeWith("unit", entql.And(entql.FieldEQ("deleted", false),
-				entql.FieldIn("agency_id", values...)))), nil
+		return entql.HasEdgeWith("workflow_agencies", entql.FieldIn("agency_id", values...)), nil
 	case "unit":
-		return entql.And(entql.FieldIn("unit_id", values...),
-			entql.HasEdgeWith("unit", entql.FieldEQ("deleted", false))), nil
+		return entql.And(entql.FieldEQ("narrowing_kind", "unit"),
+			entql.HasEdgeWith("scope_references", entql.And(entql.FieldIn("unit_id", values...),
+				entql.HasEdgeWith("unit", entql.FieldEQ("deleted", false))))), nil
 	default:
 		return nil, authz.ErrInvalidInput
 	}
 }
 
 func workflowScope(authority authz.Authority, action string, now time.Time) (entql.P, error) {
-	plan, err := permissions.ReadScope(authority, action, nil, permissions.Attributes{Scope: scopeReference}, now)
+	plan, err := permissions.ReadScope(authority, action, nil, permissions.Attributes{Scope: grantScope}, now)
 	if err != nil {
 		return nil, err
 	}
-	scoped := entql.And(entql.FieldIn("scope_kind", "network", "unit"),
-		entql.HasEdgeWith("scope_references", entql.FieldNotNil("id")),
-		entql.Not(entql.HasEdgeWith("scope_references", entql.Not(plan.Predicate))))
-	err = authz.Authorize(authority, action, nil, authz.Target{}, now)
-	if err == nil {
-		scoped = entql.Or(entql.FieldEQ("scope_kind", "all"), scoped)
-	} else if !errors.Is(err, authz.ErrForbidden) {
-		return nil, err
-	}
-	return entql.And(entql.FieldEQ("deleted", false), scoped), nil
+	return entql.And(entql.FieldEQ("deleted", false), plan.Predicate), nil
 }
 
 func metadata(row *ent.Workflow) (processing.WorkflowConfiguration, error) {
@@ -119,26 +130,36 @@ func metadata(row *ent.Workflow) (processing.WorkflowConfiguration, error) {
 	if err != nil {
 		return processing.WorkflowConfiguration{}, err
 	}
+	agencies, err := row.Edges.WorkflowAgenciesOrErr()
+	if err != nil {
+		return processing.WorkflowConfiguration{}, err
+	}
 	out := processing.WorkflowConfiguration{ID: row.ID, Revision: row.Revision, Name: row.Name,
-		Scope: authz.Scope{Kind: string(row.ScopeKind)}, Enabled: row.Enabled, Deleted: row.Deleted,
+		Enabled: row.Enabled, Deleted: row.Deleted,
 		ActiveVersionID: row.ActiveVersionID, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
+	for _, agency := range agencies {
+		out.Scope.Agencies = append(out.Scope.Agencies, agency.AgencyID)
+	}
+	if row.NarrowingKind != nil {
+		out.Scope.Narrowing = &processing.WorkflowNarrowing{Kind: string(*row.NarrowingKind)}
+	}
 	for _, reference := range references {
-		switch out.Scope.Kind {
-		case "network":
-			if reference.NetworkID == nil || reference.UnitID != nil {
-				return processing.WorkflowConfiguration{}, authz.ErrInvalidInput
-			}
-			out.Scope.References = append(out.Scope.References, reference.NetworkID.String())
-		case "unit":
-			if reference.UnitID == nil || reference.NetworkID != nil {
-				return processing.WorkflowConfiguration{}, authz.ErrInvalidInput
-			}
-			out.Scope.References = append(out.Scope.References, reference.UnitID.String())
+		switch {
+		case out.Scope.Narrowing == nil:
+			return processing.WorkflowConfiguration{}, authz.ErrInvalidInput
+		case out.Scope.Narrowing.Kind == "network" && reference.NetworkID != nil && reference.UnitID == nil:
+			out.Scope.Narrowing.References = append(out.Scope.Narrowing.References, *reference.NetworkID)
+		case out.Scope.Narrowing.Kind == "unit" && reference.UnitID != nil && reference.NetworkID == nil:
+			out.Scope.Narrowing.References = append(out.Scope.Narrowing.References, *reference.UnitID)
 		default:
 			return processing.WorkflowConfiguration{}, authz.ErrInvalidInput
 		}
 	}
-	slices.Sort(out.Scope.References)
+	scope, err := out.Scope.Canonical()
+	if err != nil {
+		return processing.WorkflowConfiguration{}, err
+	}
+	out.Scope = scope
 	if err := out.Validate(); err != nil {
 		return processing.WorkflowConfiguration{}, err
 	}
@@ -152,7 +173,8 @@ func (s *Store) readClient(ctx context.Context, tx platform.TransactionContext, 
 	}
 	return s.client(ctx, tx, map[string]entql.P{"Workflow": filter,
 		"WorkflowVersion":        entql.HasEdgeWith("workflow", filter),
-		"WorkflowScopeReference": entql.HasEdgeWith("workflow", filter)}, nil)
+		"WorkflowScopeReference": entql.HasEdgeWith("workflow", filter),
+		"WorkflowAgency":         entql.HasEdgeWith("workflow", filter)}, nil)
 }
 
 // ReadWorkflow returns identical not-found for an absent or natively filtered Workflow.
@@ -161,7 +183,7 @@ func (s *Store) ReadWorkflow(ctx context.Context, tx platform.TransactionContext
 	if err != nil {
 		return processing.WorkflowConfiguration{}, err
 	}
-	row, err := client.Workflow.Query().Where(workflow.ID(id)).WithScopeReferences().Only(scope)
+	row, err := client.Workflow.Query().Where(workflow.ID(id)).WithScopeReferences().WithWorkflowAgencies().Only(scope)
 	if ent.IsNotFound(err) {
 		return processing.WorkflowConfiguration{}, authz.ErrNotFound
 	}
@@ -196,7 +218,7 @@ func (s *Store) ListWorkflows(ctx context.Context, tx platform.TransactionContex
 		return processing.Page[processing.WorkflowConfiguration]{}, err
 	}
 	rows, err := client.Workflow.Query().Order(workflow.ByCreatedAt(), workflow.ByID()).
-		Offset(input.Offset).Limit(input.Limit).WithScopeReferences().All(scope)
+		Offset(input.Offset).Limit(input.Limit).WithScopeReferences().WithWorkflowAgencies().All(scope)
 	if err != nil {
 		return processing.Page[processing.WorkflowConfiguration]{}, err
 	}
@@ -289,6 +311,11 @@ func (s *Store) SaveWorkflow(ctx context.Context, tx platform.TransactionContext
 	if value.Revision != next {
 		return authz.ErrInvalidInput
 	}
+	if action == "workflow.activate" && value.ActiveVersionID != nil {
+		if err := s.requireVersionOutputSchemas(ctx, tx, *value.ActiveVersionID); err != nil {
+			return err
+		}
+	}
 	filter := entql.FieldEQ("id", value.ID)
 	if expected != 0 {
 		allowed, err := workflowScope(authority, action, now)
@@ -298,22 +325,26 @@ func (s *Store) SaveWorkflow(ctx context.Context, tx platform.TransactionContext
 		filter = entql.And(filter, allowed)
 	}
 	client, scope, err := s.client(ctx, tx, map[string]entql.P{"Workflow": filter,
-		"WorkflowScopeReference": entql.FieldEQ("workflow_id", value.ID)},
-		map[string]bool{"Workflow": expected == 0, "WorkflowScopeReference": true})
+		"WorkflowScopeReference": entql.FieldEQ("workflow_id", value.ID),
+		"WorkflowAgency":         entql.FieldEQ("workflow_id", value.ID)},
+		map[string]bool{"Workflow": expected == 0, "WorkflowScopeReference": true, "WorkflowAgency": true})
 	if err != nil {
 		return err
 	}
 	if expected == 0 {
 		if err := client.Workflow.Create().SetID(value.ID).SetRevision(1).SetName(value.Name).
-			SetScopeKind(workflow.ScopeKind(value.Scope.Kind)).SetEnabled(value.Enabled).
+			SetNillableNarrowingKind(narrowingKind(value.Scope)).SetEnabled(value.Enabled).
 			SetDeleted(value.Deleted).SetNillableActiveVersionID(value.ActiveVersionID).
 			SetCreatedAt(now).SetUpdatedAt(now).Exec(scope); err != nil {
 			return err
 		}
 	} else {
 		update := client.Workflow.Update().Where(workflow.ID(value.ID), workflow.Revision(expected)).
-			SetRevision(next).SetName(value.Name).SetScopeKind(workflow.ScopeKind(value.Scope.Kind)).
+			SetRevision(next).SetName(value.Name).SetNillableNarrowingKind(narrowingKind(value.Scope)).
 			SetEnabled(value.Enabled).SetDeleted(value.Deleted).SetUpdatedAt(now)
+		if value.Scope.Narrowing == nil {
+			update.ClearNarrowingKind()
+		}
 		if value.ActiveVersionID == nil {
 			update.ClearActiveVersionID()
 		} else {
@@ -327,21 +358,42 @@ func (s *Store) SaveWorkflow(ctx context.Context, tx platform.TransactionContext
 			return authz.ErrRevisionConflict
 		}
 	}
-	if _, err := client.WorkflowScopeReference.Delete().Where(workflowscopereference.WorkflowID(value.ID)).Exec(scope); err != nil {
+	return saveScope(scope, client, value)
+}
+
+// narrowingKind returns the narrowing kind to persist, nil for a Workflow without narrowing.
+func narrowingKind(scope processing.WorkflowScope) *workflow.NarrowingKind {
+	if scope.Narrowing == nil {
+		return nil
+	}
+	kind := workflow.NarrowingKind(scope.Narrowing.Kind)
+	return &kind
+}
+
+// saveScope replaces the Workflow's Agency assignments and narrowing references with the scope.
+func saveScope(ctx context.Context, client *ent.Client, value processing.WorkflowConfiguration) error {
+	if _, err := client.WorkflowAgency.Delete().Where(workflowagency.WorkflowID(value.ID)).Exec(ctx); err != nil {
 		return err
 	}
-	for _, reference := range value.Scope.References {
-		id, err := uuid.Parse(reference)
-		if err != nil {
-			return authz.ErrInvalidInput
+	for _, agency := range value.Scope.Agencies {
+		if err := client.WorkflowAgency.Create().SetWorkflowID(value.ID).SetAgencyID(agency).Exec(ctx); err != nil {
+			return err
 		}
+	}
+	if _, err := client.WorkflowScopeReference.Delete().Where(workflowscopereference.WorkflowID(value.ID)).Exec(ctx); err != nil {
+		return err
+	}
+	if value.Scope.Narrowing == nil {
+		return nil
+	}
+	for _, id := range value.Scope.Narrowing.References {
 		create := client.WorkflowScopeReference.Create().SetWorkflowID(value.ID)
-		if value.Scope.Kind == "network" {
+		if value.Scope.Narrowing.Kind == "network" {
 			create.SetNetworkID(id)
 		} else {
 			create.SetUnitID(id)
 		}
-		if err := create.Exec(scope); err != nil {
+		if err := create.Exec(ctx); err != nil {
 			return err
 		}
 	}
@@ -363,6 +415,13 @@ func (s *Store) SaveVersion(ctx context.Context, tx platform.TransactionContext,
 	}
 	if detached.SchemaVersion != 1 {
 		return authz.ErrInvalidInput
+	}
+	keys := make([]string, 0, len(detached.Outputs))
+	for key := range detached.Outputs {
+		keys = append(keys, key)
+	}
+	if err := s.requireOutputSchemas(ctx, tx, keys); err != nil {
+		return err
 	}
 	client, scope, err := s.client(ctx, tx, nil, map[string]bool{"WorkflowVersion": true})
 	if err != nil {

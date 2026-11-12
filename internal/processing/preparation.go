@@ -9,17 +9,27 @@ import (
 	"github.com/google/uuid"
 )
 
-// SourceDeclarationOwner supplies trusted, current source and target schemas.
+// DeclarationSet is what a Workflow definition is compiled against.
+type DeclarationSet struct {
+	// Source declares the source and target fields a definition reads.
+	Source Declarations
+	// Outputs declares the Attribute fields a definition writes.
+	Outputs Declarations
+}
+
+// SourceDeclarationOwner supplies trusted, current declarations for compiling a definition.
+// Whether deprecated fields are accepted is the owner's configuration: the owner behind the
+// preparer rejects them, so a new version never references a deprecated field.
 type SourceDeclarationOwner interface {
-	ProcessingDeclarations(context.Context) (Declarations, error)
+	ProcessingDeclarations(context.Context) (DeclarationSet, error)
 }
 
 // MissingSourceDeclarationOwner blocks preparation until the schema owner is wired.
 type MissingSourceDeclarationOwner struct{}
 
 // ProcessingDeclarations never substitutes caller-provided declarations.
-func (MissingSourceDeclarationOwner) ProcessingDeclarations(context.Context) (Declarations, error) {
-	return nil, capabilityUnavailable(errors.New("processing declaration owner unavailable"))
+func (MissingSourceDeclarationOwner) ProcessingDeclarations(context.Context) (DeclarationSet, error) {
+	return DeclarationSet{}, capabilityUnavailable(errors.New("processing declaration owner unavailable"))
 }
 
 // WorkflowDefinitionPreparer compiles immutable definitions against trusted declarations.
@@ -51,16 +61,16 @@ func (p *WorkflowDefinitionPreparer) CompileWorkflow(ctx context.Context, defini
 	if err != nil {
 		return nil, err
 	}
-	if declarations == nil {
+	if declarations.Source == nil || declarations.Outputs == nil {
 		return nil, capabilityUnavailable(errors.New("processing declaration owner returned no declarations"))
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if artifacts == nil {
-		return CompileWorkflow(ctx, definition, declarations, p.regex)
+		return CompileWorkflow(ctx, definition, declarations.Source, declarations.Outputs, p.regex)
 	}
-	return CompileWorkflowInstalled(ctx, definition, declarations, p.regex, artifacts)
+	return CompileWorkflowInstalled(ctx, definition, declarations.Source, declarations.Outputs, p.regex, artifacts)
 }
 
 type preparationArtifactTracker struct {

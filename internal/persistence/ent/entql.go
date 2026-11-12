@@ -41,6 +41,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/unittemplate"
 	"github.com/gopager/gopager/internal/persistence/ent/usergroup"
 	"github.com/gopager/gopager/internal/persistence/ent/workflow"
+	"github.com/gopager/gopager/internal/persistence/ent/workflowagency"
 	"github.com/gopager/gopager/internal/persistence/ent/workflowscopereference"
 	"github.com/gopager/gopager/internal/persistence/ent/workflowversion"
 
@@ -52,7 +53,7 @@ import (
 
 // schemaGraph holds a representation of ent/schema at runtime.
 var schemaGraph = func() *sqlgraph.Schema {
-	graph := &sqlgraph.Schema{Nodes: make([]*sqlgraph.Node, 39)}
+	graph := &sqlgraph.Schema{Nodes: make([]*sqlgraph.Node, 40)}
 	graph.Nodes[0] = &sqlgraph.Node{
 		NodeSpec: sqlgraph.NodeSpec{
 			Table:   account.Table,
@@ -768,7 +769,7 @@ var schemaGraph = func() *sqlgraph.Schema {
 		Fields: map[string]*sqlgraph.FieldSpec{
 			workflow.FieldRevision:        {Type: field.TypeInt64, Column: workflow.FieldRevision},
 			workflow.FieldName:            {Type: field.TypeString, Column: workflow.FieldName},
-			workflow.FieldScopeKind:       {Type: field.TypeEnum, Column: workflow.FieldScopeKind},
+			workflow.FieldNarrowingKind:   {Type: field.TypeEnum, Column: workflow.FieldNarrowingKind},
 			workflow.FieldEnabled:         {Type: field.TypeBool, Column: workflow.FieldEnabled},
 			workflow.FieldDeleted:         {Type: field.TypeBool, Column: workflow.FieldDeleted},
 			workflow.FieldActiveVersionID: {Type: field.TypeUUID, Column: workflow.FieldActiveVersionID},
@@ -777,6 +778,27 @@ var schemaGraph = func() *sqlgraph.Schema {
 		},
 	}
 	graph.Nodes[37] = &sqlgraph.Node{
+		NodeSpec: sqlgraph.NodeSpec{
+			Table:   workflowagency.Table,
+			Columns: workflowagency.Columns,
+			CompositeID: []*sqlgraph.FieldSpec{
+				{
+					Type:   field.TypeUUID,
+					Column: workflowagency.FieldWorkflowID,
+				},
+				{
+					Type:   field.TypeUUID,
+					Column: workflowagency.FieldAgencyID,
+				},
+			},
+		},
+		Type: "WorkflowAgency",
+		Fields: map[string]*sqlgraph.FieldSpec{
+			workflowagency.FieldWorkflowID: {Type: field.TypeUUID, Column: workflowagency.FieldWorkflowID},
+			workflowagency.FieldAgencyID:   {Type: field.TypeUUID, Column: workflowagency.FieldAgencyID},
+		},
+	}
+	graph.Nodes[38] = &sqlgraph.Node{
 		NodeSpec: sqlgraph.NodeSpec{
 			Table:   workflowscopereference.Table,
 			Columns: workflowscopereference.Columns,
@@ -792,7 +814,7 @@ var schemaGraph = func() *sqlgraph.Schema {
 			workflowscopereference.FieldUnitID:     {Type: field.TypeUUID, Column: workflowscopereference.FieldUnitID},
 		},
 	}
-	graph.Nodes[38] = &sqlgraph.Node{
+	graph.Nodes[39] = &sqlgraph.Node{
 		NodeSpec: sqlgraph.NodeSpec{
 			Table:   workflowversion.Table,
 			Columns: workflowversion.Columns,
@@ -856,6 +878,30 @@ var schemaGraph = func() *sqlgraph.Schema {
 		},
 		"Agency",
 		"Network",
+	)
+	graph.MustAddE(
+		"workflows",
+		&sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   agency.WorkflowsTable,
+			Columns: agency.WorkflowsPrimaryKey,
+			Bidi:    false,
+		},
+		"Agency",
+		"Workflow",
+	)
+	graph.MustAddE(
+		"workflow_agencies",
+		&sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: true,
+			Table:   agency.WorkflowAgenciesTable,
+			Columns: []string{agency.WorkflowAgenciesColumn},
+			Bidi:    false,
+		},
+		"Agency",
+		"WorkflowAgency",
 	)
 	graph.MustAddE(
 		"agency",
@@ -1000,6 +1046,54 @@ var schemaGraph = func() *sqlgraph.Schema {
 		},
 		"Workflow",
 		"WorkflowScopeReference",
+	)
+	graph.MustAddE(
+		"agencies",
+		&sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   workflow.AgenciesTable,
+			Columns: workflow.AgenciesPrimaryKey,
+			Bidi:    false,
+		},
+		"Workflow",
+		"Agency",
+	)
+	graph.MustAddE(
+		"workflow_agencies",
+		&sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: true,
+			Table:   workflow.WorkflowAgenciesTable,
+			Columns: []string{workflow.WorkflowAgenciesColumn},
+			Bidi:    false,
+		},
+		"Workflow",
+		"WorkflowAgency",
+	)
+	graph.MustAddE(
+		"workflow",
+		&sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   workflowagency.WorkflowTable,
+			Columns: []string{workflowagency.WorkflowColumn},
+			Bidi:    false,
+		},
+		"WorkflowAgency",
+		"Workflow",
+	)
+	graph.MustAddE(
+		"agency",
+		&sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   workflowagency.AgencyTable,
+			Columns: []string{workflowagency.AgencyColumn},
+			Bidi:    false,
+		},
+		"WorkflowAgency",
+		"Agency",
 	)
 	graph.MustAddE(
 		"workflow",
@@ -1328,6 +1422,34 @@ func (f *AgencyFilter) WhereHasNetworks() {
 // WhereHasNetworksWith applies a predicate to check if query has an edge networks with a given conditions (other predicates).
 func (f *AgencyFilter) WhereHasNetworksWith(preds ...predicate.Network) {
 	f.Where(entql.HasEdgeWith("networks", sqlgraph.WrapFunc(func(s *sql.Selector) {
+		for _, p := range preds {
+			p(s)
+		}
+	})))
+}
+
+// WhereHasWorkflows applies a predicate to check if query has an edge workflows.
+func (f *AgencyFilter) WhereHasWorkflows() {
+	f.Where(entql.HasEdge("workflows"))
+}
+
+// WhereHasWorkflowsWith applies a predicate to check if query has an edge workflows with a given conditions (other predicates).
+func (f *AgencyFilter) WhereHasWorkflowsWith(preds ...predicate.Workflow) {
+	f.Where(entql.HasEdgeWith("workflows", sqlgraph.WrapFunc(func(s *sql.Selector) {
+		for _, p := range preds {
+			p(s)
+		}
+	})))
+}
+
+// WhereHasWorkflowAgencies applies a predicate to check if query has an edge workflow_agencies.
+func (f *AgencyFilter) WhereHasWorkflowAgencies() {
+	f.Where(entql.HasEdge("workflow_agencies"))
+}
+
+// WhereHasWorkflowAgenciesWith applies a predicate to check if query has an edge workflow_agencies with a given conditions (other predicates).
+func (f *AgencyFilter) WhereHasWorkflowAgenciesWith(preds ...predicate.WorkflowAgency) {
+	f.Where(entql.HasEdgeWith("workflow_agencies", sqlgraph.WrapFunc(func(s *sql.Selector) {
 		for _, p := range preds {
 			p(s)
 		}
@@ -3914,9 +4036,9 @@ func (f *WorkflowFilter) WhereName(p entql.StringP) {
 	f.Where(p.Field(workflow.FieldName))
 }
 
-// WhereScopeKind applies the entql string predicate on the scope_kind field.
-func (f *WorkflowFilter) WhereScopeKind(p entql.StringP) {
-	f.Where(p.Field(workflow.FieldScopeKind))
+// WhereNarrowingKind applies the entql string predicate on the narrowing_kind field.
+func (f *WorkflowFilter) WhereNarrowingKind(p entql.StringP) {
+	f.Where(p.Field(workflow.FieldNarrowingKind))
 }
 
 // WhereEnabled applies the entql bool predicate on the enabled field.
@@ -3972,6 +4094,107 @@ func (f *WorkflowFilter) WhereHasScopeReferencesWith(preds ...predicate.Workflow
 	})))
 }
 
+// WhereHasAgencies applies a predicate to check if query has an edge agencies.
+func (f *WorkflowFilter) WhereHasAgencies() {
+	f.Where(entql.HasEdge("agencies"))
+}
+
+// WhereHasAgenciesWith applies a predicate to check if query has an edge agencies with a given conditions (other predicates).
+func (f *WorkflowFilter) WhereHasAgenciesWith(preds ...predicate.Agency) {
+	f.Where(entql.HasEdgeWith("agencies", sqlgraph.WrapFunc(func(s *sql.Selector) {
+		for _, p := range preds {
+			p(s)
+		}
+	})))
+}
+
+// WhereHasWorkflowAgencies applies a predicate to check if query has an edge workflow_agencies.
+func (f *WorkflowFilter) WhereHasWorkflowAgencies() {
+	f.Where(entql.HasEdge("workflow_agencies"))
+}
+
+// WhereHasWorkflowAgenciesWith applies a predicate to check if query has an edge workflow_agencies with a given conditions (other predicates).
+func (f *WorkflowFilter) WhereHasWorkflowAgenciesWith(preds ...predicate.WorkflowAgency) {
+	f.Where(entql.HasEdgeWith("workflow_agencies", sqlgraph.WrapFunc(func(s *sql.Selector) {
+		for _, p := range preds {
+			p(s)
+		}
+	})))
+}
+
+// addPredicate implements the predicateAdder interface.
+func (_q *WorkflowAgencyQuery) addPredicate(pred func(s *sql.Selector)) {
+	_q.predicates = append(_q.predicates, pred)
+}
+
+// Filter returns a Filter implementation to apply filters on the WorkflowAgencyQuery builder.
+func (_q *WorkflowAgencyQuery) Filter() *WorkflowAgencyFilter {
+	return &WorkflowAgencyFilter{config: _q.config, predicateAdder: _q}
+}
+
+// addPredicate implements the predicateAdder interface.
+func (m *WorkflowAgencyMutation) addPredicate(pred func(s *sql.Selector)) {
+	m.predicates = append(m.predicates, pred)
+}
+
+// Filter returns an entql.Where implementation to apply filters on the WorkflowAgencyMutation builder.
+func (m *WorkflowAgencyMutation) Filter() *WorkflowAgencyFilter {
+	return &WorkflowAgencyFilter{config: m.config, predicateAdder: m}
+}
+
+// WorkflowAgencyFilter provides a generic filtering capability at runtime for WorkflowAgencyQuery.
+type WorkflowAgencyFilter struct {
+	predicateAdder
+	config
+}
+
+// Where applies the entql predicate on the query filter.
+func (f *WorkflowAgencyFilter) Where(p entql.P) {
+	f.addPredicate(func(s *sql.Selector) {
+		if err := schemaGraph.EvalP(schemaGraph.Nodes[37].Type, p, s); err != nil {
+			s.AddError(err)
+		}
+	})
+}
+
+// WhereWorkflowID applies the entql [16]byte predicate on the workflow_id field.
+func (f *WorkflowAgencyFilter) WhereWorkflowID(p entql.ValueP) {
+	f.Where(p.Field(workflowagency.FieldWorkflowID))
+}
+
+// WhereAgencyID applies the entql [16]byte predicate on the agency_id field.
+func (f *WorkflowAgencyFilter) WhereAgencyID(p entql.ValueP) {
+	f.Where(p.Field(workflowagency.FieldAgencyID))
+}
+
+// WhereHasWorkflow applies a predicate to check if query has an edge workflow.
+func (f *WorkflowAgencyFilter) WhereHasWorkflow() {
+	f.Where(entql.HasEdge("workflow"))
+}
+
+// WhereHasWorkflowWith applies a predicate to check if query has an edge workflow with a given conditions (other predicates).
+func (f *WorkflowAgencyFilter) WhereHasWorkflowWith(preds ...predicate.Workflow) {
+	f.Where(entql.HasEdgeWith("workflow", sqlgraph.WrapFunc(func(s *sql.Selector) {
+		for _, p := range preds {
+			p(s)
+		}
+	})))
+}
+
+// WhereHasAgency applies a predicate to check if query has an edge agency.
+func (f *WorkflowAgencyFilter) WhereHasAgency() {
+	f.Where(entql.HasEdge("agency"))
+}
+
+// WhereHasAgencyWith applies a predicate to check if query has an edge agency with a given conditions (other predicates).
+func (f *WorkflowAgencyFilter) WhereHasAgencyWith(preds ...predicate.Agency) {
+	f.Where(entql.HasEdgeWith("agency", sqlgraph.WrapFunc(func(s *sql.Selector) {
+		for _, p := range preds {
+			p(s)
+		}
+	})))
+}
+
 // addPredicate implements the predicateAdder interface.
 func (_q *WorkflowScopeReferenceQuery) addPredicate(pred func(s *sql.Selector)) {
 	_q.predicates = append(_q.predicates, pred)
@@ -4001,7 +4224,7 @@ type WorkflowScopeReferenceFilter struct {
 // Where applies the entql predicate on the query filter.
 func (f *WorkflowScopeReferenceFilter) Where(p entql.P) {
 	f.addPredicate(func(s *sql.Selector) {
-		if err := schemaGraph.EvalP(schemaGraph.Nodes[37].Type, p, s); err != nil {
+		if err := schemaGraph.EvalP(schemaGraph.Nodes[38].Type, p, s); err != nil {
 			s.AddError(err)
 		}
 	})
@@ -4098,7 +4321,7 @@ type WorkflowVersionFilter struct {
 // Where applies the entql predicate on the query filter.
 func (f *WorkflowVersionFilter) Where(p entql.P) {
 	f.addPredicate(func(s *sql.Selector) {
-		if err := schemaGraph.EvalP(schemaGraph.Nodes[38].Type, p, s); err != nil {
+		if err := schemaGraph.EvalP(schemaGraph.Nodes[39].Type, p, s); err != nil {
 			s.AddError(err)
 		}
 	})

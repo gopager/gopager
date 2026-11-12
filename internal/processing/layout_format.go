@@ -190,6 +190,7 @@ type jsonLayoutItem struct {
 	Kind  string           `json:"kind"`
 	Text  string           `json:"text,omitempty"`
 	Label string           `json:"label,omitempty"`
+	Icon  string           `json:"icon,omitempty"`
 	Title string           `json:"title,omitempty"`
 	Value *Value           `json:"value,omitempty"`
 	URL   string           `json:"url,omitempty"`
@@ -199,7 +200,7 @@ type jsonLayoutItem struct {
 func toJSONItems(items []layoutItem) []jsonLayoutItem {
 	converted := make([]jsonLayoutItem, 0, len(items))
 	for _, item := range items {
-		entry := jsonLayoutItem{Kind: item.kind, Label: item.label, Title: item.title, Value: item.value,
+		entry := jsonLayoutItem{Kind: item.kind, Label: item.label, Icon: item.icon, Title: item.title, Value: item.value,
 			URL: item.url, Items: toJSONItems(item.children)}
 		if item.kind == blockText {
 			entry.Text = item.text

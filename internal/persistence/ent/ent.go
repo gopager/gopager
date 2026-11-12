@@ -49,6 +49,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/unittemplate"
 	"github.com/gopager/gopager/internal/persistence/ent/usergroup"
 	"github.com/gopager/gopager/internal/persistence/ent/workflow"
+	"github.com/gopager/gopager/internal/persistence/ent/workflowagency"
 	"github.com/gopager/gopager/internal/persistence/ent/workflowscopereference"
 	"github.com/gopager/gopager/internal/persistence/ent/workflowversion"
 )
@@ -148,6 +149,7 @@ func checkColumn(t, c string) error {
 			unittemplate.Table:              unittemplate.ValidColumn,
 			usergroup.Table:                 usergroup.ValidColumn,
 			workflow.Table:                  workflow.ValidColumn,
+			workflowagency.Table:            workflowagency.ValidColumn,
 			workflowscopereference.Table:    workflowscopereference.ValidColumn,
 			workflowversion.Table:           workflowversion.ValidColumn,
 		})

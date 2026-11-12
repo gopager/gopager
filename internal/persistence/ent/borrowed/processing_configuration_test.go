@@ -39,6 +39,24 @@ func (processingDeclarationsFixture) FieldGroups(ref processing.FieldRef) ([]str
 	return []string{"unit"}, nil
 }
 
+// processingOutputsFixture declares the Attribute fields test.out (boolean) and test.text and
+// test.mode (strings) that fixture Workflows write.
+type processingOutputsFixture struct{}
+
+// FieldSchema implements processing.Declarations.
+func (processingOutputsFixture) FieldSchema(ref processing.FieldRef) (processing.FieldSchema, error) {
+	if ref.Namespace != "attributes" || len(ref.Path) != 2 || ref.Path[0] != "test" {
+		return processing.FieldSchema{}, authz.ErrInvalidInput
+	}
+	switch ref.Path[1] {
+	case "out":
+		return processing.FieldSchema{Kind: processing.BooleanValue}, nil
+	case "text", "mode":
+		return processing.FieldSchema{Kind: processing.StringValue}, nil
+	}
+	return processing.FieldSchema{}, authz.ErrInvalidInput
+}
+
 func preparedProcessingDefinition(t *testing.T) processing.Definition {
 	t.Helper()
 	flag := processing.FieldRef{Namespace: "source", Path: []string{"flag"}}
@@ -47,9 +65,8 @@ func preparedProcessingDefinition(t *testing.T) processing.Definition {
 		t.Fatal(err)
 	}
 	definition := processing.Definition{SchemaVersion: 1, Selector: processing.Predicate{
-		Op: "eq", Field: &flag, Value: &value}, OutputSchema: map[string]processing.FieldSchema{},
-		Outputs: map[string]processing.Assignment{}}
-	if _, err := processing.CompileWorkflow(t.Context(), definition, processingDeclarationsFixture{}, nil); err != nil {
+		Op: "eq", Field: &flag, Value: &value}, Outputs: map[string]map[string]processing.Assignment{}}
+	if _, err := processing.CompileWorkflow(t.Context(), definition, processingDeclarationsFixture{}, processingOutputsFixture{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	return definition
@@ -74,10 +91,13 @@ func TestProcessingConfigurationNativeUnionBeforeCountPagingAndVersionLookup(t *
 	actor, network1, network2 := uuid.New(), uuid.New(), uuid.New()
 	agency1, agency2 := uuid.New(), uuid.New()
 	admin := processingAuthorityFixture(actor, authz.Scope{Kind: "all"})
-	// Workflow selection scopes name Networks; grants name the Agencies that own them.
-	scopes := []authz.Scope{{Kind: "all"}, {Kind: "network", References: []string{network1.String()}},
-		{Kind: "network", References: []string{network2.String()}},
-		{Kind: "network", References: []string{network1.String(), network2.String()}}}
+	// A Workflow is visible to a reader holding one of its Agencies, so the third is visible to
+	// both readers while only the first and the fourth (narrowed to a Network of Agency 1) are
+	// confined to Agency 1.
+	scopes := []processing.WorkflowScope{{Agencies: []uuid.UUID{agency1}}, {Agencies: []uuid.UUID{agency2}},
+		{Agencies: []uuid.UUID{agency1, agency2}},
+		{Agencies: []uuid.UUID{agency1}, Narrowing: &processing.WorkflowNarrowing{Kind: "network",
+			References: []uuid.UUID{network1}}}}
 	configs := make([]processing.WorkflowConfiguration, len(scopes))
 	versions := make([]processing.Version, len(scopes))
 	definition := preparedProcessingDefinition(t)
@@ -153,11 +173,11 @@ func TestProcessingConfigurationNativeUnionBeforeCountPagingAndVersionLookup(t *
 	first := authz.Scope{Kind: "agency", References: []string{agency1.String()}}
 	second := authz.Scope{Kind: "agency", References: []string{agency2.String()}}
 	agencyOnly := processingAuthorityFixture(actor, first)
-	check(agencyOnly, 1, []uuid.UUID{configs[1].ID})
+	check(agencyOnly, 3, []uuid.UUID{configs[0].ID, configs[2].ID, configs[3].ID})
 	union := processingAuthorityFixture(actor, first, second)
-	check(union, 3, []uuid.UUID{configs[1].ID, configs[2].ID, configs[3].ID})
+	check(union, 4, []uuid.UUID{configs[0].ID, configs[1].ID, configs[2].ID, configs[3].ID})
 	union.Key = &authz.Restrictions{Actions: []string{"workflow.read"}, Scopes: []authz.Scope{first}}
-	check(union, 1, []uuid.UUID{configs[1].ID})
+	check(union, 3, []uuid.UUID{configs[0].ID, configs[2].ID, configs[3].ID})
 }
 
 func TestProcessingConfigurationSaveActivationCASAndAllParticipantsRollback(t *testing.T) {
@@ -178,7 +198,7 @@ func TestProcessingConfigurationSaveActivationCASAndAllParticipantsRollback(t *t
 	actor, commandID := uuid.New(), uuid.New()
 	authority := processingAuthorityFixture(actor, authz.Scope{Kind: "all"})
 	config := processing.WorkflowConfiguration{ID: uuid.New(), Revision: 1, Name: "saved but inactive",
-		Scope: authz.Scope{Kind: "all"}}
+		Scope: seedAgencyScope(t, primary)}
 	definition := preparedProcessingDefinition(t)
 	savedVersion := processing.Version{ID: uuid.New(), WorkflowID: config.ID, Definition: definition, CreatedBy: actor}
 	if err := primary.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
@@ -351,6 +371,7 @@ func TestProcessingSchemaDeferredVersionOwnershipAndPrivacy(t *testing.T) {
 	}
 	actor := uuid.New()
 	authority := processingAuthorityFixture(actor, authz.Scope{Kind: "all"})
+	scope := seedAgencyScope(t, primary)
 	first, second, foreignVersion := uuid.New(), uuid.New(), uuid.New()
 	definition := preparedProcessingDefinition(t)
 	if err := primary.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
@@ -360,7 +381,7 @@ func TestProcessingSchemaDeferredVersionOwnershipAndPrivacy(t *testing.T) {
 		}
 		for _, id := range []uuid.UUID{first, second} {
 			if err := store.SaveWorkflow(tx.Context(), tx, authority, "workflow.create",
-				processing.WorkflowConfiguration{ID: id, Revision: 1, Name: id.String(), Scope: authz.Scope{Kind: "all"}}, 0, now); err != nil {
+				processing.WorkflowConfiguration{ID: id, Revision: 1, Name: id.String(), Scope: scope}, 0, now); err != nil {
 				return err
 			}
 		}

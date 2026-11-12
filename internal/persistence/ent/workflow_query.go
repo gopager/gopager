@@ -15,8 +15,10 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/persistence/ent/agency"
 	"github.com/gopager/gopager/internal/persistence/ent/predicate"
 	"github.com/gopager/gopager/internal/persistence/ent/workflow"
+	"github.com/gopager/gopager/internal/persistence/ent/workflowagency"
 	"github.com/gopager/gopager/internal/persistence/ent/workflowscopereference"
 	"github.com/gopager/gopager/internal/persistence/ent/workflowversion"
 )
@@ -24,13 +26,15 @@ import (
 // WorkflowQuery is the builder for querying Workflow entities.
 type WorkflowQuery struct {
 	config
-	ctx                 *QueryContext
-	order               []workflow.OrderOption
-	inters              []Interceptor
-	predicates          []predicate.Workflow
-	withVersions        *WorkflowVersionQuery
-	withScopeReferences *WorkflowScopeReferenceQuery
-	modifiers           []func(*sql.Selector)
+	ctx                  *QueryContext
+	order                []workflow.OrderOption
+	inters               []Interceptor
+	predicates           []predicate.Workflow
+	withVersions         *WorkflowVersionQuery
+	withScopeReferences  *WorkflowScopeReferenceQuery
+	withAgencies         *AgencyQuery
+	withWorkflowAgencies *WorkflowAgencyQuery
+	modifiers            []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -104,6 +108,50 @@ func (_q *WorkflowQuery) QueryScopeReferences() *WorkflowScopeReferenceQuery {
 			sqlgraph.From(workflow.Table, workflow.FieldID, selector),
 			sqlgraph.To(workflowscopereference.Table, workflowscopereference.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, workflow.ScopeReferencesTable, workflow.ScopeReferencesColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryAgencies chains the current query on the "agencies" edge.
+func (_q *WorkflowQuery) QueryAgencies() *AgencyQuery {
+	query := (&AgencyClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(workflow.Table, workflow.FieldID, selector),
+			sqlgraph.To(agency.Table, agency.FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, false, workflow.AgenciesTable, workflow.AgenciesPrimaryKey...),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryWorkflowAgencies chains the current query on the "workflow_agencies" edge.
+func (_q *WorkflowQuery) QueryWorkflowAgencies() *WorkflowAgencyQuery {
+	query := (&WorkflowAgencyClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(workflow.Table, workflow.FieldID, selector),
+			sqlgraph.To(workflowagency.Table, workflowagency.WorkflowColumn),
+			sqlgraph.Edge(sqlgraph.O2M, true, workflow.WorkflowAgenciesTable, workflow.WorkflowAgenciesColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -298,13 +346,15 @@ func (_q *WorkflowQuery) Clone() *WorkflowQuery {
 		return nil
 	}
 	return &WorkflowQuery{
-		config:              _q.config,
-		ctx:                 _q.ctx.Clone(),
-		order:               append([]workflow.OrderOption{}, _q.order...),
-		inters:              append([]Interceptor{}, _q.inters...),
-		predicates:          append([]predicate.Workflow{}, _q.predicates...),
-		withVersions:        _q.withVersions.Clone(),
-		withScopeReferences: _q.withScopeReferences.Clone(),
+		config:               _q.config,
+		ctx:                  _q.ctx.Clone(),
+		order:                append([]workflow.OrderOption{}, _q.order...),
+		inters:               append([]Interceptor{}, _q.inters...),
+		predicates:           append([]predicate.Workflow{}, _q.predicates...),
+		withVersions:         _q.withVersions.Clone(),
+		withScopeReferences:  _q.withScopeReferences.Clone(),
+		withAgencies:         _q.withAgencies.Clone(),
+		withWorkflowAgencies: _q.withWorkflowAgencies.Clone(),
 		// clone intermediate query.
 		sql:       _q.sql.Clone(),
 		path:      _q.path,
@@ -331,6 +381,28 @@ func (_q *WorkflowQuery) WithScopeReferences(opts ...func(*WorkflowScopeReferenc
 		opt(query)
 	}
 	_q.withScopeReferences = query
+	return _q
+}
+
+// WithAgencies tells the query-builder to eager-load the nodes that are connected to
+// the "agencies" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *WorkflowQuery) WithAgencies(opts ...func(*AgencyQuery)) *WorkflowQuery {
+	query := (&AgencyClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withAgencies = query
+	return _q
+}
+
+// WithWorkflowAgencies tells the query-builder to eager-load the nodes that are connected to
+// the "workflow_agencies" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *WorkflowQuery) WithWorkflowAgencies(opts ...func(*WorkflowAgencyQuery)) *WorkflowQuery {
+	query := (&WorkflowAgencyClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withWorkflowAgencies = query
 	return _q
 }
 
@@ -418,9 +490,11 @@ func (_q *WorkflowQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Wor
 	var (
 		nodes       = []*Workflow{}
 		_spec       = _q.querySpec()
-		loadedTypes = [2]bool{
+		loadedTypes = [4]bool{
 			_q.withVersions != nil,
 			_q.withScopeReferences != nil,
+			_q.withAgencies != nil,
+			_q.withWorkflowAgencies != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -457,6 +531,20 @@ func (_q *WorkflowQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Wor
 			func(n *Workflow, e *WorkflowScopeReference) {
 				n.Edges.ScopeReferences = append(n.Edges.ScopeReferences, e)
 			}); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withAgencies; query != nil {
+		if err := _q.loadAgencies(ctx, query, nodes,
+			func(n *Workflow) { n.Edges.Agencies = []*Agency{} },
+			func(n *Workflow, e *Agency) { n.Edges.Agencies = append(n.Edges.Agencies, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withWorkflowAgencies; query != nil {
+		if err := _q.loadWorkflowAgencies(ctx, query, nodes,
+			func(n *Workflow) { n.Edges.WorkflowAgencies = []*WorkflowAgency{} },
+			func(n *Workflow, e *WorkflowAgency) { n.Edges.WorkflowAgencies = append(n.Edges.WorkflowAgencies, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -518,6 +606,97 @@ func (_q *WorkflowQuery) loadScopeReferences(ctx context.Context, query *Workflo
 		node, ok := nodeids[fk]
 		if !ok {
 			return fmt.Errorf(`unexpected referenced foreign-key "workflow_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *WorkflowQuery) loadAgencies(ctx context.Context, query *AgencyQuery, nodes []*Workflow, init func(*Workflow), assign func(*Workflow, *Agency)) error {
+	edgeIDs := make([]driver.Value, len(nodes))
+	byID := make(map[uuid.UUID]*Workflow)
+	nids := make(map[uuid.UUID]map[*Workflow]struct{})
+	for i, node := range nodes {
+		edgeIDs[i] = node.ID
+		byID[node.ID] = node
+		if init != nil {
+			init(node)
+		}
+	}
+	query.Where(func(s *sql.Selector) {
+		joinT := sql.Table(workflow.AgenciesTable)
+		s.Join(joinT).On(s.C(agency.FieldID), joinT.C(workflow.AgenciesPrimaryKey[1]))
+		s.Where(sql.InValues(joinT.C(workflow.AgenciesPrimaryKey[0]), edgeIDs...))
+		columns := s.SelectedColumns()
+		s.Select(joinT.C(workflow.AgenciesPrimaryKey[0]))
+		s.AppendSelect(columns...)
+		s.SetDistinct(false)
+	})
+	if err := query.prepareQuery(ctx); err != nil {
+		return err
+	}
+	qr := QuerierFunc(func(ctx context.Context, q Query) (Value, error) {
+		return query.sqlAll(ctx, func(_ context.Context, spec *sqlgraph.QuerySpec) {
+			assign := spec.Assign
+			values := spec.ScanValues
+			spec.ScanValues = func(columns []string) ([]any, error) {
+				values, err := values(columns[1:])
+				if err != nil {
+					return nil, err
+				}
+				return append([]any{new(uuid.UUID)}, values...), nil
+			}
+			spec.Assign = func(columns []string, values []any) error {
+				outValue := *values[0].(*uuid.UUID)
+				inValue := *values[1].(*uuid.UUID)
+				if nids[inValue] == nil {
+					nids[inValue] = map[*Workflow]struct{}{byID[outValue]: {}}
+					return assign(columns[1:], values[1:])
+				}
+				nids[inValue][byID[outValue]] = struct{}{}
+				return nil
+			}
+		})
+	})
+	neighbors, err := withInterceptors[[]*Agency](ctx, query, qr, query.inters)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected "agencies" node returned %v`, n.ID)
+		}
+		for kn := range nodes {
+			assign(kn, n)
+		}
+	}
+	return nil
+}
+func (_q *WorkflowQuery) loadWorkflowAgencies(ctx context.Context, query *WorkflowAgencyQuery, nodes []*Workflow, init func(*Workflow), assign func(*Workflow, *WorkflowAgency)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[uuid.UUID]*Workflow)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(workflowagency.FieldWorkflowID)
+	}
+	query.Where(predicate.WorkflowAgency(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(workflow.WorkflowAgenciesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.WorkflowID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "workflow_id" returned %v for node %v`, fk, n)
 		}
 		assign(node, n)
 	}

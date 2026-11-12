@@ -6,11 +6,11 @@ Contribution and documentation rules: [CONTRIBUTING.md](../CONTRIBUTING.md). Run
 
 | Tool | Needed for |
 | --- | --- |
-| Go, version from [go.mod](../go.mod) (`go 1.27.3`) | everything |
+| Go, version from [go.mod](../go.mod) (`go 1.27.4`) | everything |
 | Make | all `make` targets below |
 | Network access | the first run of a tool downloads its pinned module; `make vuln` also queries the vulnerability database |
-| Docker (running daemon, pull access to `postgres:18.0-alpine`) | integration tests, unless an external test database is supplied |
-| Node.js ≥ 22.12 with npm | the commit message hook: run `npm ci` once per clone |
+| Docker (running daemon, pull access to `postgres:18.6-alpine`) | integration tests, unless an external test database is supplied |
+| Node.js ≥ 26.13.1 with npm | the commit message hook: run `npm ci` once per clone |
 
 `npm ci` installs the repository tooling pinned in [package.json](../package.json) and [package-lock.json](../package-lock.json): [commitlint](https://commitlint.js.org/) and [lefthook](https://lefthook.dev/), whose install step registers the git hooks from [lefthook.yml](../lefthook.yml) (it skips that when `CI` is set). The `commit-msg` hook rejects messages that break the [commit message rules](../CONTRIBUTING.md#commit-messages). Git worktrees below the clone, such as `.claude/worktrees/`, share the hooks and find the tooling in the clone's `node_modules`.
 
@@ -38,7 +38,8 @@ One Go module, `github.com/gopager/gopager`.
 | `internal/protocols/` | Protocol and transmission payload validation |
 | `internal/messages/` | Grouping of transmissions into messages |
 | `internal/delivery/` | Subscriptions, Delivery fan-out consumer, materialization, Delivery runner, sending admission, Delivery management, the Core target port and built-in layouts |
-| `internal/processing/presentation/` | Layout definitions with immutable versions and the layout resolver |
+| `internal/processing/presentation/` | Layout definitions with immutable versions, assigned to Agencies, and the layout resolver |
+| `internal/attributes/` | Attribute schemas: model, validation, compatibility rules, service and ports |
 | `internal/readmodel/` | Message feed, detail and filter-option service, filters, page tokens, projections and the ports they need |
 | `internal/commands/` | Administrative command receipts |
 | `internal/events/` | Domain fact types appended to the event store |
@@ -58,7 +59,9 @@ One Go module, `github.com/gopager/gopager`.
 | `internal/persistence/ent/borrowed/` | Ent driver that runs inside an existing platform transaction; hosts most store integration tests |
 | `internal/persistence/ent/*store/` | Repository adapters per domain: `identitystore`, `unitstore`, `assignmentstore`, `ingeststore`, `processingstore`, `eventstore` (sequenced domain event log), `commandstore` |
 | `internal/persistence/ent/deliverystore/` | PostgreSQL implementation of the Delivery store in raw SQL: Subscriptions, Deliveries with fenced claims, attempts, admission windows and Unit parameters |
-| `internal/persistence/ent/layoutstore/` | Layout definitions and versions in raw SQL |
+| `internal/persistence/ent/layoutstore/` | Layout definitions, versions and Agencies in raw SQL |
+| `internal/persistence/ent/attributestore/` | Attribute schemas, Agencies and the catalog revision in raw SQL |
+| `internal/persistence/ent/agencyscope/` | Translation of an `authz.AgencyVisibility` into a SQL condition |
 | `internal/persistence/ent/readstore/` | PostgreSQL implementation of the `readmodel` store in raw SQL: eligibility, filters, text search, keyset paging and the page token key |
 | `internal/testutil/postgres/` | Test PostgreSQL lifecycle (`Run(m)`) |
 | `internal/testutil/pluginfixture/` | Builds plugin fixtures for tests (`Binary(t, name)`) |
@@ -99,11 +102,11 @@ make vuln               # govulncheck ./... (pinned version, needs network)
 
 `make generate-check` compares only the Ent output (`internal/persistence/ent`, not its hand-written `schema/`) with git, so commit or stage regenerated files before expecting it to pass locally; it also fails on generated files that git does not track.
 
-`make vuln` reports no vulnerability reachable from the code (Go 1.27.3, `klauspost/compress` v1.20.2, `moby/go-archive` v0.3.0) and is a required CI check. golangci-lint v1 cannot read Go 1.27 export data, which is why the pin is v2.
+`make vuln` reports no vulnerability in the code (Go 1.27.4, the latest module versions) and is a required CI check. golangci-lint v1 cannot read Go 1.27 export data, which is why the pin is v2.
 
 ### Continuous integration
 
-[.github/workflows/ci.yml](../.github/workflows/ci.yml) runs on pull requests and pushes to `main`. Job `static`: `make fmt-check`, `make vet`, `make golangci`, `make test`, `make generate-check`. Job `integration` (after `static`, 15 minute limit): `make test-race` on the runner's Docker daemon, then it uploads `build/test-reports` (`junit.xml`, `test.json`) as the `test-reports` artifact and appends `make test-slowest` to the job summary, both even when tests fail. Job `image` builds the container image from `deploy/compose/Dockerfile` without pushing it. Job `vulnerabilities` runs `make vuln` as non-blocking information. The Go version comes from `go.mod`.
+[.github/workflows/ci.yml](../.github/workflows/ci.yml) runs on pull requests and pushes to `main`. Job `static`: `make fmt-check`, `make vet`, `make golangci`, `make test`, `make generate-check`, with a rolling build and lint cache (`actions/cache`, saved per run, restored from the newest earlier run; the fixed-key `setup-go` cache is never updated after its first save). The integration tests run in parallel with `static` as three shards on separate runners (`command`: `./cmd/...`, `stores`: `./internal/persistence/ent/borrowed/...`, `other`: every other package; 15 minute limit each): `make test-race PKGS=…` on the runner's Docker daemon with a race-build cache of its own (`actions/cache`, saved per run, restored from the newest earlier run), then each uploads its reports (`junit.xml`, `test.json`) as the `test-reports-<shard>` artifact and appends `make test-slowest` to the job summary, both even when tests fail. Job `integration` (the required check `Integration tests`) passes only when every shard passed. `PKGS` (default `./...`) selects the packages of `make test-integration` and `make test-race` locally too. Job `image` builds the container image from `deploy/compose/Dockerfile` without pushing it. Job `vulnerabilities` runs `make vuln` as non-blocking information. The Go version comes from `go.mod`.
 
 [.github/workflows/commits.yml](../.github/workflows/commits.yml) checks the pull request title with commitlint on every title edit and push, because the title becomes the squash commit header on `main`. It uses [commitlint.pr-title.config.mjs](../commitlint.pr-title.config.mjs), the shared rules without commitlint's default ignores for git-generated messages.
 
@@ -154,7 +157,7 @@ Packages with database tests (their `TestMain` calls `testpostgres.Run`): `cmd/g
 
 ### Parallel tests
 
-Every test runs in parallel. `paralleltest` and `tparallel` (configured in `.golangci.yml`, run by `make`) fail the build otherwise.
+Every test runs in parallel. `paralleltest` and `tparallel` (configured in `.golangci.yml`, run by `make`) fail the build otherwise. Tests do not pay production costs that only make them slow: passwords use the reduced Argon2id cost of `internal/testutil/passwords` (the command tests set it once in `TestMain` through `identityOptions`), and batch sizes and intervals are options of their component (for example `assignments.WithCorrectionBatchSize`) so that a test can exercise multi-batch behaviour with little data.
 
 - A new top-level test calls `t.Parallel()` as its first statement. A subtest calls it too, so it needs its own setup: its own database (`newStore(t)`, `testpostgres.EmptyDatabase(t)`), `t.TempDir()`, server and fixtures. Siblings must not share mutable state or depend on each other's order; a case that mutates shared fixtures gets a fixture of its own.
 - A parent with parallel subtests releases its resources with `t.Cleanup`, never `defer`: a deferred call runs when the parent function returns, before the parallel subtests resume.

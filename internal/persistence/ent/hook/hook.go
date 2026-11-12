@@ -453,6 +453,18 @@ func (f WorkflowFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, er
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.WorkflowMutation", m)
 }
 
+// The WorkflowAgencyFunc type is an adapter to allow the use of ordinary
+// function as WorkflowAgency mutator.
+type WorkflowAgencyFunc func(context.Context, *ent.WorkflowAgencyMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f WorkflowAgencyFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.WorkflowAgencyMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.WorkflowAgencyMutation", m)
+}
+
 // The WorkflowScopeReferenceFunc type is an adapter to allow the use of ordinary
 // function as WorkflowScopeReference mutator.
 type WorkflowScopeReferenceFunc func(context.Context, *ent.WorkflowScopeReferenceMutation) (ent.Value, error)

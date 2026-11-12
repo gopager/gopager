@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/commands"
+	"github.com/gopager/gopager/internal/fields"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/units"
@@ -66,16 +67,18 @@ type SavedViews struct {
 	clock        platform.Clock
 	store        SavedViewStore
 	receipts     commands.Repository
+	registry     FieldRegistry
 }
 
 // NewSavedViews composes the saved view service. It fails with authz.ErrInvalidInput on a
 // missing dependency.
 func NewSavedViews(transactions identity.Transactions, resolver identity.AuthorityResolver, clock platform.Clock,
-	store SavedViewStore, receipts commands.Repository) (*SavedViews, error) {
-	if transactions == nil || resolver == nil || clock == nil || store == nil || receipts == nil {
+	store SavedViewStore, receipts commands.Repository, registry FieldRegistry) (*SavedViews, error) {
+	if transactions == nil || resolver == nil || clock == nil || store == nil || receipts == nil || registry == nil {
 		return nil, authz.ErrInvalidInput
 	}
-	return &SavedViews{transactions: transactions, resolver: resolver, clock: clock, store: store, receipts: receipts}, nil
+	return &SavedViews{transactions: transactions, resolver: resolver, clock: clock, store: store, receipts: receipts,
+		registry: registry}, nil
 }
 
 // actor is what a saved view operation needs to know about its caller.
@@ -87,6 +90,8 @@ type actor struct {
 	// manager may manage global views.
 	manager bool
 	groups  map[string]bool
+	// registry is the field registry predicates are checked against.
+	registry *fields.Registry
 }
 
 func (a actor) can(group string) bool { return a.groups[group] }
@@ -116,6 +121,16 @@ func (s *SavedViews) within(ctx context.Context, proof identity.Proof, mutation 
 			}
 			if mutation && who.guest {
 				return identity.ErrLoginRequired
+			}
+			if mutation {
+				// Locked before the registry is read, so a concurrent schema deletion cannot
+				// pass its reference check before this write commits.
+				if err := s.registry.LockCatalog(tx.Context(), tx); err != nil {
+					return err
+				}
+			}
+			if who.registry, err = s.registry.Registry(tx.Context(), tx); err != nil {
+				return err
 			}
 			return operation(tx, who, now)
 		})
@@ -178,9 +193,15 @@ func (a actor) writable(record SavedViewRecord) error {
 	return authz.ErrNotFound
 }
 
-// requireAuthorGroups rejects filters that need a field group the author cannot read.
+// requireAuthorGroups compiles the predicate of new filters strictly, so that unknown and
+// deprecated fields are authz.ErrInvalidInput, and rejects filters that need a field group the
+// author cannot read with authz.ErrForbidden.
 func (a actor) requireAuthorGroups(filters Filters) error {
-	for _, group := range filters.RequiredFieldGroups() {
+	selection, err := CompileSelection(a.registry, filters.Filter, true)
+	if err != nil {
+		return err
+	}
+	for _, group := range filters.RequiredFieldGroups(selection) {
 		if !a.can(group) {
 			return authz.ErrForbidden
 		}
@@ -188,14 +209,19 @@ func (a actor) requireAuthorGroups(filters Filters) error {
 	return nil
 }
 
-// view builds the response of a stored view for this caller.
+// view builds the response of a stored view for this caller. A stored predicate that the
+// registry no longer accepts does not hide the view: its filter dimension is unavailable. The
+// predicate is compiled as running the view does, strictly, so that a field deprecated since
+// saving makes the filter unavailable instead of failing only when the view is run.
 func (a actor) view(record SavedViewRecord) (SavedView, error) {
 	definition, err := ParseDefinition(record.Definition)
 	if err != nil {
 		return SavedView{}, platform.NewFailure(platform.CodeInternalError, err)
 	}
+	filters := definition.FeedFilters()
+	selection, _ := CompileSelection(a.registry, filters.Filter, true)
 	return SavedView{ID: record.ID, Revision: record.Revision, Ownership: record.Ownership, Name: record.Name,
-		Definition: definition, UnavailableFilters: definition.FeedFilters().UnavailableDimensions(a.can),
+		Definition: definition, UnavailableFilters: filters.UnavailableDimensions(a.can, selection),
 		CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}, nil
 }
 

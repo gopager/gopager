@@ -13,6 +13,8 @@ GOTESTSUM := go tool gotestsum
 # Test reports (JUnit XML and the go test JSON stream) written by test-integration and
 # test-race, and read by test-slowest. STRESS_COUNT is the number of runs of test-stress.
 TEST_REPORT_DIR ?= build/test-reports
+# PKGS selects the packages of test-integration and test-race; CI splits them into shards.
+PKGS ?= ./...
 STRESS_COUNT ?= 5
 SLOWEST_THRESHOLD ?= 1s
 
@@ -58,14 +60,14 @@ test-integration:
 	mkdir -p $(TEST_REPORT_DIR)
 	GOPAGER_INTEGRATION=1 $(GOTESTSUM) --format pkgname \
 		--junitfile $(TEST_REPORT_DIR)/junit.xml --jsonfile $(TEST_REPORT_DIR)/test.json \
-		-- -count=1 -shuffle=on -timeout=10m ./...
+		-- -count=1 -shuffle=on -timeout=10m $(PKGS)
 
 # test-race is test-integration with the race detector. CI runs this target.
 test-race:
 	mkdir -p $(TEST_REPORT_DIR)
 	GOPAGER_INTEGRATION=1 $(GOTESTSUM) --format pkgname \
 		--junitfile $(TEST_REPORT_DIR)/junit.xml --jsonfile $(TEST_REPORT_DIR)/test.json \
-		-- -race -count=1 -shuffle=on -timeout=10m ./...
+		-- -race -count=1 -shuffle=on -timeout=10m $(PKGS)
 
 # test-slowest lists the tests slower than SLOWEST_THRESHOLD from the last test-integration
 # or test-race run.

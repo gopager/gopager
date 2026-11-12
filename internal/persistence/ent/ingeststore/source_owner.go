@@ -11,11 +11,14 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/assignments"
+	"github.com/gopager/gopager/internal/attributes"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/events"
+	"github.com/gopager/gopager/internal/persistence/ent/attributestore"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
 	"github.com/gopager/gopager/internal/processing"
+	"github.com/gopager/gopager/internal/processing/declarations"
 	processingmanagement "github.com/gopager/gopager/internal/processing/management"
 	"github.com/gopager/gopager/internal/processing/publication"
 	"github.com/gopager/gopager/internal/processing/worker"
@@ -41,6 +44,8 @@ type ProcessingSourceOwner struct {
 	executions  *processing.InstanceExecutions
 	principals  processing.ExecutionPrincipalResolver
 	publication *publication.Service
+	// registries yields the field registry of the catalog visible in a transaction.
+	registries *attributes.RegistrySource
 }
 
 type sourceSnapshot struct {
@@ -68,7 +73,8 @@ type selectedWorkflow struct {
 	id       uuid.UUID
 	version  uuid.UUID
 	revision int64
-	scope    string
+	// narrowing is the Workflow's narrowing kind, empty without narrowing.
+	narrowing string
 }
 
 type sourceCandidate struct {
@@ -88,7 +94,15 @@ func NewProcessingSourceOwner(store *Store, matcher *assignments.Service, reposi
 		artifacts == nil || executions == nil || principals == nil {
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing Processing source owner dependency"))
 	}
-	owner := &ProcessingSourceOwner{store: store, matcher: matcher, repository: repository,
+	catalog, err := attributestore.New(store.primary)
+	if err != nil {
+		return nil, err
+	}
+	registries, err := attributes.NewRegistrySource(catalog)
+	if err != nil {
+		return nil, err
+	}
+	owner := &ProcessingSourceOwner{registries: registries, store: store, matcher: matcher, repository: repository,
 		facts: facts, clock: clock, artifacts: artifacts, executions: executions, principals: principals}
 	publisher, err := publication.New(repository, owner, facts, clock)
 	if err != nil {
@@ -140,6 +154,10 @@ func (o *ProcessingSourceOwner) CaptureCandidate(ctx context.Context, tx platfor
 	if err != nil {
 		return worker.Capture{}, err
 	}
+	registry, err := o.registries.Registry(ctx, tx)
+	if err != nil {
+		return worker.Capture{}, err
+	}
 	scope, err := o.evaluationScope(ctx, tx, *selected, snapshot)
 	if err != nil {
 		return worker.Capture{}, err
@@ -149,7 +167,8 @@ func (o *ProcessingSourceOwner) CaptureCandidate(ctx context.Context, tx platfor
 	if err != nil {
 		return worker.Capture{}, err
 	}
-	return worker.Capture{Definition: definition, Source: snapshot.captured, Scope: scope,
+	return worker.Capture{Definition: definition, Source: snapshot.captured,
+		Outputs: declarations.For(registry, false).Outputs, Scope: scope,
 		Artifacts: o.artifacts, Invocations: run, Release: func() error {
 			return run.Close(context.Background())
 		}}, nil
@@ -667,38 +686,7 @@ func (o *ProcessingSourceOwner) selectWorkflows(ctx context.Context, tx platform
 	if err != nil {
 		return nil, err
 	}
-	rows, err := executor.QueryContext(ctx, `SELECT w.id,w.active_version_id::text,w.revision,w.scope_kind
-		FROM processing_workflows w
-		WHERE w.enabled=true AND w.deleted=false AND w.active_version_id IS NOT NULL AND (
-			w.scope_kind='all' OR
-			(w.scope_kind='network' AND EXISTS (
-				SELECT 1 FROM processing_workflow_scope_references r
-				WHERE r.workflow_id=w.id AND r.network_id=$1
-			)) OR
-			(w.scope_kind='unit' AND EXISTS (
-				SELECT 1 FROM processing_workflow_scope_references r
-				WHERE r.workflow_id=w.id AND r.unit_id=ANY($2::uuid[])
-			))
-		)
-		ORDER BY w.id FOR SHARE OF w`, snapshot.network, unitIDs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var workflows []selectedWorkflow
-	for rows.Next() {
-		var workflow selectedWorkflow
-		var version string
-		if err := rows.Scan(&workflow.id, &version, &workflow.revision, &workflow.scope); err != nil {
-			return nil, err
-		}
-		workflow.version, err = uuid.Parse(version)
-		if err != nil || workflow.version == uuid.Nil || workflow.revision <= 0 {
-			return nil, platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("invalid active Workflow reference"))
-		}
-		workflows = append(workflows, workflow)
-	}
-	return workflows, rows.Err()
+	return selectWorkflows(ctx, executor, snapshot.network, unitIDs)
 }
 
 func (o *ProcessingSourceOwner) readDefinition(ctx context.Context, tx platform.TransactionContext,
@@ -726,7 +714,7 @@ func (o *ProcessingSourceOwner) readDefinition(ctx context.Context, tx platform.
 func (o *ProcessingSourceOwner) evaluationScope(ctx context.Context, tx platform.TransactionContext,
 	workflow selectedWorkflow, snapshot sourceSnapshot,
 ) (processing.EvaluationScope, error) {
-	if workflow.scope != "unit" {
+	if workflow.narrowing != "unit" {
 		positions := make([]uint32, 0, len(snapshot.targets))
 		for i := range snapshot.targets {
 			if !snapshot.suppressed[i] {

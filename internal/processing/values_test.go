@@ -112,3 +112,35 @@ func TestValueCollectionsAndJSONBounds(t *testing.T) {
 		t.Fatal("invalid UTF-8 was silently replaced")
 	}
 }
+
+func TestTimestampValuesStartAtYearOne(t *testing.T) {
+	t.Parallel()
+	schema := processing.FieldSchema{Kind: processing.TimestampValue}
+	for _, text := range []string{`"0001-01-01T00:00:00Z"`, `"0001-01-01T01:00:00+01:00"`, `"9999-12-31T23:59:59.999999999Z"`,
+		`"2026-01-01T12:00:00+15:59"`, `"2026-01-01T12:00:00-15:59"`} {
+		if _, err := (processing.Value{Kind: processing.TimestampValue, Value: json.RawMessage(text)}).Native(schema); err != nil {
+			t.Errorf("%s: %v", text, err)
+		}
+	}
+	for _, text := range []string{`"0000-01-01T00:00:00Z"`, `"0001-01-01T00:00:00+01:00"`, `"0000-12-31T23:00:00-01:00"`,
+		`"2026-01-01T12:00:00+16:00"`, `"2026-01-01T12:00:00-16:00"`, `"2026-01-01T12:00:00+23:59"`} {
+		if _, err := (processing.Value{Kind: processing.TimestampValue, Value: json.RawMessage(text)}).Native(schema); platform.FailureCode(err) != platform.CodeInvalidInput {
+			t.Errorf("%s: %v, want INVALID_INPUT", text, err)
+		}
+	}
+}
+
+func TestNumberValuesRejectUnderflow(t *testing.T) {
+	t.Parallel()
+	schema := processing.FieldSchema{Kind: processing.NumberValue}
+	for _, text := range []string{`0`, `-0.0`, `0e-400`, `2.5`, `1e-310`, `1e308`} {
+		if _, err := (processing.Value{Kind: processing.NumberValue, Value: json.RawMessage(text)}).Native(schema); err != nil {
+			t.Errorf("%s: %v", text, err)
+		}
+	}
+	for _, text := range []string{`1e-400`, `-5e-999`, `0.0001e-330`} {
+		if _, err := (processing.Value{Kind: processing.NumberValue, Value: json.RawMessage(text)}).Native(schema); platform.FailureCode(err) != platform.CodeInvalidInput {
+			t.Errorf("%s: %v, want INVALID_INPUT", text, err)
+		}
+	}
+}

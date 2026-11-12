@@ -57,7 +57,7 @@ func selectedDefinition() Definition {
 	flag := FieldRef{"source", []string{"flag"}}
 	yes := Value{BooleanValue, json.RawMessage(`true`)}
 	return Definition{SchemaVersion: 1, Selector: Predicate{Op: "eq", Field: &flag, Value: &yes},
-		OutputSchema: map[string]FieldSchema{}, Outputs: map[string]Assignment{}}
+		Outputs: map[string]map[string]Assignment{}}
 }
 
 func TestWorkflowScopedEvaluationSkipsExcludedContextsWithoutRenumbering(t *testing.T) {
@@ -76,16 +76,15 @@ func TestWorkflowScopedEvaluationSkipsExcludedContextsWithoutRenumbering(t *test
 		t.Fatal(err)
 	}
 	definition.Selector = Predicate{Op: "eq", Field: &address, Value: &match}
-	definition.OutputSchema["address"] = FieldSchema{Kind: StringValue, Optional: true}
-	definition.Outputs["address"] = Assignment{Field: &address}
-	program, err := CompileWorkflow(t.Context(), definition, source, nil)
+	setOutput(&definition, "address", Assignment{Field: &address})
+	program, err := CompileWorkflow(t.Context(), definition, source, testOutputs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	scope := EvaluationScope{SourceEligible: true, TargetPositions: []uint32{1}}
 	result, err := program.EvaluateScoped(t.Context(), source, scope, nil)
 	if err != nil || !result.Selected || len(result.TargetResults) != 1 ||
-		result.TargetResults[0].TargetPosition != 1 || string(result.TargetResults[0].Fields["address"].Value.Value) != `"222"` {
+		result.TargetResults[0].TargetPosition != 1 || string(result.TargetResults[0].Fields["t"]["address"].Value.Value) != `"222"` {
 		t.Fatalf("excluded context was evaluated or original position renumbered: %+v %v", result, err)
 	}
 	dependencies, err := result.Dependencies()
@@ -117,7 +116,7 @@ func TestWorkflowCheckedDefinitionReturnsDetachedPreparedData(t *testing.T) {
 	t.Parallel()
 	_, source := sourceFixture(t)
 	definition := selectedDefinition()
-	program, err := CompileWorkflow(t.Context(), definition, source, nil)
+	program, err := CompileWorkflow(t.Context(), definition, source, testOutputs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,9 +125,9 @@ func TestWorkflowCheckedDefinitionReturnsDetachedPreparedData(t *testing.T) {
 		t.Fatal(err)
 	}
 	checked.Selector.Field.Path[0] = "not-a-field"
-	checked.OutputSchema["injected"] = FieldSchema{Kind: StringValue}
+	checked.Outputs = map[string]map[string]Assignment{"injected": nil}
 	again, err := program.CheckedDefinition()
-	if err != nil || again.Selector.Field.Path[0] != "flag" || len(again.OutputSchema) != 0 {
+	if err != nil || again.Selector.Field.Path[0] != "flag" || len(again.Outputs) != 0 {
 		t.Fatalf("checked definition exposed mutable prepared state: %+v %v", again, err)
 	}
 	result, err := program.Evaluate(t.Context(), source)
@@ -142,9 +141,8 @@ func TestWorkflowTargetResultsAndSourceOnlyCardinality(t *testing.T) {
 	_, source := sourceFixture(t, "111", "222")
 	definition := selectedDefinition()
 	ref := FieldRef{"target", []string{"address"}}
-	definition.OutputSchema["address"] = FieldSchema{Kind: StringValue, Optional: true}
-	definition.Outputs["address"] = Assignment{Field: &ref}
-	program, err := CompileWorkflow(context.Background(), definition, source, nil)
+	setOutput(&definition, "address", Assignment{Field: &ref})
+	program, err := CompileWorkflow(context.Background(), definition, source, testOutputs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,16 +151,16 @@ func TestWorkflowTargetResultsAndSourceOnlyCardinality(t *testing.T) {
 		t.Fatalf("bad target result cardinality: %+v, %v", result, err)
 	}
 	for i, target := range result.TargetResults {
-		if target.TargetPosition != uint32(i) || string(target.Fields["address"].Value.Value) != []string{`"111"`, `"222"`}[i] {
+		if target.TargetPosition != uint32(i) || string(target.Fields["t"]["address"].Value.Value) != []string{`"111"`, `"222"`}[i] {
 			t.Fatalf("target correlation lost: %+v", target)
 		}
 	}
-	result.TargetResults[0].Fields["address"].Value.Value[1] = '9'
+	result.TargetResults[0].Fields["t"]["address"].Value.Value[1] = '9'
 	again, err := program.Evaluate(context.Background(), source)
-	if err != nil || string(again.TargetResults[0].Fields["address"].Value.Value) != `"111"` {
+	if err != nil || string(again.TargetResults[0].Fields["t"]["address"].Value.Value) != `"111"` {
 		t.Fatalf("result mutated captured source: %+v, %v", again, err)
 	}
-	program, err = CompileWorkflow(context.Background(), selectedDefinition(), source, nil)
+	program, err = CompileWorkflow(context.Background(), selectedDefinition(), source, testOutputs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,16 +179,15 @@ func TestTargetSelectionDependencyUnionAndNoPartialSuccess(t *testing.T) {
 	literal := Value{StringValue, json.RawMessage(`"111"`)}
 	definition := selectedDefinition()
 	definition.Selector = Predicate{Op: "eq", Field: &ref, Value: &literal}
-	definition.OutputSchema["constant"] = FieldSchema{Kind: StringValue}
-	definition.Outputs["constant"] = Assignment{Literal: &literal}
-	program, err := CompileWorkflow(context.Background(), definition, source, nil)
+	setOutput(&definition, "constant", Assignment{Literal: &literal})
+	program, err := CompileWorkflow(context.Background(), definition, source, testOutputs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	result, err := program.Evaluate(context.Background(), source)
 	dependencies, dependencyErr := result.Dependencies()
 	if err != nil || dependencyErr != nil || len(result.TargetResults) != 1 || result.TargetResults[0].TargetPosition != 0 ||
-		len(result.TargetResults[0].Fields["constant"].Dependencies) != 0 || len(dependencies) != 2 {
+		len(result.TargetResults[0].Fields["t"]["constant"].Dependencies) != 0 || len(dependencies) != 2 {
 		t.Fatalf("selection context dependencies were lost: %+v, %v, %v", result, err, dependencyErr)
 	}
 	projection.Targets[1].Fields[0].Field.State = FieldAbsent
@@ -204,8 +201,7 @@ func TestTargetSelectionDependencyUnionAndNoPartialSuccess(t *testing.T) {
 		t.Fatalf("absent second context changed the selection: %+v, %v", result, err)
 	}
 	definition = selectedDefinition()
-	definition.OutputSchema["number"] = FieldSchema{Kind: IntegerValue}
-	definition.Outputs["number"] = Assignment{Field: &ref, Conversion: IntegerValue}
+	setOutput(&definition, "number", Assignment{Field: &ref, Conversion: IntegerValue})
 	projection.Targets[1].Fields[0].Field = FieldValue{State: FieldPresent,
 		Value:        &Value{StringValue, json.RawMessage(`"secret-not-numeric"`)},
 		Dependencies: projection.Targets[0].Fields[0].Field.Dependencies}
@@ -216,7 +212,7 @@ func TestTargetSelectionDependencyUnionAndNoPartialSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	program, err = CompileWorkflow(context.Background(), definition, source, nil)
+	program, err = CompileWorkflow(context.Background(), definition, source, testOutputs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,14 +227,13 @@ func TestWorkflowTargetlessAndUnusedBranchStaticDependence(t *testing.T) {
 	_, source := sourceFixture(t)
 	ref := FieldRef{"target", []string{"address"}}
 	definition := selectedDefinition()
-	definition.OutputSchema["address"] = FieldSchema{Kind: StringValue, Optional: true}
-	definition.Outputs["address"] = Assignment{Field: &ref}
-	program, err := CompileWorkflow(context.Background(), definition, source, nil)
+	setOutput(&definition, "address", Assignment{Field: &ref})
+	program, err := CompileWorkflow(context.Background(), definition, source, testOutputs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	result, err := program.Evaluate(context.Background(), source)
-	if err != nil || !result.Selected || result.TargetResults != nil || result.Fields["address"].State != FieldAbsent {
+	if err != nil || !result.Selected || result.TargetResults != nil || len(result.Fields) != 0 {
 		t.Fatalf("targetless evaluation fabricated a target: %+v, %v", result, err)
 	}
 	_, source = sourceFixture(t, "111", "222")
@@ -250,7 +245,7 @@ func TestWorkflowTargetlessAndUnusedBranchStaticDependence(t *testing.T) {
 			ThenOutputs: map[string]Assignment{}, ElseOutputs: map[string]Assignment{},
 			Else: []Step{{ID: "unused", Kind: "map", OutputSchema: map[string]FieldSchema{"address": {Kind: StringValue}},
 				Map: map[string]Assignment{"address": {Field: &ref}}}}}}}
-	program, err = CompileWorkflow(context.Background(), definition, source, nil)
+	program, err = CompileWorkflow(context.Background(), definition, source, testOutputs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,9 +273,8 @@ func TestWorkflowExtractionBranchMappingAndParallelReuse(t *testing.T) {
 				ThenOutputs: map[string]Assignment{"level": {Field: &extracted}},
 				ElseOutputs: map[string]Assignment{"level": {Literal: &seven}}}},
 	}
-	definition.OutputSchema["level"] = FieldSchema{Kind: IntegerValue}
-	definition.Outputs["level"] = Assignment{Field: &chosen}
-	program, err := CompileWorkflow(ctx, definition, source, CoreRegex{})
+	setOutput(&definition, "level", Assignment{Field: &chosen})
+	program, err := CompileWorkflow(ctx, definition, source, testOutputs, CoreRegex{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,8 +282,8 @@ func TestWorkflowExtractionBranchMappingAndParallelReuse(t *testing.T) {
 	for range 4 {
 		workers.Go(func() {
 			result, err := program.Evaluate(ctx, source)
-			if err != nil || result.Fields["level"].Value == nil || string(result.Fields["level"].Value.Value) != `"7"` ||
-				len(result.Fields["level"].Dependencies) != 0 {
+			if err != nil || result.Fields["t"]["level"].Value == nil || string(result.Fields["t"]["level"].Value.Value) != `"7"` ||
+				len(result.Fields["t"]["level"].Dependencies) != 0 {
 				t.Errorf("extract/branch result: %+v, %v", result, err)
 			}
 		})
@@ -297,10 +291,9 @@ func TestWorkflowExtractionBranchMappingAndParallelReuse(t *testing.T) {
 	workers.Wait()
 	for _, invalidDefinition := range []Definition{
 		{SchemaVersion: 1, Selector: definition.Selector, Steps: []Step{definition.Steps[0], definition.Steps[0]}},
-		{SchemaVersion: 1, Selector: definition.Selector, Outputs: map[string]Assignment{"bad": {Field: &chosen}},
-			OutputSchema: map[string]FieldSchema{"bad": {Kind: IntegerValue}}},
+		{SchemaVersion: 1, Selector: definition.Selector, Outputs: map[string]map[string]Assignment{testOutputSchemaKey: {"bad": {Field: &chosen}}}},
 	} {
-		if _, err := CompileWorkflow(ctx, invalidDefinition, source, CoreRegex{}); err == nil {
+		if _, err := CompileWorkflow(ctx, invalidDefinition, source, testOutputs, CoreRegex{}); err == nil {
 			t.Fatal("duplicate/forward step reference accepted")
 		}
 	}
@@ -310,7 +303,7 @@ func TestSourceCaptureRejectsForeignAndMutableContext(t *testing.T) {
 	t.Parallel()
 	projection, captured := sourceFixture(t, "111")
 	projection.Fields[0].Field.Value.Value = json.RawMessage(`false`)
-	program, err := CompileWorkflow(context.Background(), selectedDefinition(), captured, nil)
+	program, err := CompileWorkflow(context.Background(), selectedDefinition(), captured, testOutputs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

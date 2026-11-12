@@ -4,10 +4,11 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/gopager/gopager/internal/authz"
+	"github.com/gopager/gopager/internal/attributes"
 	"github.com/gopager/gopager/internal/persistence/ent/processingstore"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
+	"github.com/gopager/gopager/internal/testutil/attributeschemas"
 )
 
 // TestProcessingActivationValidatesReferencesForTheActivator expects a retained version to be
@@ -20,7 +21,7 @@ func TestProcessingActivationValidatesReferencesForTheActivator(t *testing.T) {
 	f := newMatcherFixture(t)
 	service, _ := newProcessingManagementFixture(t, f, &processingPreparationFixture{}, f.facts)
 	created, err := service.CreateWorkflow(t.Context(), f.proof, uuid.New(),
-		processingMetadataFixture("activation", authz.Scope{Kind: "all"}), checkedMutation)
+		processingMetadataFixture("activation", f.agencyScope()), checkedMutation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,10 +29,10 @@ func TestProcessingActivationValidatesReferencesForTheActivator(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	attributeschemas.Insert(t, f.store, "test", map[string]attributes.Field{"out": {Kind: processing.StringValue}})
 	definition := preparedProcessingDefinition(t)
 	secret := processing.FieldRef{Namespace: "source", Path: []string{"secret"}}
-	definition.OutputSchema = map[string]processing.FieldSchema{"out": {Kind: processing.BooleanValue}}
-	definition.Outputs = map[string]processing.Assignment{"out": {Field: &secret}}
+	definition.Outputs = map[string]map[string]processing.Assignment{"test": {"out": {Field: &secret}}}
 	retained := uuid.New()
 	if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		if _, err := store.LockRevision(tx.Context(), tx); err != nil {

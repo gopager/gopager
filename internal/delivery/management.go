@@ -248,6 +248,9 @@ func (d *Deliveries) prepareRedelivery(ctx context.Context, tx platform.Transact
 	if subscription.State != StateActive {
 		return DeliveryRecord{}, authz.ErrRevisionConflict
 	}
+	if subscription.Health == HealthInvalid {
+		return DeliveryRecord{}, &DependencyError{Dependency: "subscription"}
+	}
 	target, ok := subscriptionTarget(subscription, original.TargetInstanceID)
 	if !ok {
 		return DeliveryRecord{}, &DependencyError{Dependency: "subscription"}
@@ -282,8 +285,14 @@ func (d *Deliveries) prepareRedelivery(ctx context.Context, tx platform.Transact
 	if !expires.After(now) {
 		return DeliveryRecord{}, &DependencyError{Dependency: "input-ceiling"}
 	}
-	fields := newFieldSet(ctx, tx, d.deps.Results)
-	rendered, err := render(ctx, tx, d.deps, subscription, target, current.view(part, fields))
+	check, reason, err := healthCheck(ctx, tx, d.deps, subscription, current.groups)
+	if err != nil {
+		return DeliveryRecord{}, err
+	}
+	if reason != "" {
+		return DeliveryRecord{}, &DependencyError{Dependency: "subscription"}
+	}
+	rendered, err := render(ctx, tx, d.deps, subscription, target, current.view(part, check.declarations))
 	if err != nil {
 		return DeliveryRecord{}, err
 	}

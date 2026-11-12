@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/icons"
 	"github.com/gopager/gopager/internal/platform"
 )
 
@@ -64,7 +65,8 @@ type Layout struct {
 // of the other properties are allowed; any property not belonging to the kind is rejected.
 //
 //   - text: Text.
-//   - field, chip: Field and optional Label.
+//   - field, chip: Field, optional Label and optional Icon. A missing label or icon is taken
+//     from the field's declaration when the declarations provide FieldPresentation.
 //   - link: Label and URL.
 //   - section: optional Title and Blocks.
 //   - conditional: When, Then and optional Else.
@@ -74,6 +76,7 @@ type LayoutBlock struct {
 	Text   string        `json:"text,omitempty"`
 	Field  *FieldRef     `json:"field,omitempty"`
 	Label  string        `json:"label,omitempty"`
+	Icon   string        `json:"icon,omitempty"`
 	Title  string        `json:"title,omitempty"`
 	URL    *LayoutURL    `json:"url,omitempty"`
 	When   *Predicate    `json:"when,omitempty"`
@@ -139,6 +142,7 @@ const (
 	propBlocks
 	propThen
 	propElse
+	propIcon
 )
 
 func (b LayoutBlock) properties() property {
@@ -150,6 +154,7 @@ func (b LayoutBlock) properties() property {
 		{b.Text != "", propText}, {b.Field != nil, propField}, {b.Label != "", propLabel},
 		{b.Title != "", propTitle}, {b.URL != nil, propURL}, {b.When != nil, propWhen},
 		{b.Blocks != nil, propBlocks}, {b.Then != nil, propThen}, {b.Else != nil, propElse},
+		{b.Icon != "", propIcon},
 	} {
 		if item.present {
 			set |= item.bit
@@ -208,7 +213,7 @@ func (b LayoutBlock) validate(depth int, count *int) error {
 	case blockText:
 		allowed = propText
 	case blockField, blockChip:
-		allowed = propField | propLabel
+		allowed = propField | propLabel | propIcon
 	case blockLink:
 		allowed = propLabel | propURL
 	case blockSection:
@@ -228,6 +233,9 @@ func (b LayoutBlock) validate(depth int, count *int) error {
 	}
 	if err := checkLayoutText(b.Title, maxLayoutLabelBytes, false); err != nil {
 		return err
+	}
+	if b.Icon != "" && !icons.Valid(b.Icon) {
+		return invalid(errors.New("invalid layout icon"))
 	}
 	switch b.Kind {
 	case blockText:
@@ -330,6 +338,7 @@ type layoutNode struct {
 	kind      string
 	text      string
 	label     string
+	icon      string
 	title     string
 	field     FieldRef
 	schema    FieldSchema
@@ -402,6 +411,29 @@ func (c *layoutCompiler) schema(ref FieldRef) (FieldSchema, error) {
 	return cloneSchema(schema), nil
 }
 
+// presentation returns the label and icon of a field block: the block's own, else the
+// declaration's.
+func (c *layoutCompiler) presentation(ref FieldRef, label, icon string) (string, string) {
+	if label != "" && icon != "" {
+		return label, icon
+	}
+	source, ok := c.declarations.(FieldPresentation)
+	if !ok {
+		return label, icon
+	}
+	declaredLabel, declaredIcon, ok := source.FieldPresentation(ref)
+	if !ok {
+		return label, icon
+	}
+	if label == "" {
+		label = declaredLabel
+	}
+	if icon == "" {
+		icon = declaredIcon
+	}
+	return label, icon
+}
+
 func (c *layoutCompiler) compile(blocks []LayoutBlock) ([]layoutNode, error) {
 	nodes := make([]layoutNode, 0, len(blocks))
 	for _, block := range blocks {
@@ -410,7 +442,9 @@ func (c *layoutCompiler) compile(blocks []LayoutBlock) ([]layoutNode, error) {
 		switch block.Kind {
 		case blockField, blockChip:
 			node.field = *block.Field
-			node.schema, err = c.schema(*block.Field)
+			if node.schema, err = c.schema(*block.Field); err == nil {
+				node.label, node.icon = c.presentation(*block.Field, block.Label, block.Icon)
+			}
 		case blockLink:
 			node.url = splitTemplate(block.URL.Template)
 			node.urlField = block.URL.Fields

@@ -48,13 +48,12 @@ func referencingDefinition(t *testing.T, ref processing.FieldRef) *processing.Wo
 		t.Fatal(err)
 	}
 	definition := processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "eq", Field: &processing.FieldRef{Namespace: "source", Path: []string{"flag"}}, Value: &value},
-		OutputSchema: map[string]processing.FieldSchema{"out": {Kind: processing.BooleanValue}},
-		Outputs:      map[string]processing.Assignment{"out": {Field: &ref}}}
+		Selector: processing.Predicate{Op: "eq", Field: &processing.FieldRef{Namespace: "source", Path: []string{"flag"}}, Value: &value},
+		Outputs:  map[string]map[string]processing.Assignment{"alerts": {"out": {Field: &ref}}}}
 	program, err := processing.CompileWorkflow(context.Background(), definition, groupedDeclarations{preparationDeclarations{
 		"source\x00flag":   {Kind: processing.BooleanValue},
 		"source\x00secret": {Kind: processing.BooleanValue},
-	}}, nil)
+	}}, preparationDeclarations{"attributes\x00alerts\x00out": {Kind: processing.BooleanValue}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

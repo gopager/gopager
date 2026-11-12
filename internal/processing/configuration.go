@@ -3,7 +3,6 @@ package processing
 import (
 	"context"
 	"errors"
-	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -15,42 +14,22 @@ import (
 
 // WorkflowConfiguration is revisioned metadata, separate from saved immutable definitions.
 type WorkflowConfiguration struct {
-	ID              uuid.UUID   `json:"id"`
-	Revision        int64       `json:"revision,string"`
-	Name            string      `json:"name"`
-	Scope           authz.Scope `json:"scope"`
-	Enabled         bool        `json:"enabled"`
-	ActiveVersionID *uuid.UUID  `json:"activeVersionId,omitempty"`
-	CreatedAt       time.Time   `json:"createdAt"`
-	UpdatedAt       time.Time   `json:"updatedAt"`
-	Deleted         bool        `json:"-"`
-}
-
-// validWorkflowScope accepts the Workflow selection scopes all, network and unit: a technical
-// selection by Radio network or Unit, independent of the grant scope kinds of authz.
-func validWorkflowScope(scope authz.Scope) bool {
-	if !slices.Contains([]string{"all", "network", "unit"}, scope.Kind) {
-		return false
-	}
-	if scope.Kind == "all" {
-		return len(scope.References) == 0
-	}
-	if len(scope.References) == 0 || len(scope.References) > 1024 {
-		return false
-	}
-	for _, reference := range scope.References {
-		if id, err := uuid.Parse(reference); err != nil || id == uuid.Nil {
-			return false
-		}
-	}
-	return true
+	ID              uuid.UUID     `json:"id"`
+	Revision        int64         `json:"revision,string"`
+	Name            string        `json:"name"`
+	Scope           WorkflowScope `json:"scope"`
+	Enabled         bool          `json:"enabled"`
+	ActiveVersionID *uuid.UUID    `json:"activeVersionId,omitempty"`
+	CreatedAt       time.Time     `json:"createdAt"`
+	UpdatedAt       time.Time     `json:"updatedAt"`
+	Deleted         bool          `json:"-"`
 }
 
 // Validate checks metadata without inventing scope/enable defaults or coercing operator names.
 func (w WorkflowConfiguration) Validate() error {
 	if w.ID == uuid.Nil || w.Revision <= 0 || !utf8.ValidString(w.Name) ||
 		strings.TrimSpace(w.Name) == "" || strings.ContainsRune(w.Name, '\x00') ||
-		!validWorkflowScope(w.Scope) ||
+		w.Scope.Validate() != nil ||
 		(w.ActiveVersionID != nil && *w.ActiveVersionID == uuid.Nil) ||
 		(w.Deleted && (w.Enabled || w.ActiveVersionID != nil)) {
 		return invalid(errors.New("invalid Workflow configuration"))
@@ -92,5 +71,14 @@ type ConfigurationRepository interface {
 	ListVersions(context.Context, platform.TransactionContext, authz.Authority, uuid.UUID, PageInput, time.Time) (Page[Version], error)
 	SaveWorkflow(context.Context, platform.TransactionContext, authz.Authority, string, WorkflowConfiguration, int64, time.Time) error
 	SaveVersion(context.Context, platform.TransactionContext, Version) error
+	// LockedCatalogRevision locks the Attribute-schema catalog for the rest of tx, shared with
+	// other writers, and returns its revision. A save compares the revision seen before it
+	// prepared a definition with the one under this lock, so a schema changed in between is
+	// noticed.
+	LockedCatalogRevision(ctx context.Context, tx platform.TransactionContext) (int64, error)
+	// NewOutputSchemaAgencies returns, for the Attribute schema keys among keys that no version
+	// of the Workflow references yet and that exist, the Agencies each schema is assigned to. It
+	// holds the schema catalog against deletion for the rest of the transaction.
+	NewOutputSchemaAgencies(ctx context.Context, tx platform.TransactionContext, workflow uuid.UUID, keys []string) (map[string][]uuid.UUID, error)
 	RecordChange(context.Context, platform.TransactionContext, uuid.UUID, uuid.UUID, string, time.Time) error
 }

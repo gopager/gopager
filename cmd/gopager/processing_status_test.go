@@ -22,6 +22,7 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
 	"github.com/gopager/gopager/internal/processing"
+	"github.com/gopager/gopager/internal/testutil/passwords"
 )
 
 type processingReadFixture struct {
@@ -79,7 +80,7 @@ func seedProcessingReadCandidate(t *testing.T, store *postgres.Store, workflowID
 				Value: &processing.Value{Kind: processing.StringValue, Value: json.RawMessage(`"private-evaluation-sentinel"`)}}
 			return client.ProcessingResult.Create().SetID(fixture.resultID).
 				SetCandidateID(fixture.candidateID).SetRevision(1).SetProducingFence(1).SetFieldGroups([]string{"derived"}).
-				SetEvaluation(processing.Evaluation{Selected: true, Fields: map[string]processing.FieldValue{"secret": secret}}).
+				SetEvaluation(processing.Evaluation{Selected: true, Fields: map[string]map[string]processing.FieldValue{"private": {"secret": secret}}}).
 				SetCompletedAt(at).Exec(scope)
 		}
 		return nil
@@ -98,7 +99,7 @@ func createReadReviewer(t *testing.T, store *postgres.Store) (uuid.UUID, string,
 		t.Fatal(err)
 	}
 	password := "reviewer-password"
-	passwordHash, err := identity.HashPassword(password)
+	passwordHash, err := passwords.Hasher().Hash(password)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,6 +163,7 @@ func revokeReadReviewer(t *testing.T, store *postgres.Store, principalID uuid.UU
 func TestProcessingStatusHTTPFiltersWorkflowPagesAndHidesPrivateEvidence(t *testing.T) {
 	t.Parallel()
 	store := newManagementStore(t)
+	agency := seedAgency(t, store)
 	shared := mustComposeCore(t, store)
 	runtime, err := composeProcessingAPIRuntime(t.Context(), shared, "")
 	if err != nil {
@@ -193,7 +195,7 @@ func TestProcessingStatusHTTPFiltersWorkflowPagesAndHidesPrivateEvidence(t *test
 	createWorkflow := func(name, commandID string) uuid.UUID {
 		t.Helper()
 		body := `{"schemaVersion":1,"commandId":"` + commandID +
-			`","name":"` + name + `","scope":{"kind":"all"},"enabled":true}`
+			`","name":"` + name + `","scope":` + workflowScopeJSON(agency) + `,"enabled":true}`
 		result := managementRequest(t, client, origin, http.MethodPost, "/api/v1/workflows",
 			body, login.CSRFToken, "", http.StatusCreated)
 		id, _ := managementResultID(t, result)

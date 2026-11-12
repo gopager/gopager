@@ -31,6 +31,11 @@ func (c processingScopeContext) ReadUnitContext(ctx context.Context, tx platform
 	return c.units.ReadUnitContext(ctx, tx, id)
 }
 
+// LockAgency holds the Agency against deletion until commit; an unknown Agency is invalid input.
+func (c processingScopeContext) LockAgency(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) error {
+	return c.units.LockAgency(ctx, tx, id)
+}
+
 type syntheticAssignmentNetworkOwner struct {
 	owner synthetic.NetworkOwner
 }

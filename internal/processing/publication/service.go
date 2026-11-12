@@ -107,7 +107,7 @@ func (s *Service) Publish(ctx context.Context, tx platform.TransactionContext, t
 			WorkflowID: item.Candidate.WorkflowID, DefinitionVersionID: item.Candidate.DefinitionVersionID,
 			ResultID: item.Result.ID, ResultRevision: item.Result.Revision,
 			SourceRevision: binding.Source.SourceRevision, ContextRevision: binding.Source.ContextRevision,
-			OccurredAt: now, OutputSchema: item.Definition.OutputSchema, Result: item.Result.Evaluation,
+			OccurredAt: now, Outputs: item.Outputs, Result: item.Result.Evaluation,
 		})
 		if err != nil {
 			return err

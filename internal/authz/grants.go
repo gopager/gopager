@@ -107,6 +107,8 @@ func buildActionScopes() map[string][]string {
 	add("delivery.read delivery.retry delivery.redeliver", "all", "agency", "unit", "unitCollection", "account")
 	add("workflow.read workflow.create workflow.update workflow.delete workflow.preview workflow.activate workflow.reprocess presentation.manage",
 		"all", "agency", "unit")
+	// Attribute schemas are Agency-bound definitions: managing one needs the right in every Agency it is assigned to.
+	add("attribute-schema.manage", "all", "agency")
 	add("notice.manage plugin.configure operations.manage saved-view.manage-global", "all")
 	add("audit.read", "all", "agency", "account")
 	return out
@@ -133,14 +135,10 @@ func ActionAllowsScope(action, kind string) bool {
 	return slices.Contains(actionScopes[action], kind)
 }
 
-// ValidField recognizes standard fields or syntactically namespaced extension fields.
-// The owning field registry must additionally validate any extension declaration.
+// ValidField reports whether field is one of the fixed field groups. Plugin-defined or
+// administrator-defined fields never form groups of their own, so the set is closed.
 func ValidField(field string) bool {
-	if slices.Contains([]string{"payload", "address", "unit", "gateway", "quality", "derived"}, field) {
-		return true
-	}
-	parts := strings.Split(field, ".")
-	return len(parts) == 3 && parts[0] == "extension" && parts[1] != "" && parts[2] != ""
+	return slices.Contains(MessageFieldGroups, field)
 }
 
 // ValidateGrant rejects unknown actions, malformed references and implicit wildcards.

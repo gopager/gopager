@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/events"
+	"github.com/gopager/gopager/internal/fields"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
@@ -29,16 +30,17 @@ type Dependencies struct {
 	Store     Store
 	Instances Instances
 	Targets   Targets
-	Layouts   processing.LayoutResolver
+	Layouts   Layouts
 	Projector Projector
-	Results   ResultSchemas
+	Fields    FieldRegistry
+	Facts     events.SubscriptionAppender
 	Authority PrincipalAuthority
 }
 
 // validate fails with authz.ErrInvalidInput when a port is missing.
 func (d Dependencies) validate() error {
 	if d.Store == nil || d.Instances == nil || d.Targets == nil || d.Layouts == nil || d.Projector == nil ||
-		d.Results == nil || d.Authority == nil {
+		d.Fields == nil || d.Facts == nil || d.Authority == nil {
 		return authz.ErrInvalidInput
 	}
 	return nil
@@ -60,6 +62,9 @@ type subject struct {
 	message   *readmodel.DeliveryProjection
 	gateway   *GatewayView
 	splits    []split
+	// memo shares the projection among the Subscriptions of one subscriber within a fan-out
+	// event; nil outside fan-out.
+	memo *subjectMemo
 }
 
 // absentAuthority reports a failure that means the subscriber cannot act now (suspended,
@@ -76,7 +81,18 @@ func absentAuthority(err error) bool {
 // without error when the subscriber has no current authority or may not see the fact's data.
 func observe(ctx context.Context, tx platform.TransactionContext, deps Dependencies, now time.Time,
 	subscription Subscription, event eventView) (*subject, error) {
-	authority, err := deps.Authority.ResolvePrincipalAuthority(ctx, tx, subscription.SubscriberID)
+	current, err := resolveSubject(ctx, tx, deps, event, subscription.SubscriberID)
+	if err != nil || current == nil {
+		return nil, err
+	}
+	return current.project(ctx, tx, deps, now, subscription)
+}
+
+// resolveSubject resolves the subscriber's current authority and readable field groups. It
+// returns nil without error when the subscriber cannot act now.
+func resolveSubject(ctx context.Context, tx platform.TransactionContext, deps Dependencies, event eventView,
+	subscriber uuid.UUID) (*subject, error) {
+	authority, err := deps.Authority.ResolvePrincipalAuthority(ctx, tx, subscriber)
 	if err != nil {
 		if absentAuthority(err) {
 			return nil, nil
@@ -94,22 +110,45 @@ func observe(ctx context.Context, tx platform.TransactionContext, deps Dependenc
 	for _, group := range readable {
 		current.groups[group] = true
 	}
-	entry, _ := events.LookupType(event.Type)
+	return current, nil
+}
+
+// project reads the authorized data of the fact: the Message with its splits or the Gateway. It
+// returns nil without error when the subscriber may not see the data.
+func (s *subject) project(ctx context.Context, tx platform.TransactionContext, deps Dependencies, now time.Time,
+	subscription Subscription) (*subject, error) {
+	entry, _ := events.LookupType(s.event.Type)
 	switch entry.Projection {
 	case events.ProjectionMessage:
-		return current.observeMessage(ctx, tx, deps, now, subscription)
+		return s.observeMessage(ctx, tx, deps, now, subscription)
 	case events.ProjectionGateway:
-		return current.observeGateway(ctx, tx, deps, now)
+		return s.observeGateway(ctx, tx, deps, now)
 	}
 	return nil, nil
 }
 
-// observeMessage projects the fact's Message and builds the splits.
-func (s *subject) observeMessage(ctx context.Context, tx platform.TransactionContext, deps Dependencies, now time.Time,
-	subscription Subscription) (*subject, error) {
-	if s.event.Data.MessageID == uuid.Nil {
-		return nil, nil
+// messageProjection returns the fact's Message as the subscriber's authority may read it, or nil
+// without error when it is gone, not eligible or, for processing.completed, lacks the fact's
+// result. Within a fan-out event the answer is computed once per subscriber and shared by that
+// subscriber's Subscriptions; the start check projects once per start and shares nothing.
+func (s *subject) messageProjection(ctx context.Context, tx platform.TransactionContext, deps Dependencies,
+	now time.Time) (*readmodel.DeliveryProjection, error) {
+	if s.memo != nil && s.memo.projected {
+		return s.memo.projection, nil
 	}
+	projection, err := s.projectMessage(ctx, tx, deps, now)
+	if err != nil {
+		return nil, err
+	}
+	if s.memo != nil {
+		s.memo.projected, s.memo.projection = true, projection
+	}
+	return projection, nil
+}
+
+// projectMessage reads the projection of the fact's Message under the subscriber's authority.
+func (s *subject) projectMessage(ctx context.Context, tx platform.TransactionContext, deps Dependencies,
+	now time.Time) (*readmodel.DeliveryProjection, error) {
 	message, err := deps.Store.CurrentMessage(ctx, tx, s.event.Data.MessageID, s.event.Data.TransmissionID)
 	if errors.Is(err, authz.ErrNotFound) {
 		return nil, nil
@@ -124,13 +163,23 @@ func (s *subject) observeMessage(ctx context.Context, tx platform.TransactionCon
 		}
 		return nil, err
 	}
-	if !ok {
+	if !ok || s.event.Type == "processing.completed" && !resultVisible(projection, s.event.Data.ResultID) {
 		return nil, nil
 	}
-	if s.event.Type == "processing.completed" && !resultVisible(projection, s.event.Data.ResultID) {
+	return &projection, nil
+}
+
+// observeMessage projects the fact's Message and builds the splits.
+func (s *subject) observeMessage(ctx context.Context, tx platform.TransactionContext, deps Dependencies, now time.Time,
+	subscription Subscription) (*subject, error) {
+	if s.event.Data.MessageID == uuid.Nil {
 		return nil, nil
 	}
-	s.message = &projection
+	projection, err := s.messageProjection(ctx, tx, deps, now)
+	if err != nil || projection == nil {
+		return nil, err
+	}
+	s.message = projection
 	withoutUnit := split{key: "", anchor: projection.Item.MessageTime}
 	for i, appearance := range projection.WithoutUnit {
 		withoutUnit.agencies = appendUnique(withoutUnit.agencies, appearance.AgencyID)
@@ -175,12 +224,11 @@ func (s *subject) observeGateway(ctx context.Context, tx platform.TransactionCon
 	return s, nil
 }
 
-// resultVisible reports whether the published result is part of the projection.
+// resultVisible reports whether the subscriber may read the published result. It does not
+// depend on the result's values being effective: a result without outputs, or one whose values a
+// later result replaced, is still a completed processing the subscriber may be told about.
 func resultVisible(projection readmodel.DeliveryProjection, result uuid.UUID) bool {
-	if result == uuid.Nil || projection.Item.Derived == nil {
-		return false
-	}
-	return slices.ContainsFunc(*projection.Item.Derived, func(item readmodel.DerivedItem) bool { return item.ResultID == result })
+	return result != uuid.Nil && slices.Contains(projection.PublishedResults, result)
 }
 
 func appendUnique(ids []uuid.UUID, id uuid.UUID) []uuid.UUID {
@@ -191,26 +239,14 @@ func appendUnique(ids []uuid.UUID, id uuid.UUID) []uuid.UUID {
 }
 
 // view returns the field view of one split.
-func (s *subject) view(part split, fields *fieldSet) *view {
-	return &view{event: s.event, message: s.message, units: part.units, gateway: s.gateway, groups: s.groups, fields: fields}
+func (s *subject) view(part split, declarations fields.Declarations) *view {
+	return &view{event: s.event, message: s.message, units: part.units, gateway: s.gateway, groups: s.groups,
+		declarations: declarations}
 }
 
-// matches evaluates the Subscription filter on a split; no filter matches everything. An
-// evaluation failure of a stored filter (for example a cost limit) counts as no match.
-func matches(ctx context.Context, filter *processing.PredicateProgram, current *view) bool {
-	if filter == nil {
-		return true
-	}
-	ok, err := filter.Evaluate(ctx, current)
-	return err == nil && ok
-}
-
-// compileFilter compiles a Subscription's filter against the catalog.
-func compileFilter(ctx context.Context, subscription Subscription, fields *fieldSet) (*processing.PredicateProgram, error) {
-	if subscription.Filter == nil {
-		return nil, nil
-	}
-	return processing.CompilePredicate(ctx, *subscription.Filter, fields)
+// matches evaluates the compiled filter on a split; no filter matches everything.
+func matches(filter *fields.Filter, current *view) bool {
+	return filter == nil || filter.Match(current)
 }
 
 // rendering is the input of one Delivery or the failure code that replaces it.
@@ -268,7 +304,7 @@ func render(ctx context.Context, tx platform.TransactionContext, deps Dependenci
 		result.code = CodeInputInvalid
 		return result, nil
 	}
-	program, err := processing.CompileLayout(ctx, resolved.Layout, current.fields)
+	program, err := processing.CompileLayout(ctx, resolved.Layout, current.declarations)
 	if err == nil {
 		var rendered processing.RenderedLayout
 		rendered, err = program.Render(ctx, current)
@@ -428,19 +464,23 @@ func newRecord(subscription Subscription, current *subject, part split, target T
 }
 
 // materialize builds the Deliveries one Subscription creates for a fact now: one per split and
-// target whose filter matches and whose expiry lies ahead.
+// target whose filter matches and whose expiry lies ahead. A Subscription whose filter or Layout
+// does not compile now, or whose subscriber can no longer read their fields, becomes invalid
+// and creates none.
 func materialize(ctx context.Context, tx platform.TransactionContext, deps Dependencies, now time.Time,
-	subscription Subscription, event eventView) ([]DeliveryRecord, error) {
-	current, err := observe(ctx, tx, deps, now, subscription, event)
+	subscription Subscription, event eventView, memo *eventMemo) ([]DeliveryRecord, error) {
+	current, err := memo.subject(ctx, tx, deps, event, subscription.SubscriberID)
 	if err != nil || current == nil {
 		return nil, err
 	}
-	fields := newFieldSet(ctx, tx, deps.Results)
-	filter, err := compileFilter(ctx, subscription, fields)
+	check, reason, err := healthCheck(ctx, tx, deps, subscription, current.groups)
 	if err != nil {
-		if platform.FailureCode(err) == platform.CodeInvalidInput || platform.FailureCode(err) == platform.CodeResourceLimit {
-			return nil, nil
-		}
+		return nil, err
+	}
+	if reason != "" {
+		return nil, markInvalid(ctx, tx, deps, subscription, reason, now)
+	}
+	if current, err = current.project(ctx, tx, deps, now, subscription); err != nil || current == nil {
 		return nil, err
 	}
 	var records []DeliveryRecord
@@ -449,8 +489,8 @@ func materialize(ctx context.Context, tx platform.TransactionContext, deps Depen
 		if !expires.After(now) {
 			continue
 		}
-		partView := current.view(part, fields)
-		if !matches(ctx, filter, partView) {
+		partView := current.view(part, check.declarations)
+		if !matches(check.filter, partView) {
 			continue
 		}
 		for _, target := range subscription.Targets {

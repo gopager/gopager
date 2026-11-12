@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/fields"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
 )
@@ -22,13 +23,24 @@ func completionFixture(t *testing.T) ProcessingCompletionFact {
 		MessageTime: time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC),
 		WorkflowID:  uuid.New(), DefinitionVersionID: uuid.New(), ResultID: uuid.New(),
 		ResultRevision: 3, SourceRevision: 7, ContextRevision: 9, OccurredAt: time.Unix(100, 0),
-		OutputSchema: map[string]processing.FieldSchema{"level": {Kind: processing.StringValue}},
-		Result: processing.Evaluation{Selected: true, Fields: map[string]processing.FieldValue{"level": {
+		Outputs: outputDeclarations(processing.StringValue),
+		Result: processing.Evaluation{Selected: true, Fields: map[string]map[string]processing.FieldValue{"alerts": {"level": {
 			State: processing.FieldPresent, Value: &value, Dependencies: []processing.Dependency{{
 				TransmissionID: transmission, NetworkID: uuid.New(), SourceRevision: 7, ContextRevision: 9,
 				Groups: []string{"payload"},
 			}},
-		}}}}
+		}}}}}
+}
+
+// outputDeclarations declares the Attribute field alerts.level with the given kind.
+func outputDeclarations(kind processing.ValueKind) processing.Declarations {
+	provider := fields.NewStaticProvider(1, []fields.Field{{
+		Ref:    processing.FieldRef{Namespace: "attributes", Path: []string{"alerts", "level"}},
+		Type:   processing.FieldSchema{Kind: kind},
+		Group:  "derived",
+		Scopes: []fields.Scope{fields.ScopeMessage},
+	}})
+	return fields.New(provider).Declarations(fields.ScopeMessage, false)
 }
 
 func TestProcessingFactFactoriesClosedVocabularyAndDetachedEnvelope(t *testing.T) {
@@ -74,19 +86,21 @@ func TestProcessingFactFactoriesClosedVocabularyAndDetachedEnvelope(t *testing.T
 func TestProcessingCompletionRejectsPartialHiddenUncorrelatedAndUnpublishedResults(t *testing.T) {
 	t.Parallel()
 	cases := map[string]func(*ProcessingCompletionFact){
-		"missing message":     func(f *ProcessingCompletionFact) { f.MessageID = uuid.Nil },
-		"missing schema":      func(f *ProcessingCompletionFact) { f.OutputSchema = nil },
-		"not selected":        func(f *ProcessingCompletionFact) { f.Result.Selected = false },
-		"empty missing field": func(f *ProcessingCompletionFact) { f.Result.Fields = map[string]processing.FieldValue{} },
+		"missing message": func(f *ProcessingCompletionFact) { f.MessageID = uuid.Nil },
+		"missing schema":  func(f *ProcessingCompletionFact) { f.Outputs = nil },
+		"not selected":    func(f *ProcessingCompletionFact) { f.Result.Selected = false },
+		"empty missing field": func(f *ProcessingCompletionFact) {
+			f.Result.Fields = map[string]map[string]processing.FieldValue{"alerts": {}}
+		},
 		"hidden": func(f *ProcessingCompletionFact) {
-			field := f.Result.Fields["level"]
+			field := f.Result.Fields["alerts"]["level"]
 			field.State, field.Value = processing.FieldState("hidden"), nil
-			f.Result.Fields["level"] = field
+			f.Result.Fields["alerts"]["level"] = field
 		},
 		"wrong type": func(f *ProcessingCompletionFact) {
-			f.OutputSchema["level"] = processing.FieldSchema{Kind: processing.BooleanValue}
+			f.Outputs = outputDeclarations(processing.BooleanValue)
 		},
-		"wrong revision": func(f *ProcessingCompletionFact) { f.Result.Fields["level"].Dependencies[0].SourceRevision++ },
+		"wrong revision": func(f *ProcessingCompletionFact) { f.Result.Fields["alerts"]["level"].Dependencies[0].SourceRevision++ },
 		"mixed containers": func(f *ProcessingCompletionFact) {
 			f.Result.TargetResults = []processing.TargetResult{{TargetPosition: 0, Fields: f.Result.Fields}}
 		},

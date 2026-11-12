@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/events"
+	"github.com/gopager/gopager/internal/fields"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/platform"
 )
@@ -137,7 +138,8 @@ func (s *LiveSession) evaluate(ctx context.Context, tx platform.TransactionConte
 	now time.Time, key []byte) (LiveBatch, Position, error) {
 	l := s.live
 	resync := LiveBatch{Resync: true, Frames: []LiveFrame{ResyncFrame()}}
-	if err := current.requireGroups(s.filters.RequiredFieldGroups()); err != nil {
+	selection, err := l.service.prepare(ctx, tx, current, s.filters)
+	if err != nil {
 		return LiveBatch{}, Position{}, err
 	}
 	if (s.revision != 0 && s.revision != current.revision) || s.invalid || s.position.Issued.Before(now.Add(-l.window)) {
@@ -175,7 +177,7 @@ func (s *LiveSession) evaluate(ctx context.Context, tx platform.TransactionConte
 		return resync, s.position, nil
 	}
 	batch := LiveBatch{Position: next.Sign(key), More: len(records) == LiveBatchFacts}
-	view, err := s.view(ctx, tx, current, now, facts)
+	view, err := s.view(ctx, tx, current, now, selection, facts)
 	if err != nil {
 		return LiveBatch{}, Position{}, err
 	}
@@ -234,7 +236,7 @@ func (s *LiveSession) mergeVisible(ctx context.Context, tx platform.TransactionC
 // whether it falls into its range. Eligibility and the before contexts are only read for the
 // Messages that no longer match, which is where a remove might be due.
 func (s *LiveSession) view(ctx context.Context, tx platform.TransactionContext, current access, now time.Time,
-	facts []liveFact) (liveView, error) {
+	selection *fields.Filter, facts []liveFact) (liveView, error) {
 	service := s.live.service
 	view := liveView{matches: map[uuid.UUID]FeedItem{}, eligible: map[uuid.UUID]bool{},
 		units: map[uuid.UUID]UnitContext{}, networks: map[uuid.UUID]uuid.UUID{}, rows: current.rows, now: now}
@@ -247,7 +249,7 @@ func (s *LiveSession) view(ctx context.Context, tx platform.TransactionContext, 
 	}
 	slices.SortFunc(ids, func(a, b uuid.UUID) int { return slices.Compare(a[:], b[:]) })
 	ids = slices.Compact(ids)
-	items, err := service.evaluate(ctx, tx, current, s.filters, ids)
+	items, err := service.evaluate(ctx, tx, current, s.filters, selection, ids)
 	if err != nil {
 		return liveView{}, err
 	}

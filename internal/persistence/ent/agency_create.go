@@ -13,6 +13,7 @@ import (
 	"github.com/gopager/gopager/internal/persistence/ent/agency"
 	"github.com/gopager/gopager/internal/persistence/ent/network"
 	"github.com/gopager/gopager/internal/persistence/ent/unit"
+	"github.com/gopager/gopager/internal/persistence/ent/workflow"
 )
 
 // AgencyCreate is the builder for creating a Agency entity.
@@ -84,6 +85,21 @@ func (_c *AgencyCreate) AddNetworks(v ...*Network) *AgencyCreate {
 		ids[i] = v[i].ID
 	}
 	return _c.AddNetworkIDs(ids...)
+}
+
+// AddWorkflowIDs adds the "workflows" edge to the Workflow entity by IDs.
+func (_c *AgencyCreate) AddWorkflowIDs(ids ...uuid.UUID) *AgencyCreate {
+	_c.mutation.AddWorkflowIDs(ids...)
+	return _c
+}
+
+// AddWorkflows adds the "workflows" edges to the Workflow entity.
+func (_c *AgencyCreate) AddWorkflows(v ...*Workflow) *AgencyCreate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddWorkflowIDs(ids...)
 }
 
 // Mutation returns the AgencyMutation object of the builder.
@@ -223,6 +239,22 @@ func (_c *AgencyCreate) createSpec() (*Agency, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(network.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.WorkflowsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   agency.WorkflowsTable,
+			Columns: agency.WorkflowsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {

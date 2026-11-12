@@ -12,11 +12,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/attributes"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/persistence/ent/processingstore"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
 	"github.com/gopager/gopager/internal/processing/worker"
+	"github.com/gopager/gopager/internal/testutil/attributeschemas"
 )
 
 // TestInstalledWorkflowRunsOnProductionWiring submits a Transmission that selects a Workflow
@@ -26,14 +28,14 @@ import (
 func TestInstalledWorkflowRunsOnProductionWiring(t *testing.T) {
 	t.Parallel()
 	store := newManagementStoreWithFields(t, []string{"unit", "address", "payload", "gateway", "derived"})
-	network, gateway := uuid.New(), uuid.New()
+	network, gateway, agency := uuid.New(), uuid.New(), uuid.New()
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		executor, err := store.Resolve(tx)
 		if err != nil {
 			return err
 		}
-		if _, err := executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id)
-			INSERT INTO networks(id,name,protocol,agency_id) SELECT $1,'Installed Network','pocsag',a.id FROM a`, network); err != nil {
+		if _, err := executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES($2,'Fixture agency') RETURNING id)
+			INSERT INTO networks(id,name,protocol,agency_id) SELECT $1,'Installed Network','pocsag',a.id FROM a`, network, agency); err != nil {
 			return err
 		}
 		if _, err := executor.ExecContext(tx.Context(), `INSERT INTO gateways(id) VALUES($1)`, gateway); err != nil {
@@ -90,7 +92,7 @@ func TestInstalledWorkflowRunsOnProductionWiring(t *testing.T) {
 	seedCurrentInstance(t, store, instance)
 
 	workflowResponse := managementRequest(t, client, origin, http.MethodPost, "/api/v1/workflows",
-		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Installed run","scope":{"kind":"all"},"enabled":true}`,
+		`{"schemaVersion":1,"commandId":"`+uuid.NewString()+`","name":"Installed run","scope":`+workflowScopeJSON(agency)+`,"enabled":true}`,
 		login.CSRFToken, "", http.StatusCreated)
 	workflowID, _ := managementResultID(t, workflowResponse)
 	protocolField := processing.FieldRef{Namespace: "source", Path: []string{"protocol"}}
@@ -99,6 +101,7 @@ func TestInstalledWorkflowRunsOnProductionWiring(t *testing.T) {
 		t.Fatal(err)
 	}
 	textField := processing.FieldRef{Namespace: "source", Path: []string{"payload", "text", "value"}}
+	attributeschemas.Insert(t, store, "plugin", map[string]attributes.Field{"text": {Kind: processing.StringValue}})
 	definition := processing.Definition{SchemaVersion: 1,
 		Selector: processing.Predicate{Op: "eq", Field: &protocolField, Value: &pocsag},
 		Steps: []processing.Step{{
@@ -106,10 +109,9 @@ func TestInstalledWorkflowRunsOnProductionWiring(t *testing.T) {
 			Installed: &processing.InstalledStep{InstanceID: instance.ID, ConfigurationRevision: 1,
 				Input: map[string]processing.Assignment{"text": {Field: &textField}}},
 		}},
-		OutputSchema: map[string]processing.FieldSchema{"text": {Kind: processing.StringValue}},
-		Outputs: map[string]processing.Assignment{"text": {Field: &processing.FieldRef{
+		Outputs: map[string]map[string]processing.Assignment{"plugin": {"text": {Field: &processing.FieldRef{
 			Namespace: "step", Path: []string{"command", "text"},
-		}}}}
+		}}}}}
 	versionInput, err := json.Marshal(workflowVersionMutation{SchemaVersion: 1,
 		CommandID: uuid.New(), ExpectedRevision: 1, Definition: definition})
 	if err != nil {
@@ -122,6 +124,22 @@ func TestInstalledWorkflowRunsOnProductionWiring(t *testing.T) {
 	managementRequest(t, client, origin, http.MethodPost,
 		"/api/v1/workflows/"+workflowID.String()+"/versions/"+versionID.String()+"/activate",
 		`{"schemaVersion":1,"expectedRevision":"2"}`, login.CSRFToken, "", http.StatusOK)
+
+	// A deprecation after activation must not stop the active version from running.
+	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		if _, err := executor.ExecContext(tx.Context(),
+			`UPDATE attribute_schemas SET fields = jsonb_set(fields, '{text,deprecated}', 'true') WHERE key = 'plugin'`); err != nil {
+			return err
+		}
+		_, err = executor.ExecContext(tx.Context(), `UPDATE attribute_catalog SET revision = revision + 1`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	var credential gatewayCredentialResponse
 	rawProcessingRequest(t, client, origin, "/api/v1/gateways/"+gateway.String()+"/credentials",
@@ -184,6 +202,24 @@ func TestInstalledWorkflowRunsOnProductionWiring(t *testing.T) {
 	}
 	if state != "completed" || status != "completed" || published != 1 {
 		t.Fatalf("candidate=%s transmission=%s published results=%d; want completed/completed/1", state, status, published)
+	}
+	// Feed filters find Messages through the value projection, so publication must have written
+	// the published value into it.
+	var projected int
+	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		return executor.QueryRowContext(tx.Context(), `SELECT count(*) FROM message_attribute_values v
+			JOIN processing_results r ON r.id = v.result_id
+			WHERE r.candidate_id = $1 AND v.schema_key = 'plugin' AND v.path = 'text' AND v.text_digest IS NOT NULL`,
+			due[0].ID).Scan(&projected)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if projected != 1 {
+		t.Fatalf("published result projected %d values of plugin.text, want 1", projected)
 	}
 	var groups string
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {

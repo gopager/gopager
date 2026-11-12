@@ -97,8 +97,8 @@ func TestProcessingSourceOwnerMapsMissingMessageToNotFound(t *testing.T) {
 		t.Fatal(err)
 	}
 	definition := processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "eq", Field: &protocolField, Value: &protocolValue},
-		OutputSchema: map[string]processing.FieldSchema{}, Outputs: map[string]processing.Assignment{}}
+		Selector: processing.Predicate{Op: "eq", Field: &protocolField, Value: &protocolValue},
+		Outputs:  map[string]map[string]processing.Assignment{}}
 	encodedDefinition, err := json.Marshal(definition)
 	if err != nil {
 		t.Fatal(err)
@@ -116,8 +116,9 @@ func TestProcessingSourceOwnerMapsMissingMessageToNotFound(t *testing.T) {
 			{`INSERT INTO gateways(id,state) VALUES($1,'active')`, []any{gateway}},
 			{`INSERT INTO gateway_networks(id,gateway_id,gateway_network_identifier,network_id,priority)
 				VALUES($1,$2,'default',$3,0)`, []any{uuid.New(), gateway, network}},
-			{`INSERT INTO processing_workflows(id,name,scope_kind,enabled,created_at,updated_at)
-				VALUES($1,'owner workflow','all',true,$2,$2)`, []any{workflow, now}},
+			{`INSERT INTO processing_workflows(id,name,enabled,created_at,updated_at)
+				VALUES($1,'owner workflow',true,$2,$2)`, []any{workflow, now}},
+			{`INSERT INTO processing_workflow_agencies(workflow_id,agency_id) SELECT $1, id FROM agencies`, []any{workflow}},
 			{`INSERT INTO processing_workflow_versions(id,workflow_id,definition,created_at,created_by)
 				VALUES($1,$2,$3,$4,$5)`, []any{version, workflow, encodedDefinition, now, uuid.New()}},
 			{`UPDATE processing_workflows SET active_version_id=$2 WHERE id=$1`, []any{workflow, version}},
@@ -213,22 +214,22 @@ func TestIntakeStoreReadsSyntheticNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	live, deleted := uuid.New(), uuid.New()
+	live, deleted, agency := uuid.New(), uuid.New(), uuid.New()
 	if err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 		executor, err := store.Resolve(tx)
 		if err != nil {
 			return err
 		}
-		if _, err := executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES(gen_random_uuid(),'Fixture agency') RETURNING id)
-			INSERT INTO networks(id,name,protocol,deleted,agency_id) SELECT v.id,v.name,v.protocol,v.deleted,a.id FROM (VALUES ($1::uuid,'Live FLEX','flex',false),($2::uuid,'Deleted ZVEI','zvei',true)) AS v(id,name,protocol,deleted), a`, live, deleted); err != nil {
+		if _, err := executor.ExecContext(tx.Context(), `WITH a AS (INSERT INTO agencies(id,name) VALUES($3,'Fixture agency') RETURNING id)
+			INSERT INTO networks(id,name,protocol,deleted,agency_id) SELECT v.id,v.name,v.protocol,v.deleted,a.id FROM (VALUES ($1::uuid,'Live FLEX','flex',false),($2::uuid,'Deleted ZVEI','zvei',true)) AS v(id,name,protocol,deleted), a`, live, deleted, agency); err != nil {
 			return err
 		}
 		got, err := intakeRepository.ReadSyntheticNetwork(tx.Context(), tx, live)
-		if err != nil || got != (synthetic.Network{ID: live, Name: "Live FLEX", Protocol: protocols.FLEX}) {
+		if err != nil || got != (synthetic.Network{ID: live, Name: "Live FLEX", Protocol: protocols.FLEX, AgencyID: agency}) {
 			t.Fatalf("live Network = %+v, err = %v", got, err)
 		}
 		got, err = intakeRepository.ReadSyntheticNetwork(tx.Context(), tx, deleted)
-		if err != nil || got != (synthetic.Network{ID: deleted, Name: "Deleted ZVEI", Protocol: protocols.ZVEI, Deleted: true}) {
+		if err != nil || got != (synthetic.Network{ID: deleted, Name: "Deleted ZVEI", Protocol: protocols.ZVEI, AgencyID: agency, Deleted: true}) {
 			t.Fatalf("deleted Network = %+v, err = %v", got, err)
 		}
 		if _, err := intakeRepository.ReadSyntheticNetwork(tx.Context(), tx, uuid.New()); !errors.Is(err, authz.ErrNotFound) {

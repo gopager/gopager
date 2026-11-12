@@ -52,10 +52,10 @@ func preparedDefinition(t *testing.T) processing.Definition {
 		t.Fatal(err)
 	}
 	definition := processing.Definition{SchemaVersion: 1,
-		Selector:     processing.Predicate{Op: "eq", Field: &field, Value: &value},
-		OutputSchema: map[string]processing.FieldSchema{}, Outputs: map[string]processing.Assignment{}}
+		Selector: processing.Predicate{Op: "eq", Field: &field, Value: &value},
+		Outputs:  map[string]map[string]processing.Assignment{}}
 	program, err := processing.CompileWorkflow(t.Context(), definition,
-		preparationDeclarations{"source\x00flag": {Kind: processing.BooleanValue}}, nil)
+		preparationDeclarations{"source\x00flag": {Kind: processing.BooleanValue}}, preparationDeclarations{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestPrepareClosesTemporaryPreparedProgram(t *testing.T) {
 	t.Parallel()
 	programDefinition := preparedDefinition(t)
 	program, err := processing.CompileWorkflow(t.Context(), programDefinition,
-		preparationDeclarations{"source\x00flag": {Kind: processing.BooleanValue}}, nil)
+		preparationDeclarations{"source\x00flag": {Kind: processing.BooleanValue}}, preparationDeclarations{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestPrepareClosesProgramAfterSubstitutionRejection(t *testing.T) {
 	t.Parallel()
 	programDefinition := preparedDefinition(t)
 	program, err := processing.CompileWorkflow(t.Context(), programDefinition,
-		preparationDeclarations{"source\x00flag": {Kind: processing.BooleanValue}}, nil)
+		preparationDeclarations{"source\x00flag": {Kind: processing.BooleanValue}}, preparationDeclarations{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestPrepareReturnsTemporaryArtifactCloseFailure(t *testing.T) {
 	t.Parallel()
 	programDefinition := preparedDefinition(t)
 	program, err := processing.CompileWorkflow(t.Context(), programDefinition,
-		preparationDeclarations{"source\x00flag": {Kind: processing.BooleanValue}}, nil)
+		preparationDeclarations{"source\x00flag": {Kind: processing.BooleanValue}}, preparationDeclarations{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

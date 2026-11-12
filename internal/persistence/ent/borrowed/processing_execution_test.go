@@ -295,9 +295,8 @@ func TestProcessingExecutionCurrentAuthorityAndArtifactLifetime(t *testing.T) {
 			definition.Steps = []processing.Step{{ID: "module", Kind: "installed", OutputSchema: schema,
 				Installed: &processing.InstalledStep{InstanceID: instance.ID, ConfigurationRevision: 1,
 					Input: map[string]processing.Assignment{"mode": {Literal: &mode}, "text": {Field: &input}}}}}
-			definition.OutputSchema["text"] = schema["text"]
-			definition.Outputs["text"] = processing.Assignment{Field: &output}
-			program, err := processing.CompileWorkflowInstalled(run.Context(), definition, source, nil, run)
+			definition.Outputs["test"] = map[string]processing.Assignment{"text": {Field: &output}}
+			program, err := processing.CompileWorkflowInstalled(run.Context(), definition, source, processingOutputsFixture{}, nil, run)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -312,7 +311,7 @@ func TestProcessingExecutionCurrentAuthorityAndArtifactLifetime(t *testing.T) {
 			if name == "preview" || name == "editor-revoked" {
 				want = `"PREVIEW:CURRENT"`
 			}
-			if err != nil || result.Fields["text"].Value == nil || string(result.Fields["text"].Value.Value) != want {
+			if err != nil || result.Fields["test"]["text"].Value == nil || string(result.Fields["test"]["text"].Value.Value) != want {
 				t.Fatalf("current actual guest result=%+v err=%v", result, err)
 			}
 			if _, err := f.store.Resolve(sourceOwner.last); err == nil {

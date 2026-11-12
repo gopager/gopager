@@ -68,7 +68,11 @@ func (s *Store) ReadPublicationItem(ctx context.Context, tx platform.Transaction
 	if err != nil {
 		return processing.PublicationItem{}, err
 	}
-	item := processing.PublicationItem{Candidate: candidate, Definition: version.Definition}
+	outputs, err := s.outputDeclarations(ctx, tx)
+	if err != nil {
+		return processing.PublicationItem{}, err
+	}
+	item := processing.PublicationItem{Candidate: candidate, Definition: version.Definition, Outputs: outputs}
 	if candidate.State != "completed" || candidate.Selected == nil || !*candidate.Selected {
 		return item, nil
 	}
@@ -93,7 +97,8 @@ func (s *Store) ReadPublicationItem(ctx context.Context, tx platform.Transaction
 // ApplyPublicationItem re-reads the candidate's current evidence, verifies that it still matches
 // expected and attaches the result to the Message by setting its publication time and Message
 // under the result's revision and producing fence; the candidate row is unchanged. The source
-// status refresh and the completion fact must commit in this same transaction or all writes roll back.
+// status refresh, the projection of the result's attribute values (see ProjectAttributeValuesSQL)
+// and the completion fact must commit in this same transaction or all writes roll back.
 func (s *Store) ApplyPublicationItem(ctx context.Context, tx platform.TransactionContext,
 	binding processing.PublicationBinding, expected processing.PublicationItem) error {
 	if err := binding.Validate(); err != nil {
@@ -120,7 +125,7 @@ func (s *Store) ApplyPublicationItem(ctx context.Context, tx platform.Transactio
 	if err != nil {
 		return err
 	}
-	if err := processing.ValidateEvaluation(item.Result.Evaluation, item.Definition.OutputSchema, processing.EvaluationBinding{
+	if err := processing.ValidateEvaluation(item.Result.Evaluation, item.Outputs, processing.EvaluationBinding{
 		TransmissionID: binding.Source.TransmissionID, SourceRevision: binding.Source.SourceRevision,
 		ContextRevision: binding.Source.ContextRevision, TargetLimit: binding.Source.OriginalTargetCount,
 	}); err != nil {
@@ -142,5 +147,5 @@ func (s *Store) ApplyPublicationItem(ctx context.Context, tx platform.Transactio
 	if changed != 1 {
 		return platform.NewFailure(platform.CodeRevisionConflict, errors.New("private result changed before publication"))
 	}
-	return nil
+	return s.projectAttributeValues(ctx, tx, item.Result.ID)
 }

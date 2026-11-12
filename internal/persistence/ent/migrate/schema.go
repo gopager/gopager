@@ -907,7 +907,7 @@ var (
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "revision", Type: field.TypeInt64, Default: 1},
 		{Name: "name", Type: field.TypeString},
-		{Name: "scope_kind", Type: field.TypeEnum, Enums: []string{"all", "network", "unit"}},
+		{Name: "narrowing_kind", Type: field.TypeEnum, Nullable: true, Enums: []string{"network", "unit"}},
 		{Name: "enabled", Type: field.TypeBool, Default: false},
 		{Name: "deleted", Type: field.TypeBool, Default: false},
 		{Name: "active_version_id", Type: field.TypeUUID, Nullable: true},
@@ -919,6 +919,31 @@ var (
 		Name:       "processing_workflows",
 		Columns:    ProcessingWorkflowsColumns,
 		PrimaryKey: []*schema.Column{ProcessingWorkflowsColumns[0]},
+	}
+	// ProcessingWorkflowAgenciesColumns holds the columns for the "processing_workflow_agencies" table.
+	ProcessingWorkflowAgenciesColumns = []*schema.Column{
+		{Name: "workflow_id", Type: field.TypeUUID},
+		{Name: "agency_id", Type: field.TypeUUID},
+	}
+	// ProcessingWorkflowAgenciesTable holds the schema information for the "processing_workflow_agencies" table.
+	ProcessingWorkflowAgenciesTable = &schema.Table{
+		Name:       "processing_workflow_agencies",
+		Columns:    ProcessingWorkflowAgenciesColumns,
+		PrimaryKey: []*schema.Column{ProcessingWorkflowAgenciesColumns[0], ProcessingWorkflowAgenciesColumns[1]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "processing_workflow_agencies_processing_workflows_workflow",
+				Columns:    []*schema.Column{ProcessingWorkflowAgenciesColumns[0]},
+				RefColumns: []*schema.Column{ProcessingWorkflowsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "processing_workflow_agencies_agencies_agency",
+				Columns:    []*schema.Column{ProcessingWorkflowAgenciesColumns[1]},
+				RefColumns: []*schema.Column{AgenciesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
 	}
 	// ProcessingWorkflowScopeReferencesColumns holds the columns for the "processing_workflow_scope_references" table.
 	ProcessingWorkflowScopeReferencesColumns = []*schema.Column{
@@ -1063,6 +1088,7 @@ var (
 		UnitTemplatesTable,
 		IdentityUserGroupsTable,
 		ProcessingWorkflowsTable,
+		ProcessingWorkflowAgenciesTable,
 		ProcessingWorkflowScopeReferencesTable,
 		ProcessingWorkflowVersionsTable,
 		UnitCollectionMembershipsTable,
@@ -1186,6 +1212,11 @@ func init() {
 	}
 	ProcessingWorkflowsTable.Annotation = &entsql.Annotation{
 		Table: "processing_workflows",
+	}
+	ProcessingWorkflowAgenciesTable.ForeignKeys[0].RefTable = ProcessingWorkflowsTable
+	ProcessingWorkflowAgenciesTable.ForeignKeys[1].RefTable = AgenciesTable
+	ProcessingWorkflowAgenciesTable.Annotation = &entsql.Annotation{
+		Table: "processing_workflow_agencies",
 	}
 	ProcessingWorkflowScopeReferencesTable.ForeignKeys[0].RefTable = ProcessingWorkflowsTable
 	ProcessingWorkflowScopeReferencesTable.ForeignKeys[1].RefTable = UnitsTable

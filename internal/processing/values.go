@@ -10,6 +10,7 @@ import (
 	"io"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -237,6 +238,16 @@ func (v Value) native(schema FieldSchema, depth int, decodedBytes *int) (any, er
 		if err != nil {
 			return nil, invalid(err)
 		}
+		// PostgreSQL has no year zero; such a value would fail every later cast of the stored
+		// value, so it is rejected here, where all typed values are checked.
+		if instant.Year() < 1 || instant.UTC().Year() < 1 {
+			return nil, invalid(errors.New("timestamp before year 1"))
+		}
+		// PostgreSQL accepts numeric offsets only up to 15:59:59; a larger one would fail the
+		// cast of every stored copy of the value.
+		if _, offset := instant.Zone(); offset >= maxTimestampOffset || offset <= -maxTimestampOffset {
+			return nil, invalid(errors.New("timestamp offset of 16 hours or more"))
+		}
 		return instant, nil
 	case BytesValue:
 		var encoded string
@@ -269,6 +280,11 @@ func (v Value) native(schema FieldSchema, depth int, decodedBytes *int) (any, er
 		native, err := number.Float64()
 		if err != nil || math.IsNaN(native) || math.IsInf(native, 0) {
 			return nil, invalid(errors.New("nonfinite processing number"))
+		}
+		// A nonzero literal that rounds to zero underflows; PostgreSQL rejects it when the
+		// stored text is cast, so it is rejected here, where all typed values are checked.
+		if native == 0 && nonzeroMantissa(string(number)) {
+			return nil, invalid(errors.New("processing number underflows"))
 		}
 		return native, nil
 	case ObjectValue:
@@ -382,4 +398,15 @@ func Literal(kind ValueKind, value any) (Value, error) {
 		return Value{}, resource(errors.New("processing literal boundary"))
 	}
 	return Value{Kind: kind, Value: encoded}, nil
+}
+
+// maxTimestampOffset is the first UTC offset, in seconds, that PostgreSQL rejects.
+const maxTimestampOffset = 16 * 60 * 60
+
+// nonzeroMantissa reports whether the significand of a JSON number literal has a nonzero digit.
+func nonzeroMantissa(literal string) bool {
+	if i := strings.IndexAny(literal, "eE"); i >= 0 {
+		literal = literal[:i]
+	}
+	return strings.ContainsAny(literal, "123456789")
 }

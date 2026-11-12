@@ -14,8 +14,11 @@ import (
 
 // Capture contains owner-validated immutable input and original-position eligibility.
 type Capture struct {
-	Definition  processing.Definition
-	Source      *processing.CapturedSource
+	Definition processing.Definition
+	Source     *processing.CapturedSource
+	// Outputs declares the Attribute fields the definition writes, resolved without strictness
+	// so that a deprecation never stops the evaluation of an active version.
+	Outputs     processing.Declarations
 	Scope       processing.EvaluationScope
 	Artifacts   processing.InstalledArtifacts
 	Invocations processing.InstalledInvocationOwner
@@ -255,9 +258,9 @@ func (s *Service) run(ctx context.Context, pending processing.Candidate, publish
 		var program *processing.WorkflowProgram
 		var err error
 		if captured.Artifacts == nil {
-			program, err = processing.CompileWorkflow(compute, captured.Definition, captured.Source, s.regex)
+			program, err = processing.CompileWorkflow(compute, captured.Definition, captured.Source, captured.Outputs, s.regex)
 		} else {
-			program, err = processing.CompileWorkflowInstalled(compute, captured.Definition, captured.Source, s.regex, captured.Artifacts)
+			program, err = processing.CompileWorkflowInstalled(compute, captured.Definition, captured.Source, captured.Outputs, s.regex, captured.Artifacts)
 		}
 		if err != nil {
 			results <- outcome{err: err}
