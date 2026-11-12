@@ -25,7 +25,7 @@
 //			"bearerToken": plugintest.SecretValue("s3cret"),
 //		})
 //		outcome, err := h.Attempt(plugintest.AttemptInput{Body: "disk full"})
-//		if err != nil || outcome.Status != processing.AttemptAccepted {
+//		if err != nil || outcome.Status != pluginsdk.StatusAccepted {
 //			t.Fatalf("%+v %v", outcome, err)
 //		}
 //	}
