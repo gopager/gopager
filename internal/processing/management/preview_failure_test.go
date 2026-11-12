@@ -66,14 +66,14 @@ func TestPreviewResultEncodesTheEvaluationUnchanged(t *testing.T) {
 func TestWrappedRequestFailuresOfAStepStayErrors(t *testing.T) {
 	t.Parallel()
 	for _, code := range []platform.ErrorCode{platform.CodeForbidden, platform.CodeLoginRequired, platform.CodeNotFound,
-		platform.CodeStorageUnavailable, platform.CodeCommitUncertain, platform.CodeRevisionConflict} {
+		platform.CodeStorageUnavailable, platform.CodeCommitUncertain, platform.CodeRevisionConflict, platform.CodeInternalError} {
 		err := &processing.StepFailure{StepID: "lookup", Err: platform.NewFailure(code, errors.New("cause"))}
 		if failure, ok := previewFailure(context.Background(), err); ok {
 			t.Fatalf("%s inside a step became the explanation %+v", code, failure)
 		}
 	}
 	for _, code := range []platform.ErrorCode{platform.CodeInvalidInput, platform.CodeIncompatibleVersion,
-		platform.CodeAuthorityUnavailable, platform.CodeInternalError} {
+		platform.CodeAuthorityUnavailable} {
 		err := &processing.StepFailure{StepID: "lookup", Err: platform.NewFailure(code, errors.New("cause"))}
 		if failure, ok := previewFailure(context.Background(), err); !ok || failure.StepID != "lookup" {
 			t.Fatalf("%s inside a step = %+v, %v, want an explanation", code, failure, ok)
@@ -86,7 +86,7 @@ func TestWrappedRequestFailuresOfAStepStayErrors(t *testing.T) {
 func TestAnExpiredCallerIsNotExplained(t *testing.T) {
 	t.Parallel()
 	err := &processing.StepFailure{StepID: "lookup",
-		Err: platform.NewFailure(platform.CodeInternalError, context.DeadlineExceeded)}
+		Err: platform.NewFailure(platform.CodeInvalidInput, context.DeadlineExceeded)}
 	expired, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 	defer cancel()
 	if failure, ok := previewFailure(expired, err); ok {

@@ -60,11 +60,12 @@ func previewFailure(caller context.Context, err error) (*PreviewFailure, bool) {
 }
 
 // explainedCode reports whether a failure code describes the evaluated Workflow: invalid or
-// unconvertible data, a limit, an unavailable or incompatible capability, or a failing step.
+// unconvertible data, a limit, or an unavailable or incompatible capability. An internal error is
+// a fault of the server, not of the Workflow, and stays an error so that it is logged and reported.
 func explainedCode(code platform.ErrorCode) bool {
 	switch code {
 	case platform.CodeInvalidInput, platform.CodeResourceLimit, platform.CodeIncompatibleVersion,
-		platform.CodeAuthorityUnavailable, platform.CodeInternalError:
+		platform.CodeAuthorityUnavailable:
 		return true
 	}
 	return false

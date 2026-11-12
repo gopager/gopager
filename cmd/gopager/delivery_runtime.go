@@ -42,8 +42,8 @@ type deliveryRuntime struct {
 	// layoutStore and presentation are the persisted Layouts and their layers.
 	layoutStore  *layoutstore.Store
 	presentation *presentationstore.Store
-	// layoutResolver is the layered Layout resolver every renderer of Messages uses, so that a
-	// card and a Delivery choose the same Layout.
+	// layoutResolver is the layered Layout resolver of Delivery, built by composeLayouts like the
+	// card renderer's, so that a card and a Delivery choose the same Layout.
 	layoutResolver *presentation.LayeredResolver
 }
 

@@ -108,7 +108,11 @@ func (r *CardRenderer) resolveLayouts(ctx context.Context, tx platform.Transacti
 		requests[i] = processing.LayoutRequest{OutputKind: processing.LayoutJSON, UnitIDs: unitIDs}
 	}
 	if batch, ok := r.layouts.(BatchLayoutResolver); ok {
-		return batch.ResolveLayouts(ctx, tx, requests)
+		resolutions, err := batch.ResolveLayouts(ctx, tx, requests)
+		if err == nil && len(resolutions) != len(requests) {
+			err = platform.NewFailure(platform.CodeInternalError, errors.New("layout batch resolution lost requests"))
+		}
+		return resolutions, err
 	}
 	resolutions := make([]LayoutResolution, len(requests))
 	for i, request := range requests {

@@ -25,6 +25,8 @@ type memoryAssignments struct {
 	rows  map[assignmentKey]Assignment
 	units map[uuid.UUID]UnitContext
 	orgs  map[uuid.UUID]bool
+	// getErr, when set, is the failure of every Get.
+	getErr error
 }
 
 func (m *memoryAssignments) List(_ context.Context, _ platform.TransactionContext, kind string, id uuid.UUID) ([]Assignment, error) {
@@ -47,6 +49,9 @@ func (m *memoryAssignments) List(_ context.Context, _ platform.TransactionContex
 }
 
 func (m *memoryAssignments) Get(_ context.Context, _ platform.TransactionContext, kind string, id uuid.UUID, output string) (Assignment, error) {
+	if m.getErr != nil {
+		return Assignment{}, m.getErr
+	}
 	row, ok := m.rows[assignmentKey{kind, id, output}]
 	if !ok {
 		return Assignment{}, authz.ErrNotFound
@@ -246,5 +251,24 @@ func TestAssignmentsNeedPresentationManage(t *testing.T) {
 	}
 	if _, err := f.put(ScopeUnit, uuid.New(), "text", uuid.New(), 0); !errors.Is(err, authz.ErrForbidden) {
 		t.Fatalf("put of an unknown unit without the right must not reveal it: %v", err)
+	}
+}
+
+// TestAssignmentReplaceKeepsStorageFailures expects a failure to read the current assignment to
+// stay that failure: only a missing assignment is a revision conflict.
+func TestAssignmentReplaceKeepsStorageFailures(t *testing.T) {
+	t.Parallel()
+	f := newAssignmentFixture(t)
+	layout := f.layout(t, "text", f.agencyA)
+	if _, err := f.put(ScopeUnit, f.unit, "text", layout, 0); err != nil {
+		t.Fatal(err)
+	}
+	f.rows.getErr = platform.NewFailure(platform.CodeStorageUnavailable, errors.New("down"))
+	if _, err := f.put(ScopeUnit, f.unit, "text", layout, 1); platform.FailureCode(err) != platform.CodeStorageUnavailable {
+		t.Fatalf("replace during a storage failure = %v, want STORAGE_UNAVAILABLE", err)
+	}
+	f.rows.getErr = authz.ErrNotFound
+	if _, err := f.put(ScopeUnit, f.unit, "text", layout, 1); !errors.Is(err, authz.ErrRevisionConflict) {
+		t.Fatalf("replace of a missing assignment = %v, want a revision conflict", err)
 	}
 }

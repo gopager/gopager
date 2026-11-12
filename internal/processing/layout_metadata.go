@@ -5,8 +5,9 @@ import (
 	"slices"
 )
 
-// blockShape is the single description of a block kind: the properties it allows and the ones it
-// requires. Validation and the editor metadata both read it, so they cannot drift apart.
+// blockShape describes a block kind: the properties it allows and the ones it requires. Validation
+// reads the allowed set; it enforces required properties with its own per-kind checks, and a test
+// keeps those in agreement with the required set the editor metadata reports.
 type blockShape struct {
 	kind     string
 	allowed  property

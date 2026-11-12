@@ -213,3 +213,19 @@ func TestCardReportsALayoutConflictOfTheUnits(t *testing.T) {
 		t.Fatalf("card = %+v, want a conflict without fallback", card)
 	}
 }
+
+// shortBatch resolves fewer Layouts than requested.
+type shortBatch struct{ stubLayouts }
+
+func (s *shortBatch) ResolveLayouts(context.Context, platform.TransactionContext, []processing.LayoutRequest) ([]LayoutResolution, error) {
+	return nil, nil
+}
+
+func TestCardFailsSafelyWhenABatchLosesRequests(t *testing.T) {
+	t.Parallel()
+	_, err := cardRenderer(t, &shortBatch{}).RenderCards(context.Background(), fakeTx{context.Background()},
+		[]readmodel.DeliveryProjection{projectionOf("FIRE", "payload")})
+	if platform.FailureCode(err) != platform.CodeInternalError {
+		t.Fatalf("err = %v, want INTERNAL_ERROR", err)
+	}
+}

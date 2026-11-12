@@ -218,8 +218,11 @@ func (s *AssignmentService) Put(ctx context.Context, proof identity.Proof, scope
 		if expected > 0 {
 			// Replacing an assignment of another Layout needs the right over that Layout too.
 			current, err := s.store.Get(tx.Context(), tx, scopeKind, scopeID, outputKind)
-			if err != nil {
+			if errors.Is(err, authz.ErrNotFound) {
 				return authz.ErrRevisionConflict
+			}
+			if err != nil {
+				return err
 			}
 			if err := s.authorizeAssignment(tx.Context(), tx, who, now, current); err != nil {
 				return err

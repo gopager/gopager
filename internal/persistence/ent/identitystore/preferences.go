@@ -59,8 +59,8 @@ func (s *Store) SavePreferences(ctx context.Context, tx platform.TransactionCont
 	return nil
 }
 
-// DeleteAccountPreferences removes the account's preferences in the caller's transaction. Account
-// deletion calls it; it succeeds when the account has none.
+// DeleteAccountPreferences removes the account's preferences in the caller's transaction, for the
+// account deletion workflow, which is not implemented yet; it succeeds when the account has none.
 func (s *Store) DeleteAccountPreferences(ctx context.Context, tx platform.TransactionContext, accountID uuid.UUID) error {
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {

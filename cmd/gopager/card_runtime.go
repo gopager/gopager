@@ -8,8 +8,9 @@ import (
 	"github.com/gopager/gopager/internal/readmodel"
 )
 
-// layoutComposition is the Layout persistence and the layered resolver that every renderer of
-// Messages shares, so a GUI card and a Delivery of the same Message choose the same Layout.
+// layoutComposition is the Layout persistence and the layered resolver of one renderer of
+// Messages. Every renderer builds it with composeLayouts; the resolvers hold no state, so a GUI
+// card and a Delivery of the same Message choose the same Layout.
 type layoutComposition struct {
 	layouts  *layoutstore.Store
 	layers   *presentationstore.Store
