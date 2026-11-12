@@ -2,6 +2,8 @@ package processingstore
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/platform"
@@ -79,13 +81,44 @@ const workflowHistory = `(EXISTS (SELECT 1 FROM processing_results r JOIN proces
 	OR EXISTS (SELECT 1 FROM processing_candidates h WHERE h.transmission_id = c.transmission_id
 		AND h.workflow_id = c.workflow_id AND h.id <> c.id AND h.state IN ('completed', 'failed')))`
 
-// inheritReprocessMark gives a candidate that AdmitCandidate just created or re-pended the mark
-// of a Reprocess its Transmission is under, when its Workflow has history for the Transmission
+// transferOutstandingMark moves the mark of another candidate of the same Transmission and
+// Workflow, typically one just superseded by a new version or context revision before it could
+// publish, onto the given candidate and clears it on the donor, in one statement. The
+// replacement thereby still retracts the earlier results and stays historical.
+func (s *Store) transferOutstandingMark(ctx context.Context, tx platform.TransactionContext, candidate uuid.UUID) error {
+	executor, err := s.primary.Resolve(tx)
+	if err != nil {
+		return err
+	}
+	var donor, mark uuid.UUID
+	err = executor.QueryRowContext(ctx, `SELECT d.id, d.reprocess_id FROM processing_candidates d
+		JOIN processing_candidates c ON c.transmission_id = d.transmission_id AND c.workflow_id = d.workflow_id
+		WHERE c.id = $1 AND d.id <> c.id AND d.reprocess_id IS NOT NULL AND c.reprocess_id IS NULL
+		ORDER BY d.created_at LIMIT 1 FOR UPDATE OF d`, candidate).Scan(&donor, &mark)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := executor.ExecContext(ctx, `UPDATE processing_candidates SET reprocess_id = NULL WHERE id = $1`, donor); err != nil {
+		return err
+	}
+	_, err = executor.ExecContext(ctx, `UPDATE processing_candidates SET reprocess_id = $2 WHERE id = $1`, candidate, mark)
+	return err
+}
+
+// inheritReprocessMark gives a candidate that AdmitCandidate just created or re-pended the
+// outstanding mark of its own Workflow's replaced candidate or, failing that, the mark of a
+// Reprocess its Transmission is under, when its Workflow has history for the Transmission
 // or the candidate was re-pended from a terminal state. The Transmission is under Reprocess while
 // a non-superseded candidate of another Workflow carries a mark; the candidate itself is then a
 // historical re-run, whereas a first run (fresh intake) stays unmarked.
 func (s *Store) inheritReprocessMark(ctx context.Context, tx platform.TransactionContext,
 	candidate uuid.UUID, repended bool) error {
+	if err := s.transferOutstandingMark(ctx, tx, candidate); err != nil {
+		return err
+	}
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {
 		return err
