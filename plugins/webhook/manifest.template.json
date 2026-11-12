@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 2,
+  "sdkMajor": 2,
+  "sdkMinor": 1,
+  "pluginId": "webhook",
+  "version": "1.0.0",
+  "capabilityId": "webhook",
+  "capability": "delivery",
+  "artifact": {
+    "path": "webhook/1.0.0/webhook",
+    "digest": "@DIGEST@"
+  },
+  "configurationSchema": {
+    "kind": "object",
+    "properties": {
+      "url": {"kind": "string"},
+      "bearerToken": {"kind": "string", "optional": true},
+      "hmacSecret": {"kind": "string", "optional": true},
+      "followRedirects": {"kind": "boolean", "optional": true},
+      "allowPrivateDestinations": {"kind": "boolean", "optional": true}
+    }
+  },
+  "configurationPolicy": {
+    "configurationScope": "admin",
+    "secret": false,
+    "properties": {
+      "url": {"configurationScope": "admin", "secret": false},
+      "bearerToken": {"configurationScope": "admin", "secret": true},
+      "hmacSecret": {"configurationScope": "admin", "secret": true},
+      "followRedirects": {"configurationScope": "admin", "secret": false},
+      "allowPrivateDestinations": {"configurationScope": "admin", "secret": false}
+    }
+  },
+  "delivery": {
+    "outputKinds": ["json", "text", "markdown"],
+    "inputs": [
+      {"name": "topic", "kind": "string", "required": false, "maxBytes": 256}
+    ],
+    "dependencies": [
+      {"kind": "network", "description": "HTTPS POST to the configured URL"},
+      {"kind": "secret", "description": "Optional Bearer token and HMAC signing secret"}
+    ],
+    "sendsPerMinute": 0,
+    "idempotent": false
+  }
+}

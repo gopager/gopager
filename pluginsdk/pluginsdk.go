@@ -17,6 +17,11 @@
 //			return []byte(`{"schemaVersion":2,"fields":{}}`), nil
 //		}))
 //	}
+//
+// A Delivery plugin (SDK 2.1, manifest "capability": "delivery") implements DeliveryHandler
+// and runs with ServeDelivery instead; the SDK decodes the request, validates the result and
+// answers in the Delivery response format. The safehttp package offers the HTTP client such a
+// plugin uses to reach its destination.
 package pluginsdk
 
 import (
