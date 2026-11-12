@@ -167,7 +167,7 @@ Every literal and every result value is a typed envelope `{"kind": K, "value": V
 | `boolean` | JSON boolean | `{"kind":"boolean","value":true}` |
 | `integer` | Decimal **string**, int64 range | `{"kind":"integer","value":"9223372036854775807"}` |
 | `number` | JSON number, finite (not a string) | `{"kind":"number","value":1.25}` |
-| `timestamp` | RFC 3339 string with offset; the instant and the written year lie in years 1 to 9999, and the offset is below ±16:00 | `{"kind":"timestamp","value":"2026-11-01T12:00:00+01:00"}` |
+| `timestamp` | RFC 3339 string with offset; both the instant in UTC and the written year lie in years 1 to 9999, and the offset is below ±16:00 | `{"kind":"timestamp","value":"2026-11-01T12:00:00+01:00"}` |
 | `bytes` | Canonical standard Base64 with padding | `{"kind":"bytes","value":"AAEC/w=="}` |
 | `object` | Map of name → typed value; every non-optional property must be present | `{"kind":"object","value":{"ids":{"kind":"list","value":[{"kind":"integer","value":"7"}]}}}` |
 | `list` | Array of typed values (≤ 1000) | `{"kind":"list","value":[{"kind":"integer","value":"7"}]}` |
