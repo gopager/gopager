@@ -61,22 +61,11 @@ func composeDelivery(c *core) (*deliveryRuntime, error) {
 	if err != nil {
 		return nil, err
 	}
-	layouts, err := layoutstore.New(c.store)
+	composition, err := composeLayouts(c)
 	if err != nil {
 		return nil, err
 	}
-	layers, err := presentationstore.New(c.store)
-	if err != nil {
-		return nil, err
-	}
-	base, err := presentation.NewResolver(layouts, delivery.DefaultLayouts())
-	if err != nil {
-		return nil, err
-	}
-	resolver, err := presentation.NewLayeredResolver(base, layers)
-	if err != nil {
-		return nil, err
-	}
+	layouts, layers, resolver := composition.layouts, composition.layers, composition.resolver
 	targets := c.deliveryConfig.targets
 	if targets == nil {
 		targets = delivery.UnavailableTargets{}

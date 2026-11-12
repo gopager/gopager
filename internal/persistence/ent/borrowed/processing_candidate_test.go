@@ -243,7 +243,7 @@ func TestProcessingCandidateNativeReselectionRetainsResultsAndAttempts(t *testin
 			t.Fatalf("native recovery race/history: successes=%d result=%+v err=%v", successes, recovered, recoveryError)
 		}
 		if err := primary.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
-			_, err := store.FailCandidate(tx.Context(), tx, latest, platform.CodeInternalError, false)
+			_, err := store.FailCandidate(tx.Context(), tx, latest, platform.CodeInternalError, "", false)
 			return err
 		}); !errors.Is(err, authz.ErrRevisionConflict) {
 			t.Fatalf("lost worker wrote over native recovery: %v", err)
@@ -397,16 +397,19 @@ func TestProcessingCandidateNativeReselectionRetainsResultsAndAttempts(t *testin
 			if err != nil {
 				return err
 			}
-			failed, err = store.FailCandidate(tx.Context(), tx, failureLease, platform.CodeAuthorityUnavailable, true)
+			failed, err = store.FailCandidate(tx.Context(), tx, failureLease, platform.CodeAuthorityUnavailable, "fetch-station", true)
 			if err != nil {
 				return err
+			}
+			if failed.FailureStep == nil || *failed.FailureStep != "fetch-station" {
+				t.Fatalf("native failure lost the failing step: %+v", failed)
 			}
 			if failed.State != "pending" || failed.Attempts != 1 || failed.AutomaticAttempts != 1 ||
 				failed.WorkerID != nil || failed.LeaseUntil != nil || failed.FailureCode == nil ||
 				failed.DueAt.Sub(failed.UpdatedAt) < 24*time.Second || failed.DueAt.Sub(failed.UpdatedAt) > 36*time.Second {
 				t.Fatalf("native failure lost safe status/schedule: %+v", failed)
 			}
-			if _, err := store.FailCandidate(tx.Context(), tx, failureLease, platform.CodeInternalError, false); !errors.Is(err, authz.ErrRevisionConflict) {
+			if _, err := store.FailCandidate(tx.Context(), tx, failureLease, platform.CodeInternalError, "", false); !errors.Is(err, authz.ErrRevisionConflict) {
 				t.Fatalf("old failed lease overwrote pending retry: %v", err)
 			}
 			return nil

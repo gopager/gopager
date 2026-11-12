@@ -335,8 +335,9 @@ func (s *Service) finish(ctx context.Context, current processing.Candidate, capt
 		}
 		if result.err != nil {
 			code, retryable := classifyFailure(result.err)
+			step, _ := processing.FailedStep(result.err)
 			var err error
-			completed, err = s.repository.FailCandidate(tx.Context(), tx, lease, code, retryable)
+			completed, err = s.repository.FailCandidate(tx.Context(), tx, lease, code, step, retryable)
 			if err != nil {
 				return err
 			}

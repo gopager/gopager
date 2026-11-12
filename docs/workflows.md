@@ -294,7 +294,7 @@ Patterns are checked when the definition is compiled, so an inadmissible pattern
   - Any other reason, or a malformed response → `INVALID_INPUT`
   - A plugin error, crash or broken connection during the call → `INVALID_INPUT`
   - A plugin process that cannot be started or does not complete its handshake → `AUTHORITY_UNAVAILABLE`
-- During preview the instance's plugin is called with `mode: "preview"` and must answer without effects outside its process. If its manifest does not declare `supportsPreview`, the plugin is not called and the step fails with `AUTHORITY_UNAVAILABLE`.
+- During preview the instance's plugin is called with `mode: "preview"` and must answer without effects outside its process. If its manifest does not declare `supportsPreview`, the plugin is not called and the step fails with `AUTHORITY_UNAVAILABLE`; a preview explains it as a `capability-unavailable` [failure](#failure-explanations).
 - The plugin process of an instance revision is long-lived and shared by all runs and previews that use it, one call at a time; see [Plugins](plugins.md#1-runtime-model).
 - Plugins whose configuration policy declares a secret, or user-scoped configuration, cannot be used: `AUTHORITY_UNAVAILABLE`.
 
@@ -463,7 +463,7 @@ Preview evaluates one definition against one source without persisting anything.
 | --- | --- |
 | `versionId` or `definition` | Exactly one. `definition` is an unsaved draft and is compiled like a save. |
 | `syntheticJson` | A synthetic transmission (see below). |
-| `storedTransmissionId` | Accepted by the schema, but stored-transmission preview is not available and returns `AUTHORITY_UNAVAILABLE`. |
+| `storedTransmissionId` | An accepted Transmission (see [Stored samples](#stored-samples)). |
 
 Synthetic transmission:
 
@@ -488,7 +488,21 @@ Rules:
 - An unsaved draft that references a field the editor may not read is rejected with `INVALID_INPUT`, exactly as on save. A saved version is evaluated in full, and its result is released only if the editor may read every group of its [classification](#classification).
 - Installed steps call the instance's plugin in preview mode, and only if its manifest declares `supportsPreview`. Each call checks both the execution principal and the editor.
 - After evaluation, the workflow revision and source authority are checked again. If the workflow changed, the request fails with `REVISION_CONFLICT`.
-- The response is the [result shape](#result-shape).
+- The response is the [result shape](#result-shape), or, when the evaluation fails, the [failure explanation](#failure-explanations).
+
+#### Stored samples
+
+`storedTransmissionId` previews an accepted Transmission: its stored Payload and Protocol, observation time (to the second), Network and original targets are evaluated with the current matching and the current Unit attributes, exactly like a synthetic sample. Nothing is persisted: no candidate, result, fact or processing status changes, and installed steps run in preview mode. The editor needs `workflow.preview` on the Workflow scope and must be able to read the Transmission, that is, it must be one of the supporting readable Transmissions that the detail of its Message lists for the editor (`message.read` and `message.detail` on an eligible appearance); otherwise the request is `404 NOT_FOUND`, as for a missing Transmission. The editor must also read every field group the preview carries (`payload`, `address` and `unit`, and the groups of the source fields the definition reads); otherwise the request is `403 FORBIDDEN`, A Transmission with an original target the editor cannot see (a suppressed one, or one assigned to a Unit outside the editor's grants) is refused with `403 FORBIDDEN` as a whole, never evaluated without that target, because an extracted output could expose it. Readability is checked again when the result is rechecked, so a grant change during the preview is fenced. A preview therefore never shows a hidden or foreign field.
+
+#### Failure explanations
+
+An evaluation that fails (a failing step, a processing limit) does not fail the request. The preview answers `200` with
+
+```json
+{"failure": {"code": "INVALID_INPUT", "reason": "conversion-failed", "stepId": "extract-level"}}
+```
+
+`code` is the error code, `reason` is one of `resource-limit` (`RESOURCE_LIMIT`), `capability-unavailable` (`AUTHORITY_UNAVAILABLE`, `DEPENDENCY_UNAVAILABLE`, `INCOMPATIBLE_VERSION`), `conversion-failed` (`INVALID_INPUT`) and `evaluation-failed` (anything else), the keys `processing.<reason>` of the text catalog, and `stepId` is the ID of the failing step (the innermost one for steps nested in a branch), omitted when no step failed. No raw error text is returned. Request errors, authorization errors and infrastructure failures stay HTTP errors.
 
 ### From transmission to candidate
 
@@ -644,10 +658,10 @@ All processing events use schema version 1 and producer version `processing-kern
 Candidate status reads require `workflow.read` on the workflow and are permission-filtered. Their response contains only:
 
 ```json
-{"id": "…", "revision": "4", "state": "failed", "selected": true, "failureCode": "RESOURCE_LIMIT", "updatedAt": "…"}
+{"id": "…", "revision": "4", "state": "failed", "failureCode": "RESOURCE_LIMIT", "failureReason": "resource-limit", "failureStep": "extract-level", "updatedAt": "…"}
 ```
 
-`selected` and `failureCode` appear only when set.
+`selected`, `failureCode`, `failureReason` and `failureStep` appear only when set. `failureReason` explains `failureCode` as for a [preview failure](#failure-explanations); `failureStep` is the ID of the step that failed, which the worker stores with the failure and a retry clears.
 
 Result metadata returns `{"id", "revision", "completedAt"}`. Source identity, execution pins, lease data and result fields are not exposed through these routes.
 

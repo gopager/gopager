@@ -22,7 +22,12 @@ type CandidateStatus struct {
 	State       string              `json:"state"`
 	Selected    *bool               `json:"selected,omitempty"`
 	FailureCode *platform.ErrorCode `json:"failureCode,omitempty"`
-	UpdatedAt   time.Time           `json:"updatedAt"`
+	// FailureReason explains FailureCode (`resource-limit`, `capability-unavailable`,
+	// `conversion-failed` or `evaluation-failed`); it is derived on read, never stored.
+	FailureReason string `json:"failureReason,omitempty"`
+	// FailureStep is the ID of the Workflow step that failed, when a step did.
+	FailureStep *string   `json:"failureStep,omitempty"`
+	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
 // PrivateResultMetadata omits classified Evaluation fields and all source identity.
@@ -78,6 +83,9 @@ func validateCandidateStatus(status CandidateStatus) error {
 	if status.State != "failed" && status.FailureCode != nil {
 		return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("unexpected candidate failure projection"))
 	}
+	if status.FailureStep != nil && (status.FailureCode == nil || len(*status.FailureStep) > processing.MaxFailureStepBytes) {
+		return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("invalid candidate failure step projection"))
+	}
 	return nil
 }
 
@@ -89,6 +97,8 @@ func validatePageInput(input processing.PageInput) error {
 	return nil
 }
 
+// detachCandidateStatus copies the mutable fields of a validated status and explains its failure
+// code with a reason.
 func detachCandidateStatus(status CandidateStatus) CandidateStatus {
 	if status.Selected != nil {
 		selected := *status.Selected
@@ -97,6 +107,11 @@ func detachCandidateStatus(status CandidateStatus) CandidateStatus {
 	if status.FailureCode != nil {
 		code := *status.FailureCode
 		status.FailureCode = &code
+		status.FailureReason = processing.FailureReason(string(code))
+	}
+	if status.FailureStep != nil {
+		step := *status.FailureStep
+		status.FailureStep = &step
 	}
 	return status
 }

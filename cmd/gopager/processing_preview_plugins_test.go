@@ -289,9 +289,18 @@ func TestProcessingSyntheticPreviewUsesOnlyPreviewSupportingInstalledPlugins(t *
 	}
 	missing := managementRequest(t, client, origin, http.MethodPost,
 		"/api/v1/workflows/"+workflowID.String()+"/preview", bodyFor(withoutPreviewID),
-		login.CSRFToken, "", http.StatusServiceUnavailable)
-	if missing.Code != string(platform.CodeAuthorityUnavailable) {
-		t.Fatalf("plugin without preview support returned %q, want authority unavailable", missing.Code)
+		login.CSRFToken, "", http.StatusOK)
+	var explained struct {
+		Failure struct {
+			Code   string `json:"code"`
+			Reason string `json:"reason"`
+			StepID string `json:"stepId"`
+		} `json:"failure"`
+	}
+	if err := json.Unmarshal(missing.Data, &explained); err != nil ||
+		explained.Failure.Code != string(platform.CodeAuthorityUnavailable) ||
+		explained.Failure.Reason != "capability-unavailable" || explained.Failure.StepID == "" {
+		t.Fatalf("plugin without preview support returned %s, want an unavailable-capability failure at its step", missing.Data)
 	}
 	if after := processingPreviewSideEffects(t, store); before != after {
 		t.Fatalf("installed previews wrote durable results/candidates/events: before=%v after=%v", before, after)

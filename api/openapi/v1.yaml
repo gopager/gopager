@@ -3362,10 +3362,17 @@ paths:
         fields the caller may read. If the Workflow changes during evaluation the request fails with
         409 `REVISION_CONFLICT`. A `syntheticJson` input is evaluated against the current Network named
         by its `networkId`: an unknown Network is 404 `NOT_FOUND`; a deleted Network, or one whose
-        Protocol differs from the input, is 503 `AUTHORITY_UNAVAILABLE`. `storedTransmissionId` is not
-        supported and returns 503 `AUTHORITY_UNAVAILABLE` after validation and authorization.
+        Protocol differs from the input, is 503 `AUTHORITY_UNAVAILABLE`. `storedTransmissionId` evaluates
+        the stored Payload, observation time, Network and original targets of an accepted Transmission
+        with the current matching and Unit attributes, like a synthetic sample. The caller must be able
+        to read the Transmission (a supporting readable Transmission of its Message, else 404
+        `NOT_FOUND`) and every field group the projection carries and the definition reads (else 403
+        `FORBIDDEN`; also 403 when an original target of the Transmission is not visible to the caller), so a
+        preview never shows a hidden field; nothing is written.
         An `installed` step is called in preview mode; a plugin whose manifest does not declare
-        `supportsPreview` is not called and the request is 503 `AUTHORITY_UNAVAILABLE`.
+        `supportsPreview` is not called and its step fails with `AUTHORITY_UNAVAILABLE`. A failed
+        evaluation (a failing step, a processing limit) is answered with 200 and a `failure` instead of
+        an evaluation; request, authorization and infrastructure errors stay HTTP errors.
          The body is limited to 1 MiB and is decoded strictly: unknown fields, duplicate object keys and trailing data are 400.
       security:
       - sessionCookie: []
@@ -8946,7 +8953,39 @@ components:
         schemaVersion:
           $ref: '#/components/schemas/SchemaVersion'
         data:
-          $ref: '#/components/schemas/Evaluation'
+          oneOf:
+          - $ref: '#/components/schemas/Evaluation'
+          - $ref: '#/components/schemas/PreviewFailureResult'
+    PreviewFailureResult:
+      type: object
+      description: The explanation of a preview whose evaluation failed. It carries no raw error text.
+      required:
+      - failure
+      properties:
+        failure:
+          type: object
+          required:
+          - code
+          - reason
+          properties:
+            code:
+              type: string
+              description: Error code of the failure, for example `INVALID_INPUT` or `RESOURCE_LIMIT`.
+            reason:
+              $ref: '#/components/schemas/ProcessingFailureReason'
+            stepId:
+              type: string
+              description: The ID of the failing Workflow step, when a step failed.
+    ProcessingFailureReason:
+      type: string
+      description: The text key `processing.<reason>` explains a failure with. `resource-limit` for `RESOURCE_LIMIT`;
+        `capability-unavailable` for `AUTHORITY_UNAVAILABLE`, `DEPENDENCY_UNAVAILABLE` and `INCOMPATIBLE_VERSION`;
+        `conversion-failed` for `INVALID_INPUT`; `evaluation-failed` otherwise.
+      enum:
+      - resource-limit
+      - capability-unavailable
+      - conversion-failed
+      - evaluation-failed
     Candidate:
       type: object
       required:
@@ -8981,6 +9020,11 @@ components:
           - AUTHORITY_UNAVAILABLE
           - INTERNAL_ERROR
           description: Present only for some `failed` candidates.
+        failureReason:
+          $ref: '#/components/schemas/ProcessingFailureReason'
+        failureStep:
+          type: string
+          description: The ID of the Workflow step that failed, when a step did. Present only with `failureCode`.
         updatedAt:
           type: string
           format: date-time
@@ -9045,6 +9089,39 @@ components:
         networkUnresolved:
           type: boolean
           description: Present (true) only where `network.read` reaches the Network's Agency.
+        card:
+          $ref: '#/components/schemas/MessageCard'
+    MessageCard:
+      type: object
+      description: The GUI card of the Message, the `json` rendering of the Layout that applies to it. It is built
+        from what the caller may read and never shows more than the rest of the item; a field the caller cannot read
+        is absent from it. Present in feed items, details and live `upsert` frames.
+      required:
+      - layoutVersion
+      - layoutConflict
+      - fallback
+      - items
+      properties:
+        layoutId:
+          type: string
+          format: uuid
+          description: The Layout the card was rendered with; absent for the built-in default.
+        layoutVersion:
+          type: integer
+          format: int64
+          description: The revision of the Layout, 0 for the built-in default.
+        layoutConflict:
+          type: boolean
+          description: The Message's Units are assigned different Layouts, so the installation default applies.
+        fallback:
+          type: boolean
+          description: The chosen Layout could not render for this caller, so the built-in default was rendered.
+        items:
+          type: array
+          description: The ordered items of the rendering, as a Delivery with a `json` Layout renders them.
+          items:
+            type: object
+            additionalProperties: true
     MessageUnit:
       type: object
       required:

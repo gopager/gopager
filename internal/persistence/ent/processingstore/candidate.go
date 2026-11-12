@@ -232,11 +232,11 @@ func (s *Store) changeClaim(ctx context.Context, tx platform.TransactionContext,
 	return next, nil
 }
 
-// FailCandidate persists a safe classified failure and remaining retry schedule under current fencing.
+// FailCandidate persists a safe classified failure, the failing step (empty for none) and the remaining retry schedule under current fencing.
 func (s *Store) FailCandidate(ctx context.Context, tx platform.TransactionContext, lease processing.CandidateLease,
-	code platform.ErrorCode, retryable bool) (processing.Candidate, error) {
+	code platform.ErrorCode, step string, retryable bool) (processing.Candidate, error) {
 	return s.changeClaim(ctx, tx, lease.CandidateID, false, func(current processing.Candidate, now time.Time) (processing.Candidate, error) {
-		return current.Fail(lease, code, retryable, now)
+		return current.Fail(lease, code, step, retryable, now)
 	})
 }
 

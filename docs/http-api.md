@@ -565,6 +565,20 @@ reads its group:
 | `derived` | `attributes` | `filter` fields in the `attributes` namespace |
 
 A filter that needs an unreadable group is `403 FORBIDDEN`; it is never dropped or widened.
+
+**Cards.** Every feed item, detail and live `upsert` frame carries `card`, the GUI card of the
+Message: the `json` rendering of the Layout that applies to it, with the shared Layout renderer,
+so a card and a Delivery of the same Message show the same blocks, labels, icons and link checks.
+`card` has `layoutId` (absent for the built-in default), `layoutVersion` (0 for the built-in
+default), `layoutConflict`, `fallback` and `items`, the ordered items
+`{kind, label?, icon?, value | text | url | items}`. The values are those a Delivery of the Message
+to the same reader would carry, without event fields: the card reads the caller's projection, so a
+field the caller cannot read is absent and the card never widens field rights. `fallback` is true
+when the Layout could not render for this caller (a limit, an invalid or deleted Layout) and the
+built-in default was rendered instead; a bad Layout never hides a Message or fails the read.
+The Layout is chosen by the [layout layers](#layout-assignments) for the Message's eligible Units
+(the caller's Unit appearances, so a hidden Unit never chooses); `layoutConflict` is true when
+those Units are assigned different Layouts and the installation default applies instead.
 `networkUnresolved: true` appears only where the caller's `network.read` reaches the Network's Agency.
 
 **Feed (`GET /messages`).** Query parameters; unknown parameters and repeated scalars are
@@ -1067,12 +1081,23 @@ may read. `fields` (and each `targetResults[].fields`) is keyed by Attribute sch
 field name; an output without a value is omitted ([Workflows](workflows.md#outputs)). A `syntheticJson` input is evaluated against the current network named by its
 `networkId`: an unknown network returns `404 NOT_FOUND`, and a deleted network or one
 whose protocol differs from the input returns `503 AUTHORITY_UNAVAILABLE`.
-`storedTransmissionId` is not supported and returns `503 AUTHORITY_UNAVAILABLE`.
+`storedTransmissionId` evaluates an accepted Transmission like a synthetic sample: the editor must be able to read it
+(`404 NOT_FOUND` otherwise) and every field group the preview carries (`403 FORBIDDEN` otherwise), and nothing
+is written ([Workflows](workflows.md#preview)).
+A failed evaluation is not an HTTP error: the preview answers `200` with
+`{"failure":{"code","reason","stepId"}}` instead of the result, where `reason` is
+`resource-limit`, `capability-unavailable`, `conversion-failed` or `evaluation-failed` and `stepId` (omitted when no step
+failed) names the failing step. No raw error text is returned. Request, authorization and
+infrastructure errors keep their HTTP status.
 
 Candidate retry requeues a `failed`, unpublished candidate and returns
 `{"candidateId","revision"}` in `data`. If the candidate's source, workflow version or
 revision, or the processing configuration changed since it was admitted, the retry
 returns `409 REVISION_CONFLICT`. Details: [workflows](workflows.md#retries).
+
+Candidate status reads (`GET /workflows/{id}/candidates` and `/candidates/{candidate}`) explain a
+failed candidate with `failureCode`, `failureReason` (the same reasons as the preview failure) and
+`failureStep`, the ID of the failing step, when a step failed.
 
 Definition format: [workflows](workflows.md).
 

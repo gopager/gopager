@@ -1,0 +1,79 @@
+package readmodel
+
+import (
+	"context"
+	"encoding/json"
+	"slices"
+
+	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/platform"
+)
+
+// Card is the GUI card model of a Message: the json rendering of the Layout that applies to the
+// Message for the caller. It reads only what the caller's projection holds, so it never widens
+// field rights.
+type Card struct {
+	// LayoutID is the Layout the card was rendered with; absent for the built-in default.
+	LayoutID *uuid.UUID `json:"layoutId,omitempty"`
+	// LayoutVersion is the revision of the Layout; 0 for the built-in default.
+	LayoutVersion int64 `json:"layoutVersion"`
+	// LayoutConflict is true when the Units of the Message are assigned different Layouts.
+	LayoutConflict bool `json:"layoutConflict"`
+	// Fallback is true when the chosen Layout could not render for this caller and the built-in
+	// default was rendered instead.
+	Fallback bool `json:"fallback"`
+	// Items are the ordered json items of the rendering.
+	Items json.RawMessage `json:"items"`
+}
+
+// CardRenderer renders the cards of Messages as the caller reads them.
+type CardRenderer interface {
+	// RenderCards returns one card per projection, in order, inside the caller's transaction. A
+	// Layout that cannot render yields the built-in default card; only infrastructure failures
+	// are returned as errors. Implementations may share resolved Layouts across the call.
+	RenderCards(ctx context.Context, tx platform.TransactionContext, projections []DeliveryProjection) ([]*Card, error)
+}
+
+// Option configures a Service.
+type Option func(*Service)
+
+// WithCards makes every feed item and detail of the Service carry a card rendered by renderer.
+func WithCards(renderer CardRenderer) Option {
+	return func(s *Service) { s.cards = renderer }
+}
+
+// projection builds the Delivery view of a record the way the caller reads it: the feed item,
+// the eligible appearances and the readable groups, sorted.
+func (v viewer) projection(record FeedRecord) DeliveryProjection {
+	groups := make([]string, 0, len(v.groups))
+	for group := range v.groups {
+		groups = append(groups, group)
+	}
+	slices.Sort(groups)
+	return DeliveryProjection{Item: v.feedItem(record, false), Units: slices.Clone(record.Units),
+		WithoutUnit: slices.Clone(record.WithoutUnit), Groups: groups, ResultVisible: record.ResultVisible}
+}
+
+// attachCards renders the cards of the records and sets them on the items, which are the
+// records' feed items in the same order. Without a renderer the items stay as they are.
+func (s *Service) attachCards(ctx context.Context, tx platform.TransactionContext, current access,
+	records []FeedRecord, items []FeedItem) error {
+	if s.cards == nil || len(records) == 0 {
+		return nil
+	}
+	projections := make([]DeliveryProjection, 0, len(records))
+	for _, record := range records {
+		projections = append(projections, current.viewer.projection(record))
+	}
+	cards, err := s.cards.RenderCards(ctx, tx, projections)
+	if err != nil {
+		return err
+	}
+	if len(cards) != len(items) {
+		return platform.NewFailure(platform.CodeInternalError, nil)
+	}
+	for i := range items {
+		items[i].Card = cards[i]
+	}
+	return nil
+}

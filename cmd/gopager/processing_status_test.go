@@ -209,6 +209,7 @@ func TestProcessingStatusHTTPFiltersWorkflowPagesAndHidesPrivateEvidence(t *test
 	completed := seedProcessingReadCandidate(t, store, workflowA, processingcandidate.StateCompleted, &completedSelected, "", at.Add(time.Minute))
 	failureCode := string(platform.CodeResourceLimit)
 	failed := seedProcessingReadCandidate(t, store, workflowA, processingcandidate.StateFailed, nil, failureCode, at.Add(2*time.Minute))
+	setCandidateFailureStep(t, store, failed.candidateID, "extract-level")
 	otherCompleted := seedProcessingReadCandidate(t, store, workflowB, processingcandidate.StateCompleted, &completedSelected, "", at)
 
 	page := managementRequest(t, client, origin, http.MethodGet,
@@ -263,6 +264,22 @@ func TestProcessingStatusHTTPFiltersWorkflowPagesAndHidesPrivateEvidence(t *test
 		strings.Contains(string(status.Data), "workerId") || strings.Contains(string(status.Data), "attempts") {
 		t.Fatalf("candidate status leaked private work fields: %s", status.Data)
 	}
+	explained := managementRequest(t, client, origin, http.MethodGet,
+		"/api/v1/workflows/"+workflowA.String()+"/candidates/"+failed.candidateID.String(), "", "", "", http.StatusOK)
+	var failure struct {
+		FailureCode   string `json:"failureCode"`
+		FailureReason string `json:"failureReason"`
+		FailureStep   string `json:"failureStep"`
+	}
+	if err := json.Unmarshal(explained.Data, &failure); err != nil {
+		t.Fatal(err)
+	}
+	if failure.FailureCode != failureCode || failure.FailureReason != "resource-limit" || failure.FailureStep != "extract-level" {
+		t.Fatalf("failed candidate = %s, want code, reason resource-limit and step extract-level", explained.Data)
+	}
+	if strings.Contains(string(status.Data), "failureReason") || strings.Contains(string(status.Data), "failureStep") {
+		t.Fatalf("a completed candidate reports a failure: %s", status.Data)
+	}
 	result := managementRequest(t, client, origin, http.MethodGet,
 		"/api/v1/workflows/"+workflowA.String()+"/candidates/"+completed.candidateID.String()+"/result",
 		"", "", "", http.StatusOK)
@@ -314,4 +331,20 @@ func TestProcessingStatusHTTPFiltersWorkflowPagesAndHidesPrivateEvidence(t *test
 	revokeReadReviewer(t, store, reviewerID)
 	managementRequest(t, reviewerClient, origin, http.MethodGet,
 		"/api/v1/workflows/"+workflowA.String()+"/candidates", "", "", "", http.StatusForbidden)
+}
+
+// setCandidateFailureStep stores the failing step of a seeded candidate.
+func setCandidateFailureStep(t *testing.T, store *postgres.Store, candidate uuid.UUID, step string) {
+	t.Helper()
+	err := store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		_, err = executor.ExecContext(tx.Context(), `UPDATE processing_candidates SET failure_step = $1 WHERE id = $2`, step, candidate)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }

@@ -25,6 +25,7 @@ type candidateStatusProjection struct {
 	State       string    `sql:"state"`
 	Selected    *bool     `sql:"selected"`
 	FailureCode *string   `sql:"failure_code"`
+	FailureStep *string   `sql:"failure_step"`
 	UpdatedAt   time.Time `sql:"updated_at"`
 }
 
@@ -75,7 +76,7 @@ func (s *Store) processingReadClient(ctx context.Context, tx platform.Transactio
 func candidateStatus(value candidateStatusProjection) processingmanagement.CandidateStatus {
 	status := processingmanagement.CandidateStatus{
 		ID: value.ID, Revision: value.Revision, State: value.State,
-		Selected: value.Selected, UpdatedAt: value.UpdatedAt,
+		Selected: value.Selected, FailureStep: value.FailureStep, UpdatedAt: value.UpdatedAt,
 	}
 	if value.FailureCode != nil {
 		code := platform.ErrorCode(*value.FailureCode)
@@ -105,7 +106,8 @@ func (s *Store) ListCandidateStatuses(ctx context.Context, tx platform.Transacti
 	err = query.Order(processingcandidate.ByUpdatedAt(), processingcandidate.ByID()).
 		Offset(input.Offset).Limit(input.Limit).
 		Select(processingcandidate.FieldID, processingcandidate.FieldRevision, processingcandidate.FieldState,
-			processingcandidate.FieldSelected, processingcandidate.FieldFailureCode, processingcandidate.FieldUpdatedAt).
+			processingcandidate.FieldSelected, processingcandidate.FieldFailureCode, processingcandidate.FieldFailureStep,
+			processingcandidate.FieldUpdatedAt).
 		Scan(scope, &rows)
 	if err != nil {
 		return processing.Page[processingmanagement.CandidateStatus]{}, err
@@ -134,7 +136,8 @@ func (s *Store) ReadCandidateStatus(ctx context.Context, tx platform.Transaction
 	err = client.ProcessingCandidate.Query().
 		Where(processingcandidate.ID(candidateID), processingcandidate.WorkflowID(workflowID)).
 		Select(processingcandidate.FieldID, processingcandidate.FieldRevision, processingcandidate.FieldState,
-			processingcandidate.FieldSelected, processingcandidate.FieldFailureCode, processingcandidate.FieldUpdatedAt).
+			processingcandidate.FieldSelected, processingcandidate.FieldFailureCode, processingcandidate.FieldFailureStep,
+			processingcandidate.FieldUpdatedAt).
 		Scan(scope, &rows)
 	if err != nil {
 		return processingmanagement.CandidateStatus{}, err
@@ -164,7 +167,8 @@ func (s *Store) ReadPrivateResultMetadata(ctx context.Context, tx platform.Trans
 	err = client.ProcessingCandidate.Query().
 		Where(processingcandidate.ID(candidateID), processingcandidate.WorkflowID(workflowID)).
 		Select(processingcandidate.FieldID, processingcandidate.FieldRevision, processingcandidate.FieldState,
-			processingcandidate.FieldSelected, processingcandidate.FieldFailureCode, processingcandidate.FieldUpdatedAt).
+			processingcandidate.FieldSelected, processingcandidate.FieldFailureCode, processingcandidate.FieldFailureStep,
+			processingcandidate.FieldUpdatedAt).
 		Scan(scope, &candidates)
 	if err != nil {
 		return processingmanagement.PrivateResultMetadata{}, err

@@ -2,7 +2,6 @@ package readmodel
 
 import (
 	"context"
-	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -56,13 +55,6 @@ func (s *Service) ProjectForDelivery(ctx context.Context, tx platform.Transactio
 	if len(result.Items) == 0 {
 		return DeliveryProjection{}, false, nil
 	}
-	record := result.Items[0]
-	groups := make([]string, 0, len(current.viewer.groups))
-	for group := range current.viewer.groups {
-		groups = append(groups, group)
-	}
-	slices.Sort(groups)
-	return DeliveryProjection{Item: current.viewer.feedItem(record, false), Units: slices.Clone(record.Units),
-		WithoutUnit: slices.Clone(record.WithoutUnit), Groups: groups,
-		ResultVisible: record.ResultVisible}, true, nil
+	projection := current.viewer.projection(result.Items[0])
+	return projection, true, nil
 }
