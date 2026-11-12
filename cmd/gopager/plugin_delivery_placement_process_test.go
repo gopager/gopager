@@ -47,8 +47,9 @@ func (s *pluginDeliveryScene) awaitStatus(id uuid.UUID, want string) {
 // TestDeliveryPlacementAcrossTwoWorkerProcesses starts two real worker processes on one database,
 // one with the webhook plugin in its plugin directory and one with an empty directory. The node
 // that has the plugin attempts a prepared Delivery and the other leaves it alone. Once only the node
-// without the plugin is left, it prepares the next Delivery as deferred, and when that Delivery is
-// overdue it claims it, defers it again as dependency-unavailable and records no attempt.
+// without the plugin is left, it prepares the next Delivery as dependency-unavailable but still due,
+// leaves it to nodes that have the plugin, and once it is overdue claims it, defers it and records
+// no attempt.
 func TestDeliveryPlacementAcrossTwoWorkerProcesses(t *testing.T) {
 	t.Parallel()
 	s := newPluginDeliveryScene(t)
@@ -59,8 +60,8 @@ func TestDeliveryPlacementAcrossTwoWorkerProcesses(t *testing.T) {
 	bearer, _ := s.subscriber("payload", "unit")
 	s.subscribeTarget(bearer, instance, nil)
 
-	// The scene prepares the first Delivery itself: which worker fans a fact out is not
-	// deterministic, and a node without the plugin prepares the Delivery as deferred.
+	// The scene prepares the first Delivery itself, because which worker fans a fact out is not
+	// deterministic.
 	served := s.deliverMessage("first")[0]
 
 	withPlugin := startCommand(t, "worker", s.dsn, "", "--event-poll-interval=100ms --processing-artifact-root="+s.directory)
@@ -84,8 +85,13 @@ func TestDeliveryPlacementAcrossTwoWorkerProcesses(t *testing.T) {
 	withPlugin()
 	stoppedWithPlugin = true
 	orphaned := s.awaitDelivery(s.recordMessage("second"))
-	if got := s.text(`SELECT (next_attempt_at > now())::text FROM deliveries WHERE id = $1`, orphaned); got != "true" {
-		t.Fatalf("the node without the plugin made a Delivery due at once: %s", s.status(orphaned))
+	if got := s.text(`SELECT (next_attempt_at <= now())::text FROM deliveries WHERE id = $1`, orphaned); got != "true" {
+		t.Fatalf("a Delivery prepared without the plugin must stay due for nodes that have it: %s", s.status(orphaned))
+	}
+	prepared := s.text(`SELECT updated_at::text FROM deliveries WHERE id = $1`, orphaned)
+	time.Sleep(time.Second)
+	if got := s.text(`SELECT updated_at::text FROM deliveries WHERE id = $1`, orphaned); got != prepared {
+		t.Fatalf("the node without the plugin claimed a Delivery that is not overdue: %s", s.status(orphaned))
 	}
 	before := s.now()
 	s.overdue(orphaned, delivery.PlacementGrace)

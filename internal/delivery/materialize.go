@@ -436,8 +436,11 @@ func newRecord(subscription Subscription, current *subject, part split, target T
 	}
 	switch {
 	case !result.available:
+		// The fan-out node may simply lack the target's plugin, so the Delivery stays due now: a
+		// node that can serve the target claims it at once and materializes it at start, while
+		// other nodes take it only after the placement grace and defer it then.
 		code := CodeDependency
-		record.OutcomeCode, record.Due = &code, now.Add(UnavailableDelay)
+		record.OutcomeCode = &code
 	case result.code != "":
 		code := result.code
 		record.State, record.OutcomeCode, record.Input = Failed, &code, nil
