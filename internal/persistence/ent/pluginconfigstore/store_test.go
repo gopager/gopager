@@ -126,6 +126,7 @@ func cipher(t *testing.T) *processing.SecretCipher {
 }
 
 func TestSecretsRoundTripAndAccountDeletion(t *testing.T) {
+	t.Parallel()
 	w := newWorld(t)
 	sealer := cipher(t)
 	adminRow, err := sealer.Seal(uuid.New(), w.instance, nil, []byte("admin-token"))
@@ -169,6 +170,7 @@ func TestSecretsRoundTripAndAccountDeletion(t *testing.T) {
 }
 
 func TestPersonalConfigurationRevisionsAndOwners(t *testing.T) {
+	t.Parallel()
 	w := newWorld(t)
 	value := processing.EmptyConfiguration()
 	save := func(owner uuid.UUID, expected int64) (int64, error) {
@@ -226,6 +228,7 @@ func TestPersonalConfigurationRevisionsAndOwners(t *testing.T) {
 }
 
 func TestUnitParameters(t *testing.T) {
+	t.Parallel()
 	w := newWorld(t)
 	text, err := processing.Literal(processing.StringValue, "bell")
 	if err != nil {
@@ -264,6 +267,7 @@ func TestUnitParameters(t *testing.T) {
 }
 
 func TestUnitParametersRejectUnknownUnit(t *testing.T) {
+	t.Parallel()
 	w := newWorld(t)
 	text, err := processing.Literal(processing.StringValue, "bell")
 	if err != nil {
@@ -278,6 +282,7 @@ func TestUnitParametersRejectUnknownUnit(t *testing.T) {
 }
 
 func TestCurrentInstancesNeedNoAuthority(t *testing.T) {
+	t.Parallel()
 	w := newWorld(t)
 	w.within(func(tx platform.TransactionContext) error {
 		list, err := w.instances.ListCurrentInstances(tx.Context(), tx)

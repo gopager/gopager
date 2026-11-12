@@ -31,9 +31,11 @@ func (f *fakeDeliveryHost) Attempt(_ context.Context, request processing.Deliver
 }
 
 func TestPluginDeliveryTargetsDescribe(t *testing.T) {
+	t.Parallel()
 	instance := processing.InstanceConfiguration{ID: uuid.New(), Revision: 3}
 	for name, personal := range map[string]bool{"admin": false, "admin-and-personal": true} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			host := &fakeDeliveryHost{description: processing.DeliveryDescription{OutputKinds: []string{"text"},
 				Inputs:         []processing.DeliveryInputDeclaration{{Name: "to", Kind: processing.StringValue, Required: true, MaxBytes: 9}},
 				Dependencies:   []processing.DeliveryDependency{{Kind: "network", Description: "smtp"}},
@@ -58,6 +60,7 @@ func TestPluginDeliveryTargetsDescribe(t *testing.T) {
 }
 
 func TestPluginDeliveryTargetsAttempt(t *testing.T) {
+	t.Parallel()
 	correlation := uuid.New()
 	invocation := delivery.AttemptInvocation{DeliveryID: uuid.New(), AttemptID: uuid.New(), AttemptNumber: 2,
 		InstanceID: uuid.New(), SubscriberID: uuid.New(), InstanceRevision: 4, CorrelationID: &correlation,
@@ -70,6 +73,7 @@ func TestPluginDeliveryTargetsAttempt(t *testing.T) {
 		"uncertain": {Status: processing.AttemptUncertain, Code: "timeout"},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			host := &fakeDeliveryHost{outcome: outcome}
 			got, err := pluginDeliveryTargets{host: host}.Attempt(t.Context(), invocation)
 			if err != nil {

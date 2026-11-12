@@ -79,7 +79,9 @@ func handle(_ context.Context, data []byte) ([]byte, error) {
 	if err := json.Unmarshal(in.Attempt, &current); err != nil {
 		return nil, err
 	}
-	switch current.Body {
+	// A layout that renders the Message text carries its field label; accept it so a Message can
+	// select the behaviour end to end.
+	switch strings.TrimPrefix(current.Body, "Text: ") {
 	case "accept":
 		return answer("accepted", "ok", 0, map[string]bool{"ok": true})
 	case "transient":

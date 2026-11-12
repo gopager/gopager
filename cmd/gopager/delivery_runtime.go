@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/delivery"
 	"github.com/gopager/gopager/internal/events"
 	"github.com/gopager/gopager/internal/httpapi"
@@ -21,6 +23,9 @@ type deliveryConfig struct {
 	// targets is the Delivery target port; nil selects delivery.UnavailableTargets, so that
 	// without a target provider every target is visibly unavailable.
 	targets delivery.Targets
+	// placement lists the target instances this node can serve; nil serves every claimed
+	// Delivery (tests without a plugin host).
+	placement func(ctx context.Context) ([]uuid.UUID, error)
 	// pollInterval is the Delivery runner's fallback poll; zero selects the default.
 	pollInterval time.Duration
 }
@@ -89,6 +94,7 @@ func composeDeliveryRunner(c *core, wakes events.WakeSubscriber) (*delivery.Runn
 		return nil, err
 	}
 	return delivery.NewRunner(runtime.deps, c.store, c.store, delivery.RunnerOptions{Limits: c.deliveryConfig.limits,
+		Placement:    c.deliveryConfig.placement,
 		PollInterval: c.deliveryConfig.pollInterval, Wakes: wakes, Logger: slog.Default()})
 }
 

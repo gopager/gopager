@@ -139,13 +139,14 @@ func TestSecretCipherFingerprintIsKeyedAndStable(t *testing.T) {
 	t.Parallel()
 	first, second := testCipher(t, 1), testCipher(t, 2)
 	data := []byte("token")
-	if first.Fingerprint(data) != first.Fingerprint(data) {
+	fingerprint := first.Fingerprint(data)
+	if again := first.Fingerprint(data); fingerprint != again {
 		t.Fatal("fingerprint is not stable")
 	}
-	if first.Fingerprint(data) == second.Fingerprint(data) {
+	if fingerprint == second.Fingerprint(data) {
 		t.Fatal("fingerprint does not depend on the key")
 	}
-	if strings.Contains(first.Fingerprint(data), "token") || len(first.Fingerprint(data)) != 64 {
+	if strings.Contains(fingerprint, "token") || len(fingerprint) != 64 {
 		t.Fatal("unexpected fingerprint shape")
 	}
 }

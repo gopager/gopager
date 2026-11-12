@@ -137,6 +137,19 @@ func run() (result error) {
 			return errors.Join(err, store.Close())
 		}
 		shared.deliveryConfig = config.Delivery
+		processingRuntime, err = composeProcessingAPIRuntimeWith(ctx, shared,
+			processingRuntimeSettings{ArtifactRoot: config.ProcessingArtifactRoot, Secrets: config.PluginSecrets})
+		if err != nil {
+			return errors.Join(err, store.Close())
+		}
+		defer func() {
+			result = errors.Join(result, processingRuntime.Close(context.Background()))
+		}()
+		// The Delivery side is composed after the plugin host, so its Subscriptions, fan-out and
+		// runner see the real plugin targets from their first use.
+		if err := processingRuntime.bindDelivery(shared); err != nil {
+			return errors.Join(err, store.Close())
+		}
 		eventRuntime, err = composeEventsRuntime(shared, slices.Contains(config.Roles, platform.RoleWorker), config.EventPollInterval)
 		if err != nil {
 			return errors.Join(err, store.Close())
@@ -146,14 +159,6 @@ func run() (result error) {
 		stopEventHub := eventRuntime.startStandaloneHub(ctx)
 		defer func() {
 			result = errors.Join(result, stopEventHub())
-		}()
-		processingRuntime, err = composeProcessingAPIRuntimeWith(ctx, shared,
-			processingRuntimeSettings{ArtifactRoot: config.ProcessingArtifactRoot, Secrets: config.PluginSecrets})
-		if err != nil {
-			return errors.Join(err, store.Close())
-		}
-		defer func() {
-			result = errors.Join(result, processingRuntime.Close(context.Background()))
 		}()
 	}
 	if slices.Contains(config.Roles, platform.RoleWorker) {
