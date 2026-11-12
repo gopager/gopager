@@ -9,7 +9,7 @@ GoPager is a single Go binary, `gopager` ([cmd/gopager](../cmd/gopager/)), backe
 | Role | Runs | Started from |
 | --- | --- | --- |
 | `api` | HTTP listener: gateway intake, login/session, management routes, health endpoints | `composeApplicationAPI` in [main.go](../cmd/gopager/main.go) |
-| `worker` | Processing dispatcher (workflow candidates), correction runner (rematching, Processing readmission), Gateway contact-loss monitor, event consumers (Delivery fan-out) and the Delivery runner | `composeProcessingWorker`, `composeCorrectionRunner`, `composeEventsRuntime` |
+| `worker` | Processing dispatcher (workflow candidates), correction runner (rematching, Processing readmission), Reprocess runner (historical Reprocess), Gateway contact-loss monitor, event consumers (Delivery fan-out) and the Delivery runner | `composeProcessingWorker`, `composeCorrectionRunner`, `composeReprocessRunner`, `composeEventsRuntime` |
 | `bootstrap` subcommand | One-shot local creation of the first account; no listener | [bootstrap.go](../cmd/gopager/bootstrap.go) |
 
 One process can run both roles (`--roles api,worker`), or the roles can run in separate processes against the same database. Role processes coordinate only through PostgreSQL (row locks, leases, fencing tokens). They do not talk to each other directly.
@@ -114,7 +114,11 @@ There is no publication barrier: accepted evidence is visible on commit, and pro
 | `transmissions` | `processing_status` (`none`/`pending`/`completed`/`failed`) | `none` when no workflow was selected at intake; otherwise derived from the candidates of the currently selected workflows: `pending` while any is pending or running, `failed` when none is pending and at least one failed, `completed` when all completed |
 | `processing_results` | `published_at`, `message_id` | Set when the result was attached to the Message; `message_id` references `messages` and follows a merge |
 
-Result-dependent reactions subscribe to `processing.completed`; nothing else waits for processing.
+Result-dependent reactions subscribe to `processing.completed`; nothing else waits for processing. A result a Reprocess withdrew carries `retracted_at` instead of `published_at`/`message_id`; readers use only results with `published_at`, so a retracted result is invisible and never publishes again.
+
+### Historical Reprocess (worker role)
+
+`POST /workflows/{id}/reprocess` bumps the Workflow revision and stores a `processing_reprocess_requests` row (pins, Message-time range, primary-clock `cutoff_at`, `cursor`, `scanned`/`readmitted`/`retracted`, lease) in one transaction and notifies `gopager_processing_reprocess`. `reprocess.Runner` claims a due request with `FOR UPDATE SKIP LOCKED`; per Transmission, in ID order after the cursor and in one transaction with the cursor advance, it re-checks the pins under the shared `processing_control` lock, calls `ProcessingSourceOwner.ReadmitProcessing`, marks the Workflow's current candidate (`processing_candidates.reprocess_id`) or retracts the Workflow's published results of the Transmission when it is no longer selected. Publication of a marked candidate retracts the other results of the Transmission and Workflow, publishes the new one and appends `processing.completed` with replay mode `reprocess`, which Delivery fan-out ignores. The request is superseded by any later Workflow revision or active-version change. See [workflows.md](workflows.md#historical-reprocess).
 
 ### Historical correction (worker role)
 
@@ -232,7 +236,8 @@ The layering rules that the code follows:
 | `internal/assignments` | Address rules (selectors, validity intervals, conflict validation), target matching, suppressions, correction status/retry, `CorrectionRunner` |
 | `internal/ingest` | Submission validation, Network resolution, intake service, gateway state reports and transitions, Network and Gateway administration (lifecycle, network assignment, credentials, diagnostics, history), contact-loss monitor |
 | `internal/processing` | Workflow definition model and compiler, CEL predicates, Core regex, value/schema codec, candidate state machine, retry schedule, source capture, plugin host (process pool, verified-artifact cache, per-instance status) and installed-step execution, processing instances, the Delivery host (`DeliveryHost`: describe, placement, attempts), manifest capabilities and Secret handling (references, cipher, resolver, merged configuration) |
-| `internal/processing/management` | Authorized workflow/version/instance commands and reads, instance inspection, Secret writes, personal configuration and per-Unit values, candidate status reads, manual retry, preview |
+| `internal/processing/management` | Authorized workflow/version/instance commands and reads, instance inspection, Secret writes, personal configuration and per-Unit values, candidate status reads, manual retry, Reprocess requests and progress, preview |
+| `internal/processing/reprocess` | `Runner`: claims Reprocess requests and re-admits the Transmissions they cover, one fenced step per Transmission |
 | `internal/processing/worker` | Candidate dispatcher and per-candidate execution (claim, evaluate, complete/fail, publish) |
 | `internal/processing/publication` | Applies completed results and source readiness in the caller's transaction |
 | `internal/processing/execution` | Binds a request proof to preview authority for installed steps |
@@ -493,7 +498,7 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 
 ### Readiness and lifecycle
 
-`platform.StartWithAPI` checks connectivity, write authority and the migration state before starting any role. It then serves `/health/live` and `/health/ready`, rechecks every 5 seconds, and rejects application requests and new transactions with `503 AUTHORITY_UNAVAILABLE` while not ready. The processing dispatcher and the correction runner do not exit on transient database failures (`STORAGE_UNAVAILABLE`, `AUTHORITY_UNAVAILABLE`, `COMMIT_UNCERTAIN`, `REVISION_CONFLICT`); they log the code and retry with a backoff that doubles up to 30 seconds, so readiness returns once the recheck succeeds. A runner that exits early for any other reason marks the process not ready until restart. On SIGINT or SIGTERM the process stops accepting work, drains in-flight operations and runners, and closes the plugin host and the store. Configuration flags are listed in [operations.md](operations.md).
+`platform.StartWithAPI` checks connectivity, write authority and the migration state before starting any role. It then serves `/health/live` and `/health/ready`, rechecks every 5 seconds, and rejects application requests and new transactions with `503 AUTHORITY_UNAVAILABLE` while not ready. The processing dispatcher, the correction runner and the Reprocess runner do not exit on transient database failures (`STORAGE_UNAVAILABLE`, `AUTHORITY_UNAVAILABLE`, `COMMIT_UNCERTAIN`, `REVISION_CONFLICT`); they log the code and retry with a backoff that doubles up to 30 seconds, so readiness returns once the recheck succeeds. A runner that exits early for any other reason marks the process not ready until restart. On SIGINT or SIGTERM the process stops accepting work, drains in-flight operations and runners, and closes the plugin host and the store. Configuration flags are listed in [operations.md](operations.md).
 
 ### Migrations and Ent code generation
 

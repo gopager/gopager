@@ -3546,6 +3546,132 @@ paths:
           $ref: '#/components/responses/InternalError'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /workflows/{id}/reprocess:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    post:
+      operationId: requestWorkflowReprocess
+      tags:
+      - Workflows
+      summary: Request a historical Reprocess
+      description: |
+        Requires `workflow.reprocess` over the whole Workflow scope. Asks the worker role to judge the
+        Transmissions whose Message time lies in the half-open range `[messageTimeFrom, messageTimeTo)`
+        again with the active version, current access, targets and Workflow selection. `versionId` must
+        be the active version and `expectedRevision` the Workflow revision; otherwise, or when the
+        Workflow is disabled, the answer is 409 `REVISION_CONFLICT`. An empty or reversed range or a
+        malformed time is 400 `INVALID_INPUT`. The request advances the Workflow revision and fixes a
+        cutoff: only Transmissions accepted at or before it are scanned. Results replaced by the run
+        are retracted and not sent again; the replacement facts carry replay mode `reprocess`.
+        The body is limited to 1 MiB and is decoded strictly: unknown fields, duplicate object keys and trailing data are 400.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReprocessRequestBody'
+      responses:
+        '202':
+          description: Request stored; the worker role runs it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReprocessResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /workflows/{id}/reprocesses:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    get:
+      operationId: listWorkflowReprocesses
+      tags:
+      - Workflows
+      summary: List Reprocess requests
+      description: Requires `workflow.read` on the Workflow. Newest first.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      parameters:
+      - $ref: '#/components/parameters/Offset'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of requests.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReprocessPageResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /workflows/{id}/reprocesses/{request}:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    - name: request
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Reprocess request ID.
+    get:
+      operationId: readWorkflowReprocess
+      tags:
+      - Workflows
+      summary: Read a Reprocess request
+      description: Requires `workflow.read` on the Workflow. Reports the progress of the run.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      responses:
+        '200':
+          description: The request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReprocessResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /instances:
     get:
       operationId: listInstances
@@ -9241,6 +9367,124 @@ components:
               format: uuid
             revision:
               $ref: '#/components/schemas/Revision'
+    ReprocessRequestBody:
+      type: object
+      description: '`expectedRevision` is the Workflow revision; `versionId` must be the active version.'
+      required:
+      - schemaVersion
+      - versionId
+      - expectedRevision
+      - messageTimeFrom
+      - messageTimeTo
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        versionId:
+          type: string
+          format: uuid
+        expectedRevision:
+          $ref: '#/components/schemas/Revision'
+        messageTimeFrom:
+          type: string
+          format: date-time
+          description: Inclusive start of the Message-time range.
+        messageTimeTo:
+          type: string
+          format: date-time
+          description: Exclusive end of the Message-time range; later than `messageTimeFrom`.
+      additionalProperties: false
+    Reprocess:
+      type: object
+      required:
+      - id
+      - workflowId
+      - versionId
+      - messageTimeFrom
+      - messageTimeTo
+      - cutoffAt
+      - state
+      - scanned
+      - readmitted
+      - retracted
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        workflowId:
+          type: string
+          format: uuid
+        versionId:
+          type: string
+          format: uuid
+        messageTimeFrom:
+          type: string
+          format: date-time
+        messageTimeTo:
+          type: string
+          format: date-time
+        cutoffAt:
+          type: string
+          format: date-time
+          description: Primary-clock time of the request; later accepted Transmissions are not scanned.
+        state:
+          type: string
+          enum:
+          - pending
+          - running
+          - completed
+          - superseded
+          description: '`superseded` means the Workflow changed after the request.'
+        scanned:
+          type: integer
+          minimum: 0
+          description: Transmissions handled so far.
+        readmitted:
+          type: integer
+          minimum: 0
+          description: Transmissions whose candidate was marked for replacement.
+        retracted:
+          type: integer
+          minimum: 0
+          description: Published results withdrawn because the Workflow no longer selects the Transmission.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ReprocessResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          $ref: '#/components/schemas/Reprocess'
+    ReprocessPageResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          type: object
+          required:
+          - items
+          - total
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Reprocess'
+            total:
+              type: integer
+              minimum: 0
     ProvisionedArtifact:
       type: object
       required:
