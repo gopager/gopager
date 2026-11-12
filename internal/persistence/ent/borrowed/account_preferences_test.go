@@ -20,7 +20,9 @@ func TestAccountPreferencesStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	account := uuid.New()
-	within := func(fn func(tx platform.TransactionContext) error) error { return store.WithinTransaction(t.Context(), fn) }
+	within := func(fn func(tx platform.TransactionContext) error) error {
+		return store.WithinTransaction(t.Context(), fn)
+	}
 	if err := within(func(tx platform.TransactionContext) error {
 		executor, err := store.Resolve(tx)
 		if err != nil {
@@ -73,7 +75,9 @@ func TestAccountPreferencesStore(t *testing.T) {
 		t.Fatalf("replaced = %+v", got)
 	}
 	deleteAccount := func() error {
-		return within(func(tx platform.TransactionContext) error { return accounts.DeleteAccountPreferences(tx.Context(), tx, account) })
+		return within(func(tx platform.TransactionContext) error {
+			return accounts.DeleteAccountPreferences(tx.Context(), tx, account)
+		})
 	}
 	if err := deleteAccount(); err != nil {
 		t.Fatal(err)
