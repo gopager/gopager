@@ -83,3 +83,60 @@ func TestReprocessMarksACandidateAdmittedBetweenTheRequestAndTheRunner(t *testin
 		t.Fatalf("results published=%d retracted=%d", published, retracted)
 	}
 }
+
+// TestReprocessMarkingDoesNotDependOnTheAdmissionOrder expects the re-run of another Workflow
+// that a readmission re-pends before the runner reached the Transmission to be historical, however
+// reconciliation orders it. Existing candidates are reselected in Workflow ID order and candidates
+// for a new version are created afterwards, so the cases cover the Reprocessed Workflow at a new
+// version and at its old one, with the lower and the higher ID.
+func TestReprocessMarkingDoesNotDependOnTheAdmissionOrder(t *testing.T) {
+	t.Parallel()
+	for name, c := range map[string]struct{ newVersion, reprocessedLower bool }{
+		"new version, reprocessed lower":   {true, true},
+		"new version, reprocessed higher":  {true, false},
+		"same version, reprocessed lower":  {false, true},
+		"same version, reprocessed higher": {false, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			first := newReprocessFixture(t)
+			second := first.otherWorkflow("Other", "alert")
+			low, high := first, second
+			if low.workflow.String() > high.workflow.String() {
+				low, high = high, low
+			}
+			reprocessed, other := high, low
+			if c.reprocessedLower {
+				reprocessed, other = low, high
+			}
+			from, to, firstTime, secondTime, _ := reprocessWindow()
+			reprocessedV1, otherV1 := reprocessed.saveVersion("3"), other.saveVersion("5")
+			reprocessed.activate(reprocessedV1)
+			other.activate(otherV1)
+			history := first.submit("history", firstTime)
+			first.runWorker()
+			version := reprocessedV1
+			if c.newVersion {
+				version = reprocessed.saveVersion("4")
+				reprocessed.activate(version)
+			}
+			reprocessed.requestReprocess(version, from, to)
+			first.readmit(history)
+			fresh := first.submit("fresh", secondTime)
+			first.runReprocess()
+			first.runWorker()
+
+			for label, view := range map[string]*reprocessFixture{"reprocessed": reprocessed, "other": other} {
+				if modes := view.replayModesOf(history); !slices.Equal(modes, []string{"normal", "reprocess"}) {
+					t.Fatalf("%s replay modes = %v, want the re-run to be a reprocess fact", label, modes)
+				}
+				if published, retracted := view.resultsOf(history); published != 1 || retracted != 1 {
+					t.Fatalf("%s results published=%d retracted=%d, want the older result replaced", label, published, retracted)
+				}
+				if modes := view.replayModesOf(fresh); !slices.Equal(modes, []string{"normal"}) {
+					t.Fatalf("%s fresh replay modes = %v, want normal", label, modes)
+				}
+			}
+		})
+	}
+}

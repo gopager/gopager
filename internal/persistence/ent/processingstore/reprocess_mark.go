@@ -135,12 +135,15 @@ func (s *Store) inheritReprocessMark(ctx context.Context, tx platform.Transactio
 	return s.markCoveredByRequest(ctx, tx, candidate, repended)
 }
 
-// markCoveredByRequest marks a candidate that was just created or re-pended with the newest
-// active Reprocess request of its Workflow that covers its Transmission, when the Workflow has
-// history for the Transmission. The runner may not have reached the Transmission yet, so without
-// this a readmission by a correction or by another Workflow's dispatch would make the re-run
-// look like fresh intake. A request covers a Transmission accepted by its cutoff whose Message
-// time lies in its range.
+// markCoveredByRequest marks a candidate that was just created or re-pended with an active
+// Reprocess request that covers its Transmission, when the candidate's Workflow has history for
+// the Transmission. The request of the candidate's own Workflow is preferred, otherwise the newest
+// covering request of any Workflow that has a candidate or result on the Transmission is taken, so
+// that the outcome does not depend on whether reconciliation reaches this candidate before or
+// after the Reprocessed Workflow's own. Without this a readmission by a correction or by another
+// Workflow's dispatch, before the runner reached the Transmission, would make the re-run look like
+// fresh intake. A request covers a Transmission accepted by its cutoff whose Message time lies in
+// its range.
 func (s *Store) markCoveredByRequest(ctx context.Context, tx platform.TransactionContext, candidate uuid.UUID, repended bool) error {
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {
@@ -149,10 +152,13 @@ func (s *Store) markCoveredByRequest(ctx context.Context, tx platform.Transactio
 	_, err = executor.ExecContext(ctx, `UPDATE processing_candidates c SET reprocess_id = (
 			SELECT r.id FROM processing_reprocess_requests r
 				JOIN transmissions t ON t.id = c.transmission_id JOIN messages m ON m.id = t.message_id
-			WHERE r.workflow_id = c.workflow_id AND r.state IN ('pending', 'running')
+			WHERE r.state IN ('pending', 'running')
 				AND t.accepted_at <= r.cutoff_at
 				AND m.first_observed_at >= r.message_time_from AND m.first_observed_at < r.message_time_to
-			ORDER BY r.created_at DESC, r.id DESC LIMIT 1)
+				AND (r.workflow_id = c.workflow_id
+					OR EXISTS (SELECT 1 FROM processing_candidates v WHERE v.transmission_id = c.transmission_id
+						AND v.workflow_id = r.workflow_id))
+			ORDER BY (r.workflow_id = c.workflow_id) DESC, r.created_at DESC, r.id DESC LIMIT 1)
 		WHERE c.id = $1 AND c.reprocess_id IS NULL AND ($2 OR `+workflowHistory+`)`, candidate, repended)
 	return err
 }
