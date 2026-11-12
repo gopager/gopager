@@ -26,6 +26,11 @@ type ReprocessView struct {
 	Retracted       int64     `json:"retracted"`
 	CreatedAt       time.Time `json:"createdAt"`
 	UpdatedAt       time.Time `json:"updatedAt"`
+	// FailureCode is the code of the last failed step while the request keeps retrying; absent
+	// when the last step succeeded.
+	FailureCode *string `json:"failureCode,omitempty"`
+	// Attempts counts the consecutive failed steps.
+	Attempts int `json:"attempts"`
 }
 
 func reprocessView(request processing.ReprocessRequest) ReprocessView {
@@ -33,7 +38,8 @@ func reprocessView(request processing.ReprocessRequest) ReprocessView {
 		MessageTimeFrom: request.MessageTimeFrom.UTC(), MessageTimeTo: request.MessageTimeTo.UTC(),
 		CutoffAt: request.CutoffAt.UTC(), State: request.State, Scanned: request.Scanned,
 		Readmitted: request.Readmitted, Retracted: request.Retracted,
-		CreatedAt: request.CreatedAt.UTC(), UpdatedAt: request.UpdatedAt.UTC()}
+		CreatedAt: request.CreatedAt.UTC(), UpdatedAt: request.UpdatedAt.UTC(),
+		FailureCode: request.FailureCode, Attempts: request.Attempts}
 }
 
 // ReprocessService requests and reports explicit historical Reprocess runs of a Workflow.

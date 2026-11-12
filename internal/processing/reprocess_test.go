@@ -15,12 +15,16 @@ func TestReprocessInputValidate(t *testing.T) {
 		t.Fatalf("valid input rejected: %v", err)
 	}
 	for name, mutate := range map[string]func(*ReprocessInput){
-		"missing version":   func(i *ReprocessInput) { i.VersionID = uuid.Nil },
-		"missing revision":  func(i *ReprocessInput) { i.ExpectedRevision = 0 },
-		"missing from":      func(i *ReprocessInput) { i.MessageTimeFrom = time.Time{} },
-		"missing to":        func(i *ReprocessInput) { i.MessageTimeTo = time.Time{} },
-		"empty range":       func(i *ReprocessInput) { i.MessageTimeTo = i.MessageTimeFrom },
-		"reversed range":    func(i *ReprocessInput) { i.MessageTimeTo = i.MessageTimeFrom.Add(-time.Second) },
+		"missing version":  func(i *ReprocessInput) { i.VersionID = uuid.Nil },
+		"missing revision": func(i *ReprocessInput) { i.ExpectedRevision = 0 },
+		"missing from":     func(i *ReprocessInput) { i.MessageTimeFrom = time.Time{} },
+		"missing to":       func(i *ReprocessInput) { i.MessageTimeTo = time.Time{} },
+		"empty range":      func(i *ReprocessInput) { i.MessageTimeTo = i.MessageTimeFrom },
+		"reversed range":   func(i *ReprocessInput) { i.MessageTimeTo = i.MessageTimeFrom.Add(-time.Second) },
+		"empty after truncating to microseconds": func(i *ReprocessInput) {
+			i.MessageTimeFrom = from.Add(100 * time.Nanosecond)
+			i.MessageTimeTo = from.Add(900 * time.Nanosecond)
+		},
 		"negative revision": func(i *ReprocessInput) { i.ExpectedRevision = -1 },
 	} {
 		input := valid

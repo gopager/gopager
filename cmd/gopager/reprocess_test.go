@@ -273,6 +273,9 @@ func TestReprocessRunnerRollsBackAFailedStepAndResumesAtTheCursor(t *testing.T) 
 	if view := f.request(request); view.State != processing.ReprocessPending || view.Scanned != 1 {
 		t.Fatalf("request after the failed step = %+v, want pending after one committed step", view)
 	}
+	if view := f.request(request); view.FailureCode != "STORAGE_UNAVAILABLE" || view.Attempts != 1 {
+		t.Fatalf("request = %+v, want the failure code and one failed attempt visible", view)
+	}
 	cursor := f.queryStrings(`SELECT cursor::text FROM processing_reprocess_requests WHERE id=$1`, request)[0]
 	if cursor != ids[0].String() {
 		t.Fatalf("cursor = %s, want the first Transmission %s", cursor, ids[0])
@@ -295,6 +298,9 @@ func TestReprocessRunnerRollsBackAFailedStepAndResumesAtTheCursor(t *testing.T) 
 	}
 	if view := f.request(request); view.State != processing.ReprocessCompleted || view.Scanned != 3 || view.Readmitted != 3 {
 		t.Fatalf("request = %+v, want completed with three Transmissions", view)
+	}
+	if view := f.request(request); view.FailureCode != "" || view.Attempts != 0 {
+		t.Fatalf("request = %+v, want the failure cleared by progress", view)
 	}
 
 	// A runner that died holding the lease is replaced once the lease expired.

@@ -1067,9 +1067,11 @@ an empty or reversed range, a malformed time or another `schemaVersion` is `400 
 `versionId` must be the active version and `expectedRevision` the current workflow revision, else
 `409 REVISION_CONFLICT`; so is a disabled workflow. `workflow.reprocess` is checked over the whole workflow scope exactly
 like the other workflow commands. The call advances the workflow revision, answers `202` and returns the request as
-`{"id","workflowId","versionId","messageTimeFrom","messageTimeTo","cutoffAt","state","scanned","readmitted","retracted","createdAt","updatedAt"}`.
+`{"id","workflowId","versionId","messageTimeFrom","messageTimeTo","cutoffAt","state","scanned","readmitted","retracted","createdAt","updatedAt","failureCode","attempts"}`.
 `state` is `pending`, `running`, `completed` or `superseded`; the counts grow while the worker role runs the request
-([Workflows](workflows.md#historical-reprocess)). The read routes return the same view.
+([Workflows](workflows.md#historical-reprocess)). `failureCode` (omitted when none) and `attempts` report a step that keeps
+failing and is retried with backoff, for example a revision conflict while stored targets await their correction; both are
+cleared by the next successful step. There is no cancel route: change the workflow to supersede a request. The read routes return the same view.
 
 Preview body:
 

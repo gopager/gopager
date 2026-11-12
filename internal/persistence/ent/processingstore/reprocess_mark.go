@@ -124,11 +124,12 @@ func (s *Store) inheritReprocessMark(ctx context.Context, tx platform.Transactio
 		return err
 	}
 	if _, err = executor.ExecContext(ctx, `UPDATE processing_candidates c SET reprocess_id = m.reprocess_id
-		FROM (SELECT o.reprocess_id, o.transmission_id, o.workflow_id FROM processing_candidates o
+		FROM (SELECT o.reprocess_id FROM processing_candidates o
+			JOIN processing_reprocess_requests q ON q.id = o.reprocess_id
 			WHERE o.id <> $1 AND o.reprocess_id IS NOT NULL AND o.state <> 'superseded'
 				AND o.transmission_id = (SELECT transmission_id FROM processing_candidates WHERE id = $1)
 				AND o.workflow_id <> (SELECT workflow_id FROM processing_candidates WHERE id = $1)
-			LIMIT 1) m
+			ORDER BY q.created_at DESC, q.id DESC LIMIT 1) m
 		WHERE c.id = $1 AND c.reprocess_id IS NULL AND ($2 OR `+workflowHistory+`)`, candidate, repended); err != nil {
 		return err
 	}

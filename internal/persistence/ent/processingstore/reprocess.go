@@ -226,8 +226,9 @@ func (s *Store) ApplyReprocessStep(ctx context.Context, tx platform.TransactionC
 	return withdrawn, requireOneRow(updated, err)
 }
 
-// markOrRetract marks the Transmission's current candidates of the Workflow with the request and
-// returns how many it marked, or, when there are none, retracts the Workflow's published results
+// markOrRetract marks the Transmission's current candidates of the Workflow with the request,
+// keeping the attribution of one that an earlier request already marked, and returns how many
+// current candidates there are, or, when there are none, retracts the Workflow's published results
 // and returns how many.
 func (s *Store) markOrRetract(ctx context.Context, tx platform.TransactionContext,
 	request processing.ReprocessRequest, transmission uuid.UUID) (readmitted int64, retracted []uuid.UUID, err error) {
@@ -235,7 +236,7 @@ func (s *Store) markOrRetract(ctx context.Context, tx platform.TransactionContex
 	if err != nil {
 		return 0, nil, err
 	}
-	marked, err := executor.ExecContext(ctx, `UPDATE processing_candidates SET reprocess_id=$3
+	marked, err := executor.ExecContext(ctx, `UPDATE processing_candidates SET reprocess_id=COALESCE(reprocess_id, $3)
 		WHERE transmission_id=$1 AND workflow_id=$2 AND state <> 'superseded'`, transmission, request.WorkflowID, request.ID)
 	if err != nil {
 		return 0, nil, err
@@ -277,7 +278,7 @@ func (s *Store) FinishReprocess(ctx context.Context, tx platform.TransactionCont
 		return err
 	}
 	updated, err := executor.ExecContext(ctx, `UPDATE processing_reprocess_requests
-		SET state=$3, worker_id=NULL, lease_until=NULL, failure_code=NULL, revision=revision+1, updated_at=$4
+		SET state=$3, worker_id=NULL, lease_until=NULL, failure_code=NULL, attempts=0, revision=revision+1, updated_at=$4
 		WHERE id=$1 AND worker_id=$2 AND state='running'`, request.ID, request.WorkerID, state, now)
 	return requireOneRow(updated, err)
 }

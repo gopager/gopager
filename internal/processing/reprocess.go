@@ -65,10 +65,12 @@ type ReprocessInput struct {
 	MessageTimeTo   time.Time
 }
 
-// Validate rejects a missing version or revision and a range that is empty or reversed.
+// Validate rejects a missing version or revision and a range that is empty or reversed once both
+// bounds are cut to the microseconds the store keeps.
 func (i ReprocessInput) Validate() error {
 	if i.VersionID == uuid.Nil || i.ExpectedRevision <= 0 || i.MessageTimeFrom.IsZero() ||
-		i.MessageTimeTo.IsZero() || !i.MessageTimeFrom.Before(i.MessageTimeTo) {
+		i.MessageTimeTo.IsZero() ||
+		!i.MessageTimeFrom.Truncate(time.Microsecond).Before(i.MessageTimeTo.Truncate(time.Microsecond)) {
 		return invalid(errors.New("invalid Reprocess request"))
 	}
 	return nil

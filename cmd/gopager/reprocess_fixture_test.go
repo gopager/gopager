@@ -397,6 +397,9 @@ type requestView struct {
 	Scanned    int64  `json:"scanned"`
 	Readmitted int64  `json:"readmitted"`
 	Retracted  int64  `json:"retracted"`
+	// FailureCode and Attempts describe the last failed step of a request that is retrying.
+	FailureCode string `json:"failureCode"`
+	Attempts    int    `json:"attempts"`
 }
 
 func (f *reprocessFixture) request(id uuid.UUID) requestView {
