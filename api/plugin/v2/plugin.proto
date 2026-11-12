@@ -10,7 +10,9 @@
 //
 // Request and response values are UTF-8 JSON documents (see docs/plugins.md):
 // the invocation envelope (schemaVersion 2) and the response ({"schemaVersion":2,"fields":...}
-// or {"schemaVersion":2,"failure":"<reason>"}).
+// or {"schemaVersion":2,"failure":"<reason>"}). A Delivery plugin (manifest capability
+// "delivery", SDK 2.1) receives a request with "kind":"delivery" through the same Invoke method
+// and answers {"schemaVersion":2,"attempt":{...}}; the service itself is unchanged.
 syntax = "proto3";
 
 package gopager.plugin.v2;

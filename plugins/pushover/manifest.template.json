@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 2,
+  "sdkMajor": 2,
+  "sdkMinor": 1,
+  "pluginId": "pushover",
+  "version": "1.0.0",
+  "capabilityId": "pushover",
+  "capability": "delivery",
+  "artifact": {
+    "path": "pushover/1.0.0/pushover",
+    "digest": "@DIGEST@"
+  },
+  "configurationSchema": {
+    "kind": "object",
+    "properties": {
+      "apiToken": {"kind": "string"},
+      "title": {"kind": "string", "optional": true},
+      "priority": {"kind": "integer", "optional": true},
+      "sound": {"kind": "string", "optional": true},
+      "endpoint": {"kind": "string", "optional": true},
+      "allowPrivateDestinations": {"kind": "boolean", "optional": true},
+      "userKey": {"kind": "string", "optional": true},
+      "device": {"kind": "string", "optional": true}
+    }
+  },
+  "configurationPolicy": {
+    "configurationScope": "admin",
+    "secret": false,
+    "properties": {
+      "apiToken": {"configurationScope": "admin", "secret": true},
+      "title": {"configurationScope": "admin", "secret": false},
+      "priority": {"configurationScope": "admin", "secret": false},
+      "sound": {"configurationScope": "admin", "secret": false},
+      "endpoint": {"configurationScope": "admin", "secret": false},
+      "allowPrivateDestinations": {"configurationScope": "admin", "secret": false},
+      "userKey": {"configurationScope": "user", "secret": true},
+      "device": {"configurationScope": "user", "secret": false}
+    }
+  },
+  "delivery": {
+    "outputKinds": ["text"],
+    "inputs": [
+      {"name": "title", "kind": "string", "required": false, "maxBytes": 250},
+      {"name": "priority", "kind": "integer", "required": false, "maxBytes": 20},
+      {"name": "url", "kind": "string", "required": false, "maxBytes": 512},
+      {"name": "urlTitle", "kind": "string", "required": false, "maxBytes": 100},
+      {"name": "sound", "kind": "string", "required": false, "maxBytes": 32}
+    ],
+    "dependencies": [
+      {"kind": "network", "description": "HTTPS POST to the Pushover messages API"},
+      {"kind": "secret", "description": "Pushover application token and the recipient's user key"}
+    ],
+    "sendsPerMinute": 60,
+    "idempotent": false
+  }
+}

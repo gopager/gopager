@@ -1,4 +1,4 @@
-.DEFAULT_GOAL := lint
+.DEFAULT_GOAL := all
 
 # Tools are pinned as "go tool" dependencies, so no global install is needed, local runs
 # match CI, and runs work offline once the modules are downloaded ("go run pkg@version"
@@ -27,7 +27,14 @@ GINKGO_SUITE_PACKAGES := ./internal/identity ./internal/events ./internal/platfo
 # schema input.
 GENERATED := internal/persistence/ent ':(exclude)internal/persistence/ent/schema'
 
-.PHONY: fmt fmt-check vet golangci lint test test-integration test-race test-slowest test-stress generate-check vuln docs-check
+# The first-party plugins are separate Go modules below plugins/, so the root targets do not
+# cover them; the plugin targets below do.
+PLUGINS := pushover webhook
+
+.PHONY: all fmt fmt-check vet golangci lint test test-integration test-race test-slowest test-stress generate-check vuln docs-check plugins plugins-test plugins-lint
+
+# all is the default: static analysis plus the plugin tests ("make test" runs the root tests).
+all: lint plugins-test
 
 fmt:
 	gofmt -w cmd internal
@@ -46,10 +53,10 @@ golangci:
 	$(GOLANGCI_LINT) run ./...
 
 # lint is the full static-analysis tier: formatting, go vet and golangci-lint.
-lint: fmt-check vet golangci docs-check
+lint: fmt-check vet golangci docs-check plugins-lint
 
 # test is the quick tier: no Docker, database tests are skipped.
-test:
+test: plugins-test
 	go test ./...
 
 # test-integration runs every test including the PostgreSQL ones (one Docker container per
@@ -102,3 +109,25 @@ vuln:
 # docs-check verifies Markdown links, heading fragments and the ID registers declared in .doccheck.json files.
 docs-check:
 	go run ./tools/doccheck
+
+# plugins builds the first-party plugins and their manifests (with the executables' digests)
+# into build/plugins/<id>/<version>/, the layout of the plugin directory.
+plugins:
+	plugins/build.sh build/plugins
+
+# plugins-test runs the tests of every plugin module with the race detector.
+plugins-test:
+	@for plugin in $(PLUGINS); do \
+		(cd plugins/$$plugin && go test -race -count=1 ./...) || exit $$?; \
+	done
+
+# plugins-lint checks the formatting and runs go vet in every plugin module.
+plugins-lint:
+	@files="$$(gofmt -l plugins)" || exit $$?; \
+	if [ -n "$$files" ]; then \
+		printf 'Go formatting required in plugins:\n%s\n' "$$files"; \
+		exit 1; \
+	fi
+	@for plugin in $(PLUGINS); do \
+		(cd plugins/$$plugin && go vet ./...) || exit $$?; \
+	done
