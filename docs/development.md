@@ -110,7 +110,7 @@ make vuln               # govulncheck ./... (pinned version, needs network)
 
 [.github/workflows/commits.yml](../.github/workflows/commits.yml) checks the pull request title with commitlint on every title edit and push, because the title becomes the squash commit header on `main`. It uses [commitlint.pr-title.config.mjs](../commitlint.pr-title.config.mjs), the shared rules without commitlint's default ignores for git-generated messages.
 
-The repository ruleset `main` makes changes to the default branch go through pull requests, allows squash merges only, blocks force pushes and deletion, and requires the checks `Static checks and quick tests`, `Integration tests`, `Container image` and `Conventional pull request title` (`Vulnerability scan` stays informational). A pull request must be up to date with `main` before it merges, so the squash commit is exactly the tree the checks passed on. Nobody can bypass the ruleset; in an emergency an admin disables it temporarily.
+The repository ruleset `main` makes changes to the default branch go through pull requests, allows squash merges only, blocks force pushes and deletion, and requires the checks `Static checks and quick tests`, `Integration tests`, `Container image` and `Conventional pull request title` (`Vulnerability scan` stays informational). A pull request must be up to date with `main` before it merges, so the squash commit is exactly the tree the checks passed on. Repository admins may bypass the ruleset and push to `main` directly; everyone else goes through pull requests.
 
 ### Releases
 
