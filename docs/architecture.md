@@ -154,7 +154,7 @@ Subscriptions select deliverable Domain event types for one subscriber (the owni
 - **Target use.** A `delivery` instance carries `targetUse` (`everyone` or listed Principal IDs) in its revisioned record. It is enforced where the Delivery is created or started: Subscription save (an unusable target is reported like an unavailable one), fan-out (no Delivery) and the start check (`cancelled` with `authority-revoked`).
 - **Placement.** The runner's `Placement` function asks the plugin host which current, enabled `delivery` instances verify from this node's plugin directory (`DeliveryHost.Loadable`, cached for 5 s, no process started) and claims only their due Deliveries, plus any Delivery overdue by 60 s (`PlacementGrace`). Fan-out on a node that cannot describe the target creates the Delivery with outcome code `dependency-unavailable` but due at once, so a capable node is not held back. The start check of such a Delivery calls `Describe`; when the node cannot load the artifact the Delivery is deferred by 60 s with outcome code `dependency-unavailable`, keeps its state (`prepared` or `retry-pending`) and consumes no attempt.
 - **Unit attributes.** A filter that reads `unit.attributes.…` is evaluated per relevant Unit (`delivery.matches`), as the feed evaluates it per appearance, and a Layout reads the first relevant Unit with a value. `subscription_targets.input_bindings` maps target inputs to Unit attributes; materialization applies the constant inputs, then the bindings (the Delivery's Units must agree), then `integration_unit_parameters`.
-- **Layouts.** `processing/presentation` stores layout definitions with immutable versions (`layout_definitions`, `layout_definition_versions`, `layout_definition_agencies`) and resolves the Subscription's layout or the built-in default per output kind (`delivery.DefaultLayouts`).
+- **Layouts.** `processing/presentation` stores layout definitions with immutable versions (`layout_definitions`, `layout_definition_versions`, `layout_definition_agencies`) and resolves the Subscription's layout or the built-in default per output kind (`delivery.DefaultLayouts`). `presentation.CardRenderer` implements the `readmodel.CardRenderer` port: feed items, details and live `upsert` frames carry a GUI card, the `json` rendering of the resolved Layout read with `delivery.MessageFieldReader` over the caller's projection (no event fields), so cards and Deliveries share one renderer; programs are resolved and compiled once per Layout version and request, and a Layout that cannot render yields the built-in default card with `fallback: true`.
 
 ### Address rule semantics
 
@@ -195,7 +195,7 @@ flowchart BT
     stores[persistence/ent/*store] --> postgres & ingest & assignments & units & pworker & ppub & pmgmt & readmodel
     readmodel --> authz & identity & platform
     delivery --> readmodel & processing & events & identity & commands & units
-    ppres[processing/presentation] --> processing & identity & commands & units
+    ppres[processing/presentation] --> processing & identity & commands & units & delivery & readmodel
     httpapi --> identity & units & assignments & ingest & pmgmt & readmodel & delivery & ppres
     cmd[cmd/gopager] --> stores & httpapi & ingest & pmgmt & psyn
 ```
@@ -225,7 +225,7 @@ The layering rules that the code follows:
 | `internal/protocols` | Protocol enum, address/target model and ranges, payload forms, payload identity |
 | `internal/messages` | Grouping decision type and the pure grouping function `Decide` |
 | `internal/delivery` | Subscriptions (management, save-time checks, health), field resolution of filters and layouts against the field registry, the `delivery-fanout` consumer, materialization, the Delivery runner (claims, start check, attempts, retry, uncertainty), sending admission, Delivery management (list, read, retry, redelivery), the Core target port and built-in layouts |
-| `internal/processing/presentation` | Layout definitions with immutable versions, assigned to Agencies (`presentation.manage`), and the `LayoutResolver` used by Delivery |
+| `internal/processing/presentation` | Layout definitions with immutable versions, assigned to Agencies (`presentation.manage`), the `LayoutResolver` used by Delivery and the `CardRenderer` of the Message read side |
 | `internal/attributes` | Attribute schemas: model, validation, compatibility, service (`attribute-schema.manage`) and the store and catalog ports |
 | `internal/readmodel` | Message read side: feed/detail/filter-option service, filter parsing and canonical encoding, page tokens and positions, field-group projection; ports for the store, token key and Workflow classification |
 | `internal/units` (package `units`) | Agencies, Units, Unit collections, Organizations with setting defaults, Unit templates, bulk Unit operations, setting inheritance |

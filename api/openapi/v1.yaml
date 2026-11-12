@@ -8602,6 +8602,39 @@ components:
         networkUnresolved:
           type: boolean
           description: Present (true) only where `network.read` reaches the Network's Agency.
+        card:
+          $ref: '#/components/schemas/MessageCard'
+    MessageCard:
+      type: object
+      description: The GUI card of the Message, the `json` rendering of the Layout that applies to it. It is built
+        from what the caller may read and never shows more than the rest of the item; a field the caller cannot read
+        is absent from it. Present in feed items, details and live `upsert` frames.
+      required:
+      - layoutVersion
+      - layoutConflict
+      - fallback
+      - items
+      properties:
+        layoutId:
+          type: string
+          format: uuid
+          description: The Layout the card was rendered with; absent for the built-in default.
+        layoutVersion:
+          type: integer
+          format: int64
+          description: The revision of the Layout, 0 for the built-in default.
+        layoutConflict:
+          type: boolean
+          description: The Message's Units are assigned different Layouts, so the installation default applies.
+        fallback:
+          type: boolean
+          description: The chosen Layout could not render for this caller, so the built-in default was rendered.
+        items:
+          type: array
+          description: The ordered items of the rendering, as a Delivery with a `json` Layout renders them.
+          items:
+            type: object
+            additionalProperties: true
     MessageUnit:
       type: object
       required:

@@ -27,6 +27,9 @@ type FeedItem struct {
 	WithoutUnit       *bool             `json:"withoutUnit,omitempty"`
 	Attributes        *[]AttributeValue `json:"attributes,omitempty"`
 	NetworkUnresolved *bool             `json:"networkUnresolved,omitempty"`
+	// Card is the GUI card of the Message, set by feeds, details and live updates when the
+	// service has a card renderer; a Delivery projection carries none.
+	Card *Card `json:"card,omitempty"`
 }
 
 // UnitItem is an eligible Unit appearance. FirstObservedAt appears in details only.

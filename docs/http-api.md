@@ -558,6 +558,18 @@ reads its group:
 | `derived` | `attributes` | `filter` fields in the `attributes` namespace |
 
 A filter that needs an unreadable group is `403 FORBIDDEN`; it is never dropped or widened.
+
+**Cards.** Every feed item, detail and live `upsert` frame carries `card`, the GUI card of the
+Message: the `json` rendering of the Layout that applies to it, with the shared Layout renderer,
+so a card and a Delivery of the same Message show the same blocks, labels, icons and link checks.
+`card` has `layoutId` (absent for the built-in default), `layoutVersion` (0 for the built-in
+default), `layoutConflict`, `fallback` and `items`, the ordered items
+`{kind, label?, icon?, value | text | url | items}`. The values are those a Delivery of the Message
+to the same reader would carry, without event fields: the card reads the caller's projection, so a
+field the caller cannot read is absent and the card never widens field rights. `fallback` is true
+when the Layout could not render for this caller (a limit, an invalid or deleted Layout) and the
+built-in default was rendered instead; a bad Layout never hides a Message or fails the read.
+`layoutConflict` is false until Layouts are assigned to Units.
 `networkUnresolved: true` appears only where the caller's `network.read` reaches the Network's Agency.
 
 **Feed (`GET /messages`).** Query parameters; unknown parameters and repeated scalars are

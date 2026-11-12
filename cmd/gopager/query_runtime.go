@@ -19,7 +19,11 @@ func composeReadSide(c *core) (*readSide, error) {
 	if c.readSide != nil {
 		return c.readSide, nil
 	}
-	service, err := readmodel.NewService(c.store, c.resolver, c.store, c.reads, c.reads, c.fields)
+	cards, err := composeCardRenderer(c)
+	if err != nil {
+		return nil, err
+	}
+	service, err := readmodel.NewService(c.store, c.resolver, c.store, c.reads, c.reads, c.fields, readmodel.WithCards(cards))
 	if err != nil {
 		return nil, err
 	}
