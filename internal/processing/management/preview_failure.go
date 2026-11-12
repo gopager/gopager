@@ -40,14 +40,27 @@ func (r PreviewResult) MarshalJSON() ([]byte, error) {
 }
 
 // previewFailure classifies an error of an evaluation. A failure of a Workflow step and a resource
-// limit are explained; anything else (authorization, cancellation, storage) is not a property of
-// the evaluated Workflow and stays an error.
+// limit are explained when their code describes the evaluated Workflow; authorization, session,
+// storage and concurrency failures (also when a step raised them) and cancellation are not a
+// property of the Workflow and stay errors, so they keep their HTTP status and retry semantics.
 func previewFailure(err error) (*PreviewFailure, bool) {
 	step, failedStep := processing.FailedStep(err)
 	code := platform.FailureCode(err)
 	var failure *platform.Failure
-	if errors.Is(err, context.Canceled) || !errors.As(err, &failure) || (!failedStep && code != platform.CodeResourceLimit) {
+	if errors.Is(err, context.Canceled) || !errors.As(err, &failure) || !explainedCode(code) ||
+		(!failedStep && code != platform.CodeResourceLimit) {
 		return nil, false
 	}
 	return &PreviewFailure{Code: string(code), Reason: processing.FailureReason(string(code)), StepID: step}, true
+}
+
+// explainedCode reports whether a failure code describes the evaluated Workflow: invalid or
+// unconvertible data, a limit, an unavailable or incompatible capability, or a failing step.
+func explainedCode(code platform.ErrorCode) bool {
+	switch code {
+	case platform.CodeInvalidInput, platform.CodeResourceLimit, platform.CodeIncompatibleVersion,
+		platform.CodeAuthorityUnavailable, platform.CodeInternalError:
+		return true
+	}
+	return false
 }

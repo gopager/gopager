@@ -1087,8 +1087,9 @@ is written ([Workflows](workflows.md#preview)).
 A failed evaluation is not an HTTP error: the preview answers `200` with
 `{"failure":{"code","reason","stepId"}}` instead of the result, where `reason` is
 `resource-limit`, `capability-unavailable`, `conversion-failed` or `evaluation-failed` and `stepId` (omitted when no step
-failed) names the failing step. No raw error text is returned. Request, authorization and
-infrastructure errors keep their HTTP status.
+failed) names the failing step. No raw error text is returned. Only `INVALID_INPUT`, `RESOURCE_LIMIT`,
+`INCOMPATIBLE_VERSION`, `AUTHORITY_UNAVAILABLE` and `INTERNAL_ERROR` are explained; request, authorization,
+session, storage and concurrency errors keep their HTTP status, also when a step raised them.
 
 Candidate retry requeues a `failed`, unpublished candidate and returns
 `{"candidateId","revision"}` in `data`. If the candidate's source, workflow version or

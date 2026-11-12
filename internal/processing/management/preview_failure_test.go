@@ -59,3 +59,23 @@ func TestPreviewResultEncodesTheEvaluationUnchanged(t *testing.T) {
 		t.Fatalf("got %s, want %s, err %v", got, want, err)
 	}
 }
+
+// TestWrappedRequestFailuresOfAStepStayErrors expects authorization, session and storage
+// failures raised inside a step to keep their HTTP error instead of becoming an explanation.
+func TestWrappedRequestFailuresOfAStepStayErrors(t *testing.T) {
+	t.Parallel()
+	for _, code := range []platform.ErrorCode{platform.CodeForbidden, platform.CodeLoginRequired, platform.CodeNotFound,
+		platform.CodeStorageUnavailable, platform.CodeCommitUncertain, platform.CodeRevisionConflict} {
+		err := &processing.StepFailure{StepID: "lookup", Err: platform.NewFailure(code, errors.New("cause"))}
+		if failure, ok := previewFailure(err); ok {
+			t.Fatalf("%s inside a step became the explanation %+v", code, failure)
+		}
+	}
+	for _, code := range []platform.ErrorCode{platform.CodeInvalidInput, platform.CodeIncompatibleVersion,
+		platform.CodeAuthorityUnavailable, platform.CodeInternalError} {
+		err := &processing.StepFailure{StepID: "lookup", Err: platform.NewFailure(code, errors.New("cause"))}
+		if failure, ok := previewFailure(err); !ok || failure.StepID != "lookup" {
+			t.Fatalf("%s inside a step = %+v, %v, want an explanation", code, failure, ok)
+		}
+	}
+}

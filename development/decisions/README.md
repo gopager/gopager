@@ -12,7 +12,7 @@ Add a decision to the ADR file of its topic with status, date, supersession, the
 | [02-intake-and-grouping.md](02-intake-and-grouping.md) | Intake and Grouping | 34 (D-17..D-139) |
 | [03-assignment-and-correction.md](03-assignment-and-correction.md) | Assignment and correction | 10 (D-08..D-145) |
 | [04-processing-and-plugins.md](04-processing-and-plugins.md) | Processing and plugins | 36 (D-05..D-159) |
-| [05-events-and-delivery.md](05-events-and-delivery.md) | Events and Delivery | 18 (D-06..D-164) |
+| [05-events-and-delivery.md](05-events-and-delivery.md) | Events and Delivery | 19 (D-06..D-166) |
 | [06-identity-and-authorization.md](06-identity-and-authorization.md) | Identity and authorization | 19 (D-07..D-165) |
 | [07-query-and-live.md](07-query-and-live.md) | Query and live | 4 (D-16..D-152) |
 | [08-operations-and-http.md](08-operations-and-http.md) | Operations and HTTP | 3 (D-52..D-133) |
@@ -188,3 +188,4 @@ Add a decision to the ADR file of its topic with status, date, supersession, the
 | D-163 | Deliveries show the provider's safe code | accepted | 2026-11-12 | [05-events-and-delivery](05-events-and-delivery.md#d-163) |
 | D-164 | AP-13 write scope: Units in the layout request and a shared Message field reader | accepted | 2026-11-12 | [05-events-and-delivery](05-events-and-delivery.md#d-164) |
 | D-165 | AP-13 write scope: field-level invalid input in authz | accepted | 2026-11-12 | [06-identity-and-authorization](06-identity-and-authorization.md#d-165) |
+| D-166 | Retracted Processing results notify live views | accepted | 2026-11-12 | [05-events-and-delivery](05-events-and-delivery.md#d-166) |
