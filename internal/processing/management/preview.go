@@ -26,7 +26,7 @@ type PreviewSourceOwner interface {
 	CaptureSyntheticPreview(context.Context, platform.TransactionContext, authz.Authority,
 		processing.WorkflowConfiguration, processing.Definition, json.RawMessage) (PreviewCapture, error)
 	CaptureStoredPreview(context.Context, platform.TransactionContext, authz.Authority,
-		processing.WorkflowConfiguration, uuid.UUID) (PreviewCapture, error)
+		processing.WorkflowConfiguration, processing.Definition, uuid.UUID) (PreviewCapture, error)
 }
 
 // SyntheticPreviewReleaser is optionally implemented by a PreviewSourceOwner that holds
@@ -143,10 +143,9 @@ func (s *PreviewService) preview(ctx context.Context, proof identity.Proof, inpu
 	var versionID uuid.UUID
 	var capture PreviewCapture
 	var editorAuthority authz.Authority
-	if mode == previewSynthetic {
-		if releaser, ok := s.sourceOwner.(SyntheticPreviewReleaser); ok {
-			defer func() { releaser.ReleaseSyntheticPreview(capture.Projection.TransmissionID) }()
-		}
+	// A stored sample is captured like a synthetic one, so both are released alike.
+	if releaser, ok := s.sourceOwner.(SyntheticPreviewReleaser); ok {
+		defer func() { releaser.ReleaseSyntheticPreview(capture.Projection.TransmissionID) }()
 	}
 	err = s.management.within(ctx, proof, false, transportCheck, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
 		var readErr error
@@ -178,7 +177,7 @@ func (s *PreviewService) preview(ctx context.Context, proof identity.Proof, inpu
 				workflow, definition, append(json.RawMessage(nil), input.SyntheticJSON...))
 		case previewStored:
 			capture, readErr = s.sourceOwner.CaptureStoredPreview(tx.Context(), tx, authority,
-				workflow, input.StoredTransmissionID)
+				workflow, definition, input.StoredTransmissionID)
 		}
 		return readErr
 	})
@@ -221,6 +220,11 @@ func (s *PreviewService) preview(ctx context.Context, proof identity.Proof, inpu
 	// exactly like a save.
 	if input.Definition != nil {
 		if err = authorizeReferences(editorAuthority, program.SourceReferences()); err != nil {
+			return processing.Evaluation{}, nil, err
+		}
+	}
+	if mode == previewStored {
+		if err = requireReadableGroups(editorAuthority, program.SourceReferences()); err != nil {
 			return processing.Evaluation{}, nil, err
 		}
 	}

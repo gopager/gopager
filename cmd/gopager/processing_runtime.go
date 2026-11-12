@@ -137,7 +137,12 @@ func composeProcessingAPIRuntimeWith(ctx context.Context, c *core, settings proc
 	if err != nil {
 		return nil, err
 	}
-	sourceOwner, err := synthetic.NewOwner(matcher, networks, store, workflows, synthetic.WithUnitAttributes(unitAttributes))
+	side, err := composeReadSide(c)
+	if err != nil {
+		return nil, err
+	}
+	sourceOwner, err := synthetic.NewOwner(matcher, networks, store, workflows, synthetic.WithUnitAttributes(unitAttributes),
+		synthetic.WithStoredTransmissions(c.processing, side.service))
 	if err != nil {
 		return nil, err
 	}

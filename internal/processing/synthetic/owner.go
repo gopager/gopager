@@ -107,8 +107,11 @@ type Owner struct {
 	scope    ScopeAuthorizer
 	// unitAttributes is nil when previews capture no Unit attributes.
 	unitAttributes UnitAttributeOwner
-	mu             sync.Mutex
-	active         map[uuid.UUID]captured
+	// stored and access are nil when previews of stored Transmissions are unavailable.
+	stored StoredTransmissionReader
+	access TransmissionAccess
+	mu     sync.Mutex
+	active map[uuid.UUID]captured
 }
 
 type captured struct {
@@ -174,6 +177,15 @@ func (o *Owner) CaptureSyntheticPreview(ctx context.Context, tx platform.Transac
 	if err != nil {
 		return management.PreviewCapture{}, err
 	}
+	return o.captureInput(ctx, tx, workflow, definition, input, observed)
+}
+
+// captureInput resolves a validated input against the current Network and Assignment context,
+// projects it and retains its captured context. Synthetic and stored previews share it, so a
+// stored sample is evaluated exactly like a synthetic one.
+func (o *Owner) captureInput(ctx context.Context, tx platform.TransactionContext,
+	workflow processing.WorkflowConfiguration, definition processing.Definition, input Input, observed time.Time,
+) (management.PreviewCapture, error) {
 	network, err := o.networks.ReadSyntheticNetwork(ctx, tx, input.NetworkID)
 	if err != nil {
 		return management.PreviewCapture{}, err
@@ -218,13 +230,6 @@ func (o *Owner) CaptureSyntheticPreview(ctx context.Context, tx platform.Transac
 		units: cloneUnits(matched.UnitContext), identity: identity, eligibleUnits: eligibleUnits}
 	o.mu.Unlock()
 	return management.PreviewCapture{Projection: projection, Scope: scope}, nil
-}
-
-// CaptureStoredPreview always fails as unavailable: previews of stored Transmissions are
-// not supported by the synthetic owner.
-func (o *Owner) CaptureStoredPreview(context.Context, platform.TransactionContext, authz.Authority,
-	processing.WorkflowConfiguration, uuid.UUID) (management.PreviewCapture, error) {
-	return management.PreviewCapture{}, unavailable(errors.New("stored Transmission owner unavailable"))
 }
 
 // ReleaseSyntheticPreview forgets the captured context for a synthetic TransmissionID.
