@@ -170,6 +170,15 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Rationale:** Both tests asserted a timing their subject does not guarantee; the live replay was reproduced locally with a held transaction, the exec failure only in CI.
 - **Consequences:** Follow-ups in the [AP-08](../execution/ap-08.md) and [AP-10](../execution/ap-10.md) records; the AP-13 record links this decision under Blockers and Deviations. No open AP changes.
 
+<a id="d-168"></a>
+## D-168 Local security and code review before every code push
+
+- **Status:** accepted
+- **Date:** 2026-11-12
+- **Decision:** The user made a local review mandatory before every push that contains a code commit: the agent runs the `security-review` skill and the `code-review` skill (arguments `xhigh ap-NN-<slug> --max-findings all`, without `--comment`, `--fix`, `max` or `ultra`) on the AP branch, checks each finding like a Copilot annotation, fixes the valid ones and runs both reviews again after every fix until a run reports no open finding; only then it pushes and requests the Copilot review. Copilot annotations fixed with code repeat this whole loop before the next push. Rejected findings are recorded with their reason in the evidence and do not count as open. Pushes of Markdown-only commits need no local review ([D-162](#d-162)). Recorded in the [shared rules](../work-packages/shared-rules.md#pull-request-and-review) and the `execute-work-package` skill.
+- **Rationale:** Each Copilot review round costs a paid review and a round trip; as many findings as possible should be found locally before Copilot reviews. `xhigh` with unlimited findings is the highest-recall level that does not start the many reviewer agents of `max` or `ultra`.
+- **Consequences:** Applies to every open AP from now on. The Copilot review gate of the pull request is unchanged.
+
 <a id="d-169"></a>
 ## D-169 Live stream tests record what they received
 
