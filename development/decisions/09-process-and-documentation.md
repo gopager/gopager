@@ -160,3 +160,12 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Decision:** The user decided that only code changes require a new Copilot review in the pull-request loop. The review gate applies to the **last code commit**, the newest commit that changes any file other than Markdown (`*.md`); a later commit that changes only Markdown (execution records, contracts, decisions, `docs/`) is pushed without re-requesting a review. The required checks still run and must pass on the head commit. Recorded in the [shared rules](../work-packages/shared-rules.md#pull-request-and-review) and the `execute-work-package` skill.
 - **Rationale:** Recording a clean review in the execution record changed the head and restarted the review loop although no reviewed code changed.
 - **Consequences:** Applies to every open AP from now on, first to the AP-12 pull request ([AP-12 record](../execution/ap-12.md)).
+
+<a id="d-167"></a>
+## D-167 Live merge and plugin start tests tolerate transient replays and exec failures
+
+- **Status:** accepted
+- **Date:** 2026-11-12
+- **Decision:** CI failed on two documentation-only heads of the [AP-13](../work-packages/ap-13-processing-presentation-integration.md) pull request in tests outside its write scope. The user approved fixing both. (1) `TestLiveStreamMergesResynchronizeWithoutDisclosingIDs` (AP-10) now skips replayed `upsert` frames of Messages the reader could already see before the expected `resync-required`: a stream position trails transactions still running anywhere in the cluster, so a creation committed shortly before the position may be replayed, which at-least-once delivery allows. The merge-chain subtest holds a transaction open to make that replay deterministic. Hidden Messages are never skipped, so a disclosure still fails. (2) `TestInstalledLoadDoesNotStartPlugin` (AP-08) retries the invocation up to five times when the marker script did not run, because on Linux executing a freshly written script can fail with `ETXTBSY` while a parallel test forks. Test-only, no behavior change.
+- **Rationale:** Both tests asserted a timing their subject does not guarantee; the live replay was reproduced locally with a held transaction, the exec failure only in CI.
+- **Consequences:** Follow-ups in the [AP-08](../execution/ap-08.md) and [AP-10](../execution/ap-10.md) records; the AP-13 record links this decision under Blockers and Deviations. No open AP changes.
