@@ -21,6 +21,21 @@ jobs:
       - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
+          # setup-go's cache key only changes with go.sum, so after its first save it is never
+          # updated and the build drifts back to cold; this job keeps a rolling cache instead.
+          cache: false
+      # Each run saves the build and lint caches under a new key and restores the newest earlier
+      # one, so vet, golangci-lint, the tests and code generation only redo what changed.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+            ~/.cache/golangci-lint
+          key: go-static-${{ hashFiles('go.sum', 'golangci-lint.sum') }}-${{ github.sha }}
+          restore-keys: |
+            go-static-${{ hashFiles('go.sum', 'golangci-lint.sum') }}-
+            go-static-
       - name: Formatting
         run: make fmt-check
       - name: go vet
