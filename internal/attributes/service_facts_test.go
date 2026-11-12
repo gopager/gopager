@@ -50,3 +50,27 @@ func TestUpdateRecordsAgencyChangeOfUnitSchemaOnly(t *testing.T) {
 		t.Fatalf("fact = %+v", fact)
 	}
 }
+
+// TestDeleteRecordsUnitSchemaDeletionOnly expects deleting a unit schema, whose entries leave
+// deleted Units, to record one fact, and deleting a message schema none.
+func TestDeleteRecordsUnitSchemaDeletionOnly(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	service, store := serviceFor(t, agencyScope(agencyA), ManageAction)
+	for _, schema := range []SchemaInput{unitInput("site", agencyA), input("alarm", agencyA)} {
+		if _, err := service.Create(ctx, identity.Proof{}, uuid.New(), schema, allow); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := service.Delete(ctx, identity.Proof{}, "alarm", 1, allow); err != nil || len(store.facts) != 0 {
+		t.Fatalf("deleting a message schema recorded %d facts, err %v", len(store.facts), err)
+	}
+	deleted, err := service.Delete(ctx, identity.Proof{}, "site", 1, allow)
+	if err != nil || len(store.facts) != 1 {
+		t.Fatalf("deleting a unit schema recorded %d facts, err %v", len(store.facts), err)
+	}
+	if fact := store.facts[0]; fact.Aggregate.Type != "attributeSchema" || fact.Aggregate.ID != schemaID("site") ||
+		fact.Revision != deleted.Revision || fact.ChangeKind != "deleted" {
+		t.Fatalf("fact = %+v", fact)
+	}
+}

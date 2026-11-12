@@ -438,7 +438,7 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 | `suppression.changed` | Suppression created or lifted |
 | `gateway.state-changed` | Effective gateway state change from a report, a Submission or the contact-loss monitor; one per Gateway revision, with a matching `gateway_state_history` row |
 | `operation.submission-rejected`, `operation.observation-time-implausible`, `operation.network-ambiguous` | Operational problems at intake; the ambiguity fact carries the chosen Network and the resolution `address-priority` |
-| `configuration.changed` | Account/group/grant, Unit/collection/Organization/template, Agency assignment of a Unit attribute schema, rule, workflow, processing-instance or Subscription configuration changed (Subscriptions: `created`, `updated`, `paused`, `deleted`) |
+| `configuration.changed` | Account/group/grant, Unit/collection/Organization/template, Agency assignment or deletion of a Unit attribute schema, rule, workflow, processing-instance or Subscription configuration changed (Subscriptions: `created`, `updated`, `paused`, `deleted`) |
 | `subscription.health-changed` | A Subscription became `invalid` (fan-out or start check found its filter or Layout no longer usable) or valid again (a save that compiles); data `health`, `reason`, `revision`; producer `delivery`, aggregate `subscription`, not deliverable |
 | `principal.access-changed`, `principal.deleted` | Effective access of a principal changed or the account is being deleted |
 | `processing.completed` | A processing result was published |

@@ -1359,8 +1359,9 @@ Workflows) or of Units (`subject` `unit`, maintained by managers). Schemas: `Att
 - **Configuration fact.** An update that changes the Agencies of a `unit` schema (adds or removes one) records one
   `configuration.changed` fact with aggregate `attributeSchema` and `changeKind` `updated` in the same transaction,
   because the Agencies decide which Units inherit Organization defaults of the schema, so inherited values and filter
-  membership change; live Message streams answer it with `resync-required`. Other updates, `message` schemas, creation and
-  deletion record no fact. The fact is not a Delivery trigger.
+  membership change; deleting a `unit` schema records one with `changeKind` `deleted`, because it removes the schema's
+  entries from deleted Units that history still shows. Live Message streams answer both with `resync-required`. Other
+  updates, `message` schemas and creation record no fact. The fact is not a Delivery trigger.
 - **Agencies and rights.** A schema is assigned to 1 to 256 distinct Agencies. Create, update and delete need
   `attribute-schema.manage` in every Agency involved (new set; stored and new set; stored set). A schema is visible to a
   caller holding any of `message.read`, `workflow.read`, `presentation.manage`, `subscription.manage-own`,

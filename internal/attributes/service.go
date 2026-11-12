@@ -285,15 +285,21 @@ func (s *Service) recordAgencyChange(tx platform.TransactionContext, current, ne
 	if next.Subject != SubjectUnit || slices.Equal(sortedAgencies(current.Agencies), next.Agencies) {
 		return nil
 	}
+	return s.recordUnitSchemaFact(tx, next.Key, next.Revision, "updated", now)
+}
+
+// recordUnitSchemaFact appends the configuration fact of a unit schema change that live views must
+// resync on.
+func (s *Service) recordUnitSchemaFact(tx platform.TransactionContext, key string, revision int64, change string, now time.Time) error {
 	_, err := s.facts.AppendMasterDataFact(tx.Context(), tx, events.MasterDataFact{ID: uuid.New(),
-		Aggregate: events.EntityRef{Type: "attributeSchema", ID: schemaID(next.Key)}, Revision: next.Revision,
-		OccurredAt: now, ChangeKind: "updated"})
+		Aggregate: events.EntityRef{Type: "attributeSchema", ID: schemaID(key)}, Revision: revision,
+		OccurredAt: now, ChangeKind: change})
 	return err
 }
 
 // Delete removes a schema at the expected revision and returns its revision reached. The caller
 // needs ManageAction in every Agency of the schema. A schema that is still referenced is
-// authz.ErrRevisionConflict.
+// authz.ErrRevisionConflict. Deleting a unit schema appends a configuration fact.
 func (s *Service) Delete(ctx context.Context, proof identity.Proof, key string, expected int64,
 	check func(identity.Authentication) error) (Deleted, error) {
 	if !ValidKey(key) || expected <= 0 {
@@ -314,6 +320,13 @@ func (s *Service) Delete(ctx context.Context, proof identity.Proof, key string, 
 		}
 		if err := s.store.Delete(tx.Context(), tx, key, expected); err != nil {
 			return err
+		}
+		// The deletion removes the schema's entries from deleted Units, whose values history views
+		// still show, so live views resync.
+		if current.Subject == SubjectUnit {
+			if err := s.recordUnitSchemaFact(tx, key, revision, "deleted", now); err != nil {
+				return err
+			}
 		}
 		result = Deleted{Key: key, Revision: revision}
 		return nil

@@ -1,9 +1,7 @@
 package delivery
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"slices"
 	"time"
@@ -391,18 +389,6 @@ func validInput(field InputField, value processing.Value) error {
 		return platform.NewFailure(platform.CodeResourceLimit, errors.New("input value too large"))
 	}
 	return nil
-}
-
-// sameValue compares two typed values by kind and compact encoding.
-func sameValue(left, right processing.Value) bool {
-	if left.Kind != right.Kind {
-		return false
-	}
-	var a, b bytes.Buffer
-	if json.Compact(&a, left.Value) != nil || json.Compact(&b, right.Value) != nil {
-		return false
-	}
-	return bytes.Equal(a.Bytes(), b.Bytes())
 }
 
 // expiry returns when a Delivery created now for a split stops being sendable.
