@@ -56,6 +56,8 @@ type ProcessingCandidate struct {
 	FailureCode *string `json:"failure_code,omitempty"`
 	// FailureStep holds the value of the "failure_step" field.
 	FailureStep *string `json:"failure_step,omitempty"`
+	// ReprocessID holds the value of the "reprocess_id" field.
+	ReprocessID *uuid.UUID `json:"reprocess_id,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -68,7 +70,7 @@ func (*ProcessingCandidate) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case processingcandidate.FieldWorkerID:
+		case processingcandidate.FieldWorkerID, processingcandidate.FieldReprocessID:
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		case processingcandidate.FieldSelected, processingcandidate.FieldManualRetryPending:
 			values[i] = new(sql.NullBool)
@@ -220,6 +222,13 @@ func (_m *ProcessingCandidate) assignValues(columns []string, values []any) erro
 				_m.FailureStep = new(string)
 				*_m.FailureStep = value.String
 			}
+		case processingcandidate.FieldReprocessID:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field reprocess_id", values[i])
+			} else if value.Valid {
+				_m.ReprocessID = new(uuid.UUID)
+				*_m.ReprocessID = *value.S.(*uuid.UUID)
+			}
 		case processingcandidate.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -333,6 +342,11 @@ func (_m *ProcessingCandidate) String() string {
 	if v := _m.FailureStep; v != nil {
 		builder.WriteString("failure_step=")
 		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ReprocessID; v != nil {
+		builder.WriteString("reprocess_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")

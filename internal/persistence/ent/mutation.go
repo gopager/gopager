@@ -17271,6 +17271,7 @@ type ProcessingCandidateMutation struct {
 	due_at                    *time.Time
 	failure_code              *string
 	failure_step              *string
+	reprocess_id              *uuid.UUID
 	created_at                *time.Time
 	updated_at                *time.Time
 	clearedFields             map[string]struct{}
@@ -18292,6 +18293,55 @@ func (m *ProcessingCandidateMutation) ResetFailureStep() {
 	delete(m.clearedFields, processingcandidate.FieldFailureStep)
 }
 
+// SetReprocessID sets the "reprocess_id" field.
+func (m *ProcessingCandidateMutation) SetReprocessID(u uuid.UUID) {
+	m.reprocess_id = &u
+}
+
+// ReprocessID returns the value of the "reprocess_id" field in the mutation.
+func (m *ProcessingCandidateMutation) ReprocessID() (r uuid.UUID, exists bool) {
+	v := m.reprocess_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReprocessID returns the old "reprocess_id" field's value of the ProcessingCandidate entity.
+// If the ProcessingCandidate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessingCandidateMutation) OldReprocessID(ctx context.Context) (v *uuid.UUID, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReprocessID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReprocessID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReprocessID: %w", err)
+	}
+	return oldValue.ReprocessID, nil
+}
+
+// ClearReprocessID clears the value of the "reprocess_id" field.
+func (m *ProcessingCandidateMutation) ClearReprocessID() {
+	m.reprocess_id = nil
+	m.clearedFields[processingcandidate.FieldReprocessID] = struct{}{}
+}
+
+// ReprocessIDCleared returns if the "reprocess_id" field was cleared in this mutation.
+func (m *ProcessingCandidateMutation) ReprocessIDCleared() bool {
+	_, ok := m.clearedFields[processingcandidate.FieldReprocessID]
+	return ok
+}
+
+// ResetReprocessID resets all changes to the "reprocess_id" field.
+func (m *ProcessingCandidateMutation) ResetReprocessID() {
+	m.reprocess_id = nil
+	delete(m.clearedFields, processingcandidate.FieldReprocessID)
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *ProcessingCandidateMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -18398,7 +18448,7 @@ func (m *ProcessingCandidateMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProcessingCandidateMutation) Fields() []string {
-	fields := make([]string, 0, 21)
+	fields := make([]string, 0, 22)
 	if m.revision != nil {
 		fields = append(fields, processingcandidate.FieldRevision)
 	}
@@ -18456,6 +18506,9 @@ func (m *ProcessingCandidateMutation) Fields() []string {
 	if m.failure_step != nil {
 		fields = append(fields, processingcandidate.FieldFailureStep)
 	}
+	if m.reprocess_id != nil {
+		fields = append(fields, processingcandidate.FieldReprocessID)
+	}
 	if m.created_at != nil {
 		fields = append(fields, processingcandidate.FieldCreatedAt)
 	}
@@ -18508,6 +18561,8 @@ func (m *ProcessingCandidateMutation) Field(name string) (ent.Value, bool) {
 		return m.FailureCode()
 	case processingcandidate.FieldFailureStep:
 		return m.FailureStep()
+	case processingcandidate.FieldReprocessID:
+		return m.ReprocessID()
 	case processingcandidate.FieldCreatedAt:
 		return m.CreatedAt()
 	case processingcandidate.FieldUpdatedAt:
@@ -18559,6 +18614,8 @@ func (m *ProcessingCandidateMutation) OldField(ctx context.Context, name string)
 		return m.OldFailureCode(ctx)
 	case processingcandidate.FieldFailureStep:
 		return m.OldFailureStep(ctx)
+	case processingcandidate.FieldReprocessID:
+		return m.OldReprocessID(ctx)
 	case processingcandidate.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case processingcandidate.FieldUpdatedAt:
@@ -18704,6 +18761,13 @@ func (m *ProcessingCandidateMutation) SetField(name string, value ent.Value) err
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetFailureStep(v)
+		return nil
+	case processingcandidate.FieldReprocessID:
+		v, ok := value.(uuid.UUID)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReprocessID(v)
 		return nil
 	case processingcandidate.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -18863,6 +18927,9 @@ func (m *ProcessingCandidateMutation) ClearedFields() []string {
 	if m.FieldCleared(processingcandidate.FieldFailureStep) {
 		fields = append(fields, processingcandidate.FieldFailureStep)
 	}
+	if m.FieldCleared(processingcandidate.FieldReprocessID) {
+		fields = append(fields, processingcandidate.FieldReprocessID)
+	}
 	return fields
 }
 
@@ -18891,6 +18958,9 @@ func (m *ProcessingCandidateMutation) ClearField(name string) error {
 		return nil
 	case processingcandidate.FieldFailureStep:
 		m.ClearFailureStep()
+		return nil
+	case processingcandidate.FieldReprocessID:
+		m.ClearReprocessID()
 		return nil
 	}
 	return fmt.Errorf("unknown ProcessingCandidate nullable field %s", name)
@@ -18956,6 +19026,9 @@ func (m *ProcessingCandidateMutation) ResetField(name string) error {
 		return nil
 	case processingcandidate.FieldFailureStep:
 		m.ResetFailureStep()
+		return nil
+	case processingcandidate.FieldReprocessID:
+		m.ResetReprocessID()
 		return nil
 	case processingcandidate.FieldCreatedAt:
 		m.ResetCreatedAt()
@@ -20244,6 +20317,7 @@ type ProcessingResultMutation struct {
 	completed_at       *time.Time
 	published_at       *time.Time
 	message_id         *uuid.UUID
+	retracted_at       *time.Time
 	clearedFields      map[string]struct{}
 	done               bool
 	oldValue           func(context.Context) (*ProcessingResult, error)
@@ -20723,6 +20797,55 @@ func (m *ProcessingResultMutation) ResetMessageID() {
 	delete(m.clearedFields, processingresult.FieldMessageID)
 }
 
+// SetRetractedAt sets the "retracted_at" field.
+func (m *ProcessingResultMutation) SetRetractedAt(t time.Time) {
+	m.retracted_at = &t
+}
+
+// RetractedAt returns the value of the "retracted_at" field in the mutation.
+func (m *ProcessingResultMutation) RetractedAt() (r time.Time, exists bool) {
+	v := m.retracted_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRetractedAt returns the old "retracted_at" field's value of the ProcessingResult entity.
+// If the ProcessingResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessingResultMutation) OldRetractedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRetractedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRetractedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRetractedAt: %w", err)
+	}
+	return oldValue.RetractedAt, nil
+}
+
+// ClearRetractedAt clears the value of the "retracted_at" field.
+func (m *ProcessingResultMutation) ClearRetractedAt() {
+	m.retracted_at = nil
+	m.clearedFields[processingresult.FieldRetractedAt] = struct{}{}
+}
+
+// RetractedAtCleared returns if the "retracted_at" field was cleared in this mutation.
+func (m *ProcessingResultMutation) RetractedAtCleared() bool {
+	_, ok := m.clearedFields[processingresult.FieldRetractedAt]
+	return ok
+}
+
+// ResetRetractedAt resets all changes to the "retracted_at" field.
+func (m *ProcessingResultMutation) ResetRetractedAt() {
+	m.retracted_at = nil
+	delete(m.clearedFields, processingresult.FieldRetractedAt)
+}
+
 // Where appends a list predicates to the ProcessingResultMutation builder.
 func (m *ProcessingResultMutation) Where(ps ...predicate.ProcessingResult) {
 	m.predicates = append(m.predicates, ps...)
@@ -20757,7 +20880,7 @@ func (m *ProcessingResultMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProcessingResultMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 9)
 	if m.revision != nil {
 		fields = append(fields, processingresult.FieldRevision)
 	}
@@ -20781,6 +20904,9 @@ func (m *ProcessingResultMutation) Fields() []string {
 	}
 	if m.message_id != nil {
 		fields = append(fields, processingresult.FieldMessageID)
+	}
+	if m.retracted_at != nil {
+		fields = append(fields, processingresult.FieldRetractedAt)
 	}
 	return fields
 }
@@ -20806,6 +20932,8 @@ func (m *ProcessingResultMutation) Field(name string) (ent.Value, bool) {
 		return m.PublishedAt()
 	case processingresult.FieldMessageID:
 		return m.MessageID()
+	case processingresult.FieldRetractedAt:
+		return m.RetractedAt()
 	}
 	return nil, false
 }
@@ -20831,6 +20959,8 @@ func (m *ProcessingResultMutation) OldField(ctx context.Context, name string) (e
 		return m.OldPublishedAt(ctx)
 	case processingresult.FieldMessageID:
 		return m.OldMessageID(ctx)
+	case processingresult.FieldRetractedAt:
+		return m.OldRetractedAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown ProcessingResult field %s", name)
 }
@@ -20896,6 +21026,13 @@ func (m *ProcessingResultMutation) SetField(name string, value ent.Value) error 
 		}
 		m.SetMessageID(v)
 		return nil
+	case processingresult.FieldRetractedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRetractedAt(v)
+		return nil
 	}
 	return fmt.Errorf("unknown ProcessingResult field %s", name)
 }
@@ -20959,6 +21096,9 @@ func (m *ProcessingResultMutation) ClearedFields() []string {
 	if m.FieldCleared(processingresult.FieldMessageID) {
 		fields = append(fields, processingresult.FieldMessageID)
 	}
+	if m.FieldCleared(processingresult.FieldRetractedAt) {
+		fields = append(fields, processingresult.FieldRetractedAt)
+	}
 	return fields
 }
 
@@ -20978,6 +21118,9 @@ func (m *ProcessingResultMutation) ClearField(name string) error {
 		return nil
 	case processingresult.FieldMessageID:
 		m.ClearMessageID()
+		return nil
+	case processingresult.FieldRetractedAt:
+		m.ClearRetractedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown ProcessingResult nullable field %s", name)
@@ -21010,6 +21153,9 @@ func (m *ProcessingResultMutation) ResetField(name string) error {
 		return nil
 	case processingresult.FieldMessageID:
 		m.ResetMessageID()
+		return nil
+	case processingresult.FieldRetractedAt:
+		m.ResetRetractedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown ProcessingResult field %s", name)

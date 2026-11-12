@@ -606,6 +606,7 @@ var (
 		{Name: "due_at", Type: field.TypeTime},
 		{Name: "failure_code", Type: field.TypeString, Nullable: true},
 		{Name: "failure_step", Type: field.TypeString, Nullable: true},
+		{Name: "reprocess_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
@@ -680,6 +681,7 @@ var (
 		{Name: "completed_at", Type: field.TypeTime},
 		{Name: "published_at", Type: field.TypeTime, Nullable: true},
 		{Name: "message_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "retracted_at", Type: field.TypeTime, Nullable: true},
 	}
 	// ProcessingResultsTable holds the schema information for the "processing_results" table.
 	ProcessingResultsTable = &schema.Table{

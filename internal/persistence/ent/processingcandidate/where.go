@@ -145,6 +145,11 @@ func FailureStep(v string) predicate.ProcessingCandidate {
 	return predicate.ProcessingCandidate(sql.FieldEQ(FieldFailureStep, v))
 }
 
+// ReprocessID applies equality check predicate on the "reprocess_id" field. It's identical to ReprocessIDEQ.
+func ReprocessID(v uuid.UUID) predicate.ProcessingCandidate {
+	return predicate.ProcessingCandidate(sql.FieldEQ(FieldReprocessID, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.ProcessingCandidate {
 	return predicate.ProcessingCandidate(sql.FieldEQ(FieldCreatedAt, v))
@@ -933,6 +938,56 @@ func FailureStepEqualFold(v string) predicate.ProcessingCandidate {
 // FailureStepContainsFold applies the ContainsFold predicate on the "failure_step" field.
 func FailureStepContainsFold(v string) predicate.ProcessingCandidate {
 	return predicate.ProcessingCandidate(sql.FieldContainsFold(FieldFailureStep, v))
+}
+
+// ReprocessIDEQ applies the EQ predicate on the "reprocess_id" field.
+func ReprocessIDEQ(v uuid.UUID) predicate.ProcessingCandidate {
+	return predicate.ProcessingCandidate(sql.FieldEQ(FieldReprocessID, v))
+}
+
+// ReprocessIDNEQ applies the NEQ predicate on the "reprocess_id" field.
+func ReprocessIDNEQ(v uuid.UUID) predicate.ProcessingCandidate {
+	return predicate.ProcessingCandidate(sql.FieldNEQ(FieldReprocessID, v))
+}
+
+// ReprocessIDIn applies the In predicate on the "reprocess_id" field.
+func ReprocessIDIn(vs ...uuid.UUID) predicate.ProcessingCandidate {
+	return predicate.ProcessingCandidate(sql.FieldIn(FieldReprocessID, vs...))
+}
+
+// ReprocessIDNotIn applies the NotIn predicate on the "reprocess_id" field.
+func ReprocessIDNotIn(vs ...uuid.UUID) predicate.ProcessingCandidate {
+	return predicate.ProcessingCandidate(sql.FieldNotIn(FieldReprocessID, vs...))
+}
+
+// ReprocessIDGT applies the GT predicate on the "reprocess_id" field.
+func ReprocessIDGT(v uuid.UUID) predicate.ProcessingCandidate {
+	return predicate.ProcessingCandidate(sql.FieldGT(FieldReprocessID, v))
+}
+
+// ReprocessIDGTE applies the GTE predicate on the "reprocess_id" field.
+func ReprocessIDGTE(v uuid.UUID) predicate.ProcessingCandidate {
+	return predicate.ProcessingCandidate(sql.FieldGTE(FieldReprocessID, v))
+}
+
+// ReprocessIDLT applies the LT predicate on the "reprocess_id" field.
+func ReprocessIDLT(v uuid.UUID) predicate.ProcessingCandidate {
+	return predicate.ProcessingCandidate(sql.FieldLT(FieldReprocessID, v))
+}
+
+// ReprocessIDLTE applies the LTE predicate on the "reprocess_id" field.
+func ReprocessIDLTE(v uuid.UUID) predicate.ProcessingCandidate {
+	return predicate.ProcessingCandidate(sql.FieldLTE(FieldReprocessID, v))
+}
+
+// ReprocessIDIsNil applies the IsNil predicate on the "reprocess_id" field.
+func ReprocessIDIsNil() predicate.ProcessingCandidate {
+	return predicate.ProcessingCandidate(sql.FieldIsNull(FieldReprocessID))
+}
+
+// ReprocessIDNotNil applies the NotNil predicate on the "reprocess_id" field.
+func ReprocessIDNotNil() predicate.ProcessingCandidate {
+	return predicate.ProcessingCandidate(sql.FieldNotNull(FieldReprocessID))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

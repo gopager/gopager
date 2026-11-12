@@ -85,6 +85,11 @@ func MessageID(v uuid.UUID) predicate.ProcessingResult {
 	return predicate.ProcessingResult(sql.FieldEQ(FieldMessageID, v))
 }
 
+// RetractedAt applies equality check predicate on the "retracted_at" field. It's identical to RetractedAtEQ.
+func RetractedAt(v time.Time) predicate.ProcessingResult {
+	return predicate.ProcessingResult(sql.FieldEQ(FieldRetractedAt, v))
+}
+
 // RevisionEQ applies the EQ predicate on the "revision" field.
 func RevisionEQ(v int64) predicate.ProcessingResult {
 	return predicate.ProcessingResult(sql.FieldEQ(FieldRevision, v))
@@ -343,6 +348,56 @@ func MessageIDIsNil() predicate.ProcessingResult {
 // MessageIDNotNil applies the NotNil predicate on the "message_id" field.
 func MessageIDNotNil() predicate.ProcessingResult {
 	return predicate.ProcessingResult(sql.FieldNotNull(FieldMessageID))
+}
+
+// RetractedAtEQ applies the EQ predicate on the "retracted_at" field.
+func RetractedAtEQ(v time.Time) predicate.ProcessingResult {
+	return predicate.ProcessingResult(sql.FieldEQ(FieldRetractedAt, v))
+}
+
+// RetractedAtNEQ applies the NEQ predicate on the "retracted_at" field.
+func RetractedAtNEQ(v time.Time) predicate.ProcessingResult {
+	return predicate.ProcessingResult(sql.FieldNEQ(FieldRetractedAt, v))
+}
+
+// RetractedAtIn applies the In predicate on the "retracted_at" field.
+func RetractedAtIn(vs ...time.Time) predicate.ProcessingResult {
+	return predicate.ProcessingResult(sql.FieldIn(FieldRetractedAt, vs...))
+}
+
+// RetractedAtNotIn applies the NotIn predicate on the "retracted_at" field.
+func RetractedAtNotIn(vs ...time.Time) predicate.ProcessingResult {
+	return predicate.ProcessingResult(sql.FieldNotIn(FieldRetractedAt, vs...))
+}
+
+// RetractedAtGT applies the GT predicate on the "retracted_at" field.
+func RetractedAtGT(v time.Time) predicate.ProcessingResult {
+	return predicate.ProcessingResult(sql.FieldGT(FieldRetractedAt, v))
+}
+
+// RetractedAtGTE applies the GTE predicate on the "retracted_at" field.
+func RetractedAtGTE(v time.Time) predicate.ProcessingResult {
+	return predicate.ProcessingResult(sql.FieldGTE(FieldRetractedAt, v))
+}
+
+// RetractedAtLT applies the LT predicate on the "retracted_at" field.
+func RetractedAtLT(v time.Time) predicate.ProcessingResult {
+	return predicate.ProcessingResult(sql.FieldLT(FieldRetractedAt, v))
+}
+
+// RetractedAtLTE applies the LTE predicate on the "retracted_at" field.
+func RetractedAtLTE(v time.Time) predicate.ProcessingResult {
+	return predicate.ProcessingResult(sql.FieldLTE(FieldRetractedAt, v))
+}
+
+// RetractedAtIsNil applies the IsNil predicate on the "retracted_at" field.
+func RetractedAtIsNil() predicate.ProcessingResult {
+	return predicate.ProcessingResult(sql.FieldIsNull(FieldRetractedAt))
+}
+
+// RetractedAtNotNil applies the NotNil predicate on the "retracted_at" field.
+func RetractedAtNotNil() predicate.ProcessingResult {
+	return predicate.ProcessingResult(sql.FieldNotNull(FieldRetractedAt))
 }
 
 // And groups predicates with the AND operator between them.

@@ -121,7 +121,7 @@ Fixed values (not configurable):
 | Role | Runs |
 | --- | --- |
 | `api` | HTTP listener with health endpoints and all `/api/v1` routes (authentication, management, gateway intake and administration, processing). See [HTTP API](http-api.md). |
-| `worker` | Processing dispatcher (executes due workflow work), the assignment correction runner, the Gateway contact-loss monitor, the Delivery fan-out consumer (turns new facts into Deliveries) and the Delivery runner (attempts due Deliveries, polling every 5 s besides fact notifications). No listener. Without a configured Delivery target provider every Subscription target is unavailable and no Delivery starts. |
+| `worker` | Processing dispatcher (executes due workflow work), the assignment correction runner, the Reprocess runner (historical Reprocess requests, woken by a `gopager_processing_reprocess` notification, polling every second), the Gateway contact-loss monitor, the Delivery fan-out consumer (turns new facts into Deliveries) and the Delivery runner (attempts due Deliveries, polling every 5 s besides fact notifications). No listener. Without a configured Delivery target provider every Subscription target is unavailable and no Delivery starts. |
 
 Both roles load the plugin directory, if configured, because workflow management and preview on the API also execute plugins.
 
@@ -275,7 +275,7 @@ Logs are written to stderr by Go's default `log/slog` handler (`2026/11/05 23:54
 | `COMMIT_UNCERTAIN` | Connection lost during commit; outcome unknown |
 | `INTERNAL_ERROR` | Any other failure, including listener bind errors |
 
-Log lines in use: `platform started`, `API error response`, `platform readiness check failed`, `platform role stopped`, `GoPager exited`, the worker retry warnings `Processing dispatch selection failed; retrying` and `correction runner storage failure; retrying` and `Gateway contact monitor storage failure; retrying` with their recovery lines `Processing dispatch selection recovered`, `correction runner recovered` and `Gateway contact monitor recovered`, and the warning `operator approved a remote database connection without certificate-verified TLS`.
+Log lines in use: `platform started`, `API error response`, `platform readiness check failed`, `platform role stopped`, `GoPager exited`, the worker retry warnings `Processing dispatch selection failed; retrying` and `correction runner storage failure; retrying`, `reprocess runner failure; retrying` and `Gateway contact monitor storage failure; retrying` with their recovery lines `Processing dispatch selection recovered`, `correction runner recovered` and `Gateway contact monitor recovered`, and the warning `operator approved a remote database connection without certificate-verified TLS`.
 
 ## Database TLS
 

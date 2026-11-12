@@ -398,6 +398,7 @@ Management operations (see [HTTP API](http-api.md) for the routes and envelopes)
 | Preview | `workflow.preview` | See [Preview](#preview). | — |
 | List / read candidate status, read result metadata | `workflow.read` | See [Status reads](#status-reads). | — |
 | Retry failed candidate | `workflow.reprocess` | See [Retries](#retries). | — |
+| Reprocess | `workflow.reprocess` | See [Historical Reprocess](#historical-reprocess). Bumps the revision. | `updated` |
 
 Common rules:
 
@@ -563,6 +564,23 @@ Each delay has uniform ±20 % jitter. After the fifth automatic attempt the cand
 
 A transmission with a `failed` candidate for a current workflow stays unpublished until the candidate is retried successfully, or until it becomes obsolete. A candidate becomes obsolete when the workflow is disabled, deleted, re-scoped, or another version is activated. The candidate is then superseded the next time the transmission is reconciled.
 
+### Historical Reprocess
+
+Activating a version changes only what is processed from then on: results already published stay as they are. A historical Reprocess is the explicit request to judge existing Transmissions again, `POST /api/v1/workflows/{id}/reprocess` ([HTTP API](http-api.md#processing-workflows-versions-candidates)). It names the active version, the workflow revision the caller saw and a half-open Message-time range, and it needs `workflow.reprocess` over the whole workflow scope.
+
+The request transaction advances the workflow revision (so every existing candidate of the workflow is reselected when it is re-admitted, even at the same version), appends the same `configuration.changed` fact (`updated`) as a workflow update and stores a `processing_reprocess_requests` row. The row is the complete durable state: the pins (workflow revision and active version), the cutoff, a cursor and the counts. The **cutoff** is the primary-clock time of the request; only Transmissions with `accepted_at` at or before it are scanned, because later ones are admitted at the active version anyway.
+
+The runner (worker role) claims a due request with `FOR UPDATE SKIP LOCKED` and a lease. Per step, in one transaction, it first checks the pins under the shared Processing-control lock: when the workflow was changed since the request (revision or active version), disabled or deleted, the request becomes `superseded` and nothing more is re-admitted (candidates already marked still finish). Otherwise it takes the next Transmission in ID order after the cursor whose Message time (`messages.first_observed_at`) lies in the range and that either arrives on a Network of an Agency assigned to the workflow or holds a published result of the workflow, first asks whether the Transmission is fresh intake, then calls the source owner's `ReadmitProcessing` (current access, targets and workflow selection; Payload, membership and time stay untouched) and then
+
+- marks the workflow's current candidate of the Transmission with the request (`reprocess_id`), or,
+- when the workflow no longer selects the Transmission, **retracts** its published results of that Transmission: `processing_results.retracted_at` is set, `published_at` and `message_id` are cleared and the result's `message_attribute_values` rows are deleted, so feeds no longer show it and it never publishes again.
+
+The cursor and counts advance in the same transaction, so a rollback leaves no partial step and a restarted runner resumes after the cursor purely from the row. A failed step, including a revision conflict caused by an open correction, rolls back and reschedules the request with the backoff of the correction runner (1 s doubling up to 30 s). When no Transmission is left the request is `completed`.
+
+**Fresh intake is not history.** A Transmission whose non-superseded candidate of the workflow carries the request's pinned workflow revision and was created at or after the request was admitted by intake after the request, even if its `accepted_at` lies before the cutoff (intake takes its acceptance time before it waits for the request's configuration lock). The runner counts it as scanned, still advances the cursor, but does not mark it, so its fact stays `normal`. Candidates that existed before the request (older revision, reselected by readmission) and candidates the runner's own readmission creates for never-admitted Transmissions are marked as described.
+
+A marked candidate runs like any candidate. When it completes, publication does in one transaction: retract every other published result of the same Transmission and workflow, publish the new result if the candidate selected the Transmission, append `processing.completed` with `replayMode` `reprocess` and clear the mark. A not-selected marked candidate retracts the others and clears the mark without a fact. A failed marked candidate replaces nothing, so the old results stay visible until a retry succeeds ([Retries](#retries)); the mark survives the retry. Reprocessed results are visible in feeds at once but are not sent: Delivery fan-out ignores every fact whose `replayMode` is not `normal`, and redelivery stays a separately confirmed Delivery operation. Retrying a failed candidate is not a Reprocess and appends `normal` facts.
+
 ### Candidate states
 
 ```mermaid
@@ -583,7 +601,7 @@ stateDiagram-v2
 | --- | --- | --- |
 | `pending` | no | Waiting until `due_at`. |
 | `running` | no | Claimed under a lease and fencing token. |
-| `completed` | yes | `selected` is set. A result is stored only if `selected=true`; a stored result is published in the same transaction. |
+| `completed` | yes | `selected` is set. A result is stored only if `selected=true`; a stored result is published in the same transaction. A candidate marked by a Reprocess also retracts the earlier results ([Historical Reprocess](#historical-reprocess)). |
 | `failed` | until retried | `failureCode` holds one of `INVALID_INPUT`, `INCOMPATIBLE_VERSION`, `RESOURCE_LIMIT`, `STORAGE_UNAVAILABLE`, `AUTHORITY_UNAVAILABLE`, `INTERNAL_ERROR`. |
 | `superseded` | yes | The binding is no longer current. Evidence is retained. |
 
@@ -619,7 +637,7 @@ All processing events use schema version 1 and producer version `processing-kern
 | `configuration.changed` | `processing-instance` (ID, revision) | `configuration` | `{"changeKind": "created" \| "updated"}`. Paths, configuration values and the principal are not included. |
 | `processing.completed` | `processingResult` (result ID, result revision) | `source-classified` | `transmissionId`, `messageId`, `workflowId`, `definitionVersionId`, `resultId`, `resultRevision`, `sourceRevision`, `contextRevision`, `status: "completed"`, `result` (the [result shape](#result-shape)). |
 
-`processing.completed` is emitted only for selected results, when the result is published. Not-selected outcomes and failures emit no event; a failure is visible as the transmission's `failed` processing status. Replay mode is `normal`, or `reprocess` for a historical Reprocess; Delivery fan-out ignores every fact whose replay mode is not `normal`.
+`processing.completed` is emitted only for selected results, when the result is published. Not-selected outcomes and failures emit no event; a failure is visible as the transmission's `failed` processing status. Replay mode is `normal`, or `reprocess` for a result published by a [historical Reprocess](#historical-reprocess); Delivery fan-out ignores every fact whose replay mode is not `normal`.
 
 ### Status reads
 

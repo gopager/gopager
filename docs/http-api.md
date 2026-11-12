@@ -1040,9 +1040,22 @@ Network replacement body:
 | GET | `/workflows/{id}/candidates/{candidate}` | `workflow.read` | 200 | One candidate: `state`, `selected`, `failureCode` |
 | GET | `/workflows/{id}/candidates/{candidate}/result` | `workflow.read` | 200 | Result metadata only (`id`, `revision`, `completedAt`) |
 | POST | `/workflows/{id}/candidates/{candidate}/retry` | `workflow.reprocess` | 200 | Retry a failed candidate (`expectedRevision`) |
+| POST | `/workflows/{id}/reprocess` | `workflow.reprocess` | 202 | Request a historical Reprocess of the active version over a Message-time range |
+| GET | `/workflows/{id}/reprocesses` | `workflow.read` | 200 | List Reprocess requests, newest first (`offset`, `limit`) |
+| GET | `/workflows/{id}/reprocesses/{request}` | `workflow.read` | 200 | One request with its progress |
 
 Workflow `scope` is `{"agencies": [...], "narrowing": null | {"kind": "network" | "unit", "references": [...]}}`; see [Workflows](workflows.md#workflow-configuration). Creating, updating and deleting a
 workflow, saving a version and activating one all advance the workflow revision.
+
+Reprocess body: `{"schemaVersion":1,"versionId":"…","expectedRevision":"4","messageTimeFrom":"…","messageTimeTo":"…"}`.
+The times are RFC 3339 and the range is half-open (`messageTimeFrom` included, `messageTimeTo` excluded);
+an empty or reversed range, a malformed time or another `schemaVersion` is `400 INVALID_INPUT`.
+`versionId` must be the active version and `expectedRevision` the current workflow revision, else
+`409 REVISION_CONFLICT`; so is a disabled workflow. `workflow.reprocess` is checked over the whole workflow scope exactly
+like the other workflow commands. The call advances the workflow revision, answers `202` and returns the request as
+`{"id","workflowId","versionId","messageTimeFrom","messageTimeTo","cutoffAt","state","scanned","readmitted","retracted","createdAt","updatedAt"}`.
+`state` is `pending`, `running`, `completed` or `superseded`; the counts grow while the worker role runs the request
+([Workflows](workflows.md#historical-reprocess)). The read routes return the same view.
 
 Preview body:
 

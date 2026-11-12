@@ -293,7 +293,7 @@ func (s *Store) ListVersions(ctx context.Context, tx platform.TransactionContext
 
 // SaveWorkflow persists a service-authorized complete metadata change with expected-revision CAS.
 func (s *Store) SaveWorkflow(ctx context.Context, tx platform.TransactionContext, authority authz.Authority, action string, value processing.WorkflowConfiguration, expected int64, now time.Time) error {
-	if !slices.Contains([]string{"workflow.create", "workflow.update", "workflow.activate", "workflow.delete"}, action) ||
+	if !slices.Contains([]string{"workflow.create", "workflow.update", "workflow.activate", "workflow.delete", "workflow.reprocess"}, action) ||
 		expected < 0 || now.IsZero() {
 		return authz.ErrInvalidInput
 	}

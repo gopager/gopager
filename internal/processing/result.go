@@ -10,6 +10,8 @@ import (
 
 // PrivateResult is immutable completed evaluation evidence. PublishedAt and MessageID are set
 // once the result has been attached to its Transmission's Message and its completion fact appended.
+// RetractedAt is set when a historical Reprocess withdrew the published result; a retracted
+// result is detached from its Message and never publishes again.
 type PrivateResult struct {
 	ID             uuid.UUID
 	CandidateID    uuid.UUID
@@ -19,6 +21,7 @@ type PrivateResult struct {
 	CompletedAt    time.Time
 	PublishedAt    *time.Time
 	MessageID      *uuid.UUID
+	RetractedAt    *time.Time
 }
 
 // ResultRepository atomically commits a fenced outcome and optional private result in the caller transaction.

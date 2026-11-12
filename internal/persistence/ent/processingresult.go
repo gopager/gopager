@@ -35,7 +35,9 @@ type ProcessingResult struct {
 	// PublishedAt holds the value of the "published_at" field.
 	PublishedAt *time.Time `json:"published_at,omitempty"`
 	// MessageID holds the value of the "message_id" field.
-	MessageID    *uuid.UUID `json:"message_id,omitempty"`
+	MessageID *uuid.UUID `json:"message_id,omitempty"`
+	// RetractedAt holds the value of the "retracted_at" field.
+	RetractedAt  *time.Time `json:"retracted_at,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -50,7 +52,7 @@ func (*ProcessingResult) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case processingresult.FieldRevision, processingresult.FieldProducingFence:
 			values[i] = new(sql.NullInt64)
-		case processingresult.FieldCompletedAt, processingresult.FieldPublishedAt:
+		case processingresult.FieldCompletedAt, processingresult.FieldPublishedAt, processingresult.FieldRetractedAt:
 			values[i] = new(sql.NullTime)
 		case processingresult.FieldID, processingresult.FieldCandidateID:
 			values[i] = new(uuid.UUID)
@@ -129,6 +131,13 @@ func (_m *ProcessingResult) assignValues(columns []string, values []any) error {
 				_m.MessageID = new(uuid.UUID)
 				*_m.MessageID = *value.S.(*uuid.UUID)
 			}
+		case processingresult.FieldRetractedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field retracted_at", values[i])
+			} else if value.Valid {
+				_m.RetractedAt = new(time.Time)
+				*_m.RetractedAt = value.Time
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -190,6 +199,11 @@ func (_m *ProcessingResult) String() string {
 	if v := _m.MessageID; v != nil {
 		builder.WriteString("message_id=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.RetractedAt; v != nil {
+		builder.WriteString("retracted_at=")
+		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteByte(')')
 	return builder.String()

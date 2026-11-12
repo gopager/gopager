@@ -22,6 +22,8 @@ type ProcessingRoutes struct {
 	Retries   *processingmanagement.RetryService
 	Preview   *processingmanagement.PreviewService
 	Instances *processingmanagement.InstanceService
+	// Reprocess serves the historical Reprocess request and progress routes of a Workflow.
+	Reprocess *processingmanagement.ReprocessService
 	// Personal and UnitParameters serve the plugin configuration routes of Delivery instances.
 	Personal       *processingmanagement.PersonalService
 	UnitParameters *processingmanagement.UnitParameterService
@@ -32,6 +34,7 @@ type processingWorkflowAPI struct {
 	service        *processingmanagement.Service
 	reads          *processingmanagement.ProcessingReads
 	retries        *processingmanagement.RetryService
+	reprocess      *processingmanagement.ReprocessService
 	preview        *processingmanagement.PreviewService
 	instances      *processingmanagement.InstanceService
 	personal       *processingmanagement.PersonalService
@@ -59,7 +62,7 @@ func decodeProcessingJSON(r *http.Request, input any) error {
 // for every service present in routes.
 func RegisterProcessingRoutes(mux *http.ServeMux, transport *identity.HTTPTransport, authenticator Authenticator, routes ProcessingRoutes) {
 	api := processingWorkflowAPI{routeGuard: routeGuard{transport: transport, authenticator: authenticator}, service: routes.Workflows,
-		reads: routes.Reads, retries: routes.Retries, preview: routes.Preview, instances: routes.Instances,
+		reads: routes.Reads, retries: routes.Retries, reprocess: routes.Reprocess, preview: routes.Preview, instances: routes.Instances,
 		personal: routes.Personal, unitParameters: routes.UnitParameters}
 	if api.service != nil {
 		api.registerWorkflows(mux)
@@ -70,6 +73,9 @@ func RegisterProcessingRoutes(mux *http.ServeMux, transport *identity.HTTPTransp
 	}
 	if api.retries != nil {
 		api.registerRetry(mux)
+	}
+	if api.reprocess != nil {
+		api.registerReprocess(mux)
 	}
 	if api.preview != nil {
 		api.registerPreview(mux)
