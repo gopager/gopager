@@ -61,6 +61,8 @@ type SecretStore interface {
 type SecretCipher struct {
 	aead  cipher.AEAD
 	keyID string
+	// fingerprintKey is derived from the master key for keyed command fingerprints.
+	fingerprintKey []byte
 }
 
 // NewSecretCipher builds a cipher from a 32-byte master key; the key is not retained.
@@ -77,7 +79,8 @@ func NewSecretCipher(key []byte) (*SecretCipher, error) {
 		return nil, invalid(errors.New("secret cipher unavailable"))
 	}
 	sum := sha256.Sum256(key)
-	return &SecretCipher{aead: aead, keyID: "k1:" + hex.EncodeToString(sum[:])[:16]}, nil
+	return &SecretCipher{aead: aead, keyID: "k1:" + hex.EncodeToString(sum[:])[:16],
+		fingerprintKey: deriveFingerprintKey(key)}, nil
 }
 
 // KeyID identifies the master key without revealing it: "k1:" plus the first 16 hex digits of

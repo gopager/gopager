@@ -32,13 +32,20 @@ type InstanceSummary struct {
 	Enabled              bool                 `json:"enabled"`
 	ExecutionPrincipalID uuid.UUID            `json:"executionPrincipalId"`
 	Main                 InstanceArtifactView `json:"main"`
-	CreatedAt            time.Time            `json:"createdAt"`
+	// Capability is the capability of the pinned manifest; empty when the artifact cannot be loaded.
+	Capability string    `json:"capability,omitempty"`
+	CreatedAt  time.Time `json:"createdAt"`
 }
 
-// InstanceView adds manifest-classified configuration to a redacted instance summary.
+// InstanceView adds manifest-classified configuration, the target use, the lifecycle and the
+// status of this node to a redacted instance summary. Configuration is absent when the artifact
+// cannot be loaded.
 type InstanceView struct {
 	InstanceSummary
-	Configuration processing.InstanceConfigurationView `json:"configuration"`
+	TargetUse     *processing.TargetUse                 `json:"targetUse,omitempty"`
+	Lifecycle     string                                `json:"lifecycle"`
+	Status        InstanceStatus                        `json:"status"`
+	Configuration *processing.InstanceConfigurationView `json:"configuration,omitempty"`
 }
 
 func validateInstancePage(input processing.PageInput) error {
@@ -93,18 +100,16 @@ func (s *InstanceService) ReadInstance(ctx context.Context, proof identity.Proof
 	}); err != nil {
 		return InstanceView{}, err
 	}
-	projector, ok := s.inspector.(InstanceConfigurationProjector)
-	if !ok {
-		return InstanceView{}, platform.NewFailure(platform.CodeAuthorityUnavailable,
-			errors.New("instance configuration view owner unavailable"))
-	}
-	projected, err := projector.ProjectInstanceConfiguration(ctx, configuration)
-	if err != nil {
-		return InstanceView{}, err
-	}
 	summary, err := instanceSummary(configuration)
 	if err != nil {
 		return InstanceView{}, err
+	}
+	view := InstanceView{InstanceSummary: summary, TargetUse: configuration.TargetUse,
+		Status: s.pluginStatus(configuration.ID)}
+	manifest, projected, loadErr := s.loadForView(ctx, configuration)
+	view.Lifecycle = lifecycleOf(configuration.Enabled, loadErr)
+	if loadErr == nil {
+		view.Capability, view.Configuration = manifest.EffectiveCapability(), &projected
 	}
 	if err := s.withConfigureRead(ctx, proof, func(tx platform.TransactionContext, authority authz.Authority,
 		now time.Time) error {
@@ -119,7 +124,7 @@ func (s *InstanceService) ReadInstance(ctx context.Context, proof identity.Proof
 	}); err != nil {
 		return InstanceView{}, err
 	}
-	return InstanceView{InstanceSummary: summary, Configuration: projected}, nil
+	return view, nil
 }
 
 // ListInstances returns a bounded page of redacted current-instance summaries.
@@ -155,6 +160,9 @@ func (s *InstanceService) ListInstances(ctx context.Context, proof identity.Proo
 		summary, err := instanceSummary(configuration)
 		if err != nil {
 			return processing.Page[InstanceSummary]{}, err
+		}
+		if manifest, err := s.inspector.InspectManifest(ctx, configuration.Main); err == nil {
+			summary.Capability = manifest.EffectiveCapability()
 		}
 		result.Items[index] = summary
 	}

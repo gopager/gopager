@@ -66,7 +66,7 @@ func TestParseConfigBindsExplicitInputs(t *testing.T) {
 				switch key {
 				case "GOPAGER_DATABASE_URL":
 					return test.dsn
-				case "GOPAGER_PROCESSING_ARTIFACT_ROOT":
+				case "GOPAGER_PROCESSING_ARTIFACT_ROOT", "GOPAGER_SECRET_KEY", "GOPAGER_SECRET_KEY_FILE", "GOPAGER_SECRET_FILE_ROOT":
 					return ""
 				}
 				t.Fatalf("unexpected environment input %q", key)

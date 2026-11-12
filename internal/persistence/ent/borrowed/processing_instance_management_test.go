@@ -42,6 +42,11 @@ func (i *instanceInspectionFixture) InspectInstance(_ context.Context, value pro
 	return nil
 }
 
+// InspectManifest returns a processing manifest without configuration declarations.
+func (i *instanceInspectionFixture) InspectManifest(context.Context, processing.ProvisionedArtifact) (processing.InstalledManifest, error) {
+	return processing.InstalledManifest{}, nil
+}
+
 type invalidInstanceFactFixture struct {
 	events.ProcessingInstanceAppender
 }

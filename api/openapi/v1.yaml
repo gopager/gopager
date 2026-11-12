@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: GoPager API
-  version: 1.10.0
+  version: 1.11.0
   description: |
     GoPager application API. Human guide: docs/http-api.md.
 
@@ -3584,6 +3584,8 @@ paths:
       summary: Create a plugin instance
       description: 'Requires the global `plugin.configure` right. Loads and verifies the manifests and artifact
         digests under the operator''s artifact root (without starting the plugin) and validates `configuration`.
+        `configuration` never holds a Secret property (400); Secrets travel in `secrets`. A manifest that declares
+        Core access its capability does not grant is 403 `CAPABILITY_UNDECLARED`.
         Without an artifact root, 503 `AUTHORITY_UNAVAILABLE`; an unsupported manifest schema or SDK is 409 `INCOMPATIBLE_VERSION`.
         Idempotent per (caller, `commandId`): an identical replay returns the original result; reusing the `commandId`
         with different input is 409 `IDEMPOTENCY_CONFLICT`. The body is limited to 1 MiB and is decoded strictly: unknown
@@ -3622,6 +3624,49 @@ paths:
           $ref: '#/components/responses/InternalError'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /instances/inspection:
+    post:
+      operationId: inspectInstanceArtifact
+      tags:
+      - Processing instances
+      summary: Inspect a plugin artifact
+      description: 'Requires the global `plugin.configure` right. Verifies the manifest and executable of `main`
+        under the operator''s artifact root without starting the plugin and returns the manifest''s identity, capability,
+        schemas, policy, Delivery declaration and resources; never the artifact location or digest. A manifest that
+        declares Core access its capability does not grant is 403 `CAPABILITY_UNDECLARED`; an unsupported manifest
+        or SDK version is 409 `INCOMPATIBLE_VERSION`; without an artifact root, 503 `AUTHORITY_UNAVAILABLE`.'
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InspectInstanceRequest'
+      responses:
+        '200':
+          description: The verified manifest.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManifestInspectionResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/VersionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /instances/{id}:
     parameters:
     - $ref: '#/components/parameters/ID'
@@ -3632,7 +3677,8 @@ paths:
       summary: Read a plugin instance
       description: 'Requires `plugin.configure`. Absent, deleted and invisible items are all 404. Configuration
         is projected through the current manifest policy: secret and user-scoped values are redacted. Without an
-        artifact root, 503 `AUTHORITY_UNAVAILABLE`.'
+        artifact root, 503 `AUTHORITY_UNAVAILABLE`. An artifact that cannot be loaded is not an error: the view
+        carries `lifecycle` `incompatible` or `failed` and no `configuration`.'
       security:
       - sessionCookie: []
       - accessKey: []
@@ -3696,6 +3742,256 @@ paths:
           $ref: '#/components/responses/VersionConflict'
         '413':
           $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /instances/{id}/personal-configuration:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    get:
+      operationId: readPersonalConfiguration
+      tags:
+      - Processing instances
+      summary: Read the caller's personal plugin configuration
+      description: 'The caller''s own values for a Delivery instance, under `subscription.manage-own` on the caller''s
+        account. The instance must be current, enabled, a `delivery` instance and admit the caller by its target use;
+        otherwise, and when the caller holds no values, 404. Secrets are shown only as configured, redacted, with their
+        `source`.'
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      responses:
+        '200':
+          description: The caller's personal values.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonalConfigurationResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    put:
+      operationId: savePersonalConfiguration
+      tags:
+      - Processing instances
+      summary: Create or replace the caller's personal plugin configuration
+      description: 'Under `subscription.manage-own` on the caller''s account; the instance must admit the caller as
+        for the read (404 otherwise). `expectedRevision` is "0" to create, else the stored revision (409 `REVISION_CONFLICT`
+        on a mismatch). `configuration` replaces the user-scoped non-Secret values; `secrets` maps the dotted path
+        of a user-scoped Secret property to `{"value": ...}` (sealed into a new row owned by the caller) or null
+        (removes it), and a path left out keeps its Secret. An administrative or undeclared property anywhere, a Secret
+        inside `configuration`, and a `reference` (file or environment) in `secrets` are 400 `INVALID_INPUT` for the
+        whole request. Never touches administrative values or another owner''s values. Idempotent per (caller, `commandId`).'
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PersonalConfigurationRequest'
+      responses:
+        '200':
+          description: The instance ID and the new personal revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/VersionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    delete:
+      operationId: deletePersonalConfiguration
+      tags:
+      - Processing instances
+      summary: Delete the caller's personal plugin configuration
+      description: 'Removes the caller''s values and their Secret rows for the instance at `expectedRevision` (409
+        `REVISION_CONFLICT` on a mismatch). The instance must admit the caller as for the read. Idempotent per (caller,
+        `commandId`).'
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PersonalConfigurationDeleteRequest'
+      responses:
+        '200':
+          description: The instance ID and the deleted revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/VersionConflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /instances/{id}/unit-parameters:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    get:
+      operationId: listUnitParameters
+      tags:
+      - Processing instances
+      summary: List the per-Unit values of a Delivery instance
+      description: 'Requires the global `plugin.configure` right. The instance must be a `delivery` instance (404
+        otherwise). Offset paging over Units with values; the optional `unitId` query parameter restricts the list
+        to one Unit.'
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      parameters:
+      - $ref: '#/components/parameters/Offset'
+      - $ref: '#/components/parameters/Limit'
+      - name: unitId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Per-Unit values.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnitParametersPageResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /instances/{id}/unit-parameters/{unitId}:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    - $ref: '#/components/parameters/UnitID'
+    put:
+      operationId: replaceUnitParameters
+      tags:
+      - Processing instances
+      summary: Replace the values of one Unit
+      description: 'Requires the global `plugin.configure` right. Replaces all of the Unit''s values for the instance.
+        The instance must be a `delivery` instance and the Unit must exist (404). Every key must be an input the current
+        manifest declares and every value valid for its kind and `maxBytes` (400). Idempotent per (caller, `commandId`);
+        the result''s `id` is the Unit ID and its `revision` is always "1".'
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnitParametersRequest'
+      responses:
+        '200':
+          description: Values replaced (or replayed).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/VersionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    delete:
+      operationId: deleteUnitParameters
+      tags:
+      - Processing instances
+      summary: Remove the values of one Unit
+      description: 'Requires the global `plugin.configure` right. Same instance and Unit rules as the replace; removes
+        all of the Unit''s values for the instance. Idempotent per (caller, `commandId`).'
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnitParametersDeleteRequest'
+      responses:
+        '200':
+          description: Values removed (or replayed).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/VersionConflict'
         '500':
           $ref: '#/components/responses/InternalError'
         '503':
@@ -4567,6 +4863,14 @@ components:
         type: string
         format: uuid
       description: Resource ID (not the nil UUID); a malformed value is 400.
+    UnitID:
+      name: unitId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Unit ID (not the nil UUID); a malformed value is 400.
     CredentialID:
       name: credentialId
       in: path
@@ -4652,7 +4956,8 @@ components:
                   enum:
                   - LOGIN_REQUIRED
     Forbidden:
-      description: Not permitted, or a failed Origin/CSRF check.
+      description: Not permitted, a failed Origin/CSRF check, or (`CAPABILITY_UNDECLARED`) a plugin manifest that declares
+        Core access its capability does not grant.
       content:
         application/json:
           schema:
@@ -4664,6 +4969,7 @@ components:
                   type: string
                   enum:
                   - FORBIDDEN
+                  - CAPABILITY_UNDECLARED
     NotFound:
       description: Absent, deleted, or outside the caller's read scope (indistinguishable).
       content:
@@ -8968,8 +9274,9 @@ components:
       additionalProperties: false
     CreateInstanceRequest:
       type: object
-      description: '`configuration` must be valid against the manifest''s configuration schema. A preview of
-        a Workflow calls `main` in preview mode and requires its manifest to declare `supportsPreview`.'
+      description: '`configuration` must be valid against the manifest''s configuration schema and holds no Secret
+        property. A preview of a Workflow calls `main` in preview mode and requires its manifest to declare `supportsPreview`.
+        A `delivery` instance requires `targetUse`; a `processing` instance must not carry it.'
       required:
       - schemaVersion
       - commandId
@@ -9000,6 +9307,16 @@ components:
           $ref: '#/components/schemas/ProvisionedArtifact'
         configuration:
           $ref: '#/components/schemas/TypedValue'
+        targetUse:
+          $ref: '#/components/schemas/TargetUse'
+        secrets:
+          type: object
+          description: Secret writes by dotted property path of an administrative Secret property. A path left out keeps
+            the previous revision's Secret; null removes it (only for optional properties). Only for `delivery` instances.
+          additionalProperties:
+            oneOf:
+            - $ref: '#/components/schemas/SecretInput'
+            - type: 'null'
       additionalProperties: false
     UpdateInstanceRequest:
       type: object
@@ -9031,6 +9348,16 @@ components:
           $ref: '#/components/schemas/ProvisionedArtifact'
         configuration:
           $ref: '#/components/schemas/TypedValue'
+        targetUse:
+          $ref: '#/components/schemas/TargetUse'
+        secrets:
+          type: object
+          description: Secret writes by dotted property path of an administrative Secret property. A path left out keeps
+            the previous revision's Secret; null removes it (only for optional properties). Only for `delivery` instances.
+          additionalProperties:
+            oneOf:
+            - $ref: '#/components/schemas/SecretInput'
+            - type: 'null'
       additionalProperties: false
     InstanceArtifact:
       type: object
@@ -9068,6 +9395,8 @@ components:
           format: uuid
         main:
           $ref: '#/components/schemas/InstanceArtifact'
+        capability:
+          $ref: '#/components/schemas/PluginCapability'
         createdAt:
           type: string
           format: date-time
@@ -9091,6 +9420,13 @@ components:
         redacted:
           type: boolean
           description: True for configured secret or user-scoped values.
+        source:
+          type: string
+          enum:
+          - stored
+          - file
+          - env
+          description: Where a configured Secret comes from; never its value, path or variable name.
         value:
           description: Plain JSON value of a configured, visible scalar.
         properties:
@@ -9103,6 +9439,7 @@ components:
             $ref: '#/components/schemas/ConfigurationField'
     Instance:
       type: object
+      description: '`configuration` is absent when the artifact cannot be loaded (`lifecycle` `incompatible` or `failed`).'
       required:
       - id
       - revision
@@ -9110,7 +9447,8 @@ components:
       - executionPrincipalId
       - main
       - createdAt
-      - configuration
+      - lifecycle
+      - status
       properties:
         id:
           type: string
@@ -9124,6 +9462,41 @@ components:
           format: uuid
         main:
           $ref: '#/components/schemas/InstanceArtifact'
+        capability:
+          $ref: '#/components/schemas/PluginCapability'
+        targetUse:
+          $ref: '#/components/schemas/TargetUse'
+        lifecycle:
+          type: string
+          enum:
+          - active
+          - disabled
+          - incompatible
+          - failed
+          description: Computed on read. `incompatible` for an unsupported manifest or SDK version, `failed` for any other
+            load or configuration failure, `disabled` when switched off, else `active`.
+        status:
+          type: object
+          description: What the answering node knows about the instance's plugin processes; not shared between nodes
+            and reset with the process.
+          required:
+          - running
+          properties:
+            running:
+              type: boolean
+            lastStartedAt:
+              type: string
+              format: date-time
+            lastFailureAt:
+              type: string
+              format: date-time
+            lastFailureCode:
+              type: string
+              enum:
+              - start-failed
+              - checksum-mismatch
+              - invocation-failed
+              - deadline-exceeded
         createdAt:
           type: string
           format: date-time
@@ -9168,6 +9541,303 @@ components:
               type: integer
               minimum: 0
               description: Number of rows the caller may read, independent of paging.
+    PluginCapability:
+      type: string
+      enum:
+      - processing
+      - delivery
+    TargetUse:
+      type: object
+      description: Who may use a Delivery instance as a Subscription target. Groups are not supported.
+      required:
+      - everyone
+      - principalIds
+      properties:
+        everyone:
+          type: boolean
+        principalIds:
+          type: array
+          maxItems: 1000
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+      additionalProperties: false
+    SecretInput:
+      type: object
+      description: Exactly one of `value` (a new plaintext, 1 byte to 64 KiB UTF-8, sealed into the encrypted store;
+        503 `AUTHORITY_UNAVAILABLE` without a configured master key) or `reference` (`file:<relative path>` below the
+        operator's Secret file root, or `env:GOPAGER_PLUGIN_SECRET_<NAME>`; stored references `secret:` are refused).
+        Personal writes accept only `value`.
+      properties:
+        value:
+          type: string
+          minLength: 1
+        reference:
+          type: string
+      additionalProperties: false
+    InspectInstanceRequest:
+      type: object
+      required:
+      - schemaVersion
+      - main
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        main:
+          $ref: '#/components/schemas/ProvisionedArtifact'
+      additionalProperties: false
+    ManifestInspection:
+      type: object
+      description: The verified manifest without its artifact location and digest.
+      required:
+      - pluginId
+      - version
+      - capabilityId
+      - capability
+      - supportsPreview
+      - configurationSchema
+      - configurationPolicy
+      - secretProperties
+      properties:
+        pluginId:
+          type: string
+        version:
+          type: string
+        capabilityId:
+          type: string
+        capability:
+          $ref: '#/components/schemas/PluginCapability'
+        supportsPreview:
+          type: boolean
+        configurationSchema:
+          type: object
+          description: Field schema of the configuration (kind, optional, nullable, properties, element).
+        configurationPolicy:
+          type: object
+          description: Per-property `configurationScope` (`admin` or `user`), `secret`, nested `properties` and `element`.
+        delivery:
+          type: object
+          description: Delivery declaration of a `delivery` manifest.
+          properties:
+            outputKinds:
+              type: array
+              items:
+                type: string
+                enum:
+                - text
+                - markdown
+                - json
+            inputs:
+              type: array
+              items:
+                type: object
+                required:
+                - name
+                - kind
+                properties:
+                  name:
+                    type: string
+                  kind:
+                    type: string
+                  required:
+                    type: boolean
+                  maxBytes:
+                    type: integer
+            dependencies:
+              type: array
+              items:
+                type: object
+                properties:
+                  kind:
+                    type: string
+                    enum:
+                    - network
+                    - secret
+                    - device
+                    - other
+                  description:
+                    type: string
+            sendsPerMinute:
+              type: integer
+            idempotent:
+              type: boolean
+        resources:
+          type: object
+          description: Informational; never enforced.
+          properties:
+            memoryMiB:
+              type: integer
+            note:
+              type: string
+        secretProperties:
+          type: array
+          items:
+            type: object
+            required:
+            - path
+            - scope
+            - optional
+            properties:
+              path:
+                type: string
+                description: Dotted property path, the key in a `secrets` map.
+              scope:
+                type: string
+                enum:
+                - admin
+                - user
+              optional:
+                type: boolean
+    ManifestInspectionResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          $ref: '#/components/schemas/ManifestInspection'
+    PersonalConfigurationRequest:
+      type: object
+      required:
+      - schemaVersion
+      - commandId
+      - expectedRevision
+      - configuration
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        commandId:
+          type: string
+          format: uuid
+        expectedRevision:
+          type: string
+          pattern: ^(0|[1-9][0-9]*)$
+          description: '"0" to create, else the stored personal revision.'
+        configuration:
+          $ref: '#/components/schemas/TypedValue'
+        secrets:
+          type: object
+          description: Writes by dotted path of a user-scoped Secret property; only `value` is accepted. A path left
+            out keeps its Secret; null removes it.
+          additionalProperties:
+            oneOf:
+            - $ref: '#/components/schemas/SecretInput'
+            - type: 'null'
+      additionalProperties: false
+    PersonalConfigurationDeleteRequest:
+      type: object
+      required:
+      - schemaVersion
+      - commandId
+      - expectedRevision
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        commandId:
+          type: string
+          format: uuid
+        expectedRevision:
+          $ref: '#/components/schemas/Revision'
+      additionalProperties: false
+    PersonalConfiguration:
+      type: object
+      required:
+      - instanceId
+      - revision
+      - configuration
+      properties:
+        instanceId:
+          type: string
+          format: uuid
+        revision:
+          $ref: '#/components/schemas/Revision'
+        configuration:
+          type: object
+          required:
+          - fields
+          properties:
+            fields:
+              type: object
+              additionalProperties:
+                $ref: '#/components/schemas/ConfigurationField'
+    PersonalConfigurationResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          $ref: '#/components/schemas/PersonalConfiguration'
+    UnitParametersRequest:
+      type: object
+      required:
+      - schemaVersion
+      - commandId
+      - values
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        commandId:
+          type: string
+          format: uuid
+        values:
+          type: object
+          description: Typed values by Delivery input name.
+          additionalProperties:
+            $ref: '#/components/schemas/TypedValue'
+      additionalProperties: false
+    UnitParametersDeleteRequest:
+      type: object
+      required:
+      - schemaVersion
+      - commandId
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        commandId:
+          type: string
+          format: uuid
+      additionalProperties: false
+    UnitParameters:
+      type: object
+      required:
+      - unitId
+      - values
+      properties:
+        unitId:
+          type: string
+          format: uuid
+        values:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/TypedValue'
+    UnitParametersPageResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          type: object
+          required:
+          - items
+          - total
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/UnitParameters'
+            total:
+              type: integer
+              minimum: 0
+              description: Number of Units with values.
     DeliveryFieldRef:
       type: object
       description: Reference to a field of the Delivery field registry, for Subscription filters and layouts. See
@@ -10186,6 +10856,7 @@ components:
           - COMMIT_UNCERTAIN
           - DEPENDENCY_UNAVAILABLE
           - EXTERNAL_UNCERTAIN
+          - CAPABILITY_UNDECLARED
           - INTERNAL_ERROR
           description: |
             Stable, language-independent code. HTTP status and `retryable` per code:
@@ -10195,7 +10866,7 @@ components:
             `STORAGE_UNAVAILABLE` 503 (true); `AUTHORITY_UNAVAILABLE` 503 (true); `COMMIT_UNCERTAIN` 503
             (false; the write may have committed, so re-send with the same `commandId`/`submissionId` or read
             the resource); `DEPENDENCY_UNAVAILABLE` 409 (false); `EXTERNAL_UNCERTAIN` 409 (false);
-            `INTERNAL_ERROR` 500 (false).
+            `CAPABILITY_UNDECLARED` 403 (false); `INTERNAL_ERROR` 500 (false).
         parameters:
           type: object
           properties:
@@ -10217,7 +10888,12 @@ components:
             deliveryId:
               type: string
               format: uuid
-          description: '`{}`, except: with `AUTHORITY_UNAVAILABLE` for a Subscription target or redelivery whose instance
+            capability:
+              type: string
+              enum:
+              - delivery
+          description: '`{}`, except: with `CAPABILITY_UNDECLARED`, `capability` names the plugin capability whose
+            manifest declares access it does not grant; with `AUTHORITY_UNAVAILABLE` for a Subscription target or redelivery whose instance
             is missing, disabled or without a provider, `status` is `unavailable` and `instanceId` names the instance;
             with `DEPENDENCY_UNAVAILABLE`, `dependency` names what is missing; with `EXTERNAL_UNCERTAIN`, `deliveryId`
             names the uncertain Delivery.'
