@@ -373,6 +373,9 @@ func composeApplicationAPI(publicOrigin string, limits identity.LoginRateLimits,
 	if err := registerAttributeRoutes(mux, transport, preauthenticator, c); err != nil {
 		return nil, err
 	}
+	if err := registerPresentationRoutes(mux, transport, preauthenticator, c); err != nil {
+		return nil, err
+	}
 	httpapi.RegisterIngestRoutes(mux, intakeService)
 	httpapi.RegisterGatewayManagementRoutes(mux, transport, preauthenticator, gatewayAdministration)
 	httpapi.RegisterNetworkManagementRoutes(mux, transport, preauthenticator, networkAdministration)

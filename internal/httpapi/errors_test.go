@@ -82,3 +82,24 @@ func TestManagementErrorMapping(t *testing.T) {
 		}
 	}
 }
+
+// TestInvalidFieldNamesTheFieldInParameters expects a field-level validation failure to be an
+// ordinary INVALID_INPUT that names the offending request field.
+func TestInvalidFieldNamesTheFieldInParameters(t *testing.T) {
+	t.Parallel()
+	recorder := httptest.NewRecorder()
+	writeManagementError(recorder, authz.InvalidField("timeZone"))
+	var result struct {
+		Code       string         `json:"code"`
+		Parameters map[string]any `json:"parameters"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if recorder.Code != http.StatusBadRequest || result.Code != "INVALID_INPUT" || result.Parameters["field"] != "timeZone" {
+		t.Fatalf("mapped to %d %+v", recorder.Code, result)
+	}
+	if !errors.Is(authz.InvalidField("x"), authz.ErrInvalidInput) {
+		t.Fatal("a field error does not match ErrInvalidInput")
+	}
+}

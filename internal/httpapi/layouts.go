@@ -18,6 +18,7 @@ import (
 type LayoutService interface {
 	List(context.Context, identity.Proof, units.PageInput) (units.Page[presentation.Layout], error)
 	Read(context.Context, identity.Proof, uuid.UUID) (presentation.Layout, error)
+	EditorMetadata(context.Context, identity.Proof) (presentation.EditorMetadata, error)
 	ReadVersion(context.Context, identity.Proof, uuid.UUID, int64) (presentation.LayoutVersion, error)
 	Create(context.Context, identity.Proof, uuid.UUID, presentation.LayoutInput, func(identity.Authentication) error) (presentation.Layout, error)
 	Update(context.Context, identity.Proof, uuid.UUID, int64, presentation.LayoutInput, func(identity.Authentication) error) (presentation.Layout, error)
@@ -72,6 +73,9 @@ func RegisterLayoutRoutes(mux *http.ServeMux, transport *identity.HTTPTransport,
 		return layouts.Create(r.Context(), proof, input.CommandID,
 			presentation.LayoutInput{Name: input.Name, Definition: *input.Definition, Agencies: input.Agencies}, check)
 	}, http.StatusCreated))
+	mux.HandleFunc("GET /api/v1/layouts/editor-metadata", guard.route(func(r *http.Request, proof identity.Proof, _ func(identity.Authentication) error) (any, error) {
+		return layouts.EditorMetadata(r.Context(), proof)
+	}, http.StatusOK))
 	mux.HandleFunc("GET /api/v1/layouts/{id}", guard.route(func(r *http.Request, proof identity.Proof, _ func(identity.Authentication) error) (any, error) {
 		id, err := managementID(r)
 		if err != nil {
