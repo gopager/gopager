@@ -16,7 +16,7 @@ Add a decision to the ADR file of its topic with status, date, supersession, the
 | [06-identity-and-authorization.md](06-identity-and-authorization.md) | Identity and authorization | 18 (D-07..D-151) |
 | [07-query-and-live.md](07-query-and-live.md) | Query and live | 4 (D-16..D-152) |
 | [08-operations-and-http.md](08-operations-and-http.md) | Operations and HTTP | 3 (D-52..D-133) |
-| [09-process-and-documentation.md](09-process-and-documentation.md) | Process and documentation | 17 (D-19..D-162) |
+| [09-process-and-documentation.md](09-process-and-documentation.md) | Process and documentation | 18 (D-19..D-162, D-168) |
 | [10-foundation-redesign.md](10-foundation-redesign.md) | Foundation redesign | 2 (D-135..D-137) |
 
 ## Index
@@ -186,3 +186,4 @@ Add a decision to the ADR file of its topic with status, date, supersession, the
 | D-161 | Minute-window admission tests verify their window | accepted | 2026-11-12 | [09-process-and-documentation](09-process-and-documentation.md#d-161) |
 | D-162 | Documentation-only commits need no new Copilot review | accepted | 2026-11-12 | [09-process-and-documentation](09-process-and-documentation.md#d-162) |
 | D-163 | Deliveries show the provider's safe code | accepted | 2026-11-12 | [05-events-and-delivery](05-events-and-delivery.md#d-163) |
+| D-168 | Local security and code review before every code push | accepted | 2026-11-12 | [09-process-and-documentation](09-process-and-documentation.md#d-168) |
