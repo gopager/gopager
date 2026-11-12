@@ -81,6 +81,7 @@ func renderOne(t *testing.T, renderer *CardRenderer, projection readmodel.Delive
 }
 
 func TestCardUsesRegistryLabelsAndIcons(t *testing.T) {
+	t.Parallel()
 	layouts := &stubLayouts{resolved: processing.ResolvedLayout{Layout: jsonLayout(
 		processing.LayoutBlock{Kind: "field", Field: &processing.FieldRef{Namespace: "message", Path: []string{"time"}}})}}
 	card := renderOne(t, cardRenderer(t, layouts), projectionOf("FIRE", "payload", "unit"))
@@ -98,6 +99,7 @@ func TestCardUsesRegistryLabelsAndIcons(t *testing.T) {
 }
 
 func TestCardRendersUnreadableFieldAbsent(t *testing.T) {
+	t.Parallel()
 	layouts := &stubLayouts{resolved: processing.ResolvedLayout{Layout: jsonLayout(
 		processing.LayoutBlock{Kind: "field", Field: &processing.FieldRef{Namespace: "message", Path: []string{"text"}}},
 		processing.LayoutBlock{Kind: "field", Field: &processing.FieldRef{Namespace: "message", Path: []string{"unitNames"}}})}}
@@ -113,6 +115,7 @@ func TestCardRendersUnreadableFieldAbsent(t *testing.T) {
 }
 
 func TestCardRendersNoEventFields(t *testing.T) {
+	t.Parallel()
 	layouts := &stubLayouts{resolved: processing.ResolvedLayout{Layout: jsonLayout(
 		processing.LayoutBlock{Kind: "field", Field: &processing.FieldRef{Namespace: "event", Path: []string{"type"}}},
 		processing.LayoutBlock{Kind: "text", Text: "marker"})}}
@@ -123,6 +126,7 @@ func TestCardRendersNoEventFields(t *testing.T) {
 }
 
 func TestCardOmitsUnsafeLink(t *testing.T) {
+	t.Parallel()
 	link := processing.LayoutBlock{Kind: "link", Label: "open", URL: &processing.LayoutURL{Template: "{0}",
 		Fields: []processing.FieldRef{{Namespace: "message", Path: []string{"text"}}}}}
 	layouts := &stubLayouts{resolved: processing.ResolvedLayout{Layout: jsonLayout(link)}}
@@ -133,6 +137,7 @@ func TestCardOmitsUnsafeLink(t *testing.T) {
 }
 
 func TestCardFallsBackToTheDefaultWhenTheLayoutCannotRender(t *testing.T) {
+	t.Parallel()
 	var blocks []processing.LayoutBlock
 	for range 200 {
 		blocks = append(blocks, processing.LayoutBlock{Kind: "field", Field: &processing.FieldRef{Namespace: "message", Path: []string{"text"}}})
@@ -149,6 +154,7 @@ func TestCardFallsBackToTheDefaultWhenTheLayoutCannotRender(t *testing.T) {
 }
 
 func TestCardFallsBackForUnresolvableLayouts(t *testing.T) {
+	t.Parallel()
 	unknown := jsonLayout(processing.LayoutBlock{Kind: "field", Field: &processing.FieldRef{Namespace: "message", Path: []string{"nothing"}}})
 	for name, layouts := range map[string]*stubLayouts{
 		"deleted":      {err: authz.ErrNotFound},
@@ -156,6 +162,7 @@ func TestCardFallsBackForUnresolvableLayouts(t *testing.T) {
 		"not compiled": {resolved: processing.ResolvedLayout{ID: uuid.New(), Version: 1, Layout: unknown}},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			card := renderOne(t, cardRenderer(t, layouts), projectionOf("FIRE", "payload"))
 			if !card.Fallback || card.LayoutID != nil {
 				t.Fatalf("card = %+v", card)
@@ -165,6 +172,7 @@ func TestCardFallsBackForUnresolvableLayouts(t *testing.T) {
 }
 
 func TestCardInfrastructureErrorsFailTheRead(t *testing.T) {
+	t.Parallel()
 	boom := platform.NewFailure(platform.CodeStorageUnavailable, errors.New("down"))
 	renderer, err := NewCardRenderer(&stubLayouts{err: boom}, stubRegistry{}, delivery.DefaultLayouts())
 	if err != nil {
@@ -177,6 +185,7 @@ func TestCardInfrastructureErrorsFailTheRead(t *testing.T) {
 }
 
 func TestCardResolvesForTheEligibleUnitsAndCarriesTheLayoutIdentity(t *testing.T) {
+	t.Parallel()
 	id := uuid.New()
 	layouts := &stubLayouts{resolved: processing.ResolvedLayout{ID: id, Version: 4, Layout: jsonLayout(
 		processing.LayoutBlock{Kind: "text", Text: "hello"})}}
