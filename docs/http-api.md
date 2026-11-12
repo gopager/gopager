@@ -1059,12 +1059,23 @@ may read. `fields` (and each `targetResults[].fields`) is keyed by Attribute sch
 field name; an output without a value is omitted ([Workflows](workflows.md#outputs)). A `syntheticJson` input is evaluated against the current network named by its
 `networkId`: an unknown network returns `404 NOT_FOUND`, and a deleted network or one
 whose protocol differs from the input returns `503 AUTHORITY_UNAVAILABLE`.
-`storedTransmissionId` is not supported and returns `503 AUTHORITY_UNAVAILABLE`.
+`storedTransmissionId` evaluates an accepted Transmission like a synthetic sample: the editor must be able to read it
+(`404 NOT_FOUND` otherwise) and every field group the preview carries (`403 FORBIDDEN` otherwise), and nothing
+is written ([Workflows](workflows.md#preview)).
+A failed evaluation is not an HTTP error: the preview answers `200` with
+`{"failure":{"code","reason","stepId"}}` instead of the result, where `reason` is
+`resource-limit`, `capability-unavailable`, `conversion-failed` or `evaluation-failed` and `stepId` (omitted when no step
+failed) names the failing step. No raw error text is returned. Request, authorization and
+infrastructure errors keep their HTTP status.
 
 Candidate retry requeues a `failed`, unpublished candidate and returns
 `{"candidateId","revision"}` in `data`. If the candidate's source, workflow version or
 revision, or the processing configuration changed since it was admitted, the retry
 returns `409 REVISION_CONFLICT`. Details: [workflows](workflows.md#retries).
+
+Candidate status reads (`GET /workflows/{id}/candidates` and `/candidates/{candidate}`) explain a
+failed candidate with `failureCode`, `failureReason` (the same reasons as the preview failure) and
+`failureStep`, the ID of the failing step, when a step failed.
 
 Definition format: [workflows](workflows.md).
 

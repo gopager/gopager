@@ -236,7 +236,7 @@ The layering rules that the code follows:
 | `internal/processing/worker` | Candidate dispatcher and per-candidate execution (claim, evaluate, complete/fail, publish) |
 | `internal/processing/publication` | Applies completed results and source readiness in the caller's transaction |
 | `internal/processing/execution` | Binds a request proof to preview authority for installed steps |
-| `internal/processing/synthetic` | In-memory synthetic transmissions used as the source for workflow previews |
+| `internal/processing/synthetic` | In-memory sources for workflow previews: synthetic transmissions and stored Transmissions (read through `processingstore`, readable only with `readmodel.CheckTransmissionReadable`), both captured in memory and never persisted |
 | `internal/persistence/migrations` | Embedded goose SQL migrations (`migrations.Files`) |
 | `internal/persistence/ent` | Generated Ent client (do not edit). `schema/` holds the entity definitions. |
 | `internal/persistence/ent/borrowed` | Ent driver that runs on an existing platform transaction and cannot commit or close it |
