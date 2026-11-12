@@ -28,14 +28,17 @@ type pluginSecretSettings struct {
 func parsePluginSecrets(getenv func(string) string) (pluginSecretSettings, error) {
 	var settings pluginSecretSettings
 	encoded, variable := getenv("GOPAGER_SECRET_KEY"), "GOPAGER_SECRET_KEY"
+	configured := encoded != ""
 	if path := getenv("GOPAGER_SECRET_KEY_FILE"); path != "" {
 		content, err := readSecretKeyFile(path)
 		if err != nil {
 			return settings, invalidSecretSetting("GOPAGER_SECRET_KEY_FILE")
 		}
-		encoded, variable = content, "GOPAGER_SECRET_KEY_FILE"
+		// A named key file is a deliberate setting: an empty one must fail startup instead of
+		// silently running without a key.
+		encoded, variable, configured = content, "GOPAGER_SECRET_KEY_FILE", true
 	}
-	if encoded != "" {
+	if configured {
 		key, err := processing.ParseSecretKey(encoded)
 		if err != nil {
 			return settings, invalidSecretSetting(variable)

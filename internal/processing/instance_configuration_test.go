@@ -193,6 +193,30 @@ func TestProjectPersonalConfiguration(t *testing.T) {
 	}
 }
 
+// TestProjectPersonalObjectRedactsOnlySecretLeaves checks that a personal object holding a Secret
+// and a readable property shows the readable value and only redacts the Secret.
+func TestProjectPersonalObjectRedactsOnlySecretLeaves(t *testing.T) {
+	t.Parallel()
+	manifest := nestedManifest()
+	manifest.ConfigurationSchema.Properties["mine"] = FieldSchema{Kind: ObjectValue, Optional: true, Properties: map[string]FieldSchema{
+		"token": {Kind: StringValue, Optional: true}, "device": {Kind: StringValue, Optional: true}}}
+	manifest.ConfigurationPolicy.Properties["mine"] = ConfigurationPolicy{Scope: "user", Secret: boolPtr(false), Properties: map[string]ConfigurationPolicy{
+		"token":  {Scope: "user", Secret: boolPtr(true)},
+		"device": {Scope: "user", Secret: boolPtr(false)},
+	}}
+	view, err := manifest.ProjectPersonalConfiguration(objectOf(t, map[string]Value{
+		"mine": objectOf(t, map[string]Value{"token": stringLeaf(t, "secret:"+uuid.NewString()), "device": stringLeaf(t, "phone")})}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mine := view.Fields["mine"]
+	token, device := mine.Properties["token"], mine.Properties["device"]
+	if mine.Redacted || !token.Redacted || token.Source != "stored" || token.Value != nil ||
+		device.Redacted || string(device.Value) != `"phone"` {
+		t.Fatalf("personal object view %+v", mine)
+	}
+}
+
 func TestInspectProcessingInstanceKeepsRules(t *testing.T) {
 	t.Parallel()
 	_, root, manifest, pin := artifactFixture(t, markerScript)

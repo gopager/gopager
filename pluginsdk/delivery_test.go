@@ -149,6 +149,41 @@ func TestValueAccessors(t *testing.T) {
 	}
 }
 
+// TestValuePlainValidatesScalars checks that Plain passes on only well-formed scalars whose JSON
+// type matches their kind.
+func TestValuePlainValidatesScalars(t *testing.T) {
+	t.Parallel()
+	valid := []Value{
+		{Kind: KindString, Value: json.RawMessage(`"a"`)},
+		{Kind: KindBoolean, Value: json.RawMessage(`false`)},
+		{Kind: KindNumber, Value: json.RawMessage(`-1.5e3`)},
+		{Kind: KindNull, Value: json.RawMessage(`null`)},
+		{Kind: KindTimestamp, Value: json.RawMessage(`"2026-11-01T12:00:00.5+01:00"`)},
+		{Kind: KindBytes, Value: json.RawMessage(`"AAEC/w=="`)},
+	}
+	for _, value := range valid {
+		if plain, err := value.Plain(); err != nil || string(plain) != string(value.Value) {
+			t.Errorf("%s: %s %v", value.Kind, plain, err)
+		}
+	}
+	invalid := []Value{
+		{Kind: KindNumber, Value: json.RawMessage(`"abc"`)},
+		{Kind: KindNumber, Value: json.RawMessage(`1e999`)},
+		{Kind: KindString, Value: json.RawMessage(`null`)},
+		{Kind: KindString, Value: json.RawMessage(`7`)},
+		{Kind: KindString, Value: json.RawMessage(`"unterminated`)},
+		{Kind: KindBoolean, Value: json.RawMessage(`"true"`)},
+		{Kind: KindNull, Value: json.RawMessage(`0`)},
+		{Kind: KindTimestamp, Value: json.RawMessage(`"2026-11-01 12:00"`)},
+		{Kind: KindBytes, Value: json.RawMessage(`"AAEC/w"`)},
+	}
+	for _, value := range invalid {
+		if plain, err := value.Plain(); err == nil {
+			t.Errorf("%s %s accepted as %s", value.Kind, value.Value, plain)
+		}
+	}
+}
+
 func TestDecodeConfiguration(t *testing.T) {
 	t.Parallel()
 	var parsed DeliveryRequest

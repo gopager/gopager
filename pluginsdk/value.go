@@ -1,9 +1,13 @@
 package pluginsdk
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
+	"time"
 )
 
 // Typed value kinds used by Value.
@@ -22,6 +26,10 @@ const (
 	KindList = "list"
 	// KindNull is the explicit null.
 	KindNull = "null"
+	// KindTimestamp is an RFC 3339 string with an offset.
+	KindTimestamp = "timestamp"
+	// KindBytes is canonical standard Base64 with padding.
+	KindBytes = "bytes"
 )
 
 // Value is a typed value in the Core's envelope {"kind": K, "value": V}.
@@ -69,6 +77,10 @@ func (v Value) decode(kind string, target any) error {
 	if v.Kind != kind {
 		return fmt.Errorf("pluginsdk: value is of kind %q, not %q", v.Kind, kind)
 	}
+	// encoding/json accepts null for any target, but only the null kind may hold it.
+	if string(bytes.TrimSpace(v.Value)) == "null" {
+		return fmt.Errorf("pluginsdk: %s value is null", kind)
+	}
 	if err := json.Unmarshal(v.Value, target); err != nil {
 		return fmt.Errorf("pluginsdk: invalid %s value: %w", kind, err)
 	}
@@ -106,10 +118,58 @@ func (v Value) Plain() (json.RawMessage, error) {
 			plains[i] = plain
 		}
 		return json.Marshal(plains)
-	case KindString, KindBoolean, KindNumber, KindNull, "timestamp", "bytes":
+	case KindString, KindBoolean, KindNumber, KindNull, KindTimestamp, KindBytes:
+		if err := v.validateScalar(); err != nil {
+			return nil, err
+		}
 		return v.Value, nil
 	default:
 		return nil, fmt.Errorf("pluginsdk: unknown value kind %q", v.Kind)
+	}
+}
+
+// validateScalar checks that a scalar Value's encoding matches its kind, so Plain never passes on
+// malformed JSON or a value of another JSON type.
+func (v Value) validateScalar() error {
+	switch v.Kind {
+	case KindString:
+		_, err := v.String()
+		return err
+	case KindBoolean:
+		_, err := v.Boolean()
+		return err
+	case KindNumber:
+		number, err := v.Number()
+		if err == nil && (math.IsNaN(number) || math.IsInf(number, 0)) {
+			err = fmt.Errorf("pluginsdk: number value is not finite")
+		}
+		return err
+	case KindNull:
+		if string(bytes.TrimSpace(v.Value)) != "null" {
+			return fmt.Errorf("pluginsdk: null value is not null")
+		}
+		return nil
+	case KindTimestamp:
+		var text string
+		if err := v.decode(KindTimestamp, &text); err != nil {
+			return err
+		}
+		if _, err := time.Parse(time.RFC3339Nano, text); err != nil {
+			return fmt.Errorf("pluginsdk: invalid timestamp value: %w", err)
+		}
+		return nil
+	case KindBytes:
+		var text string
+		if err := v.decode(KindBytes, &text); err != nil {
+			return err
+		}
+		decoded, err := base64.StdEncoding.Strict().DecodeString(text)
+		if err != nil || base64.StdEncoding.EncodeToString(decoded) != text {
+			return fmt.Errorf("pluginsdk: bytes value is not canonical standard Base64")
+		}
+		return nil
+	default:
+		return fmt.Errorf("pluginsdk: unknown value kind %q", v.Kind)
 	}
 }
 

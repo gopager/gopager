@@ -37,6 +37,10 @@ func TestParseConfigPluginSecrets(t *testing.T) {
 	if err := os.WriteFile(keyFile, []byte(" "+encodedKey(2)+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	emptyFile := filepath.Join(directory, "empty")
+	if err := os.WriteFile(emptyFile, []byte(" \n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	badFile := filepath.Join(directory, "bad")
 	if err := os.WriteFile(badFile, []byte("not-a-key-content"), 0o600); err != nil {
 		t.Fatal(err)
@@ -81,7 +85,11 @@ func TestParseConfigPluginSecrets(t *testing.T) {
 				t.Fatalf("%s: unsafe or missing failure: %v", name, err)
 			}
 		}
-		_, err := parseConfig(args, secretEnvironment(map[string]string{"GOPAGER_SECRET_KEY_FILE": filepath.Join(directory, "missing")}))
+		_, err := parseConfig(args, secretEnvironment(map[string]string{"GOPAGER_SECRET_KEY_FILE": emptyFile}))
+		if platform.FailureCode(err) != platform.CodeInvalidInput {
+			t.Fatalf("an empty key file must fail startup: %v", err)
+		}
+		_, err = parseConfig(args, secretEnvironment(map[string]string{"GOPAGER_SECRET_KEY_FILE": filepath.Join(directory, "missing")}))
 		if err == nil || strings.Contains(err.Error(), directory) {
 			t.Fatalf("missing key file error = %v", err)
 		}

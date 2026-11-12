@@ -825,7 +825,7 @@ type DeliveryResult struct {
 }
 ```
 
-`ServeDelivery` decodes the request strictly (an unknown member, a `kind` other than `delivery` or another `schemaVersion` is answered `permanent` `invalid-request`), gives the handler a context that ends at the request `deadline`, validates the result and encodes the response. The handler does not touch JSON envelopes. `DeliveryRequest.Attempt.Inputs` holds `pluginsdk.Value` entries with `String()`, `Boolean()`, `Integer()`, `Number()` and `Plain()` (typed value to plain JSON). `DecodeConfiguration` first turns the typed configuration into plain JSON (integers become numbers), then unmarshals it into a struct with `json` tags; an optional property that is absent keeps its zero value.
+`ServeDelivery` decodes the request strictly (an unknown member, a `kind` other than `delivery` or another `schemaVersion` is answered `permanent` `invalid-request`), gives the handler a context that ends at the request `deadline`, validates the result and encodes the response. The handler does not touch JSON envelopes. `DeliveryRequest.Attempt.Inputs` holds `pluginsdk.Value` entries with `String()`, `Boolean()`, `Integer()`, `Number()` and `Plain()` (typed value to plain JSON); each checks that the encoding matches the kind (an explicit `null` only for kind `null`, finite numbers, RFC 3339 timestamps, canonical Base64 bytes) and returns an error otherwise, so `DecodeConfiguration` never accepts a mistyped value. `DecodeConfiguration` first turns the typed configuration into plain JSON (integers become numbers), then unmarshals it into a struct with `json` tags; an optional property that is absent keeps its zero value.
 
 A minimal handler that POSTs the body to a configured URL with a Secret token:
 

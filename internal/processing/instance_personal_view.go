@@ -53,7 +53,9 @@ func projectPersonalField(schema FieldSchema, policy ConfigurationPolicy, value 
 	if value == nil {
 		return view, nil
 	}
-	if policy.Scope != "user" {
+	if schema.Kind == ObjectValue && value.Kind == ObjectValue && (policy.Scope != "user" || hasSecretPolicy(policy)) {
+		// Recurse so that only Secret leaves are redacted; readable personal values beside a
+		// Secret stay visible to their owner.
 		members, err := decodeObject(*value)
 		if err != nil {
 			return ConfigurationFieldView{}, err
@@ -71,20 +73,16 @@ func projectPersonalField(schema FieldSchema, policy ConfigurationPolicy, value 
 		}
 		return view, nil
 	}
-	if *policy.Secret {
-		native, err := value.Native(schema)
-		if err != nil {
-			return ConfigurationFieldView{}, err
-		}
-		view.Redacted, view.Source = true, secretSourceOf(native)
+	if policy.Scope != "user" {
+		// An administrative container without an object value holds no personal properties.
 		return view, nil
 	}
 	native, err := value.Native(schema)
 	if err != nil {
 		return ConfigurationFieldView{}, err
 	}
-	if hasSecretPolicy(policy) {
-		view.Redacted = true
+	if *policy.Secret {
+		view.Redacted, view.Source = true, secretSourceOf(native)
 		return view, nil
 	}
 	encoded, err := json.Marshal(native)
