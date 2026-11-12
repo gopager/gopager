@@ -140,7 +140,7 @@ func TestProcessingRetractionEnvelopeCarriesTheRetractedResults(t *testing.T) {
 	first, second := uuid.New(), uuid.New()
 	fact := ProcessingRetractionFact{ID: uuid.New(), TransmissionID: uuid.New(), MessageID: uuid.New(),
 		MessageTime: time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC), WorkflowID: uuid.New(),
-		ResultIDs: []uuid.UUID{first, second}, OccurredAt: time.Unix(100, 0)}
+		ResultIDs: []uuid.UUID{first, second}, ResultRevision: 4, OccurredAt: time.Unix(100, 0)}
 	envelope, err := fact.Envelope(time.Unix(101, 0))
 	if err != nil {
 		t.Fatal(err)
@@ -155,13 +155,15 @@ func TestProcessingRetractionEnvelopeCarriesTheRetractedResults(t *testing.T) {
 	if err := json.Unmarshal(envelope.Data, &data); err != nil {
 		t.Fatal(err)
 	}
-	if envelope.Type != "processing.retracted" || envelope.SchemaVersion != 1 || envelope.Producer.Domain != "processing" ||
+	if envelope.AggregateRef.Type != "processingResult" || envelope.AggregateRef.ID != first || envelope.AggregateRevision != 4 ||
+		envelope.Type != "processing.retracted" || envelope.SchemaVersion != 1 || envelope.Producer.Domain != "processing" ||
 		envelope.ReplayMode != ReplayReprocess || data.MessageID != fact.MessageID || data.WorkflowID != fact.WorkflowID ||
 		data.TransmissionID != fact.TransmissionID || len(data.ResultIDs) != 2 || data.ResultIDs[0] != first ||
 		!data.MessageTime.Equal(fact.MessageTime) {
 		t.Fatalf("envelope = %+v, data = %+v", envelope, data)
 	}
 	for name, mutate := range map[string]func(*ProcessingRetractionFact){
+		"no revision":     func(f *ProcessingRetractionFact) { f.ResultRevision = 0 },
 		"no results":      func(f *ProcessingRetractionFact) { f.ResultIDs = nil },
 		"nil result":      func(f *ProcessingRetractionFact) { f.ResultIDs = []uuid.UUID{uuid.Nil} },
 		"no message":      func(f *ProcessingRetractionFact) { f.MessageID = uuid.Nil },

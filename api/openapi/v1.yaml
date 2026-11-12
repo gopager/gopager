@@ -9829,7 +9829,8 @@ components:
           - running
           - completed
           - superseded
-          description: '`superseded` means the Workflow changed after the request.'
+          - failed
+          description: '`superseded` means the Workflow changed after the request; `failed` that a step failed in a way a retry cannot overcome (see `failureCode`).'
         scanned:
           type: integer
           minimum: 0

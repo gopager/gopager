@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -164,6 +165,18 @@ func TestReprocessRetractsATransmissionTheWorkflowNoLongerSelects(t *testing.T) 
 	}
 	if got := f.retractions(transmission); !slices.Equal(got, []string{"1"}) {
 		t.Fatalf("retraction facts = %v, want one naming the withdrawn result", got)
+	}
+	// The retraction continues the result's aggregate: its revision is higher than the completion's.
+	result := f.queryStrings(`SELECT envelope->'data'->'resultIds'->>0 FROM domain_events WHERE type='processing.retracted'
+		AND envelope->'data'->>'transmissionId'=$1`, transmission.String())[0]
+	revisions := f.aggregateRevisions(result)
+	completed, retracted := 0, 0
+	if len(revisions) == 2 {
+		_, _ = fmt.Sscanf(revisions[0], "processing.completed %d", &completed)
+		_, _ = fmt.Sscanf(revisions[1], "processing.retracted %d", &retracted)
+	}
+	if completed == 0 || retracted <= completed {
+		t.Fatalf("result facts = %v, want the completion then a retraction at a higher revision", revisions)
 	}
 }
 

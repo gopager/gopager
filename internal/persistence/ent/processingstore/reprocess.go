@@ -196,7 +196,7 @@ func (s *Store) SnapshotTransmission(ctx context.Context, tx platform.Transactio
 // readmission left none, retracts the Workflow's published results of the Transmission, marks the
 // re-runs of other Workflows as historical and advances the fenced request's cursor and counts.
 func (s *Store) ApplyReprocessStep(ctx context.Context, tx platform.TransactionContext,
-	request processing.ReprocessRequest, transmission uuid.UUID, snapshot processing.ReprocessSnapshot) ([]uuid.UUID, error) {
+	request processing.ReprocessRequest, transmission uuid.UUID, snapshot processing.ReprocessSnapshot) ([]processing.RetractedResult, error) {
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {
 		return nil, err
@@ -206,7 +206,7 @@ func (s *Store) ApplyReprocessStep(ctx context.Context, tx platform.TransactionC
 		return nil, err
 	}
 	var readmitted int64
-	var withdrawn []uuid.UUID
+	var withdrawn []processing.RetractedResult
 	if !snapshot.Fresh {
 		readmitted, withdrawn, err = s.markOrRetract(ctx, tx, request, transmission)
 		if err != nil {
@@ -233,7 +233,7 @@ func (s *Store) ApplyReprocessStep(ctx context.Context, tx platform.TransactionC
 // current candidates there are, or, when there are none, retracts the Workflow's published results
 // and returns how many.
 func (s *Store) markOrRetract(ctx context.Context, tx platform.TransactionContext,
-	request processing.ReprocessRequest, transmission uuid.UUID) (readmitted int64, retracted []uuid.UUID, err error) {
+	request processing.ReprocessRequest, transmission uuid.UUID) (readmitted int64, retracted []processing.RetractedResult, err error) {
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {
 		return 0, nil, err
@@ -282,6 +282,23 @@ func (s *Store) FinishReprocess(ctx context.Context, tx platform.TransactionCont
 	updated, err := executor.ExecContext(ctx, `UPDATE processing_reprocess_requests
 		SET state=$3, worker_id=NULL, lease_until=NULL, failure_code=NULL, attempts=0, revision=revision+1, updated_at=$4
 		WHERE id=$1 AND worker_id=$2 AND state='running'`, request.ID, request.WorkerID, state, now)
+	return rowcheck.RequireOne(updated, err)
+}
+
+// FailReprocess ends the claimed request as failed and keeps the failure code.
+func (s *Store) FailReprocess(ctx context.Context, tx platform.TransactionContext,
+	request processing.ReprocessRequest, failureCode string) error {
+	executor, err := s.primary.Resolve(tx)
+	if err != nil {
+		return err
+	}
+	now, err := s.primary.Now(ctx, tx)
+	if err != nil {
+		return err
+	}
+	updated, err := executor.ExecContext(ctx, `UPDATE processing_reprocess_requests
+		SET state='failed', worker_id=NULL, lease_until=NULL, failure_code=$3, revision=revision+1, updated_at=$4
+		WHERE id=$1 AND worker_id=$2 AND state='running'`, request.ID, request.WorkerID, failureCode, now)
 	return rowcheck.RequireOne(updated, err)
 }
 

@@ -37,7 +37,7 @@ type fakeWork struct {
 	transmissions []uuid.UUID
 	applied       []uuid.UUID
 	// retracted lists the results a step withdraws, by Transmission.
-	retracted     map[uuid.UUID][]uuid.UUID
+	retracted     map[uuid.UUID][]processing.RetractedResult
 	state         string
 	rescheduledAt time.Time
 	failureCode   string
@@ -64,7 +64,7 @@ func (w *fakeWork) SnapshotTransmission(context.Context, platform.TransactionCon
 	return processing.ReprocessSnapshot{}, nil
 }
 
-func (w *fakeWork) ApplyReprocessStep(_ context.Context, _ platform.TransactionContext, _ processing.ReprocessRequest, id uuid.UUID, _ processing.ReprocessSnapshot) ([]uuid.UUID, error) {
+func (w *fakeWork) ApplyReprocessStep(_ context.Context, _ platform.TransactionContext, _ processing.ReprocessRequest, id uuid.UUID, _ processing.ReprocessSnapshot) ([]processing.RetractedResult, error) {
 	w.applied = append(w.applied, id)
 	return w.retracted[id], nil
 }
@@ -75,6 +75,11 @@ func (w *fakeWork) ReadTransmissionMessage(context.Context, platform.Transaction
 
 func (w *fakeWork) FinishReprocess(_ context.Context, _ platform.TransactionContext, _ processing.ReprocessRequest, state string) error {
 	w.state = state
+	return nil
+}
+
+func (w *fakeWork) FailReprocess(_ context.Context, _ platform.TransactionContext, _ processing.ReprocessRequest, code string) error {
+	w.state, w.failureCode = processing.ReprocessFailed, code
 	return nil
 }
 
@@ -207,12 +212,41 @@ func (f *fakeFacts) AppendProcessingRetraction(_ context.Context, _ platform.Tra
 func TestRunnerAppendsOneRetractionFactPerStepThatWithdrewResults(t *testing.T) {
 	t.Parallel()
 	work, facts := newWork(3), &fakeFacts{}
-	work.retracted = map[uuid.UUID][]uuid.UUID{work.transmissions[1]: {uuid.New(), uuid.New()}}
+	work.retracted = map[uuid.UUID][]processing.RetractedResult{work.transmissions[1]: {{ID: uuid.New(), Revision: 2}, {ID: uuid.New(), Revision: 2}}}
 	if _, err := newRunner(t, work, &fakeReadmission{}, facts).RunOnce(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if len(facts.retractions) != 1 || facts.retractions[0].TransmissionID != work.transmissions[1] ||
 		len(facts.retractions[0].ResultIDs) != 2 || facts.retractions[0].WorkflowID != work.request.WorkflowID {
 		t.Fatalf("retractions = %+v, want one fact for the second Transmission naming both results", facts.retractions)
+	}
+}
+
+func TestRunnerEndsTheRequestOnAFailureThatIsNotRetryable(t *testing.T) {
+	t.Parallel()
+	for name, cause := range map[string]error{
+		"invalid input": platform.NewFailure(platform.CodeInvalidInput, errors.New("bad")),
+		"internal":      errors.New("not classified"),
+	} {
+		work := newWork(2)
+		cause := cause
+		readmission := &fakeReadmission{failOn: work.transmissions[0], err: cause}
+		if name == "internal" {
+			readmission.err = platform.NewFailure(platform.CodeInternalError, cause)
+		}
+		if _, err := newRunner(t, work, readmission).RunOnce(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		if work.state != processing.ReprocessFailed || work.failureCode == "" || !work.rescheduledAt.IsZero() {
+			t.Errorf("%s: state=%q code=%q rescheduled=%v, want a terminal failed request that keeps its code", name, work.state, work.failureCode, work.rescheduledAt)
+		}
+	}
+	work := newWork(2)
+	readmission := &fakeReadmission{failOn: work.transmissions[0], err: platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("down"))}
+	if _, err := newRunner(t, work, readmission).RunOnce(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if work.state == processing.ReprocessFailed || work.rescheduledAt.IsZero() || work.failureCode != string(platform.CodeAuthorityUnavailable) {
+		t.Fatalf("retryable failure: state=%q code=%q rescheduled=%v, want a backoff reschedule", work.state, work.failureCode, work.rescheduledAt)
 	}
 }

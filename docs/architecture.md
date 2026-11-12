@@ -467,7 +467,7 @@ Most cross-aggregate references are UUID columns without Ent edges. The schema i
 | `subscription.health-changed` | A Subscription became `invalid` (fan-out or start check found its filter or Layout no longer usable) or valid again (a save that compiles); data `health`, `reason`, `revision`; producer `delivery`, aggregate `subscription`, not deliverable |
 | `principal.access-changed`, `principal.deleted` | Effective access of a principal changed or the account is being deleted |
 | `processing.completed` | A processing result was published |
-| `processing.retracted` | A historical Reprocess withdrew published results of one Workflow from a Message without publishing a replacement; data `transmissionId`, `messageId`, `messageTime`, `workflowId`, `resultIds`; replay mode `reprocess`, producer `processing`, not deliverable (live Message views re-evaluate the Message on it) |
+| `processing.retracted` | A historical Reprocess withdrew published results of one Workflow from a Message without publishing a replacement; aggregate `processingResult` (the first withdrawn result, whose revision the withdrawal advanced, so the fact follows its `processing.completed` on the same aggregate); data `transmissionId`, `messageId`, `messageTime`, `workflowId`, `resultIds`; replay mode `reprocess`, producer `processing`, not deliverable (live Message views re-evaluate the Message on it) |
 
 ### Idempotency
 

@@ -13,7 +13,7 @@ import (
 // ReplacePublished retracts the other published results of the item's Transmission and Workflow
 // and clears the candidate's Reprocess mark. The item's own result, if any, stays published.
 // It returns the retracted result IDs and fails with a revision conflict when the candidate no longer carries the item's mark.
-func (s *Store) ReplacePublished(ctx context.Context, tx platform.TransactionContext, item processing.PublicationItem) ([]uuid.UUID, error) {
+func (s *Store) ReplacePublished(ctx context.Context, tx platform.TransactionContext, item processing.PublicationItem) ([]processing.RetractedResult, error) {
 	if !item.ReplacesPublished() {
 		return nil, authz.ErrRevisionConflict
 	}

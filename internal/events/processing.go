@@ -90,19 +90,22 @@ type ProcessingRetractionFact struct {
 	// MessageTime is the Message time (first observation) of MessageID; required.
 	MessageTime time.Time
 	WorkflowID  uuid.UUID
-	// ResultIDs are the withdrawn results; at least one.
-	ResultIDs  []uuid.UUID
-	OccurredAt time.Time
+	// ResultIDs are the withdrawn results; at least one. The first one is the aggregate.
+	ResultIDs []uuid.UUID
+	// ResultRevision is the revision the withdrawal gave the first result, higher than the
+	// revision of its completion fact.
+	ResultRevision int64
+	OccurredAt     time.Time
 }
 
 // Envelope validates the retraction and builds its envelope. The aggregate is the first withdrawn
-// result at revision 1; the replay mode is always reprocess, because only a Reprocess retracts.
+// result at the revision the withdrawal gave it, like processing.completed; the replay mode is always reprocess, because only a Reprocess retracts.
 func (f ProcessingRetractionFact) Envelope(recorded time.Time) (ProcessingEnvelope, error) {
 	if f.TransmissionID == uuid.Nil || f.MessageID == uuid.Nil || !validMessageTime(f.MessageTime) ||
-		f.WorkflowID == uuid.Nil || len(f.ResultIDs) == 0 || slices.Contains(f.ResultIDs, uuid.Nil) {
+		f.WorkflowID == uuid.Nil || len(f.ResultIDs) == 0 || slices.Contains(f.ResultIDs, uuid.Nil) || f.ResultRevision <= 0 {
 		return ProcessingEnvelope{}, processingInvalid(errors.New("incomplete Processing retraction fact"))
 	}
-	envelope, err := processingFactEnvelope(f.ID, f.ResultIDs[0], 1, f.OccurredAt, recorded, nil, nil)
+	envelope, err := processingFactEnvelope(f.ID, f.ResultIDs[0], f.ResultRevision, f.OccurredAt, recorded, nil, nil)
 	if err != nil {
 		return ProcessingEnvelope{}, err
 	}

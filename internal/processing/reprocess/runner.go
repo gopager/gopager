@@ -160,7 +160,7 @@ func (r *Runner) step(tx platform.TransactionContext, request processing.Reproce
 // announceRetraction appends the fact that the step withdrew results without publishing a
 // replacement, in the step's transaction so that both commit together.
 func (r *Runner) announceRetraction(tx platform.TransactionContext, request processing.ReprocessRequest,
-	transmission uuid.UUID, retracted []uuid.UUID) error {
+	transmission uuid.UUID, retracted []processing.RetractedResult) error {
 	message, messageTime, err := r.repository.ReadTransmissionMessage(tx.Context(), tx, transmission)
 	if err != nil {
 		return err
@@ -171,13 +171,15 @@ func (r *Runner) announceRetraction(tx platform.TransactionContext, request proc
 	}
 	_, err = r.facts.AppendProcessingRetraction(tx.Context(), tx, events.ProcessingRetractionFact{
 		ID: uuid.New(), TransmissionID: transmission, MessageID: message, MessageTime: messageTime,
-		WorkflowID: request.WorkflowID, ResultIDs: retracted, OccurredAt: now})
+		WorkflowID: request.WorkflowID, ResultIDs: processing.RetractedIDs(retracted), ResultRevision: retracted[0].Revision,
+		OccurredAt: now})
 	return err
 }
 
-// fail releases the request for a later attempt after a failed step. An open correction on the
-// Transmission is a revision conflict and is retried like any other failure, with backoff. A lost
-// claim or a cancelled context leaves the request to its new owner or to lease expiry.
+// fail ends the request after a failure a retry cannot overcome and otherwise releases it for a
+// later attempt with backoff. An open correction on the Transmission is a revision conflict and is
+// retried. A lost claim or a cancelled context leaves the request to its new owner or to lease
+// expiry.
 func (r *Runner) fail(ctx context.Context, request processing.ReprocessRequest, cause error) error {
 	if ctx.Err() != nil {
 		return nil
@@ -187,6 +189,9 @@ func (r *Runner) fail(ctx context.Context, request processing.ReprocessRequest, 
 		code = stepFailedCode
 	}
 	err := r.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
+		if !retryable(cause) {
+			return r.repository.FailReprocess(tx.Context(), tx, request, code)
+		}
 		now, err := r.clock.Now(tx.Context(), tx)
 		if err != nil {
 			return err
@@ -197,6 +202,17 @@ func (r *Runner) fail(ctx context.Context, request processing.ReprocessRequest, 
 		return nil
 	}
 	return err
+}
+
+// retryable reports whether a later attempt can overcome the failure: storage and authority
+// outages, an uncertain commit (a step resumes at the cursor) and a revision conflict, which an
+// open correction causes and its completion clears. Any other failure ends the request.
+func retryable(err error) bool {
+	var failure *platform.Failure
+	if !errors.As(err, &failure) {
+		return false
+	}
+	return failure.Retryable() || failure.Code() == platform.CodeCommitUncertain
 }
 
 // backoff doubles from one second per consecutive failed attempt, bounded by maxBackoff.

@@ -444,6 +444,14 @@ func (f *reprocessFixture) retractions(transmission uuid.UUID) []string {
 		WHERE type='processing.retracted' AND envelope->'data'->>'transmissionId'=$1 ORDER BY seq`, transmission.String())
 }
 
+// aggregateRevisions lists, in order, the type and aggregate revision of every fact about the result.
+func (f *reprocessFixture) aggregateRevisions(result string) []string {
+	f.t.Helper()
+	return f.queryStrings(`SELECT type || ' ' || (envelope->>'aggregateRevision') FROM domain_events
+		WHERE type IN ('processing.completed', 'processing.retracted') AND envelope->'aggregateRef'->>'id'=$1
+			AND envelope->'aggregateRef'->>'type'='processingResult' ORDER BY seq`, result)
+}
+
 // marked counts the Transmission's candidates that carry a Reprocess mark.
 func (f *reprocessFixture) marked(transmission uuid.UUID) int {
 	f.t.Helper()

@@ -10,18 +10,36 @@ import (
 )
 
 // Reprocess request states. A request is pending until a runner claims it, running while a runner
-// holds its lease, completed once no Transmission is left to scan and superseded when the
-// Workflow changed after the request was made.
+// holds its lease, completed once no Transmission is left to scan, superseded when the
+// Workflow changed after the request was made and failed after a step failed in a way a retry
+// cannot overcome.
 const (
 	ReprocessPending    = "pending"
 	ReprocessRunning    = "running"
 	ReprocessCompleted  = "completed"
 	ReprocessSuperseded = "superseded"
+	ReprocessFailed     = "failed"
 )
 
 // ReprocessLeaseDuration is how long a runner may hold a Reprocess request before another runner
 // may take it over, measured on the primary clock.
 const ReprocessLeaseDuration = 30 * time.Second
+
+// RetractedResult is a published result a Reprocess withdrew, with the revision the withdrawal
+// gave it, so that the retraction fact continues the result's aggregate after its completion fact.
+type RetractedResult struct {
+	ID       uuid.UUID
+	Revision int64
+}
+
+// RetractedIDs returns the IDs of the retracted results in order.
+func RetractedIDs(results []RetractedResult) []uuid.UUID {
+	ids := make([]uuid.UUID, len(results))
+	for i, result := range results {
+		ids[i] = result.ID
+	}
+	return ids
+}
 
 // ReprocessRequest is the durable state of one explicit historical Reprocess of a Workflow over a
 // Message-time range [MessageTimeFrom, MessageTimeTo). The pins (WorkflowRevision and
@@ -135,12 +153,14 @@ type ReprocessWorkRepository interface {
 	// Workflows that the readmission re-pended or created and that have history for the
 	// Transmission get the mark as well, because their re-run is historical too. With a fresh
 	// snapshot it only advances the cursor and counts the Transmission as scanned.
-	// It returns the IDs of the results it retracted.
-	ApplyReprocessStep(ctx context.Context, tx platform.TransactionContext, request ReprocessRequest, transmission uuid.UUID, snapshot ReprocessSnapshot) ([]uuid.UUID, error)
+	// It returns the results it retracted.
+	ApplyReprocessStep(ctx context.Context, tx platform.TransactionContext, request ReprocessRequest, transmission uuid.UUID, snapshot ReprocessSnapshot) ([]RetractedResult, error)
 	// ReadTransmissionMessage returns the Message of the Transmission and its Message time.
 	ReadTransmissionMessage(ctx context.Context, tx platform.TransactionContext, transmission uuid.UUID) (uuid.UUID, time.Time, error)
 	// FinishReprocess ends the claimed request as completed or superseded.
 	FinishReprocess(ctx context.Context, tx platform.TransactionContext, request ReprocessRequest, state string) error
+	// FailReprocess ends the claimed request as failed, keeping the failure code.
+	FailReprocess(ctx context.Context, tx platform.TransactionContext, request ReprocessRequest, failureCode string) error
 	// RescheduleReprocess releases the claim and makes the request due again at the given time,
 	// recording the failure code.
 	RescheduleReprocess(ctx context.Context, tx platform.TransactionContext, request ReprocessRequest, due time.Time, failureCode string) error

@@ -142,13 +142,14 @@ func (s *Service) Publish(ctx context.Context, tx platform.TransactionContext, t
 // announceRetraction appends the retraction fact of one Transmission and Workflow when results were
 // withdrawn.
 func (s *Service) announceRetraction(ctx context.Context, tx platform.TransactionContext, binding processing.PublicationBinding,
-	item processing.PublicationItem, retracted []uuid.UUID, now time.Time) error {
+	item processing.PublicationItem, retracted []processing.RetractedResult, now time.Time) error {
 	if len(retracted) == 0 {
 		return nil
 	}
 	_, err := s.facts.AppendProcessingRetraction(ctx, tx, events.ProcessingRetractionFact{
 		ID: uuid.New(), TransmissionID: item.Candidate.TransmissionID, MessageID: binding.MessageID,
-		MessageTime: binding.MessageTime, WorkflowID: item.Candidate.WorkflowID, ResultIDs: retracted, OccurredAt: now})
+		MessageTime: binding.MessageTime, WorkflowID: item.Candidate.WorkflowID, ResultIDs: processing.RetractedIDs(retracted),
+		ResultRevision: retracted[0].Revision, OccurredAt: now})
 	return err
 }
 

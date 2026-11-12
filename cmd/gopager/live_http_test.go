@@ -454,7 +454,7 @@ func TestLiveStreamRemoveBasis(t *testing.T) {
 		f.appendFact(func(ctx context.Context, tx platform.TransactionContext) error {
 			_, err := f.core.facts.AppendProcessingRetraction(ctx, tx, events.ProcessingRetractionFact{
 				ID: uuid.New(), TransmissionID: uuid.New(), MessageID: message, MessageTime: base.Add(6 * time.Minute),
-				WorkflowID: uuid.New(), ResultIDs: []uuid.UUID{uuid.New()}, OccurredAt: now})
+				WorkflowID: uuid.New(), ResultIDs: []uuid.UUID{uuid.New()}, ResultRevision: 2, OccurredAt: now})
 			return err
 		})
 		stream.expect(t, "upsert", message)

@@ -58,13 +58,13 @@ func (r *fakeRepository) ApplyPublicationItem(context.Context, platform.Transact
 	return nil
 }
 
-func (r *fakeRepository) ReplacePublished(context.Context, platform.TransactionContext, processing.PublicationItem) ([]uuid.UUID, error) {
+func (r *fakeRepository) ReplacePublished(context.Context, platform.TransactionContext, processing.PublicationItem) ([]processing.RetractedResult, error) {
 	r.replaced++
-	ids := make([]uuid.UUID, r.retract)
-	for i := range ids {
-		ids[i] = uuid.New()
+	results := make([]processing.RetractedResult, r.retract)
+	for i := range results {
+		results[i] = processing.RetractedResult{ID: uuid.New(), Revision: 5}
 	}
-	return ids, nil
+	return results, nil
 }
 
 type fakeFacts struct {

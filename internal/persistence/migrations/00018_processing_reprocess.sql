@@ -13,7 +13,7 @@ CREATE TABLE processing_reprocess_requests (
     message_time_to timestamptz NOT NULL,
     cutoff_at timestamptz NOT NULL,
     cursor uuid,
-    state varchar NOT NULL DEFAULT 'pending' CHECK (state IN ('pending', 'running', 'completed', 'superseded')),
+    state varchar NOT NULL DEFAULT 'pending' CHECK (state IN ('pending', 'running', 'completed', 'superseded', 'failed')),
     scanned bigint NOT NULL DEFAULT 0 CHECK (scanned >= 0),
     readmitted bigint NOT NULL DEFAULT 0 CHECK (readmitted >= 0),
     retracted bigint NOT NULL DEFAULT 0 CHECK (retracted >= 0),
