@@ -70,6 +70,8 @@ CREATE TABLE messages (
     last_observed_at timestamptz NOT NULL
 );
 CREATE INDEX messages_identity ON messages (identity_form, identity_subtype, identity_value, last_observed_at);
+-- The feed pages by (first_observed_at, id) descending; the index serves that keyset order directly.
+CREATE INDEX messages_first_observed ON messages (first_observed_at DESC, id DESC);
 -- Published Processing results belong to the Message of their Transmission; a merge moves them.
 ALTER TABLE processing_results ADD CONSTRAINT processing_results_message
     FOREIGN KEY (message_id) REFERENCES messages(id);

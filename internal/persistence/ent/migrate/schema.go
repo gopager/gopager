@@ -446,6 +446,18 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{MessagesColumns[2], MessagesColumns[3], MessagesColumns[4], MessagesColumns[6]},
 			},
+			{
+				Name:    "message_first_observed_at_id",
+				Unique:  false,
+				Columns: []*schema.Column{MessagesColumns[5], MessagesColumns[0]},
+				Annotation: &entsql.IndexAnnotation{
+					DescColumns: map[string]bool{
+						MessagesColumns[5].Name: true,
+
+						MessagesColumns[0].Name: true,
+					},
+				},
+			},
 		},
 	}
 	// MessageUnitsColumns holds the columns for the "message_units" table.

@@ -349,10 +349,15 @@ func TestMeasureFeed(t *testing.T) {
 	// alone and dropped again.
 	for _, index := range []struct{ label, name, statement string }{
 		{"processing_results(message_id)", "measure_results_message", `CREATE INDEX measure_results_message ON processing_results (message_id)`},
-		{"messages(first_observed_at desc, id desc)", "measure_messages_time", `CREATE INDEX measure_messages_time ON messages (first_observed_at DESC, id DESC)`},
+		{"message_units(message_id)", "measure_units_message", `CREATE INDEX measure_units_message ON message_units (message_id)`},
 	} {
 		w.exec(index.statement)
 		w.exec(`ANALYZE`)
+		for _, m := range plan {
+			if m.core && m.feed != nil && m.feed.Selection == nil {
+				m.explain(w)
+			}
+		}
 		report("index "+index.label, true)
 		w.exec(`DROP INDEX ` + index.name)
 	}
