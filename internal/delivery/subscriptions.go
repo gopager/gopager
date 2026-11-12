@@ -450,7 +450,7 @@ func (s *Subscriptions) apply(ctx context.Context, tx platform.TransactionContex
 		return authz.ErrInvalidInput
 	}
 	layoutKind := check.layoutKind
-	targets, err := s.checkTargets(ctx, tx, input.Targets, layoutKind, check.declarations)
+	targets, err := s.checkTargets(ctx, tx, subscriber, input.Targets, layoutKind, check.declarations)
 	if err != nil {
 		return err
 	}
@@ -463,9 +463,10 @@ func (s *Subscriptions) apply(ctx context.Context, tx platform.TransactionContex
 
 // checkTargets requires every target to be the current revision of an enabled instance with an
 // available descriptor that supports the layout's output kind and declares the given inputs and
-// input bindings.
-func (s *Subscriptions) checkTargets(ctx context.Context, tx platform.TransactionContext, targets []TargetReference,
-	layoutKind string, declarations fields.Declarations) ([]TargetReference, error) {
+// input bindings. A target the subscriber has no target use for is reported exactly like an
+// unavailable one, so the answer reveals nothing about who may use an instance.
+func (s *Subscriptions) checkTargets(ctx context.Context, tx platform.TransactionContext, subscriber uuid.UUID,
+	targets []TargetReference, layoutKind string, declarations fields.Declarations) ([]TargetReference, error) {
 	checked := make([]TargetReference, 0, len(targets))
 	for _, target := range targets {
 		instance, err := s.deps.Instances.CurrentInstance(ctx, tx, target.InstanceID)
@@ -475,7 +476,7 @@ func (s *Subscriptions) checkTargets(ctx context.Context, tx platform.Transactio
 		if err != nil {
 			return nil, err
 		}
-		if !instance.Enabled {
+		if !instance.Enabled || !instance.AllowsTargetUse(subscriber) {
 			return nil, &TargetUnavailableError{InstanceID: target.InstanceID}
 		}
 		descriptor, err := s.deps.Targets.Describe(ctx, instance)
