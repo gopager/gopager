@@ -196,7 +196,7 @@ func (r *Runner) fail(ctx context.Context, request processing.ReprocessRequest, 
 		if err != nil {
 			return err
 		}
-		return r.repository.RescheduleReprocess(tx.Context(), tx, request, now.Add(backoff(request.Attempts+1)), code)
+		return r.repository.RescheduleReprocess(tx.Context(), tx, request, now.Add(platform.Backoff(request.Attempts+1, baseBackoff, maxBackoff)), code)
 	})
 	if errors.Is(err, authz.ErrRevisionConflict) {
 		return nil
@@ -213,15 +213,6 @@ func retryable(err error) bool {
 		return false
 	}
 	return failure.Retryable() || failure.Code() == platform.CodeCommitUncertain
-}
-
-// backoff doubles from one second per consecutive failed attempt, bounded by maxBackoff.
-func backoff(attempt int) time.Duration {
-	delay := baseBackoff
-	for i := 1; i < attempt && delay < maxBackoff; i++ {
-		delay *= 2
-	}
-	return min(delay, maxBackoff)
 }
 
 var _ platform.Runner = (*Runner)(nil)

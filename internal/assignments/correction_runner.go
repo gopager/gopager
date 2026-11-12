@@ -273,7 +273,7 @@ func (r *CorrectionRunner) reresolve(tx platform.TransactionContext, lease Corre
 // Messages simply keep their correcting status until a later correction refreshes them.
 func (r *CorrectionRunner) fail(ctx context.Context, lease CorrectionLease, code string) error {
 	return r.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-		final, err := r.repository.FailCorrection(tx.Context(), tx, lease, code, correctionBackoff(lease.Attempts))
+		final, err := r.repository.FailCorrection(tx.Context(), tx, lease, code, platform.Backoff(lease.Attempts, time.Second, 30*time.Second))
 		if err != nil || !final {
 			return err
 		}
@@ -294,20 +294,6 @@ func (r *CorrectionRunner) appendFailed(tx platform.TransactionContext, lease Co
 		Revision:  int64(lease.Attempts), OccurredAt: now, Reason: lease.Reason, FailureCode: code,
 	})
 	return err
-}
-
-func correctionBackoff(attempt int) time.Duration {
-	if attempt < 1 {
-		attempt = 1
-	}
-	delay := time.Second
-	for i := 1; i < attempt && delay < 30*time.Second; i++ {
-		delay *= 2
-	}
-	if delay > 30*time.Second {
-		delay = 30 * time.Second
-	}
-	return delay
 }
 
 var _ platform.Runner = (*CorrectionRunner)(nil)

@@ -218,7 +218,7 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 			return err
 		}
 		failures++
-		delay := dispatchBackoff(d.config.PollInterval, failures)
+		delay := platform.Backoff(failures, d.config.PollInterval, maxDispatchBackoff)
 		d.logger.Warn("Processing dispatch selection failed; retrying",
 			"code", platform.FailureCode(err), "failures", failures, "retryIn", delay)
 		retry = time.NewTimer(delay)
@@ -269,13 +269,4 @@ func transientFailure(err error) bool {
 		return true
 	}
 	return false
-}
-
-// dispatchBackoff doubles base per consecutive failure, bounded by maxDispatchBackoff.
-func dispatchBackoff(base time.Duration, failures int) time.Duration {
-	delay := base
-	for i := 1; i < failures && delay < maxDispatchBackoff; i++ {
-		delay *= 2
-	}
-	return min(delay, max(base, maxDispatchBackoff))
 }
