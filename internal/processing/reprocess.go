@@ -108,10 +108,14 @@ type ReprocessWorkRepository interface {
 	// NextReprocessTransmission returns the first Transmission after the cursor, in ID order, that
 	// the request covers; the bool is false when none is left.
 	NextReprocessTransmission(ctx context.Context, tx platform.TransactionContext, request ReprocessRequest) (uuid.UUID, bool, error)
+	// IsFreshIntake reports whether intake admitted the Transmission's candidate of the Workflow
+	// at the request's pinned revision after the request was made. Such work is new, not history.
+	IsFreshIntake(ctx context.Context, tx platform.TransactionContext, request ReprocessRequest, transmission uuid.UUID) (bool, error)
 	// ApplyReprocessStep marks the Transmission's current candidate of the Workflow with the
 	// request, or, without one, retracts the Workflow's published results of the Transmission,
-	// and advances the cursor and counts, all in the caller's transaction.
-	ApplyReprocessStep(ctx context.Context, tx platform.TransactionContext, request ReprocessRequest, transmission uuid.UUID) error
+	// and advances the cursor and counts, all in the caller's transaction. With fresh set it only
+	// advances the cursor and counts the Transmission as scanned.
+	ApplyReprocessStep(ctx context.Context, tx platform.TransactionContext, request ReprocessRequest, transmission uuid.UUID, fresh bool) error
 	// FinishReprocess ends the claimed request as completed or superseded.
 	FinishReprocess(ctx context.Context, tx platform.TransactionContext, request ReprocessRequest, state string) error
 	// RescheduleReprocess releases the claim and makes the request due again at the given time,

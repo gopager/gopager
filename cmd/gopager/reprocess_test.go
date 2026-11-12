@@ -349,3 +349,37 @@ func TestReprocessRequestAuthorizationAndValidation(t *testing.T) {
 		t.Fatalf("missing action code = %q", denied.Code)
 	}
 }
+
+// TestReprocessSkipsFreshIntakeThatRacedTheRequest expects a Transmission that intake admitted at
+// the bumped Workflow revision after the request, but whose accepted_at fell before the cutoff,
+// to count as scanned without being marked, so its fact stays a normal one.
+func TestReprocessSkipsFreshIntakeThatRacedTheRequest(t *testing.T) {
+	t.Parallel()
+	f := newReprocessFixture(t)
+	from, to, firstTime, secondTime, _ := reprocessWindow()
+	v1 := f.saveVersion("3")
+	f.activate(v1)
+	old := f.submit("old", firstTime)
+	f.runWorker()
+	request := f.requestReprocess(v1, from, to)
+	fresh := f.submit("fresh", secondTime)
+	// Intake took its acceptance time before the request's exclusive lock and committed after it.
+	f.exec(`UPDATE transmissions SET accepted_at = (SELECT cutoff_at FROM processing_reprocess_requests WHERE id=$2) - interval '1 second'
+		WHERE id=$1`, fresh, request)
+
+	f.runReprocess()
+	f.runWorker()
+
+	if view := f.request(request); view.State != processing.ReprocessCompleted || view.Scanned != 2 || view.Readmitted != 1 {
+		t.Fatalf("request = %+v, want two scanned and only the historical one readmitted", view)
+	}
+	if f.marked(fresh) != 0 || f.marked(old) != 0 {
+		t.Fatal("the fresh Transmission must not carry a mark, and the old one's mark must be cleared")
+	}
+	if modes := f.replayModes(fresh); !slices.Equal(modes, []string{"normal"}) {
+		t.Fatalf("fresh replay modes = %v, want a normal fact", modes)
+	}
+	if modes := f.replayModes(old); !slices.Equal(modes, []string{"normal", "reprocess"}) {
+		t.Fatalf("old replay modes = %v", modes)
+	}
+}

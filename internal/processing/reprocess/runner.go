@@ -139,10 +139,16 @@ func (r *Runner) step(tx platform.TransactionContext, request processing.Reproce
 	if !found {
 		return uuid.Nil, true, r.repository.FinishReprocess(ctx, tx, request, processing.ReprocessCompleted)
 	}
+	// Asked before readmission, which may create candidates of its own: a candidate that intake
+	// admitted at the pinned revision after the request is new work, not history to replace.
+	fresh, err := r.repository.IsFreshIntake(ctx, tx, request, transmission)
+	if err != nil {
+		return uuid.Nil, false, err
+	}
 	if err := r.readmission.ReadmitProcessing(ctx, tx, transmission); err != nil {
 		return uuid.Nil, false, err
 	}
-	return transmission, false, r.repository.ApplyReprocessStep(ctx, tx, request, transmission)
+	return transmission, false, r.repository.ApplyReprocessStep(ctx, tx, request, transmission, fresh)
 }
 
 // fail releases the request for a later attempt after a failed step. An open correction on the

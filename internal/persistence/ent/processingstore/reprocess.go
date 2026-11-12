@@ -167,11 +167,29 @@ func (s *Store) NextReprocessTransmission(ctx context.Context, tx platform.Trans
 	return id, err == nil, err
 }
 
+// IsFreshIntake reports whether the Transmission has a non-superseded candidate of the request's
+// Workflow at the pinned revision created at or after the request. Candidates that existed
+// before, and ones the runner's own readmission creates, are not fresh: the former carry an older
+// revision and the latter do not exist yet when this is asked.
+func (s *Store) IsFreshIntake(ctx context.Context, tx platform.TransactionContext,
+	request processing.ReprocessRequest, transmission uuid.UUID) (bool, error) {
+	executor, err := s.primary.Resolve(tx)
+	if err != nil {
+		return false, err
+	}
+	var fresh bool
+	err = executor.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM processing_candidates
+		WHERE transmission_id=$1 AND workflow_id=$2 AND state <> 'superseded'
+			AND workflow_revision=$3 AND created_at >= $4)`,
+		transmission, request.WorkflowID, request.WorkflowRevision, request.CreatedAt).Scan(&fresh)
+	return fresh, err
+}
+
 // ApplyReprocessStep marks the Transmission's current candidates of the Workflow, or, when the
 // readmission left none, retracts the Workflow's published results of the Transmission, and
 // advances the fenced request's cursor and counts.
 func (s *Store) ApplyReprocessStep(ctx context.Context, tx platform.TransactionContext,
-	request processing.ReprocessRequest, transmission uuid.UUID) error {
+	request processing.ReprocessRequest, transmission uuid.UUID, fresh bool) error {
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {
 		return err
@@ -180,22 +198,12 @@ func (s *Store) ApplyReprocessStep(ctx context.Context, tx platform.TransactionC
 	if err != nil {
 		return err
 	}
-	marked, err := executor.ExecContext(ctx, `UPDATE processing_candidates SET reprocess_id=$3
-		WHERE transmission_id=$1 AND workflow_id=$2 AND state <> 'superseded'`, transmission, request.WorkflowID, request.ID)
-	if err != nil {
-		return err
-	}
-	readmitted, err := marked.RowsAffected()
-	if err != nil {
-		return err
-	}
-	var retracted int64
-	if readmitted == 0 {
-		ids, err := s.RetractPublished(ctx, tx, transmission, request.WorkflowID, uuid.Nil)
+	var readmitted, retracted int64
+	if !fresh {
+		readmitted, retracted, err = s.markOrRetract(ctx, tx, request, transmission)
 		if err != nil {
 			return err
 		}
-		retracted = int64(len(ids))
 	}
 	var markedTransmissions int64
 	if readmitted > 0 {
@@ -207,6 +215,28 @@ func (s *Store) ApplyReprocessStep(ctx context.Context, tx platform.TransactionC
 		WHERE id=$1 AND worker_id=$2 AND state='running'`, request.ID, request.WorkerID, transmission,
 		markedTransmissions, retracted, now.Add(processing.ReprocessLeaseDuration), now)
 	return requireOneRow(updated, err)
+}
+
+// markOrRetract marks the Transmission's current candidates of the Workflow with the request and
+// returns how many it marked, or, when there are none, retracts the Workflow's published results
+// and returns how many.
+func (s *Store) markOrRetract(ctx context.Context, tx platform.TransactionContext,
+	request processing.ReprocessRequest, transmission uuid.UUID) (readmitted, retracted int64, err error) {
+	executor, err := s.primary.Resolve(tx)
+	if err != nil {
+		return 0, 0, err
+	}
+	marked, err := executor.ExecContext(ctx, `UPDATE processing_candidates SET reprocess_id=$3
+		WHERE transmission_id=$1 AND workflow_id=$2 AND state <> 'superseded'`, transmission, request.WorkflowID, request.ID)
+	if err != nil {
+		return 0, 0, err
+	}
+	readmitted, err = marked.RowsAffected()
+	if err != nil || readmitted > 0 {
+		return readmitted, 0, err
+	}
+	ids, err := s.RetractPublished(ctx, tx, transmission, request.WorkflowID, uuid.Nil)
+	return 0, int64(len(ids)), err
 }
 
 // FinishReprocess ends the claimed request in the given terminal state.
