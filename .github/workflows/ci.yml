@@ -37,7 +37,8 @@ jobs:
   integration:
     name: Integration tests
     runs-on: ubuntu-latest
-    needs: static
+    # Runs alongside the static checks instead of after them, so the pipeline takes as long as
+    # its slowest job rather than the sum of both.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7.0.1
