@@ -106,7 +106,7 @@ make vuln               # govulncheck ./... (pinned version, needs network)
 
 ### Continuous integration
 
-[.github/workflows/ci.yml](../.github/workflows/ci.yml) runs on pull requests and pushes to `main`. Job `static`: `make fmt-check`, `make vet`, `make golangci`, `make test`, `make generate-check`. Job `integration` (after `static`, 15 minute limit): `make test-race` on the runner's Docker daemon, then it uploads `build/test-reports` (`junit.xml`, `test.json`) as the `test-reports` artifact and appends `make test-slowest` to the job summary, both even when tests fail. Job `image` builds the container image from `deploy/compose/Dockerfile` without pushing it. Job `vulnerabilities` runs `make vuln` as non-blocking information. The Go version comes from `go.mod`.
+[.github/workflows/ci.yml](../.github/workflows/ci.yml) runs on pull requests and pushes to `main`. Job `static`: `make fmt-check`, `make vet`, `make golangci`, `make test`, `make generate-check`. Job `integration` (in parallel with `static`, 15 minute limit): `make test-race` on the runner's Docker daemon, then it uploads `build/test-reports` (`junit.xml`, `test.json`) as the `test-reports` artifact and appends `make test-slowest` to the job summary, both even when tests fail. Job `image` builds the container image from `deploy/compose/Dockerfile` without pushing it. Job `vulnerabilities` runs `make vuln` as non-blocking information. The Go version comes from `go.mod`.
 
 [.github/workflows/commits.yml](../.github/workflows/commits.yml) checks the pull request title with commitlint on every title edit and push, because the title becomes the squash commit header on `main`. It uses [commitlint.pr-title.config.mjs](../commitlint.pr-title.config.mjs), the shared rules without commitlint's default ignores for git-generated messages.
 
@@ -157,7 +157,7 @@ Packages with database tests (their `TestMain` calls `testpostgres.Run`): `cmd/g
 
 ### Parallel tests
 
-Every test runs in parallel. `paralleltest` and `tparallel` (configured in `.golangci.yml`, run by `make`) fail the build otherwise.
+Every test runs in parallel. `paralleltest` and `tparallel` (configured in `.golangci.yml`, run by `make`) fail the build otherwise. Tests do not pay production costs that only make them slow: passwords use the reduced Argon2id cost of `internal/testutil/passwords` (the command tests set it once in `TestMain` through `identityOptions`), and batch sizes and intervals are options of their component (for example `assignments.WithCorrectionBatchSize`) so that a test can exercise multi-batch behaviour with little data.
 
 - A new top-level test calls `t.Parallel()` as its first statement. A subtest calls it too, so it needs its own setup: its own database (`newStore(t)`, `testpostgres.EmptyDatabase(t)`), `t.TempDir()`, server and fixtures. Siblings must not share mutable state or depend on each other's order; a case that mutates shared fixtures gets a fixture of its own.
 - A parent with parallel subtests releases its resources with `t.Cleanup`, never `defer`: a deferred call runs when the parent function returns, before the parallel subtests resume.
