@@ -353,6 +353,7 @@ func (MessageUnit) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("message_id", "unit_id").Unique().Annotations(entsql.IndexWhere("unit_id IS NOT NULL")),
 		index.Fields("message_id", "agency_id").Unique().Annotations(entsql.IndexWhere("unit_id IS NULL")),
+		index.Fields("message_id"),
 		index.Fields("unit_id", "age_anchor"),
 		index.Fields("agency_id", "first_observed_at"),
 	}

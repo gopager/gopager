@@ -143,6 +143,8 @@ CREATE TABLE message_units (
 );
 CREATE UNIQUE INDEX message_units_message_unit ON message_units (message_id, unit_id) WHERE unit_id IS NOT NULL;
 CREATE UNIQUE INDEX message_units_message_targetless ON message_units (message_id, agency_id) WHERE unit_id IS NULL;
+-- The feed's eligibility check probes message_units by Message; the partial unique indexes above cannot serve it.
+CREATE INDEX message_units_message ON message_units (message_id);
 CREATE INDEX message_units_unit_age ON message_units (unit_id, age_anchor);
 CREATE INDEX message_units_agency_time ON message_units (agency_id, first_observed_at);
 

@@ -493,6 +493,11 @@ var (
 				},
 			},
 			{
+				Name:    "messageunit_message_id",
+				Unique:  false,
+				Columns: []*schema.Column{MessageUnitsColumns[1]},
+			},
+			{
 				Name:    "messageunit_unit_id_age_anchor",
 				Unique:  false,
 				Columns: []*schema.Column{MessageUnitsColumns[2], MessageUnitsColumns[5]},
