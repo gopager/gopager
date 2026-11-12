@@ -53,22 +53,23 @@ func texts(values []processing.Value) []string {
 func TestAttributeCandidatesAreUntargetedThenRelevantTargetsByPosition(t *testing.T) {
 	t.Parallel()
 	first, second, foreign := uuid.New(), uuid.New(), uuid.New()
-	v := viewOf([]readmodel.UnitRecord{{UnitID: second}, {UnitID: first}}, []string{"derived"},
+	values := []readmodel.AttributeValue{
 		attribute("city", nil, nil, stringValue("everywhere")),
 		attribute("city", pointer(0), &first, stringValue("A")),
 		attribute("city", pointer(1), &second, stringValue("B")),
 		attribute("city", pointer(2), &foreign, stringValue("elsewhere")),
 		attribute("city", pointer(3), nil, stringValue("unit hidden")),
-		attribute("level", nil, nil, processing.Value{Kind: processing.IntegerValue, Value: json.RawMessage(`"3"`)}))
+		attribute("level", nil, nil, processing.Value{Kind: processing.IntegerValue, Value: json.RawMessage(`"3"`)})}
+	v := viewOf([]readmodel.UnitRecord{{UnitID: second}, {UnitID: first}}, []string{"derived"}, values...)
 
 	if got := texts(v.Values(ref("incident", "city"))); len(got) != 3 || got[0] != "everywhere" || got[1] != "A" || got[2] != "B" {
 		t.Fatalf("unsplit candidates = %v", got)
 	}
-	v.units = []readmodel.UnitRecord{{UnitID: second}}
+	v = viewOf([]readmodel.UnitRecord{{UnitID: second}}, []string{"derived"}, values...)
 	if got := texts(v.Values(ref("incident", "city"))); len(got) != 2 || got[1] != "B" {
 		t.Fatalf("split candidates = %v", got)
 	}
-	v.units = nil
+	v = viewOf(nil, []string{"derived"}, values...)
 	if got := texts(v.Values(ref("incident", "city"))); len(got) != 1 || got[0] != "everywhere" {
 		t.Fatalf("Unit-less candidates = %v", got)
 	}
@@ -148,5 +149,22 @@ func TestMessageUnitIDsIsAListOfCandidates(t *testing.T) {
 	v.units = []readmodel.UnitRecord{{UnitID: first}}
 	if filter.Match(v) {
 		t.Fatal("no element equal to the operand must not match")
+	}
+}
+
+// BenchmarkRelevantUnit asks for the relevance of many Units of a view, as filtering and layout
+// do for each attribute value.
+func BenchmarkRelevantUnit(b *testing.B) {
+	units := make([]readmodel.UnitRecord, 50)
+	for i := range units {
+		units[i].UnitID = uuid.New()
+	}
+	v := viewOf(units, []string{"derived"})
+	probe := units[len(units)-1].UnitID
+	b.ResetTimer()
+	for range b.N {
+		if !v.relevantUnit(probe) {
+			b.Fatal("unit not relevant")
+		}
 	}
 }
