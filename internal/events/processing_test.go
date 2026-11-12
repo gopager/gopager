@@ -179,3 +179,18 @@ func TestProcessingRetractionEnvelopeCarriesTheRetractedResults(t *testing.T) {
 		}
 	}
 }
+
+func TestNewProcessingRetractionCarriesTheWithdrawnResults(t *testing.T) {
+	t.Parallel()
+	first, second := uuid.New(), uuid.New()
+	now := time.Date(2026, 11, 13, 8, 0, 0, 0, time.UTC)
+	fact := NewProcessingRetraction(uuid.New(), uuid.New(), now.Add(-time.Hour), uuid.New(),
+		[]processing.RetractedResult{{ID: first, Revision: 4}, {ID: second, Revision: 2}}, now)
+	if fact.ID == uuid.Nil || len(fact.ResultIDs) != 2 || fact.ResultIDs[0] != first || fact.ResultIDs[1] != second ||
+		fact.ResultRevision != 4 || !fact.OccurredAt.Equal(now) {
+		t.Fatalf("fact = %+v", fact)
+	}
+	if _, err := fact.Envelope(now); err != nil {
+		t.Fatalf("envelope: %v", err)
+	}
+}

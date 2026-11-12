@@ -169,10 +169,8 @@ func (r *Runner) announceRetraction(tx platform.TransactionContext, request proc
 	if err != nil {
 		return err
 	}
-	_, err = r.facts.AppendProcessingRetraction(tx.Context(), tx, events.ProcessingRetractionFact{
-		ID: uuid.New(), TransmissionID: transmission, MessageID: message, MessageTime: messageTime,
-		WorkflowID: request.WorkflowID, ResultIDs: processing.RetractedIDs(retracted), ResultRevision: retracted[0].Revision,
-		OccurredAt: now})
+	_, err = r.facts.AppendProcessingRetraction(tx.Context(), tx,
+		events.NewProcessingRetraction(transmission, message, messageTime, request.WorkflowID, retracted, now))
 	return err
 }
 

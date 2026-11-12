@@ -146,10 +146,8 @@ func (s *Service) announceRetraction(ctx context.Context, tx platform.Transactio
 	if len(retracted) == 0 {
 		return nil
 	}
-	_, err := s.facts.AppendProcessingRetraction(ctx, tx, events.ProcessingRetractionFact{
-		ID: uuid.New(), TransmissionID: item.Candidate.TransmissionID, MessageID: binding.MessageID,
-		MessageTime: binding.MessageTime, WorkflowID: item.Candidate.WorkflowID, ResultIDs: processing.RetractedIDs(retracted),
-		ResultRevision: retracted[0].Revision, OccurredAt: now})
+	_, err := s.facts.AppendProcessingRetraction(ctx, tx, events.NewProcessingRetraction(item.Candidate.TransmissionID,
+		binding.MessageID, binding.MessageTime, item.Candidate.WorkflowID, retracted, now))
 	return err
 }
 

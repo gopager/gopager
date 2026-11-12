@@ -98,6 +98,19 @@ type ProcessingRetractionFact struct {
 	OccurredAt     time.Time
 }
 
+// NewProcessingRetraction returns the fact of a Reprocess that withdrew the results of one
+// Transmission and Workflow without publishing a replacement, in the order retracted lists them.
+// Its aggregate continues the first withdrawn result at the revision the retraction gave it.
+func NewProcessingRetraction(transmission, message uuid.UUID, messageTime time.Time, workflow uuid.UUID,
+	retracted []processing.RetractedResult, now time.Time) ProcessingRetractionFact {
+	fact := ProcessingRetractionFact{ID: uuid.New(), TransmissionID: transmission, MessageID: message,
+		MessageTime: messageTime, WorkflowID: workflow, ResultIDs: processing.RetractedIDs(retracted), OccurredAt: now}
+	if len(retracted) > 0 {
+		fact.ResultRevision = retracted[0].Revision
+	}
+	return fact
+}
+
 // Envelope validates the retraction and builds its envelope. The aggregate is the first withdrawn
 // result at the revision the withdrawal gave it, like processing.completed; the replay mode is always reprocess, because only a Reprocess retracts.
 func (f ProcessingRetractionFact) Envelope(recorded time.Time) (ProcessingEnvelope, error) {
