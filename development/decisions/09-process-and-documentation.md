@@ -160,3 +160,13 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Decision:** The user decided that only code changes require a new Copilot review in the pull-request loop. The review gate applies to the **last code commit**, the newest commit that changes any file other than Markdown (`*.md`); a later commit that changes only Markdown (execution records, contracts, decisions, `docs/`) is pushed without re-requesting a review. The required checks still run and must pass on the head commit. Recorded in the [shared rules](../work-packages/shared-rules.md#pull-request-and-review) and the `execute-work-package` skill.
 - **Rationale:** Recording a clean review in the execution record changed the head and restarted the review loop although no reviewed code changed.
 - **Consequences:** Applies to every open AP from now on, first to the AP-12 pull request ([AP-12 record](../execution/ap-12.md)).
+
+<a id="d-168"></a>
+## D-168 Local security and code review before every code push
+
+- **Status:** accepted
+- **Date:** 2026-11-12
+- **Decision:** The user made a local review mandatory before every push that contains a code commit: the agent runs the `security-review` skill and the `code-review` skill (arguments `xhigh ap-NN-<slug> --max-findings all`, without `--comment`, `--fix`, `max` or `ultra`) on the AP branch, checks each finding like a Copilot annotation, fixes the valid ones and runs both reviews again after every fix until a run reports no open finding; only then it pushes and requests the Copilot review. Copilot annotations fixed with code repeat this whole loop before the next push. Rejected findings are recorded with their reason in the evidence and do not count as open. Pushes of Markdown-only commits need no local review ([D-162](#d-162)). Recorded in the [shared rules](../work-packages/shared-rules.md#pull-request-and-review) and the `execute-work-package` skill.
+- **Rationale:** Each Copilot review round costs a paid review and a round trip; as many findings as possible should be found locally before Copilot reviews. `xhigh` with unlimited findings is the highest-recall level that does not start the many reviewer agents of `max` or `ultra`.
+- **Consequences:** Applies to every open AP from now on. The Copilot review gate of the pull request is unchanged.
+
