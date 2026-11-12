@@ -382,6 +382,26 @@ func (_u *ProcessingCandidateUpdate) ClearFailureStep() *ProcessingCandidateUpda
 	return _u
 }
 
+// SetReprocessID sets the "reprocess_id" field.
+func (_u *ProcessingCandidateUpdate) SetReprocessID(v uuid.UUID) *ProcessingCandidateUpdate {
+	_u.mutation.SetReprocessID(v)
+	return _u
+}
+
+// SetNillableReprocessID sets the "reprocess_id" field if the given value is not nil.
+func (_u *ProcessingCandidateUpdate) SetNillableReprocessID(v *uuid.UUID) *ProcessingCandidateUpdate {
+	if v != nil {
+		_u.SetReprocessID(*v)
+	}
+	return _u
+}
+
+// ClearReprocessID clears the value of the "reprocess_id" field.
+func (_u *ProcessingCandidateUpdate) ClearReprocessID() *ProcessingCandidateUpdate {
+	_u.mutation.ClearReprocessID()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *ProcessingCandidateUpdate) SetUpdatedAt(v time.Time) *ProcessingCandidateUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -591,6 +611,12 @@ func (_u *ProcessingCandidateUpdate) sqlSave(ctx context.Context) (_node int, er
 	}
 	if _u.mutation.FailureStepCleared() {
 		_spec.ClearField(processingcandidate.FieldFailureStep, field.TypeString)
+	}
+	if value, ok := _u.mutation.ReprocessID(); ok {
+		_spec.SetField(processingcandidate.FieldReprocessID, field.TypeUUID, value)
+	}
+	if _u.mutation.ReprocessIDCleared() {
+		_spec.ClearField(processingcandidate.FieldReprocessID, field.TypeUUID)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(processingcandidate.FieldUpdatedAt, field.TypeTime, value)
@@ -969,6 +995,26 @@ func (_u *ProcessingCandidateUpdateOne) ClearFailureStep() *ProcessingCandidateU
 	return _u
 }
 
+// SetReprocessID sets the "reprocess_id" field.
+func (_u *ProcessingCandidateUpdateOne) SetReprocessID(v uuid.UUID) *ProcessingCandidateUpdateOne {
+	_u.mutation.SetReprocessID(v)
+	return _u
+}
+
+// SetNillableReprocessID sets the "reprocess_id" field if the given value is not nil.
+func (_u *ProcessingCandidateUpdateOne) SetNillableReprocessID(v *uuid.UUID) *ProcessingCandidateUpdateOne {
+	if v != nil {
+		_u.SetReprocessID(*v)
+	}
+	return _u
+}
+
+// ClearReprocessID clears the value of the "reprocess_id" field.
+func (_u *ProcessingCandidateUpdateOne) ClearReprocessID() *ProcessingCandidateUpdateOne {
+	_u.mutation.ClearReprocessID()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *ProcessingCandidateUpdateOne) SetUpdatedAt(v time.Time) *ProcessingCandidateUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -1208,6 +1254,12 @@ func (_u *ProcessingCandidateUpdateOne) sqlSave(ctx context.Context) (_node *Pro
 	}
 	if _u.mutation.FailureStepCleared() {
 		_spec.ClearField(processingcandidate.FieldFailureStep, field.TypeString)
+	}
+	if value, ok := _u.mutation.ReprocessID(); ok {
+		_spec.SetField(processingcandidate.FieldReprocessID, field.TypeUUID, value)
+	}
+	if _u.mutation.ReprocessIDCleared() {
+		_spec.ClearField(processingcandidate.FieldReprocessID, field.TypeUUID)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(processingcandidate.FieldUpdatedAt, field.TypeTime, value)

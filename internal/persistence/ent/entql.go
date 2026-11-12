@@ -542,6 +542,7 @@ var schemaGraph = func() *sqlgraph.Schema {
 			processingcandidate.FieldDueAt:                 {Type: field.TypeTime, Column: processingcandidate.FieldDueAt},
 			processingcandidate.FieldFailureCode:           {Type: field.TypeString, Column: processingcandidate.FieldFailureCode},
 			processingcandidate.FieldFailureStep:           {Type: field.TypeString, Column: processingcandidate.FieldFailureStep},
+			processingcandidate.FieldReprocessID:           {Type: field.TypeUUID, Column: processingcandidate.FieldReprocessID},
 			processingcandidate.FieldCreatedAt:             {Type: field.TypeTime, Column: processingcandidate.FieldCreatedAt},
 			processingcandidate.FieldUpdatedAt:             {Type: field.TypeTime, Column: processingcandidate.FieldUpdatedAt},
 		},
@@ -609,6 +610,7 @@ var schemaGraph = func() *sqlgraph.Schema {
 			processingresult.FieldCompletedAt:    {Type: field.TypeTime, Column: processingresult.FieldCompletedAt},
 			processingresult.FieldPublishedAt:    {Type: field.TypeTime, Column: processingresult.FieldPublishedAt},
 			processingresult.FieldMessageID:      {Type: field.TypeUUID, Column: processingresult.FieldMessageID},
+			processingresult.FieldRetractedAt:    {Type: field.TypeTime, Column: processingresult.FieldRetractedAt},
 		},
 	}
 	graph.Nodes[29] = &sqlgraph.Node{
@@ -3117,6 +3119,11 @@ func (f *ProcessingCandidateFilter) WhereFailureStep(p entql.StringP) {
 	f.Where(p.Field(processingcandidate.FieldFailureStep))
 }
 
+// WhereReprocessID applies the entql [16]byte predicate on the reprocess_id field.
+func (f *ProcessingCandidateFilter) WhereReprocessID(p entql.ValueP) {
+	f.Where(p.Field(processingcandidate.FieldReprocessID))
+}
+
 // WhereCreatedAt applies the entql time.Time predicate on the created_at field.
 func (f *ProcessingCandidateFilter) WhereCreatedAt(p entql.TimeP) {
 	f.Where(p.Field(processingcandidate.FieldCreatedAt))
@@ -3350,6 +3357,11 @@ func (f *ProcessingResultFilter) WherePublishedAt(p entql.TimeP) {
 // WhereMessageID applies the entql [16]byte predicate on the message_id field.
 func (f *ProcessingResultFilter) WhereMessageID(p entql.ValueP) {
 	f.Where(p.Field(processingresult.FieldMessageID))
+}
+
+// WhereRetractedAt applies the entql time.Time predicate on the retracted_at field.
+func (f *ProcessingResultFilter) WhereRetractedAt(p entql.TimeP) {
+	f.Where(p.Field(processingresult.FieldRetractedAt))
 }
 
 // addPredicate implements the predicateAdder interface.

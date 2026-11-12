@@ -37,16 +37,26 @@ type PublicationItem struct {
 	Candidate  Candidate
 	Definition Definition
 	Result     *PrivateResult
+	// ReprocessID is the historical Reprocess that readmitted the candidate and still awaits its
+	// replacement of the earlier published results; nil for ordinary work.
+	ReprocessID *uuid.UUID
 	// Outputs declares the Attribute fields a result may hold, as current in the reading
 	// transaction. It is not part of the stored evidence.
 	Outputs Declarations `json:"-"`
 }
 
 // Publishable reports whether the item holds a completed selected result that has not been
-// attached to its Message yet.
+// attached to its Message yet and has not been retracted.
 func (i PublicationItem) Publishable() bool {
 	return i.Candidate.State == "completed" && i.Candidate.Selected != nil && *i.Candidate.Selected &&
-		i.Result != nil && i.Result.PublishedAt == nil
+		i.Result != nil && i.Result.PublishedAt == nil && i.Result.RetractedAt == nil
+}
+
+// ReplacesPublished reports whether the item is a completed candidate readmitted by a historical
+// Reprocess, whose publication replaces the earlier published results of its Transmission and
+// Workflow. A failed marked candidate replaces nothing.
+func (i PublicationItem) ReplacesPublished() bool {
+	return i.ReprocessID != nil && i.Candidate.State == "completed"
 }
 
 // PublicationRepository reads and applies current private evidence in the caller's source transaction.
@@ -56,4 +66,8 @@ func (i PublicationItem) Publishable() bool {
 type PublicationRepository interface {
 	ReadPublicationItem(context.Context, platform.TransactionContext, CandidateBinding) (PublicationItem, error)
 	ApplyPublicationItem(context.Context, platform.TransactionContext, PublicationBinding, PublicationItem) error
+	// ReplacePublished retracts every published result of the item's Transmission and Workflow
+	// except the item's own result and clears the candidate's Reprocess mark, in the caller's
+	// transaction. It applies to items for which ReplacesPublished holds.
+	ReplacePublished(context.Context, platform.TransactionContext, PublicationItem) error
 }

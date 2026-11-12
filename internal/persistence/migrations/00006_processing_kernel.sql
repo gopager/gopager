@@ -64,6 +64,7 @@ CREATE TABLE processing_candidates (
     due_at timestamptz NOT NULL,
     failure_code varchar,
     failure_step varchar,
+    reprocess_id uuid,
     created_at timestamptz NOT NULL,
     updated_at timestamptz NOT NULL,
     FOREIGN KEY (workflow_id, definition_version_id) REFERENCES processing_workflow_versions(workflow_id, id),
@@ -86,8 +87,10 @@ CREATE TABLE processing_results (
     completed_at timestamptz NOT NULL,
     published_at timestamptz,
     message_id uuid,
+    retracted_at timestamptz,
     UNIQUE (candidate_id, revision),
-    CHECK ((published_at IS NULL) = (message_id IS NULL))
+    CHECK ((published_at IS NULL) = (message_id IS NULL)),
+    CHECK (retracted_at IS NULL OR (published_at IS NULL AND message_id IS NULL))
 );
 
 -- +goose Down

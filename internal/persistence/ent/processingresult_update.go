@@ -155,6 +155,26 @@ func (_u *ProcessingResultUpdate) ClearMessageID() *ProcessingResultUpdate {
 	return _u
 }
 
+// SetRetractedAt sets the "retracted_at" field.
+func (_u *ProcessingResultUpdate) SetRetractedAt(v time.Time) *ProcessingResultUpdate {
+	_u.mutation.SetRetractedAt(v)
+	return _u
+}
+
+// SetNillableRetractedAt sets the "retracted_at" field if the given value is not nil.
+func (_u *ProcessingResultUpdate) SetNillableRetractedAt(v *time.Time) *ProcessingResultUpdate {
+	if v != nil {
+		_u.SetRetractedAt(*v)
+	}
+	return _u
+}
+
+// ClearRetractedAt clears the value of the "retracted_at" field.
+func (_u *ProcessingResultUpdate) ClearRetractedAt() *ProcessingResultUpdate {
+	_u.mutation.ClearRetractedAt()
+	return _u
+}
+
 // Mutation returns the ProcessingResultMutation object of the builder.
 func (_u *ProcessingResultUpdate) Mutation() *ProcessingResultMutation {
 	return _u.mutation
@@ -252,6 +272,12 @@ func (_u *ProcessingResultUpdate) sqlSave(ctx context.Context) (_node int, err e
 	}
 	if _u.mutation.MessageIDCleared() {
 		_spec.ClearField(processingresult.FieldMessageID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.RetractedAt(); ok {
+		_spec.SetField(processingresult.FieldRetractedAt, field.TypeTime, value)
+	}
+	if _u.mutation.RetractedAtCleared() {
+		_spec.ClearField(processingresult.FieldRetractedAt, field.TypeTime)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
@@ -399,6 +425,26 @@ func (_u *ProcessingResultUpdateOne) ClearMessageID() *ProcessingResultUpdateOne
 	return _u
 }
 
+// SetRetractedAt sets the "retracted_at" field.
+func (_u *ProcessingResultUpdateOne) SetRetractedAt(v time.Time) *ProcessingResultUpdateOne {
+	_u.mutation.SetRetractedAt(v)
+	return _u
+}
+
+// SetNillableRetractedAt sets the "retracted_at" field if the given value is not nil.
+func (_u *ProcessingResultUpdateOne) SetNillableRetractedAt(v *time.Time) *ProcessingResultUpdateOne {
+	if v != nil {
+		_u.SetRetractedAt(*v)
+	}
+	return _u
+}
+
+// ClearRetractedAt clears the value of the "retracted_at" field.
+func (_u *ProcessingResultUpdateOne) ClearRetractedAt() *ProcessingResultUpdateOne {
+	_u.mutation.ClearRetractedAt()
+	return _u
+}
+
 // Mutation returns the ProcessingResultMutation object of the builder.
 func (_u *ProcessingResultUpdateOne) Mutation() *ProcessingResultMutation {
 	return _u.mutation
@@ -526,6 +572,12 @@ func (_u *ProcessingResultUpdateOne) sqlSave(ctx context.Context) (_node *Proces
 	}
 	if _u.mutation.MessageIDCleared() {
 		_spec.ClearField(processingresult.FieldMessageID, field.TypeUUID)
+	}
+	if value, ok := _u.mutation.RetractedAt(); ok {
+		_spec.SetField(processingresult.FieldRetractedAt, field.TypeTime, value)
+	}
+	if _u.mutation.RetractedAtCleared() {
+		_spec.ClearField(processingresult.FieldRetractedAt, field.TypeTime)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	_node = &ProcessingResult{config: _u.config}

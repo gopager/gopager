@@ -250,6 +250,8 @@ func (ProcessingCandidate) Fields() []ent.Field {
 		field.Time("due_at"),
 		field.String("failure_code").Optional().Nillable(),
 		field.String("failure_step").Optional().Nillable(),
+		// reprocess_id marks a candidate readmitted by a historical Reprocess until it publishes.
+		field.UUID("reprocess_id", uuid.UUID{}).Optional().Nillable(),
 		field.Time("created_at").Immutable(),
 		field.Time("updated_at"),
 	}
@@ -289,6 +291,9 @@ func (ProcessingResult) Fields() []ent.Field {
 		field.Time("completed_at"),
 		field.Time("published_at").Optional().Nillable(),
 		field.UUID("message_id", uuid.UUID{}).Optional().Nillable(),
+		// retracted_at is set when a Reprocess withdrew the published result; such a result
+		// never publishes again.
+		field.Time("retracted_at").Optional().Nillable(),
 	}
 }
 

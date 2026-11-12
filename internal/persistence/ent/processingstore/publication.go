@@ -72,7 +72,8 @@ func (s *Store) ReadPublicationItem(ctx context.Context, tx platform.Transaction
 	if err != nil {
 		return processing.PublicationItem{}, err
 	}
-	item := processing.PublicationItem{Candidate: candidate, Definition: version.Definition, Outputs: outputs}
+	item := processing.PublicationItem{Candidate: candidate, Definition: version.Definition, Outputs: outputs,
+		ReprocessID: row.ReprocessID}
 	if candidate.State != "completed" || candidate.Selected == nil || !*candidate.Selected {
 		return item, nil
 	}
@@ -90,7 +91,7 @@ func (s *Store) ReadPublicationItem(ctx context.Context, tx platform.Transaction
 	item.Result = &processing.PrivateResult{ID: result.ID, CandidateID: result.CandidateID,
 		Revision: result.Revision, ProducingFence: result.ProducingFence,
 		Evaluation: result.Evaluation, CompletedAt: result.CompletedAt,
-		PublishedAt: result.PublishedAt, MessageID: result.MessageID}
+		PublishedAt: result.PublishedAt, MessageID: result.MessageID, RetractedAt: result.RetractedAt}
 	return item, nil
 }
 

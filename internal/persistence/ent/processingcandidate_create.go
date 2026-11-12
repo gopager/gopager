@@ -223,6 +223,20 @@ func (_c *ProcessingCandidateCreate) SetNillableFailureStep(v *string) *Processi
 	return _c
 }
 
+// SetReprocessID sets the "reprocess_id" field.
+func (_c *ProcessingCandidateCreate) SetReprocessID(v uuid.UUID) *ProcessingCandidateCreate {
+	_c.mutation.SetReprocessID(v)
+	return _c
+}
+
+// SetNillableReprocessID sets the "reprocess_id" field if the given value is not nil.
+func (_c *ProcessingCandidateCreate) SetNillableReprocessID(v *uuid.UUID) *ProcessingCandidateCreate {
+	if v != nil {
+		_c.SetReprocessID(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *ProcessingCandidateCreate) SetCreatedAt(v time.Time) *ProcessingCandidateCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -525,6 +539,10 @@ func (_c *ProcessingCandidateCreate) createSpec() (*ProcessingCandidate, *sqlgra
 	if value, ok := _c.mutation.FailureStep(); ok {
 		_spec.SetField(processingcandidate.FieldFailureStep, field.TypeString, value)
 		_node.FailureStep = &value
+	}
+	if value, ok := _c.mutation.ReprocessID(); ok {
+		_spec.SetField(processingcandidate.FieldReprocessID, field.TypeUUID, value)
+		_node.ReprocessID = &value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(processingcandidate.FieldCreatedAt, field.TypeTime, value)
