@@ -470,80 +470,79 @@ func TestSavedViewsPaging(t *testing.T) {
 	}
 }
 
-// waitForFreshWindow avoids a window boundary inside a test that counts requests.
-func waitForFreshWindow(t *testing.T) {
-	t.Helper()
-	if left := 60 - time.Now().UTC().Second(); left < 15 {
-		time.Sleep(time.Duration(left+1) * time.Second)
-	}
-}
-
 // TestSearchAdmission covers F-108 with three attempts per minute.
 func TestSearchAdmission(t *testing.T) {
 	t.Parallel()
-	f := newSavedViewFixture(t, 3)
-	read := []string{"message.read"}
-	all := authz.Scope{Kind: "all"}
-	fields := []string{"payload"}
-	p1 := f.human(read, all, fields)
-	p2 := f.human(read, all, fields)
-	p1First, p1Second, p2Session := f.session(p1), f.session(p1), f.session(p2)
-	p1Key := f.key(p1, read, fields)
-	f.guestGrant(read, all, fields)
-	guest := credentials{}
+	withinOneAdmissionWindow(t, newAdmissionClockStore(t), func(int) error {
+		f := newSavedViewFixture(t, 3)
+		read := []string{"message.read"}
+		all := authz.Scope{Kind: "all"}
+		fields := []string{"payload"}
+		p1 := f.human(read, all, fields)
+		p2 := f.human(read, all, fields)
+		p1First, p1Second, p2Session := f.session(p1), f.session(p1), f.session(p2)
+		p1Key := f.key(p1, read, fields)
+		f.guestGrant(read, all, fields)
+		guest := credentials{}
+		clock := newAdmissionClock(f.store)
 
-	waitForFreshWindow(t)
-	feed := func(who credentials) (int, http.Header, []byte) {
-		return f.call(who, http.MethodGet, "/api/v1/messages", "")
-	}
-	for i := 0; i < 3; i++ {
-		if status, _, body := feed(p1First); status != http.StatusOK {
-			t.Fatalf("P1 request %d = %d: %s", i+1, status, body)
+		feed := func(who credentials) (int, http.Header, []byte) {
+			return f.call(who, http.MethodGet, "/api/v1/messages", "")
 		}
-	}
-	for i := 0; i < 3; i++ {
-		status, header, body := feed(p1Second)
-		if status != http.StatusTooManyRequests {
-			t.Fatalf("P1 over the limit (second session) = %d: %s", status, body)
+		for i := 0; i < 3; i++ {
+			if status, _, body := feed(p1First); status != http.StatusOK {
+				return fmt.Errorf("P1 request %d = %d: %s", i+1, status, body)
+			}
 		}
-		var parsed struct {
-			Code              string `json:"code"`
-			Retryable         bool   `json:"retryable"`
-			RetryAfterSeconds int    `json:"retryAfterSeconds"`
+		for i := 0; i < 3; i++ {
+			status, header, body := feed(p1Second)
+			if status != http.StatusTooManyRequests {
+				return fmt.Errorf("P1 over the limit (second session) = %d: %s", status, body)
+			}
+			var parsed struct {
+				Code              string `json:"code"`
+				Retryable         bool   `json:"retryable"`
+				RetryAfterSeconds int    `json:"retryAfterSeconds"`
+			}
+			if err := json.Unmarshal(body, &parsed); err != nil {
+				return err
+			}
+			retry, err := strconv.Atoi(header.Get("Retry-After"))
+			if err != nil || retry < 1 || retry > 60 || parsed.RetryAfterSeconds != retry || parsed.Code != "RATE_LIMITED" || !parsed.Retryable {
+				return fmt.Errorf("429 = %q %+v", header.Get("Retry-After"), parsed)
+			}
+			now, err := clock(t.Context())
+			if err != nil {
+				return err
+			}
+			left := 60 - now.Second()
+			if retry < left-3 || retry > left+3 {
+				return fmt.Errorf("Retry-After = %d, %d seconds left in the window", retry, left)
+			}
 		}
-		if err := json.Unmarshal(body, &parsed); err != nil {
-			t.Fatal(err)
+		if status, _, body := feed(p2Session); status != http.StatusOK {
+			return fmt.Errorf("P2 = %d: %s", status, body)
 		}
-		retry, err := strconv.Atoi(header.Get("Retry-After"))
-		if err != nil || retry < 1 || retry > 60 || parsed.RetryAfterSeconds != retry || parsed.Code != "RATE_LIMITED" || !parsed.Retryable {
-			t.Fatalf("429 = %q %+v", header.Get("Retry-After"), parsed)
+		if status, _, body := feed(p1Key); status != http.StatusOK {
+			return fmt.Errorf("P1 key = %d: %s", status, body)
 		}
-		left := 60 - time.Now().UTC().Second()
-		if retry < left-3 || retry > left+3 {
-			t.Fatalf("Retry-After = %d, %d seconds left in the window", retry, left)
+		for i := 0; i < 3; i++ {
+			if status, _, body := feed(guest); status != http.StatusOK {
+				return fmt.Errorf("guest request %d = %d: %s", i+1, status, body)
+			}
 		}
-	}
-	if status, _, body := feed(p2Session); status != http.StatusOK {
-		t.Fatalf("P2 = %d: %s", status, body)
-	}
-	if status, _, body := feed(p1Key); status != http.StatusOK {
-		t.Fatalf("P1 key = %d: %s", status, body)
-	}
-	for i := 0; i < 3; i++ {
-		if status, _, body := feed(guest); status != http.StatusOK {
-			t.Fatalf("guest request %d = %d: %s", i+1, status, body)
+		if status, header, _ := feed(guest); status != http.StatusTooManyRequests || header.Get("Retry-After") == "" {
+			return fmt.Errorf("guest over the limit = %d", status)
 		}
-	}
-	if status, header, _ := feed(guest); status != http.StatusTooManyRequests || header.Get("Retry-After") == "" {
-		t.Fatalf("guest over the limit = %d", status)
-	}
-	bucket := sha256.Sum256([]byte("principal:" + p1.String()))
-	if got := f.scalar(`SELECT count FROM search_admissions WHERE bucket = $1`, bucket[:]); got != 3 {
-		t.Fatalf("P1 count = %d; rejected requests must not be counted", got)
-	}
-	if got := f.scalar(`SELECT count(*) FROM search_admissions`); got != 4 {
-		t.Fatalf("buckets = %d, want P1, P2, key and guest", got)
-	}
+		bucket := sha256.Sum256([]byte("principal:" + p1.String()))
+		if got := f.scalar(`SELECT count FROM search_admissions WHERE bucket = $1`, bucket[:]); got != 3 {
+			return fmt.Errorf("P1 count = %d; rejected requests must not be counted", got)
+		}
+		if got := f.scalar(`SELECT count(*) FROM search_admissions`); got != 4 {
+			return fmt.Errorf("buckets = %d, want P1, P2, key and guest", got)
+		}
+		return nil
+	})
 }
 
 // TestSavedViewsStoreTheFilterPredicate checks that a predicate is compiled when saved, that its

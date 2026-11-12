@@ -185,25 +185,31 @@ type Delivery struct {
 	SplitKey             string     `json:"splitKey"`
 	State                string     `json:"state"`
 	OutcomeCode          *string    `json:"outcomeCode,omitempty"`
-	AttemptCount         int        `json:"attemptCount"`
-	LayoutID             *uuid.UUID `json:"layoutId,omitempty"`
-	LayoutVersion        int64      `json:"layoutVersion,string"`
-	MessageID            *uuid.UUID `json:"messageId,omitempty"`
-	NextAttemptAt        *time.Time `json:"nextAttemptAt,omitempty"`
-	ExpiresAt            time.Time  `json:"expiresAt"`
-	CreatedAt            time.Time  `json:"createdAt"`
-	UpdatedAt            time.Time  `json:"updatedAt"`
-	FinishedAt           *time.Time `json:"finishedAt,omitempty"`
+	// ProviderCode is the provider's safe code of the latest finished attempt, when it gave one.
+	// It is not part of the OutcomeCode set.
+	ProviderCode  *string    `json:"providerCode,omitempty"`
+	AttemptCount  int        `json:"attemptCount"`
+	LayoutID      *uuid.UUID `json:"layoutId,omitempty"`
+	LayoutVersion int64      `json:"layoutVersion,string"`
+	MessageID     *uuid.UUID `json:"messageId,omitempty"`
+	NextAttemptAt *time.Time `json:"nextAttemptAt,omitempty"`
+	ExpiresAt     time.Time  `json:"expiresAt"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	UpdatedAt     time.Time  `json:"updatedAt"`
+	FinishedAt    *time.Time `json:"finishedAt,omitempty"`
 	// Attempts is set on single-Delivery reads only.
 	Attempts []Attempt `json:"attempts,omitempty"`
 }
 
 // Attempt is one recorded provider invocation of a Delivery.
 type Attempt struct {
-	Number           int             `json:"number"`
-	ID               uuid.UUID       `json:"id"`
-	State            string          `json:"state"`
-	OutcomeCode      *string         `json:"outcomeCode,omitempty"`
+	Number      int       `json:"number"`
+	ID          uuid.UUID `json:"id"`
+	State       string    `json:"state"`
+	OutcomeCode *string   `json:"outcomeCode,omitempty"`
+	// ProviderCode is the provider's safe code of this attempt, when it gave one. It is not part of
+	// the OutcomeCode set.
+	ProviderCode     *string         `json:"providerCode,omitempty"`
 	InstanceRevision int64           `json:"instanceRevision,string"`
 	StartedAt        time.Time       `json:"startedAt"`
 	FinishedAt       *time.Time      `json:"finishedAt,omitempty"`

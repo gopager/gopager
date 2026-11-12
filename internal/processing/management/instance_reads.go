@@ -32,13 +32,20 @@ type InstanceSummary struct {
 	Enabled              bool                 `json:"enabled"`
 	ExecutionPrincipalID uuid.UUID            `json:"executionPrincipalId"`
 	Main                 InstanceArtifactView `json:"main"`
-	CreatedAt            time.Time            `json:"createdAt"`
+	// Capability is the capability of the pinned manifest; empty when the artifact cannot be loaded.
+	Capability string    `json:"capability,omitempty"`
+	CreatedAt  time.Time `json:"createdAt"`
 }
 
-// InstanceView adds manifest-classified configuration to a redacted instance summary.
+// InstanceView adds manifest-classified configuration, the target use, the lifecycle and the
+// status of this node to a redacted instance summary. Configuration is absent when the artifact
+// cannot be loaded.
 type InstanceView struct {
 	InstanceSummary
-	Configuration processing.InstanceConfigurationView `json:"configuration"`
+	TargetUse     *processing.TargetUse                 `json:"targetUse,omitempty"`
+	Lifecycle     string                                `json:"lifecycle"`
+	Status        InstanceStatus                        `json:"status"`
+	Configuration *processing.InstanceConfigurationView `json:"configuration,omitempty"`
 }
 
 func validateInstancePage(input processing.PageInput) error {
@@ -65,12 +72,15 @@ func instanceSummary(configuration processing.InstanceConfiguration) (InstanceSu
 	return summary, nil
 }
 
+// withConfigureRead runs read under global plugin.configure. check is the transport's request
+// check (Origin and CSRF for a session); a read sent with an unsafe method, such as an inspection
+// POST, must pass it so that a cross-site request cannot trigger it, while GET reads pass nil.
 func (s *InstanceService) withConfigureRead(ctx context.Context, proof identity.Proof,
-	read func(platform.TransactionContext, authz.Authority, time.Time) error) error {
+	check func(identity.Authentication) error, read func(platform.TransactionContext, authz.Authority, time.Time) error) error {
 	if s == nil || s.management == nil || s.repository == nil || ctx == nil || read == nil {
 		return authz.ErrInvalidInput
 	}
-	return s.management.within(ctx, proof, false, nil, func(tx platform.TransactionContext,
+	return s.management.within(ctx, proof, false, check, func(tx platform.TransactionContext,
 		authority authz.Authority, now time.Time) error {
 		if err := authz.Authorize(authority, "plugin.configure", nil, authz.Target{}, now); err != nil {
 			return err
@@ -85,7 +95,7 @@ func (s *InstanceService) ReadInstance(ctx context.Context, proof identity.Proof
 		return InstanceView{}, authz.ErrInvalidInput
 	}
 	var configuration processing.InstanceConfiguration
-	if err := s.withConfigureRead(ctx, proof, func(tx platform.TransactionContext, authority authz.Authority,
+	if err := s.withConfigureRead(ctx, proof, nil, func(tx platform.TransactionContext, authority authz.Authority,
 		now time.Time) error {
 		var err error
 		configuration, err = s.repository.ReadCurrentInstance(tx.Context(), tx, authority, id, now)
@@ -93,20 +103,18 @@ func (s *InstanceService) ReadInstance(ctx context.Context, proof identity.Proof
 	}); err != nil {
 		return InstanceView{}, err
 	}
-	projector, ok := s.inspector.(InstanceConfigurationProjector)
-	if !ok {
-		return InstanceView{}, platform.NewFailure(platform.CodeAuthorityUnavailable,
-			errors.New("instance configuration view owner unavailable"))
-	}
-	projected, err := projector.ProjectInstanceConfiguration(ctx, configuration)
-	if err != nil {
-		return InstanceView{}, err
-	}
 	summary, err := instanceSummary(configuration)
 	if err != nil {
 		return InstanceView{}, err
 	}
-	if err := s.withConfigureRead(ctx, proof, func(tx platform.TransactionContext, authority authz.Authority,
+	view := InstanceView{InstanceSummary: summary, TargetUse: configuration.TargetUse,
+		Status: s.pluginStatus(configuration.ID)}
+	manifest, projected, loadErr := s.loadForView(ctx, configuration)
+	view.Lifecycle = lifecycleOf(configuration.Enabled, loadErr)
+	if loadErr == nil {
+		view.Capability, view.Configuration = manifest.EffectiveCapability(), &projected
+	}
+	if err := s.withConfigureRead(ctx, proof, nil, func(tx platform.TransactionContext, authority authz.Authority,
 		now time.Time) error {
 		current, err := s.repository.ReadCurrentInstance(tx.Context(), tx, authority, id, now)
 		if err != nil {
@@ -119,7 +127,7 @@ func (s *InstanceService) ReadInstance(ctx context.Context, proof identity.Proof
 	}); err != nil {
 		return InstanceView{}, err
 	}
-	return InstanceView{InstanceSummary: summary, Configuration: projected}, nil
+	return view, nil
 }
 
 // ListInstances returns a bounded page of redacted current-instance summaries.
@@ -129,7 +137,7 @@ func (s *InstanceService) ListInstances(ctx context.Context, proof identity.Proo
 		return processing.Page[InstanceSummary]{}, err
 	}
 	var configurations processing.Page[processing.InstanceConfiguration]
-	if err := s.withConfigureRead(ctx, proof, func(tx platform.TransactionContext, authority authz.Authority,
+	if err := s.withConfigureRead(ctx, proof, nil, func(tx platform.TransactionContext, authority authz.Authority,
 		now time.Time) error {
 		var err error
 		configurations, err = s.repository.ListInstances(tx.Context(), tx, authority, input, now)
@@ -155,6 +163,9 @@ func (s *InstanceService) ListInstances(ctx context.Context, proof identity.Proo
 		summary, err := instanceSummary(configuration)
 		if err != nil {
 			return processing.Page[InstanceSummary]{}, err
+		}
+		if manifest, err := s.inspector.InspectManifest(ctx, configuration.Main); err == nil {
+			summary.Capability = manifest.EffectiveCapability()
 		}
 		result.Items[index] = summary
 	}

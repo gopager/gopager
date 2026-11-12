@@ -13,6 +13,7 @@ import (
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/ingest"
 	"github.com/gopager/gopager/internal/platform"
+	"github.com/gopager/gopager/internal/processing"
 	"github.com/gopager/gopager/internal/protocols"
 	"github.com/gopager/gopager/internal/units"
 )
@@ -49,6 +50,12 @@ func writeManagementError(w http.ResponseWriter, err error) {
 		seconds := limited.Seconds()
 		code, fallback, status, retryable, retryAfter = "RATE_LIMITED", "Try again later.", http.StatusTooManyRequests, true, &seconds
 		w.Header().Set("Retry-After", strconv.FormatInt(seconds, 10))
+	case errors.Is(err, processing.ErrCapabilityUndeclared):
+		code, fallback, status = "CAPABILITY_UNDECLARED", "This plugin declares a capability it may not use.", http.StatusForbidden
+		var undeclared *processing.CapabilityUndeclaredError
+		if errors.As(err, &undeclared) {
+			parameters["capability"] = undeclared.Capability
+		}
 	case errors.Is(err, delivery.ErrDependencyUnavailable):
 		code, fallback, status = "DEPENDENCY_UNAVAILABLE", "Required data or a required service is unavailable.", http.StatusConflict
 		if errors.As(err, &dependency) {

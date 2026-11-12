@@ -35,6 +35,10 @@
 // remote database without certificate-verified TLS). Positional arguments are
 // rejected.
 //
+// The Secret store master key is read from $GOPAGER_SECRET_KEY_FILE (a file holding the Base64 key;
+// wins) or $GOPAGER_SECRET_KEY, and $GOPAGER_SECRET_FILE_ROOT names the directory that file: Secret
+// references are relative to.
+//
 // The database connection string is read only from $GOPAGER_DATABASE_URL so
 // that it never appears in process listings. The process runs until SIGINT or
 // SIGTERM and then shuts down gracefully.
@@ -83,13 +87,15 @@ type startupConfig struct {
 	platform.Config
 	PublicOrigin           string
 	ProcessingArtifactRoot string
-	LoginLimits            identity.LoginRateLimits
-	SearchAttempts         int
-	ProcessingDispatch     worker.DispatchConfig
-	EventPollInterval      time.Duration
-	LiveReplayWindow       time.Duration
-	GatewayContact         ingestdomain.ContactConfig
-	Delivery               deliveryConfig
+	// PluginSecrets holds the master key and Secret file root; it redacts the key.
+	PluginSecrets      pluginSecretSettings
+	LoginLimits        identity.LoginRateLimits
+	SearchAttempts     int
+	ProcessingDispatch worker.DispatchConfig
+	EventPollInterval  time.Duration
+	LiveReplayWindow   time.Duration
+	GatewayContact     ingestdomain.ContactConfig
+	Delivery           deliveryConfig
 }
 
 func main() {
@@ -131,6 +137,19 @@ func run() (result error) {
 			return errors.Join(err, store.Close())
 		}
 		shared.deliveryConfig = config.Delivery
+		processingRuntime, err = composeProcessingAPIRuntimeWith(ctx, shared,
+			processingRuntimeSettings{ArtifactRoot: config.ProcessingArtifactRoot, Secrets: config.PluginSecrets})
+		if err != nil {
+			return errors.Join(err, store.Close())
+		}
+		defer func() {
+			result = errors.Join(result, processingRuntime.Close(context.Background()))
+		}()
+		// The Delivery side is composed after the plugin host, so its Subscriptions, fan-out and
+		// runner see the real plugin targets from their first use.
+		if err := processingRuntime.bindDelivery(shared); err != nil {
+			return errors.Join(err, store.Close())
+		}
 		eventRuntime, err = composeEventsRuntime(shared, slices.Contains(config.Roles, platform.RoleWorker), config.EventPollInterval)
 		if err != nil {
 			return errors.Join(err, store.Close())
@@ -140,13 +159,6 @@ func run() (result error) {
 		stopEventHub := eventRuntime.startStandaloneHub(ctx)
 		defer func() {
 			result = errors.Join(result, stopEventHub())
-		}()
-		processingRuntime, err = composeProcessingAPIRuntime(ctx, shared, config.ProcessingArtifactRoot)
-		if err != nil {
-			return errors.Join(err, store.Close())
-		}
-		defer func() {
-			result = errors.Join(result, processingRuntime.Close(context.Background()))
 		}()
 	}
 	if slices.Contains(config.Roles, platform.RoleWorker) {
@@ -273,6 +285,10 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 			return startupConfig{}, platform.NewFailure(platform.CodeInvalidInput, errors.New("invalid Processing artifact root"))
 		}
 	}
+	secrets, err := parsePluginSecrets(getenv)
+	if err != nil {
+		return startupConfig{}, err
+	}
 	// Not WithDefaults: an explicit zero must be rejected, not silently replaced.
 	dispatch := worker.DispatchConfig{Concurrency: *processingConcurrency, PollInterval: *processingPoll}
 	if err := dispatch.Validate(); err != nil {
@@ -294,7 +310,7 @@ func parseConfig(args []string, getenv func(string) string) (startupConfig, erro
 	}
 	deliveries := deliveryConfig{limits: delivery.AdmissionLimits{Subscriber: *deliverySends, Target: *deliveryTargetSends}}
 	return startupConfig{Config: config, PublicOrigin: *publicOrigin,
-		ProcessingArtifactRoot: *processingArtifactRoot, SearchAttempts: *searchAttempts,
+		ProcessingArtifactRoot: *processingArtifactRoot, PluginSecrets: secrets, SearchAttempts: *searchAttempts,
 		LoginLimits:        identity.LoginRateLimits{AccountAttempts: *loginAccount, SourceAttempts: *loginSource, InstanceAttempts: *loginInstance},
 		ProcessingDispatch: dispatch, EventPollInterval: *eventPoll, LiveReplayWindow: *liveReplayWindow, GatewayContact: contact, Delivery: deliveries}, nil
 }

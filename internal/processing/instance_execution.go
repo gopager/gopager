@@ -238,11 +238,10 @@ func (r *InstanceExecution) prepare(ctx context.Context, id uuid.UUID, revision 
 	if err != nil {
 		return preparedInstance{}, err
 	}
-	if hasSecretPolicy(manifest.ConfigurationPolicy) {
-		return preparedInstance{}, capabilityUnavailable(errors.New("instance Secret owner unavailable"))
+	if err := manifest.requireProcessing(); err != nil {
+		return preparedInstance{}, err
 	}
-	if err := validateAdministrativeConfiguration(manifest.ConfigurationSchema,
-		manifest.ConfigurationPolicy, configuration.Configuration); err != nil {
+	if err := manifest.validateInstance(configuration); err != nil {
 		return preparedInstance{}, err
 	}
 	if err := r.manager.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {

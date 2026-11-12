@@ -38,11 +38,13 @@ type ArtifactReference struct {
 	Digest string `json:"digest"`
 }
 
-// InstalledManifest describes an Operator-provisioned plugin executable (manifest schema 2, SDK 2.0).
+// InstalledManifest describes an Operator-provisioned plugin executable (manifest schema 2, SDK 2.0
+// or 2.1). Capability selects the pure Workflow step (processing, the default) or a Delivery target.
 type InstalledManifest struct {
 	SchemaVersion       int                    `json:"schemaVersion"`
 	SDKMajor            int                    `json:"sdkMajor"`
 	SDKMinor            int                    `json:"sdkMinor"`
+	Capability          string                 `json:"capability,omitempty"`
 	PluginID            string                 `json:"pluginId"`
 	Version             string                 `json:"version"`
 	CapabilityID        string                 `json:"capabilityId"`
@@ -56,6 +58,8 @@ type InstalledManifest struct {
 	RequiredCoreFields  []FieldRef             `json:"requiredCoreFields"`
 	RequiredOperations  []string               `json:"requiredOperations"`
 	HostCapabilities    []string               `json:"hostCapabilities"`
+	Delivery            *DeliveryCapability    `json:"delivery,omitempty"`
+	Resources           *PluginResources       `json:"resources,omitempty"`
 }
 
 // ArtifactPin is captured from current instance configuration, never supplied by a guest.
@@ -148,8 +152,13 @@ func validateConfigurationPolicy(schema FieldSchema, policy ConfigurationPolicy,
 }
 
 func validateManifest(manifest InstalledManifest, pin ArtifactPin) error {
-	if manifest.SchemaVersion != 2 || manifest.SDKMajor != pluginsdk.ProtocolVersion || manifest.SDKMinor != 0 {
+	if manifest.SchemaVersion != 2 || manifest.SDKMajor != pluginsdk.ProtocolVersion ||
+		(manifest.SDKMinor != 0 && manifest.SDKMinor != sdkMinorDelivery) {
 		return platform.NewFailure(platform.CodeIncompatibleVersion, errors.New("unsupported plugin manifest schema/SDK"))
+	}
+	capability, err := manifest.capabilityKind()
+	if err != nil {
+		return err
 	}
 	if !filepath.IsLocal(filepath.FromSlash(manifest.Artifact.Path)) {
 		return invalid(errors.New("plugin executable path must stay inside the artifact root"))
@@ -163,8 +172,8 @@ func validateManifest(manifest InstalledManifest, pin ArtifactPin) error {
 	if err != nil || len(digest) != sha256.Size || pin.Digest != strings.ToLower(pin.Digest) {
 		return invalid(errors.New("artifact digest must be lowercase SHA-256"))
 	}
-	if !manifest.Pure || len(manifest.RequiredCoreFields) != 0 || len(manifest.RequiredOperations) != 0 || len(manifest.HostCapabilities) != 0 {
-		return capabilityUnavailable(errors.New("installed command requires unavailable capabilities"))
+	if err := validateCapabilityDeclaration(manifest, capability); err != nil {
+		return err
 	}
 	for _, schema := range []map[string]FieldSchema{manifest.InputSchema, manifest.ResultSchema} {
 		if len(schema) > MaxCollection {
@@ -189,7 +198,13 @@ func validateManifest(manifest InstalledManifest, pin ArtifactPin) error {
 	if err := manifest.ConfigurationSchema.Validate(); err != nil {
 		return err
 	}
-	return validateConfigurationPolicy(manifest.ConfigurationSchema, manifest.ConfigurationPolicy, 1)
+	if err := validateConfigurationPolicy(manifest.ConfigurationSchema, manifest.ConfigurationPolicy, 1); err != nil {
+		return err
+	}
+	if capability == CapabilityDelivery {
+		return validateDeliveryConfiguration(manifest.ConfigurationSchema, manifest.ConfigurationPolicy)
+	}
+	return nil
 }
 
 func schemaContainsBytes(schema FieldSchema) bool {
@@ -309,25 +324,7 @@ func (h *PluginHost) LoadInstalled(ctx context.Context, root *os.Root, manifestP
 // always re-read so edits are never served stale.
 func (h *PluginHost) LoadInstalledFor(ctx context.Context, root *os.Root, manifestPath string, pin ArtifactPin,
 	instance uuid.UUID, revision int64, mode string) (*InstalledArtifact, error) {
-	if h == nil || ctx == nil || root == nil {
-		return nil, invalid(errors.New("missing plugin host/root/context"))
-	}
-	encoded, err := readArtifactFile(ctx, root, manifestPath, MaxInputBytes)
-	if err != nil {
-		return nil, err
-	}
-	var manifest InstalledManifest
-	if err := Decode(encoded, &manifest); err != nil {
-		return nil, err
-	}
-	if err := validateManifest(manifest, pin); err != nil {
-		return nil, err
-	}
-	base, err := filepath.Abs(root.Name())
-	if err != nil {
-		return nil, capabilityUnavailable(err)
-	}
-	cached, err := h.verifiedExecutable(ctx, root, base, filepath.FromSlash(manifest.Artifact.Path), pin.Digest, instance)
+	manifest, cached, err := h.loadVerified(ctx, root, manifestPath, pin, instance)
 	if err != nil {
 		return nil, err
 	}
@@ -336,6 +333,36 @@ func (h *PluginHost) LoadInstalledFor(ctx context.Context, root *os.Root, manife
 		return nil, err
 	}
 	return &InstalledArtifact{manifest: manifest, host: h, process: process}, nil
+}
+
+// loadVerified reads and validates the manifest and verifies the pinned executable without
+// acquiring or starting a process. A non-nil instance is remembered by the cache entry so
+// InstanceChanged can drop it.
+func (h *PluginHost) loadVerified(ctx context.Context, root *os.Root, manifestPath string, pin ArtifactPin,
+	instance uuid.UUID) (InstalledManifest, *cachedArtifact, error) {
+	if h == nil || ctx == nil || root == nil {
+		return InstalledManifest{}, nil, invalid(errors.New("missing plugin host/root/context"))
+	}
+	encoded, err := readArtifactFile(ctx, root, manifestPath, MaxInputBytes)
+	if err != nil {
+		return InstalledManifest{}, nil, err
+	}
+	var manifest InstalledManifest
+	if err := Decode(encoded, &manifest); err != nil {
+		return InstalledManifest{}, nil, err
+	}
+	if err := validateManifest(manifest, pin); err != nil {
+		return InstalledManifest{}, nil, err
+	}
+	base, err := filepath.Abs(root.Name())
+	if err != nil {
+		return InstalledManifest{}, nil, capabilityUnavailable(err)
+	}
+	cached, err := h.verifiedExecutable(ctx, root, base, filepath.FromSlash(manifest.Artifact.Path), pin.Digest, instance)
+	if err != nil {
+		return InstalledManifest{}, nil, err
+	}
+	return manifest, cached, nil
 }
 
 // verifiedExecutable returns the cache entry for an executable whose digest equals digest, hashing

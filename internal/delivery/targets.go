@@ -100,13 +100,15 @@ type DeliveryInput struct {
 }
 
 // AttemptInvocation is one provider call for a Delivery. DeliveryID is stable across attempts
-// and serves as the idempotency key for providers that support one.
+// and serves as the idempotency key for providers that support one. SubscriberID is the
+// Delivery's subscriber; the provider uses it to select that subscriber's personal configuration.
 type AttemptInvocation struct {
 	Version          int           `json:"version"`
 	DeliveryID       uuid.UUID     `json:"deliveryId"`
 	AttemptID        uuid.UUID     `json:"attemptId"`
 	AttemptNumber    int           `json:"attemptNumber"`
 	InstanceID       uuid.UUID     `json:"instanceId"`
+	SubscriberID     uuid.UUID     `json:"subscriberId"`
 	InstanceRevision int64         `json:"instanceRevision,string"`
 	Input            DeliveryInput `json:"input"`
 	// CorrelationID and CausationID come from the triggering fact; CausationID is the fact's own

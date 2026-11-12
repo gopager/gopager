@@ -112,6 +112,9 @@ func (a *InstalledArtifact) invokeProjectedBudget(ctx context.Context, envelope 
 	default:
 		return nil, invalid(errors.New("unknown invocation mode"))
 	}
+	if err := a.manifest.requireProcessing(); err != nil {
+		return nil, err
+	}
 	if hasSecretPolicy(a.manifest.ConfigurationPolicy) {
 		return nil, capabilityUnavailable(errors.New("secret resolution is not supplied by this adapter"))
 	}

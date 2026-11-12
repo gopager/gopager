@@ -10,6 +10,7 @@ import (
 	"github.com/gopager/gopager/internal/httpapi"
 	"github.com/gopager/gopager/internal/persistence/ent/attributestore"
 	"github.com/gopager/gopager/internal/persistence/ent/ingeststore"
+	"github.com/gopager/gopager/internal/persistence/ent/pluginconfigstore"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
 	"github.com/gopager/gopager/internal/processing/declarations"
@@ -19,8 +20,12 @@ import (
 )
 
 type processingAPIRuntime struct {
-	host            *processing.PluginHost
-	root            *os.Root
+	host *processing.PluginHost
+	root *os.Root
+	// secretFiles is the operator's Secret file root; nil when none is configured.
+	secretFiles *os.Root
+	// deliveryHost runs Delivery plugin attempts; the Delivery wiring uses it.
+	deliveryHost    *processing.DeliveryHost
 	executions      *processing.InstanceExecutions
 	routes          httpapi.ProcessingRoutes
 	workerSource    worker.WorkSourceOwner
@@ -34,7 +39,22 @@ type processingAPIRuntime struct {
 // the work source on top of the shared core. A non-nil previewNetworks replaces the production
 // Network owner for synthetic previews (tests only).
 func composeProcessingAPIRuntime(ctx context.Context, c *core, artifactRoot string,
+	previewNetworks ...synthetic.NetworkOwner) (*processingAPIRuntime, error) {
+	return composeProcessingAPIRuntimeWith(ctx, c, processingRuntimeSettings{ArtifactRoot: artifactRoot}, previewNetworks...)
+}
+
+// processingRuntimeSettings are the operator inputs of the Processing runtime.
+type processingRuntimeSettings struct {
+	// ArtifactRoot is the plugin directory; empty disables plugins.
+	ArtifactRoot string
+	// Secrets are the master key and Secret file root.
+	Secrets pluginSecretSettings
+}
+
+// composeProcessingAPIRuntimeWith is composeProcessingAPIRuntime with the operator's Secret settings.
+func composeProcessingAPIRuntimeWith(ctx context.Context, c *core, settings processingRuntimeSettings,
 	previewNetworks ...synthetic.NetworkOwner) (_ *processingAPIRuntime, result error) {
+	artifactRoot := settings.ArtifactRoot
 	if len(previewNetworks) > 1 {
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("multiple Processing preview Network owners"))
 	}
@@ -56,9 +76,20 @@ func composeProcessingAPIRuntime(ctx context.Context, c *core, artifactRoot stri
 			)
 		}
 	}
+	var secretFiles *os.Root
+	if settings.Secrets.FileRoot != "" {
+		var err error
+		if secretFiles, err = os.OpenRoot(settings.Secrets.FileRoot); err != nil {
+			return nil, errors.Join(
+				platform.NewFailure(platform.CodeInvalidInput, errors.New("invalid Secret file root")),
+				host.Close(context.WithoutCancel(ctx)), closeRoot(root),
+			)
+		}
+	}
 	var executions *processing.InstanceExecutions
 	defer func() {
 		if result != nil {
+			result = errors.Join(result, closeRoot(secretFiles))
 			if executions != nil {
 				result = errors.Join(result, executions.Close(context.WithoutCancel(ctx)))
 			}
@@ -134,7 +165,26 @@ func composeProcessingAPIRuntime(ctx context.Context, c *core, artifactRoot stri
 			return nil, err
 		}
 	}
-	instances, err := processingmanagement.NewInstances(workflows, c.processing, inspector, c.facts, executions)
+	configuration, err := pluginconfigstore.New(store)
+	if err != nil {
+		return nil, err
+	}
+	instances, err := processingmanagement.NewInstances(workflows, c.processing, inspector, c.facts, executions,
+		processingmanagement.WithSecrets(settings.Secrets.Cipher, configuration), processingmanagement.WithStatus(host))
+	if err != nil {
+		return nil, err
+	}
+	personal, err := processingmanagement.NewPersonal(instances, configuration, c.processing)
+	if err != nil {
+		return nil, err
+	}
+	unitParameters, err := processingmanagement.NewUnitParameters(instances, configuration)
+	if err != nil {
+		return nil, err
+	}
+	deliveryHost, err := processing.NewDeliveryHost(processing.DeliveryHostConfig{Host: host, Root: root,
+		Transactions: store, Instances: c.processing, Secrets: configuration, Personal: configuration,
+		Cipher: settings.Secrets.Cipher, SecretFiles: secretFiles})
 	if err != nil {
 		return nil, err
 	}
@@ -142,10 +192,11 @@ func composeProcessingAPIRuntime(ctx context.Context, c *core, artifactRoot stri
 	if err != nil {
 		return nil, err
 	}
-	return &processingAPIRuntime{host: host, root: root, executions: executions,
+	return &processingAPIRuntime{host: host, root: root, secretFiles: secretFiles, deliveryHost: deliveryHost,
+		executions:   executions,
 		workerSource: workerSource, workerPublisher: workerSource, correctionReadmission: workerSource,
 		routes: httpapi.ProcessingRoutes{Workflows: workflows, Reads: reads, Retries: retries,
-			Preview: preview, Instances: instances},
+			Preview: preview, Instances: instances, Personal: personal, UnitParameters: unitParameters},
 	}, nil
 }
 
@@ -162,10 +213,16 @@ func (runtime *processingAPIRuntime) Close(ctx context.Context) error {
 		}
 	}
 	failure = errors.Join(failure, runtime.host.Close(context.WithoutCancel(ctx)))
-	if runtime.root != nil {
-		failure = errors.Join(failure, runtime.root.Close())
-	}
+	failure = errors.Join(failure, closeRoot(runtime.root), closeRoot(runtime.secretFiles))
 	return failure
+}
+
+// closeRoot closes an optional directory root.
+func closeRoot(root *os.Root) error {
+	if root == nil {
+		return nil
+	}
+	return root.Close()
 }
 
 // unavailableInstanceInspector rejects instance inspection when no artifact root is provisioned.
@@ -173,4 +230,9 @@ type unavailableInstanceInspector struct{}
 
 func (unavailableInstanceInspector) InspectInstance(context.Context, processing.InstanceConfiguration) error {
 	return platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("processing artifact root unavailable"))
+}
+
+func (unavailableInstanceInspector) InspectManifest(context.Context, processing.ProvisionedArtifact) (processing.InstalledManifest, error) {
+	return processing.InstalledManifest{}, platform.NewFailure(platform.CodeAuthorityUnavailable,
+		errors.New("processing artifact root unavailable"))
 }

@@ -69,6 +69,14 @@ func newManagementStore(t *testing.T) *postgres.Store {
 
 func newManagementStoreWithFields(t *testing.T, fields []string) *postgres.Store {
 	t.Helper()
+	store, _ := newManagementStoreAt(t, fields)
+	return store
+}
+
+// newManagementStoreAt is newManagementStoreWithFields that also returns the database's connection
+// URL, for tests that start further processes against the same database.
+func newManagementStoreAt(t *testing.T, fields []string) (*postgres.Store, string) {
+	t.Helper()
 	scopedDSN := migratedTemplate.Database(t)
 	store, _, err := postgres.NewStore(scopedDSN, true)
 	if err != nil {
@@ -91,7 +99,7 @@ func newManagementStoreWithFields(t *testing.T, fields []string) *postgres.Store
 		identity.BootstrapPermissions{Actions: authz.Actions(), Fields: fields}, identityOptions...); err != nil {
 		t.Fatal(err)
 	}
-	return store
+	return store, scopedDSN
 }
 
 type managementResponse struct {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"regexp"
 	"slices"
 	"time"
 
@@ -24,6 +25,10 @@ const DefaultPollInterval = 5 * time.Second
 // claimBatch is the number of Deliveries one claim transaction takes.
 const claimBatch = 10
 
+// PlacementGrace is how long a due Delivery may wait before any node claims it regardless of
+// placement, so that a Delivery no node can serve is deferred instead of stranded.
+const PlacementGrace = 60 * time.Second
+
 // RunnerOptions configures a Runner.
 type RunnerOptions struct {
 	// Limits are the sending admission limits.
@@ -35,8 +40,11 @@ type RunnerOptions struct {
 	// the cancellation of a call after revocation without waiting. At least three renewals must
 	// fit into LeaseDuration.
 	RenewInterval time.Duration
-	// Instances restricts the runner to Deliveries of these target instances; empty means all.
-	Instances []uuid.UUID
+	// Placement returns the target instances whose Deliveries this node can serve now. It is
+	// called once per Tick; an error fails the Tick. Nil means no restriction: every due Delivery
+	// is claimed. Otherwise only Deliveries of the returned instances are claimed, plus those
+	// overdue by PlacementGrace, which this node then defers when it cannot serve them.
+	Placement func(ctx context.Context) ([]uuid.UUID, error)
 	// Wakes, when set, wakes the runner on new facts in addition to the poll.
 	Wakes events.WakeSubscriber
 	// Logger receives batch failures; nil selects slog.Default().
@@ -72,7 +80,6 @@ func NewRunner(deps Dependencies, transactions events.Transactor, clock platform
 	if logger == nil {
 		logger = slog.Default()
 	}
-	options.Instances = slices.Clone(options.Instances)
 	return &Runner{deps: deps, transactions: transactions, clock: clock,
 		admission: admission{store: deps.Store, limits: options.Limits.normalized()}, options: options, logger: logger}, nil
 }
@@ -112,8 +119,12 @@ func (r *Runner) Run(ctx context.Context) error {
 // Tick recovers lost claims, claims one batch of due Deliveries and processes it. It reports
 // whether the batch was full, so that another may follow at once.
 func (r *Runner) Tick(ctx context.Context) (bool, error) {
+	placed, err := r.placement(ctx)
+	if err != nil {
+		return false, err
+	}
 	var claimed []DeliveryRecord
-	err := r.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
+	err = r.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
 		now, err := r.clock.Now(tx.Context(), tx)
 		if err != nil {
 			return err
@@ -121,7 +132,9 @@ func (r *Runner) Tick(ctx context.Context) (bool, error) {
 		if _, err := r.deps.Store.ReclaimLost(tx.Context(), tx, now, claimBatch); err != nil {
 			return err
 		}
-		claimed, err = r.deps.Store.ClaimDue(tx.Context(), tx, now, LeaseDuration, claimBatch, r.options.Instances)
+		filter := placed
+		filter.OverdueBefore = now.Add(-PlacementGrace)
+		claimed, err = r.deps.Store.ClaimDue(tx.Context(), tx, now, LeaseDuration, claimBatch, filter)
 		return err
 	})
 	if err != nil {
@@ -133,6 +146,18 @@ func (r *Runner) Tick(ctx context.Context) (bool, error) {
 		}
 	}
 	return len(claimed) == claimBatch, nil
+}
+
+// placement returns the claim filter for one Tick, without its overdue boundary.
+func (r *Runner) placement(ctx context.Context) (ClaimFilter, error) {
+	if r.options.Placement == nil {
+		return ClaimFilter{}, nil
+	}
+	instances, err := r.options.Placement(ctx)
+	if err != nil {
+		return ClaimFilter{}, err
+	}
+	return ClaimFilter{Restricted: true, Instances: instances}, nil
 }
 
 // started is what the start transaction hands to the invocation.
@@ -236,7 +261,7 @@ func (r *Runner) start(ctx context.Context, tx platform.TransactionContext, clai
 	}
 	return &started{record: next_, attempt: number, invocation: AttemptInvocation{Version: InvocationVersion,
 		DeliveryID: record.ID, AttemptID: attempt.ID, AttemptNumber: number, InstanceID: record.TargetInstanceID,
-		InstanceRevision: current.instanceRevision, Input: *next_.Input, CorrelationID: record.CorrelationID,
+		SubscriberID: record.SubscriberID, InstanceRevision: current.instanceRevision, Input: *next_.Input, CorrelationID: record.CorrelationID,
 		CausationID: record.CausationID, Deadline: now.Add(AttemptDeadline)}}, nil
 }
 
@@ -295,6 +320,10 @@ func (r *Runner) current(ctx context.Context, tx platform.TransactionContext, no
 	}
 	if err != nil {
 		return currentState{}, "", err
+	}
+	if !instance.AllowsTargetUse(record.SubscriberID) {
+		// Revoked target use stops the send even for a prepared Delivery.
+		return currentState{}, CodeAuthorityRevoked, nil
 	}
 	if subject == nil {
 		// The fact or its data is gone, or the subscriber may no longer see it. Self-contained
@@ -450,8 +479,22 @@ func (r *Runner) stillVisible(ctx context.Context, tx platform.TransactionContex
 	return nil
 }
 
-// finish records an attempt's outcome under the claim. A lost claim leaves the Delivery to
-// ReclaimLost, which records it as uncertain.
+// providerCodePattern is the shape of a provider code that may be stored and shown.
+var providerCodePattern = regexp.MustCompile(`^[a-z0-9-]{1,64}$`)
+
+// safeProviderCode returns the provider's code of an attempt, or nil when the call failed or the
+// code is not a safe classification.
+func safeProviderCode(result AttemptResult, callErr error) *string {
+	if callErr != nil || !providerCodePattern.MatchString(result.Code) {
+		return nil
+	}
+	code := result.Code
+	return &code
+}
+
+// finish records an attempt's outcome under the claim. The Delivery carries the provider code of
+// this attempt, so it always reflects the latest finished attempt. A lost claim leaves the Delivery
+// to ReclaimLost, which records it as uncertain.
 func (r *Runner) finish(ctx context.Context, tx platform.TransactionContext, claim Claim, begun *started,
 	result AttemptResult, callErr error) error {
 	now, err := r.clock.Now(ctx, tx)
@@ -482,7 +525,9 @@ func (r *Runner) finish(ctx context.Context, tx platform.TransactionContext, cla
 		attemptState, code = string(StatusTransient), CodeTransient
 		record = r.reschedule(record, result.RetryAfter, now)
 	}
-	if err := r.deps.Store.FinishAttempt(ctx, tx, claim, record.ID, begun.attempt, attemptState, code, receipt, now); err != nil {
+	providerCode := safeProviderCode(result, callErr)
+	record.ProviderCode = providerCode
+	if err := r.deps.Store.FinishAttempt(ctx, tx, claim, record.ID, begun.attempt, attemptState, code, providerCode, receipt, now); err != nil {
 		return err
 	}
 	return r.deps.Store.SaveClaimed(ctx, tx, claim, record, now)

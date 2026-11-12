@@ -28,6 +28,8 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      # Directory of the first-party plugins baked into the image.
+      GOPAGER_PROCESSING_ARTIFACT_ROOT: /usr/lib/gopager/plugins
       # The database host is not loopback, so GoPager demands verified TLS unless
       # --allow-insecure-db is set; the private compose network is the trust
       # boundary here.

@@ -273,7 +273,7 @@ Scope evaluation per resource:
 | Gateway administration | The Agency of every Network currently assigned to the Gateway, and for creation and network replacement of every proposed Network; a replacement also needs the Agency of every Network that the Gateway's accepted Transmissions of a changed Protocol reference, because its correction can move them. A Gateway without Networks needs an `all` grant. Lists show only Gateways whose every Agency is readable. |
 | Gateway delegation | `gateway.diagnostics.read` and `gateway.credential.rotate` with a `gateway` scope reach exactly the listed Gateways; with `agency` scope they need every Agency of the Gateway. Diagnostics grant only the diagnostics and history routes; rotation grants only credential status, issue and revoke. Neither implies the other, any Message or Payload access, or Gateway administration. A grant on a deleted Gateway stops applying. |
 | Workflow | The workflow's own selection scope: its assigned Agencies, or with a narrowing each referenced Network resolved to its Agency and each referenced Unit to its Agency and collections. Reading needs one assigned Agency (or one referenced Unit); managing needs all of them. |
-| Processing instance | The global `plugin.configure` right. |
+| Processing instance | The global `plugin.configure` right; this includes inspection and per-Unit values. A User's own personal plugin configuration needs `subscription.manage-own` on their own account and an instance that admits them ([Processing: plugin instances](#processing-plugin-instances)). |
 | Subscription | `subscription.manage-own` on the caller's own account for personal Subscriptions; `subscription.manage-global` on the technical subscriber's account for global ones. See [Subscriptions](#subscriptions). |
 | Delivery | `delivery.read`, `delivery.retry` and `delivery.redeliver`, each matched against the subscriber's account, the Agencies and Units the Delivery concerns and their Unit collections, within the grant's maximum data age. See [Deliveries](#deliveries). |
 | Layout | The Agencies the layout is assigned to: visible with `presentation.manage` or `message.read` in one of them; changes need `presentation.manage` in every one. See [Layouts](#layouts). |
@@ -319,7 +319,7 @@ Every application error, except for unmatched routes, has this shape:
 - `parameters` is `{}`, except for `AUTHORITY_UNAVAILABLE` on a Subscription target or a
   redelivery whose instance is missing, disabled or without a provider: it then holds
   `{"status":"unavailable","instanceId":"…"}`; `DEPENDENCY_UNAVAILABLE` carries `dependency` and
-  `EXTERNAL_UNCERTAIN` carries `deliveryId` (see the table below).
+  `EXTERNAL_UNCERTAIN` carries `deliveryId`, and `CAPABILITY_UNDECLARED` carries `capability` (see the table below).
 - `requestId` is a fresh UUID per error response. The server logs the same `requestId` with the
   code and HTTP status (`API error response`), so an operator can correlate a client's report with
   the log; see [Operations](operations.md#exit-status-and-logging).
@@ -335,11 +335,12 @@ Every application error, except for unmatched routes, has this shape:
 | `IDEMPOTENCY_CONFLICT` | 409 | false | A `commandId` was reused by the same caller for a different operation or input, or a Gateway `submissionId` was reused with different content. Retrying the same request cannot succeed; send the original request again or use a new identifier. |
 | `INCOMPATIBLE_VERSION` | 409 | false | Incompatible version |
 | `DEPENDENCY_UNAVAILABLE` | 409 | false | A redelivery cannot be prepared because what it needs is gone or no longer readable for the subscriber ([Deliveries](#deliveries)); `parameters.dependency` is `input-ceiling` (24 hours since the original), `subscription` (deleted or no longer targeting the instance), `domain-event` (fact removed), `data` (not readable for the subscriber) or `input` (the input cannot be materialized). Fallback: `Required data or a required service is unavailable.` |
+| `CAPABILITY_UNDECLARED` | 403 | false | A plugin manifest declares Core access its capability does not grant, for example `requiredOperations` on a `delivery` manifest; `parameters.capability` names the capability. Raised by inspection, instance save and load. Fallback: `This plugin declares a capability it may not use.` |
 | `EXTERNAL_UNCERTAIN` | 409 | false | A retry was requested for a Delivery whose external outcome is uncertain; only a confirmed redelivery may send it again. `parameters.deliveryId` names the Delivery. Fallback: `The external outcome is uncertain; send it again only deliberately.` |
 | `RESOURCE_LIMIT` | 413 | false | Body or collection size limit exceeded, or revision counter exhausted |
 | `RATE_LIMITED` | 429 | true | Login throttled ([Login rate limiting](#login-rate-limiting)), a Message search over its limit ([Search rate limiting](#search-rate-limiting)) or a Subscription create or redelivery over the subscriber's sending limit ([Delivery sending admission](#delivery-sending-admission)); see `Retry-After` |
 | `STORAGE_UNAVAILABLE` | 503 | true | Database unavailable |
-| `AUTHORITY_UNAVAILABLE` | 503 | true | Process not ready, or a required component is unavailable. For a Subscription target or redelivery whose instance is unavailable it carries `parameters.status` and `parameters.instanceId`: the request can succeed once the instance is enabled and its provider is available. |
+| `AUTHORITY_UNAVAILABLE` | 503 | true | Process not ready, or a required component is unavailable (for example saving a stored Secret value without a configured master key). For a Subscription target or redelivery whose instance is unavailable it carries `parameters.status` and `parameters.instanceId`: the request can succeed once the instance is enabled and its provider is available. |
 | `COMMIT_UNCERTAIN` | 503 | false | The write may have committed. Re-send with the **same** command ID or `submissionId`, or read the resource, instead of creating a new operation. |
 | `INTERNAL_ERROR` | 500 | false | Unexpected failure |
 
@@ -358,7 +359,7 @@ Creating operations take a client-generated `commandId` (UUID, not nil). These a
 - `POST /assignment-corrections/{id}/retry`
 - `POST` gateway credentials and `DELETE` gateway credentials
 - `POST /workflows`, `POST /workflows/{id}/versions`
-- `POST /instances`, `PUT /instances/{id}`
+- `POST /instances`, `PUT /instances/{id}`, `PUT` and `DELETE` of `/instances/{id}/personal-configuration` and of `/instances/{id}/unit-parameters/{unitId}`
 - `POST /subscriptions`, `POST /layouts`, `POST /deliveries/{id}/redeliver`
 
 Rules:
@@ -1059,14 +1060,78 @@ Definition format: [workflows](workflows.md).
 
 | Method | Path | Right | Success | Purpose |
 | --- | --- | --- | --- | --- |
-| GET | `/instances` | `plugin.configure` (all) | 200 | List instance summaries |
+| GET | `/instances` | `plugin.configure` (all) | 200 | List instance summaries (with the manifest's `capability`) |
 | GET | `/instances/{id}` | `plugin.configure` (all) | 200 | Read; configuration redacted according to the plugin manifest |
-| POST | `/instances` | `plugin.configure` (all) | 201 | Create (`commandId`, `enabled`, `executionPrincipalId`, `main`, optional `preview`, `configuration`) |
+| POST | `/instances` | `plugin.configure` (all) | 201 | Create (`commandId`, `enabled`, `executionPrincipalId`, `main`, `configuration`, and for `delivery` instances `targetUse` and `secrets`) |
 | PUT | `/instances/{id}` | `plugin.configure` (all) | 200 | Update; requires both `commandId` and `expectedRevision` (> 0) |
+| POST | `/instances/inspection` | `plugin.configure` (all) | 200 | Verify a manifest and executable without starting the plugin |
+| GET | `/instances/{id}/personal-configuration` | `subscription.manage-own` (own account) | 200 | The caller's own personal values |
+| PUT | `/instances/{id}/personal-configuration` | `subscription.manage-own` (own account) | 200 | Create (`expectedRevision` `"0"`) or replace the caller's personal values |
+| DELETE | `/instances/{id}/personal-configuration` | `subscription.manage-own` (own account) | 200 | Delete them at `expectedRevision`; the result carries the revision of the deletion (one higher), which a later create continues from |
+| GET | `/instances/{id}/unit-parameters` | `plugin.configure` (all) | 200 | Per-Unit values (`offset`, `limit`, optional `unitId`) |
+| PUT | `/instances/{id}/unit-parameters/{unitId}` | `plugin.configure` (all) | 200 | Replace one Unit's values |
+| DELETE | `/instances/{id}/unit-parameters/{unitId}` | `plugin.configure` (all) | 200 | Remove one Unit's values |
 
 Artifacts are resolved under `-processing-artifact-root`. Without that directory,
 instance inspection returns `503 AUTHORITY_UNAVAILABLE`. Plugin and manifest details:
 [plugins](plugins.md).
+
+- **View.** Besides the redacted configuration, `GET /instances/{id}` shows the manifest's
+  `capability` (`processing` or `delivery`), the `targetUse`, the `lifecycle` and the `status` of
+  the answering node. `lifecycle` is `active` (enabled and loadable), `disabled`, `incompatible`
+  (unsupported manifest or SDK version) or `failed` (any other failure to load the artifact or the
+  configuration). When the artifact cannot be loaded the view is still returned, with that
+  lifecycle and without `configuration`. `status` is `{running, lastStartedAt, lastFailureAt,
+  lastFailureCode}` with the codes `start-failed`, `checksum-mismatch`, `invocation-failed` and
+  `deadline-exceeded`; it is kept in memory per node, so it resets with the process and differs
+  between nodes.
+- **Target use.** A `delivery` instance requires `targetUse` `{everyone, principalIds}` (at most
+  1000 distinct Principal IDs); a `processing` instance must not carry it. It states who may use
+  the instance as a Subscription target.
+- **Secrets.** A Secret property is a string property the manifest marks `secret`. It never
+  appears in `configuration` (400 `INVALID_INPUT`); a write carries `secrets`, a map from the
+  dotted property path to `{"value": "<plaintext>"}` (sealed into the encrypted store as a new
+  immutable row), `{"reference": "file:<plugin ID>/<path>"}` or `{"reference":
+  "env:GOPAGER_PLUGIN_SECRET_<ID>__<NAME>"}` (both bound to the instance's plugin; another plugin's file or variable is `INVALID_INPUT`), or `null` (remove; only for an optional property). A path
+  left out keeps the previous revision's Secret. Only administrative Secret paths are valid here;
+  a `secret:` reference, an unknown or personal path, or both `value` and `reference` are
+  `INVALID_INPUT`. A stored value needs the configured master key, otherwise the write is `503
+  AUTHORITY_UNAVAILABLE`. Views show a Secret only as `secret`, `configured`, `redacted` and
+  `source` (`stored`, `file` or `env`), never its value, path or variable name. The command
+  fingerprint holds only a keyed digest of a stored value, so a replayed `commandId` never exposes
+  it.
+- **Inspection.** The body is `{"schemaVersion": 1, "main": {manifestPath, pin}}`; the result
+  holds the manifest's `pluginId`, `version`, `capabilityId`, `capability`, `supportsPreview`,
+  `configurationSchema`, `configurationPolicy`, the Delivery declaration, `resources` and the
+  `secretProperties` (dotted path, scope, optional). It never shows the artifact path or digest and
+  never starts the plugin. A manifest that declares access its capability does not grant is `403
+  CAPABILITY_UNDECLARED`.
+- **Personal configuration.** The caller's own account, under `subscription.manage-own`. The
+  instance must be current, enabled, a `delivery` instance and admit the caller by its target use;
+  otherwise, and when the caller holds no values, the routes answer `404 NOT_FOUND`. `PUT` takes
+  `{schemaVersion, commandId, expectedRevision, configuration, secrets}`: `expectedRevision` is
+  `"0"` to create (when the caller holds no values) or the current revision, and any other value
+  is `REVISION_CONFLICT`. Revisions never restart: a deletion advances the revision and a later
+  creation continues from it, so a client holding an older revision can neither update nor delete
+  the new values; `configuration` replaces the user-scoped non-Secret
+  values; `secrets` maps the dotted path of a user-scoped Secret property to `{"value": …}` or
+  `null`, and a path left out keeps its Secret, except that a Secret below an optional object the
+  `configuration` omits is not kept (the object stays absent). Personal Secrets are always stored values owned by
+  the caller: `{"reference": "file:…"}` or `"env:…"` in a personal write is `INVALID_INPUT`, while
+  administrative writes keep accepting both. An `admin` or unknown property, a Secret inside
+  `configuration` or a reference makes the whole request `INVALID_INPUT`. Administrative values and
+  other owners' rows are never touched. `GET` returns `{instanceId, revision, configuration}` with
+  the same redacted view as above, restricted to user-scoped properties. `DELETE` takes
+  `{schemaVersion, commandId, expectedRevision}` at the current revision and also removes the
+  caller's Secrets of the instance; afterwards `GET` is `404 NOT_FOUND` and `DELETE` is
+  `REVISION_CONFLICT`. Results of `PUT` and `DELETE` are `{id (the instance), revision}`.
+- **Per-Unit values.** Under the global `plugin.configure`, for `delivery` instances only. `PUT`
+  takes `{schemaVersion, commandId, values}`, a map from Delivery input name to a typed value, and
+  replaces all of the Unit's values; every key must be an input the current manifest declares and
+  every value valid for its kind and `maxBytes` (`INVALID_INPUT`). A missing instance, a non-
+  `delivery` instance or a missing Unit is `404 NOT_FOUND`. `GET` lists `{items: [{unitId,
+  values}], total}` over the Units with values. The result of `PUT` and `DELETE` is `{id (the
+  Unit), revision}` with the constant revision `"1"`.
 
 ### Subscriptions
 
@@ -1243,6 +1308,14 @@ schemas `Delivery` and `DeliveryAttempt`.
 | `parameter-conflict`, `input-invalid`, `render-limit` | The target inputs conflict, the content cannot be built for the target, or the rendering exceeds 64 KiB (`failed`). |
 | `rate-limited` | Deferred to the next [sending admission](#delivery-sending-admission) window (`retry-pending`). |
 | `dependency-unavailable` | Data or the target was unavailable; the start is deferred by 60 seconds. |
+
+- **Provider code.** `providerCode` is the safe reason code the target plugin returned, for example
+  `recipient-missing`, `destination-denied`, `rate-limited`, `rejected`, `unexpected-response` or
+  `provider-unavailable`. It is a lowercase code of 1 to 64 letters, digits or hyphens, without Secrets or input.
+  An attempt shows the code of its own result; the Delivery shows the code of its latest finished attempt, so a
+  later attempt without a code clears it. It is absent when the plugin gave no code, the code was not of that
+  shape, or the call itself failed (including `lease-lost`). A redelivery starts without one. It is the plugin's
+  own vocabulary and not part of the `outcomeCode` set above, which stays unchanged.
 
 - **Retry.** `POST .../retry` makes a `failed` Delivery with outcome `transient` or `retry-exhausted` due again,
   before its expiry, at the `expectedRevision`. A stale revision, any other state or outcome, or a Delivery past its

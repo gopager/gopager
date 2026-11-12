@@ -30,16 +30,20 @@ type InstanceConfiguration struct {
 	ExecutionPrincipalID uuid.UUID           `json:"executionPrincipalId"`
 	Main                 ProvisionedArtifact `json:"main"`
 	Configuration        Value               `json:"configuration"`
-	CreatedAt            time.Time           `json:"createdAt"`
-	CreatedBy            uuid.UUID           `json:"createdBy"`
+	// TargetUse is required for Delivery instances and absent for processing instances.
+	TargetUse *TargetUse `json:"targetUse,omitempty"`
+	CreatedAt time.Time  `json:"createdAt"`
+	CreatedBy uuid.UUID  `json:"createdBy"`
 }
 
 // ConfigurationFieldView describes one declared administrative configuration value.
 type ConfigurationFieldView struct {
-	Scope      string                            `json:"scope"`
-	Secret     bool                              `json:"secret"`
-	Configured bool                              `json:"configured"`
-	Redacted   bool                              `json:"redacted"`
+	Scope      string `json:"scope"`
+	Secret     bool   `json:"secret"`
+	Configured bool   `json:"configured"`
+	Redacted   bool   `json:"redacted"`
+	// Source is where a configured Secret comes from (stored, file or env); never its location.
+	Source     string                            `json:"source,omitempty"`
 	Value      json.RawMessage                   `json:"value,omitempty"`
 	Properties map[string]ConfigurationFieldView `json:"properties,omitempty"`
 	Items      []ConfigurationFieldView          `json:"items,omitempty"`
@@ -66,6 +70,11 @@ func (i InstanceConfiguration) Validate() error {
 	digest, err := hex.DecodeString(artifact.Pin.Digest)
 	if err != nil || len(digest) != sha256.Size || artifact.Pin.Digest != strings.ToLower(artifact.Pin.Digest) {
 		return invalid(errors.New("invalid instance artifact digest"))
+	}
+	if i.TargetUse != nil {
+		if err := i.TargetUse.Validate(); err != nil {
+			return err
+		}
 	}
 	encoded, err := json.Marshal(i)
 	if err != nil {

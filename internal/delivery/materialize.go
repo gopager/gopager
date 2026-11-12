@@ -244,10 +244,14 @@ type rendering struct {
 	instanceRevision int64
 	descriptor       TargetDescriptor
 	available        bool
+	// denied reports that the subscriber has no target use for the instance. A denied target is
+	// never a pending dependency: no Delivery is created for it.
+	denied bool
 }
 
 // render resolves the current target, the layout and the inputs for one split. An unavailable
-// target yields available=false; materialization failures yield a code.
+// target yields available=false; materialization failures yield a code. A subscriber without
+// target use for the instance yields denied=true, so a revoked use stops every future send.
 func render(ctx context.Context, tx platform.TransactionContext, deps Dependencies, subscription Subscription,
 	target TargetReference, current *view) (rendering, error) {
 	instance, err := deps.Instances.CurrentInstance(ctx, tx, target.InstanceID)
@@ -256,6 +260,9 @@ func render(ctx context.Context, tx platform.TransactionContext, deps Dependenci
 	}
 	if err != nil {
 		return rendering{}, err
+	}
+	if !instance.AllowsTargetUse(subscription.SubscriberID) {
+		return rendering{instanceRevision: instance.Revision, denied: true}, nil
 	}
 	if !instance.Enabled {
 		return rendering{instanceRevision: instance.Revision}, nil
@@ -429,8 +436,11 @@ func newRecord(subscription Subscription, current *subject, part split, target T
 	}
 	switch {
 	case !result.available:
+		// The fan-out node may simply lack the target's plugin, so the Delivery stays due now: a
+		// node that can serve the target claims it at once and materializes it at start, while
+		// other nodes take it only after the placement grace and defer it then.
 		code := CodeDependency
-		record.OutcomeCode, record.Due = &code, now.Add(UnavailableDelay)
+		record.OutcomeCode = &code
 	case result.code != "":
 		code := result.code
 		record.State, record.OutcomeCode, record.Input = Failed, &code, nil
@@ -474,6 +484,9 @@ func materialize(ctx context.Context, tx platform.TransactionContext, deps Depen
 			result, err := render(ctx, tx, deps, subscription, target, partView)
 			if err != nil {
 				return nil, err
+			}
+			if result.denied {
+				continue
 			}
 			records = append(records, newRecord(subscription, current, part, target, result, now, expires))
 		}

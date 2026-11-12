@@ -60,4 +60,18 @@ func (api processingWorkflowAPI) registerInstances(mux *http.ServeMux) {
 		return api.instances.SaveInstance(r.Context(), proof, input.CommandID, id, input.ExpectedRevision,
 			input.InstanceInput, check)
 	}, http.StatusOK))
+	mux.HandleFunc("POST /api/v1/instances/inspection", api.route(func(r *http.Request, proof identity.Proof,
+		check func(identity.Authentication) error) (any, error) {
+		var input struct {
+			SchemaVersion int                            `json:"schemaVersion"`
+			Main          processing.ProvisionedArtifact `json:"main"`
+		}
+		if err := decodeProcessingJSON(r, &input); err != nil {
+			return nil, err
+		}
+		if input.SchemaVersion != 1 {
+			return nil, authz.ErrInvalidInput
+		}
+		return api.instances.InspectArtifact(r.Context(), proof, input.Main, check)
+	}, http.StatusOK))
 }

@@ -39,6 +39,8 @@ printf '%s\n' 'a long initial password' | docker compose run --rm -T gopager boo
   --allow-insecure-db
 ```
 
+The image also contains the two first-party Delivery plugins (Pushover and Webhook) in `/usr/lib/gopager/plugins`, and the compose file sets `GOPAGER_PROCESSING_ARTIFACT_ROOT` to that directory (see [Plugin Directory](#plugin-directory)). To store Secrets in the application, also give the `gopager` service a master key (see [Secrets](#secrets)); the compose file does not set one.
+
 The `gopager` service waits for the PostgreSQL healthcheck (`pg_isready`), then starts with `--migration-mode=apply`. The database host `postgres` is not loopback, so the compose file passes `--allow-insecure-db`; the private compose network is the trust boundary (see [Database TLS](#database-tls)). Data lives in the named volume `pgdata`; `docker compose down -v` deletes it. TLS for browsers still needs a reverse proxy.
 
 - **Upgrade:** take a backup (below), `git pull` (or fetch the new release), `docker compose up --build -d`. The new container applies migrations at start. See [Upgrade](#upgrade).
@@ -82,6 +84,9 @@ Flags use Go `flag` syntax (`--name=value` or `-name value`). Positional argumen
 | `--gateway-contact-scan-interval` | `15s` | — | Pause between the worker's contact-loss scans. Must be > 0 and at most `--gateway-contact-timeout`. Detection may lag the timeout by up to this interval. |
 | `--delivery-sends-per-minute` | `60` | — | Delivery sends per minute per subscriber, counting background attempt starts, Subscription creation and redelivery requests. Must be >= 1. A background start over the limit is deferred to the next minute without consuming an attempt; an HTTP request over it is `429 RATE_LIMITED`. |
 | `--delivery-target-sends-per-minute` | `600` | — | Delivery sends per minute per target instance; a smaller limit declared by the target lowers it. Must be >= 1. Over the limit, starts are deferred like above. |
+| `GOPAGER_SECRET_KEY_FILE` (env) | — | — | Path of a file holding the master key of the encrypted Secret store: standard padded Base64 of exactly 32 bytes, at most 1 KiB, surrounding whitespace ignored. Wins over `GOPAGER_SECRET_KEY`. An unreadable, oversized or invalid file is `INVALID_INPUT` at start (the log names only the variable). See [Secrets](#secrets). |
+| `GOPAGER_SECRET_KEY` (env) | — | — | The master key itself, same format, used only when `GOPAGER_SECRET_KEY_FILE` is not set. Prefer the file variant so the key is not in the process environment listing. Invalid is `INVALID_INPUT` at start. |
+| `GOPAGER_SECRET_FILE_ROOT` (env) | — | — | Directory that `file:` Secret references are relative to. Must exist and be openable; leading/trailing whitespace is rejected. Without it every `file:` Secret is unavailable. |
 | `--allow-insecure-db` | `false` | — | Permit a non-local database connection without certificate-verified TLS. See [Database TLS](#database-tls). |
 
 Fixed values (not configurable):
@@ -285,7 +290,13 @@ Log lines in use: `platform started`, `API error response`, `platform readiness 
 
 `--processing-artifact-root` (or `GOPAGER_PROCESSING_ARTIFACT_ROOT`) names a local directory of plugin manifests and executables. All file access is confined to this directory. Executables must be regular files with an executable bit, at most 256 MiB, and match the SHA-256 digest in their manifest. Plugin processes are started on demand (verified against the pinned digest at every start), reused by later runs of the same instance revision, stopped after 5 minutes without calls, and receive only `PATH`, `HOME`, `LANG`, `LC_ALL`, `TZ` and `TMPDIR` from GoPager's environment — never `GOPAGER_DATABASE_URL`.
 
-Without a plugin directory GoPager runs normally; creating, inspecting or executing plugin instances fails with `AUTHORITY_UNAVAILABLE`. Configure the same directory contents on every `api` and `worker` process. Manifest format and installation: [Plugins](plugins.md); configuring instances: [Workflows](workflows.md).
+Without a plugin directory GoPager runs normally; creating, inspecting or executing plugin instances fails with `AUTHORITY_UNAVAILABLE`, and no Delivery plugin is available as a Subscription target. Manifest format and installation: [Plugins](plugins.md); configuring instances: [Workflows](workflows.md) (Workflow steps) and [HTTP API](http-api.md#processing-plugin-instances) (Delivery targets).
+
+**Bundled plugins.** The Docker image ships `pushover` and `webhook` 1.0.0 with ready manifests (artifact digests filled in) under `/usr/lib/gopager/plugins/<name>/1.0.0/`, read-only for the `gopager` user. Outside Docker, `make plugins` builds the same layout into `build/plugins/`, and you copy it to the plugin directory of every node. Their properties and result codes: [Plugins: First-party Delivery plugins](plugins.md#9-first-party-delivery-plugins).
+
+**Several nodes.** Every `api` and `worker` process uses its own directory. Provision the same contents on every `worker` node: a worker claims the Deliveries of an instance immediately only if the instance's pinned manifest and executable verify from its own plugin directory (re-checked every 5 seconds, without starting the plugin). A worker without the plugin that fans out a fact still creates the Delivery due at once (outcome code `dependency-unavailable`), so a capable worker claims it without delay. A Delivery that no capable worker claimed within 60 seconds after it became due may be claimed by any worker. A worker that cannot load the artifact defers it for 60 seconds without consuming an attempt; the Delivery keeps its state and shows the outcome code `dependency-unavailable`. A Delivery in that state that stays unserved ends as `expired` when its lifetime runs out. If you see `dependency-unavailable` on Deliveries, check that the pinned plugin files are present on the workers, that the digest matches and that the executable bit is set. The plugin status in the instance view (`running`, `lastStartedAt`, `lastFailureCode`) is kept in memory per node and resets when that node restarts, so compare nodes rather than expecting one cluster-wide answer.
+
+Plugin processes are keyed by instance revision. The node that handles an instance update (a new revision or disabling it) stops the processes of older revisions at once; an attempt running in one of them fails and the Delivery records it as `uncertain`. Other nodes start new attempts in a process of the new revision and let the old one stop after its 5-minute idle timeout.
 
 ## Graceful Shutdown
 
@@ -293,9 +304,36 @@ On `SIGINT` or `SIGTERM`:
 
 1. Readiness becomes false; new application requests get `503 AUTHORITY_UNAVAILABLE`.
 2. Workers are cancelled; the HTTP server stops accepting connections and waits for in-flight requests.
-3. Running work and transactions are drained, then the database pool and plugin processes are closed.
+3. Running work and transactions are drained, then the database pool and plugin processes are closed. Closing a plugin process asks it to shut down, waits up to 2 s and then kills it. A Delivery attempt still running in a plugin at that moment ends as `uncertain` (the provider may have been contacted); it is never sent again automatically.
 
 The total deadline is 30 s. Exceeding it, or any role failure during the run, yields exit 1. Give the process at least 30 s between `SIGTERM` and `SIGKILL` (e.g. Docker `--stop-timeout=35`, Kubernetes `terminationGracePeriodSeconds: 35`). Processing work claimed but not completed before shutdown is recovered by a worker after restart; completed results are not recomputed.
+
+## Secrets
+
+Plugin instances can hold Secrets such as API tokens and signing keys ([Plugins: Secrets](plugins.md#secrets)). They live in one of three places:
+
+- **Encrypted store (`secret:`).** A value an administrator or a User enters through the API is sealed with AES-256-GCM into the database table `configuration_secrets`. Each row has a random 96-bit nonce and is bound to its row ID, instance and owner, so a row cannot be moved to another instance or user. Rows are immutable: a changed value is a new row, hence a new Secret version.
+- **File (`file:<relative path>`).** A regular file below `GOPAGER_SECRET_FILE_ROOT`, in a directory named after the plugin ID (`<root>/<plugin ID>/…`), at most 64 KiB, one trailing newline removed. Use it for mounted Kubernetes or Docker Secrets, or files written by tools such as External Secrets Operator or Vault Agent. The file is read at every attempt, so a rotated file takes effect without a restart; a new content digest is a new Secret version.
+- **Environment variable (`env:GOPAGER_PLUGIN_SECRET_<ID>__<NAME>`).** A variable of the GoPager process, readable only if its name starts with `GOPAGER_PLUGIN_SECRET_<ID>__` for the instance's plugin (so an instance cannot route `GOPAGER_DATABASE_URL` or the master key into a plugin). Changing it needs a restart of the process.
+
+Name variables and lay out the file root per plugin: plugin `pushover` reads `env:GOPAGER_PLUGIN_SECRET_PUSHOVER__TOKEN` and `file:pushover/token`; plugin `my-hook` reads `GOPAGER_PLUGIN_SECRET_MY_HOOK__KEY` (`<ID>` is the plugin ID in upper case with `-` as `_`). A reference to another plugin's name or directory is refused, so an administrator with `plugin.configure` cannot route one plugin's Secret into another plugin's instance. Delivery plugin IDs are canonical (lowercase letters and digits in groups joined by single hyphens), so every plugin has its own variable prefix and directory.
+
+`file:` and `env:` Secrets are placed by you and can only be used by administrative values; a User's personal Secret is always a stored value.
+
+**Master key.** The encrypted store needs a 32-byte key, supplied as standard padded Base64 in `GOPAGER_SECRET_KEY_FILE` (a file; preferred, and it wins) or `GOPAGER_SECRET_KEY`:
+
+```sh
+openssl rand -base64 32 > /run/secrets/gopager_secret_key     # 44 characters
+GOPAGER_SECRET_KEY_FILE=/run/secrets/gopager_secret_key
+```
+
+Give every `api` and `worker` process the same key. The key is read once at start and kept only inside the cipher, which prints as `SecretCipher(redacted)` in every textual form. Each row records a key ID (`k1:` and the first 16 hex digits of the key's SHA-256), which is not secret and does not reveal the key. Without a key the process starts normally, but writing a stored Secret is refused with `503 AUTHORITY_UNAVAILABLE` and every Delivery attempt of an instance whose configuration holds any Secret reference (of any source) ends as `transient` with the code `configuration-unavailable` until the key is configured.
+
+**Rotation limits.** There is no re-encryption and only one key is active. Replacing the key makes every stored row unreadable (its key ID no longer matches): the affected instances answer `configuration-unavailable` until each stored Secret, administrative and personal, is entered again; entering it creates a row sealed with the new key. Users must re-enter their own personal Secrets, because only the owner can write them. Rows of the old key stay in the database. If you lose the key you lose the stored Secrets; the key and the database backup must be kept (and protected) separately: a database dump alone cannot be decrypted. To rotate without re-entering values, use `file:` or `env:` Secrets for administrative values and rotate the file or variable instead.
+
+**Never logged.** Secret values and the key do not appear in logs, errors, API responses or command fingerprints (a replayed write is fingerprinted with a keyed digest only). Views show a Secret only as `secret`, `configured`, `redacted` and its source (`stored`, `file` or `env`), never the value, file path or variable name. Startup errors about the key or the file root name only the variable. The plaintext exists only in the request to the plugin during an attempt and in the plugin process itself; the server clears it when the call ends. A trusted plugin that deliberately leaks a Secret cannot be stopped: plugins are trusted code ([Plugins: Runtime model](plugins.md#1-runtime-model)). A plugin receipt that contains a Secret of the attempt is dropped.
+
+**Administrators are trusted with an instance's Secrets.** Whoever holds `plugin.configure` can change an instance's non-Secret settings, including its destination (Webhook `url`, Pushover `endpoint`), while its stored Secrets carry over; the plugin then sends them to the new destination, also when another administrator entered them. GoPager never shows a stored Secret, but it does not stop an administrator from redirecting one. Grant `plugin.configure` only to people you trust with every plugin Secret, and replace a Secret after removing such a grant.
 
 ## Security
 
@@ -307,7 +345,7 @@ The total deadline is 30 s. Exceeding it, or any role failure during the run, yi
 - **HTTP timeouts.** The server bounds header reading (5 s), the whole request (30 s), the whole response (60 s) and idle keep-alive connections (120 s), and rejects headers over 64 KiB. Slow clients are disconnected. A future streaming response (server-sent events) must extend its own write deadline per request instead of raising the global value.
 - **Authentication before body.** Gateway intake (`POST /api/v1/transmissions`, `POST /api/v1/gateway/state`) verifies the bearer credential before it reads the request body, so unauthenticated clients cannot make the server buffer payloads.
 - **Transport.** GoPager serves plain HTTP. Restrict `--listen-address` to loopback or a private interface and terminate TLS at a proxy.
-- **Secrets.** Provide `GOPAGER_DATABASE_URL` from a secret store; never pass passwords as arguments. Bootstrap reads the password from stdin only.
+- **Secrets.** Provide `GOPAGER_DATABASE_URL` from a secret store; never pass passwords as arguments. Bootstrap reads the password from stdin only. Handle the plugin Secret key and files the same way ([Secrets](#secrets)).
 - **Database role.** Day-to-day processes can use `check` mode; reserve DDL privileges for the process or job that runs `apply`, if your setup separates roles.
 
 Component overview and data flow: [Architecture](architecture.md). Building and testing: [Development](development.md).

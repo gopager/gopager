@@ -79,6 +79,16 @@ type AttemptRecord struct {
 	AccessRevision int64
 }
 
+// ClaimFilter selects which due Deliveries a claim may take. The zero value is unrestricted: every
+// due Delivery. A restricted filter admits Deliveries of the listed target instances and, so that
+// a Delivery no node can serve is not stranded, any Delivery whose next attempt is due at or
+// before OverdueBefore. A restricted filter with no instances admits only overdue Deliveries.
+type ClaimFilter struct {
+	Restricted    bool
+	Instances     []uuid.UUID
+	OverdueBefore time.Time
+}
+
 // Store is the persistence port of Subscriptions and Deliveries. Every method runs in the
 // caller's transaction. Claimed writes need the claim's current token and an unexpired lease on
 // the primary clock and fail with ErrLeaseLost otherwise.
@@ -109,24 +119,25 @@ type Store interface {
 	InsertDelivery(ctx context.Context, tx platform.TransactionContext, record DeliveryRecord) (bool, error)
 	// CancelOpen ends every unstarted Delivery of a Subscription as cancelled with code.
 	CancelOpen(ctx context.Context, tx platform.TransactionContext, subscriptionID uuid.UUID, code string, now time.Time) error
-	// ClaimDue claims up to limit due, unclaimed open Deliveries, optionally only of the given
-	// target instances, with a new token and a lease until now plus lease.
+	// ClaimDue claims up to limit due, unclaimed open Deliveries that the filter admits, with a
+	// new token and a lease until now plus lease.
 	ClaimDue(ctx context.Context, tx platform.TransactionContext, now time.Time, lease time.Duration, limit int,
-		instances []uuid.UUID) ([]DeliveryRecord, error)
+		filter ClaimFilter) ([]DeliveryRecord, error)
 	// ReclaimLost ends started Deliveries whose lease expired as uncertain with lease-lost and
 	// finishes their open attempt the same way. It returns how many it ended.
 	ReclaimLost(ctx context.Context, tx platform.TransactionContext, now time.Time, limit int) (int, error)
 	// Renew extends a claim's lease to now plus lease.
 	Renew(ctx context.Context, tx platform.TransactionContext, claim Claim, now time.Time, lease time.Duration) error
-	// SaveClaimed writes the Delivery's state, outcome, counters, due time, input, materialization
+	// SaveClaimed writes the Delivery's state, outcome, provider code, counters, due time, input, materialization
 	// context and finish time under the claim and increments its revision. Any state other than
 	// started releases the claim.
 	SaveClaimed(ctx context.Context, tx platform.TransactionContext, claim Claim, record DeliveryRecord, now time.Time) error
 	// InsertAttempt records a started attempt under the claim.
 	InsertAttempt(ctx context.Context, tx platform.TransactionContext, claim Claim, deliveryID uuid.UUID, attempt AttemptRecord, now time.Time) error
-	// FinishAttempt records an attempt's outcome under the claim.
+	// FinishAttempt records an attempt's outcome under the claim: its state, the enumerated outcome
+	// code, the provider's safe code (nil when there is none) and an optional receipt.
 	FinishAttempt(ctx context.Context, tx platform.TransactionContext, claim Claim, deliveryID uuid.UUID, number int,
-		state, code string, receipt json.RawMessage, now time.Time) error
+		state, code string, providerCode *string, receipt json.RawMessage, now time.Time) error
 	// Delivery returns one Delivery or authz.ErrNotFound; lock takes a row lock for update.
 	Delivery(ctx context.Context, tx platform.TransactionContext, id uuid.UUID, lock bool) (DeliveryRecord, error)
 	// Attempts returns the attempts of a Delivery in order.

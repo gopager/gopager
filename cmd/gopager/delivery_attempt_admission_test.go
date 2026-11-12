@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -29,19 +30,22 @@ func limitedDescriptor(perMinute int) func(processing.InstanceConfiguration) del
 // the same minute answers 429 RATE_LIMITED with a Retry-After header and retryAfterSeconds.
 func TestDeliverySubscriptionCreateConsumesTheSubscribersSendingUnit(t *testing.T) {
 	t.Parallel()
-	s := newBareScene(t, delivery.AdmissionLimits{Subscriber: 1})
-	s.subscribeTo(s.subscriberBearer)
-	body, _ := json.Marshal(map[string]any{"schemaVersion": 1, "commandId": uuid.New(), "kind": "personal", "state": "active",
-		"eventTypes": []string{"message.created"}, "targets": []any{target(s.instanceID)}})
-	status, header, decoded := s.post(s.subscriberBearer, "/api/v1/subscriptions", string(body))
-	seconds, _ := decoded["retryAfterSeconds"].(float64)
-	if status != 429 || decoded["code"] != "RATE_LIMITED" || seconds < 1 || seconds > 60 ||
-		header.Get("Retry-After") != strconv.Itoa(int(seconds)) {
-		t.Fatalf("second create: %d %v retry-after=%q", status, decoded, header.Get("Retry-After"))
-	}
-	if got := s.count(`SELECT count(*) FROM subscriptions`); got != 1 {
-		t.Fatalf("a rate-limited create stored a Subscription: %d", got)
-	}
+	withinOneAdmissionWindow(t, newAdmissionClockStore(t), func(int) error {
+		s := newBareScene(t, delivery.AdmissionLimits{Subscriber: 1})
+		s.subscribeTo(s.subscriberBearer)
+		body, _ := json.Marshal(map[string]any{"schemaVersion": 1, "commandId": uuid.New(), "kind": "personal", "state": "active",
+			"eventTypes": []string{"message.created"}, "targets": []any{target(s.instanceID)}})
+		status, header, decoded := s.post(s.subscriberBearer, "/api/v1/subscriptions", string(body))
+		seconds, _ := decoded["retryAfterSeconds"].(float64)
+		if status != 429 || decoded["code"] != "RATE_LIMITED" || seconds < 1 || seconds > 60 ||
+			header.Get("Retry-After") != strconv.Itoa(int(seconds)) {
+			return fmt.Errorf("second create: %d %v retry-after=%q", status, decoded, header.Get("Retry-After"))
+		}
+		if got := s.count(`SELECT count(*) FROM subscriptions`); got != 1 {
+			return fmt.Errorf("a rate-limited create stored a Subscription: %d", got)
+		}
+		return nil
+	})
 }
 
 // TestDeliverySubscriberLimitDefersBackgroundSendsAndRefusesRedelivery proves that when the
@@ -50,31 +54,37 @@ func TestDeliverySubscriptionCreateConsumesTheSubscribersSendingUnit(t *testing.
 // explicit redelivery answers 429 with Retry-After.
 func TestDeliverySubscriberLimitDefersBackgroundSendsAndRefusesRedelivery(t *testing.T) {
 	t.Parallel()
-	s := newAttemptScene(t, delivery.AdmissionLimits{Subscriber: 2})
-	first, second := s.deliverOne("one"), s.deliverOne("two")
-	s.attempt()
-	boundary := s.now().Truncate(time.Minute).Add(time.Minute)
+	withinOneAdmissionWindow(t, newAdmissionClockStore(t), func(int) error {
+		s := newAttemptScene(t, delivery.AdmissionLimits{Subscriber: 2})
+		first, second := s.deliverOne("one"), s.deliverOne("two")
+		s.attempt()
+		boundary := s.now().Truncate(time.Minute).Add(time.Minute)
 
-	states := map[string]uuid.UUID{}
-	for _, id := range []uuid.UUID{first, second} {
-		states[s.view(id).State] = id
-	}
-	sent, deferred := states[delivery.Accepted], states[delivery.RetryPending]
-	if sent == uuid.Nil || deferred == uuid.Nil || len(s.targets.calls()) != 1 {
-		t.Fatalf("expected one accepted and one deferred Delivery: %v, %d calls", states, len(s.targets.calls()))
-	}
-	view := s.expectState(deferred, delivery.RetryPending, delivery.CodeRateLimited)
-	if view.AttemptCount != 0 || len(view.Attempts) != 0 || view.NextAttemptAt == nil || !view.NextAttemptAt.Equal(boundary) {
-		t.Fatalf("deferred Delivery: %+v, want next attempt %s", view, boundary)
-	}
+		states := map[string]uuid.UUID{}
+		for _, id := range []uuid.UUID{first, second} {
+			states[s.view(id).State] = id
+		}
+		sent, deferred := states[delivery.Accepted], states[delivery.RetryPending]
+		if sent == uuid.Nil || deferred == uuid.Nil || len(s.targets.calls()) != 1 {
+			return fmt.Errorf("expected one accepted and one deferred Delivery: %v, %d calls", states, len(s.targets.calls()))
+		}
+		view := s.view(deferred)
+		if view.State != delivery.RetryPending || stringOf(view.OutcomeCode) != delivery.CodeRateLimited {
+			return fmt.Errorf("deferred Delivery %s: state %s, outcome %q", deferred, view.State, stringOf(view.OutcomeCode))
+		}
+		if view.AttemptCount != 0 || len(view.Attempts) != 0 || view.NextAttemptAt == nil || !view.NextAttemptAt.Equal(boundary) {
+			return fmt.Errorf("deferred Delivery: %+v, want next attempt %s", view, boundary)
+		}
 
-	status, header, decoded := s.redeliver(s.manager, sent, uuid.New(), true)
-	if status != 429 || decoded["code"] != "RATE_LIMITED" || header.Get("Retry-After") == "" || decoded["retryAfterSeconds"] == nil {
-		t.Fatalf("redelivery over the limit: %d %v retry-after=%q", status, decoded, header.Get("Retry-After"))
-	}
-	if got := s.count(`SELECT count(*) FROM deliveries`); got != 2 {
-		t.Fatalf("a rate-limited redelivery created a Delivery: %d", got)
-	}
+		status, header, decoded := s.redeliver(s.manager, sent, uuid.New(), true)
+		if status != 429 || decoded["code"] != "RATE_LIMITED" || header.Get("Retry-After") == "" || decoded["retryAfterSeconds"] == nil {
+			return fmt.Errorf("redelivery over the limit: %d %v retry-after=%q", status, decoded, header.Get("Retry-After"))
+		}
+		if got := s.count(`SELECT count(*) FROM deliveries`); got != 2 {
+			return fmt.Errorf("a rate-limited redelivery created a Delivery: %d", got)
+		}
+		return nil
+	})
 }
 
 // TestDeliveryTargetLimitCapsSendsAcrossSubscribers proves that a descriptor limit of one send per
@@ -82,24 +92,27 @@ func TestDeliverySubscriberLimitDefersBackgroundSendsAndRefusesRedelivery(t *tes
 // subscribers, and defers the other without consuming an attempt.
 func TestDeliveryTargetLimitCapsSendsAcrossSubscribers(t *testing.T) {
 	t.Parallel()
-	s := newBareScene(t, delivery.AdmissionLimits{Subscriber: 100, Target: 100})
-	s.targets.descriptor = limitedDescriptor(1)
-	other, _ := s.subscriber("payload", "unit")
-	s.subscription = s.subscribeTo(s.subscriberBearer)
-	s.subscribeTo(other)
-	s.messageFact("message.created", s.newMessage("shared"), nil)
-	s.fanOutAll()
-	if got := s.count(`SELECT count(*) FROM deliveries WHERE state = 'prepared'`); got != 2 {
-		t.Fatalf("expected two prepared Deliveries, got %d", got)
-	}
-	s.attempt()
-	if got := s.count(`SELECT count(*) FROM deliveries WHERE state = 'accepted'`); got != 1 || len(s.targets.calls()) != 1 {
-		t.Fatalf("expected one send, got %d accepted, %d calls", got, len(s.targets.calls()))
-	}
-	if got := s.count(`SELECT count(*) FROM deliveries WHERE state = 'retry-pending' AND outcome_code = 'rate-limited'
-		AND attempts = 0`); got != 1 {
-		t.Fatalf("expected one rate-limited Delivery without attempt, got %d", got)
-	}
+	withinOneAdmissionWindow(t, newAdmissionClockStore(t), func(int) error {
+		s := newBareScene(t, delivery.AdmissionLimits{Subscriber: 100, Target: 100})
+		s.targets.descriptor = limitedDescriptor(1)
+		other, _ := s.subscriber("payload", "unit")
+		s.subscription = s.subscribeTo(s.subscriberBearer)
+		s.subscribeTo(other)
+		s.messageFact("message.created", s.newMessage("shared"), nil)
+		s.fanOutAll()
+		if got := s.count(`SELECT count(*) FROM deliveries WHERE state = 'prepared'`); got != 2 {
+			t.Fatalf("expected two prepared Deliveries, got %d", got)
+		}
+		s.attempt()
+		if got := s.count(`SELECT count(*) FROM deliveries WHERE state = 'accepted'`); got != 1 || len(s.targets.calls()) != 1 {
+			return fmt.Errorf("expected one send, got %d accepted, %d calls", got, len(s.targets.calls()))
+		}
+		if got := s.count(`SELECT count(*) FROM deliveries WHERE state = 'retry-pending' AND outcome_code = 'rate-limited'
+			AND attempts = 0`); got != 1 {
+			return fmt.Errorf("expected one rate-limited Delivery without attempt, got %d", got)
+		}
+		return nil
+	})
 }
 
 // TestDeliveryInvocationCarriesVersionIdentityDeadlineAndTrace proves the provider contract: the

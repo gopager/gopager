@@ -73,6 +73,11 @@ type PluginHost struct {
 	processes map[processKey]*pluginProcess
 	unpooled  map[*pluginProcess]struct{}
 	cache     map[artifactCacheKey]*cachedArtifact
+
+	// statusMu guards statuses, the per-instance start/failure memory behind Status. It is a leaf
+	// lock so it can be taken while holding mu or a process lock.
+	statusMu sync.Mutex
+	statuses map[uuid.UUID]*statusRecord
 }
 
 // NewPluginHost creates an empty host; no process starts until an artifact is invoked.
@@ -261,17 +266,21 @@ func (p *pluginProcess) connection() (*pluginsdk.Client, *plugin.Client, error) 
 		if errors.Is(err, plugin.ErrChecksumsDoNotMatch) {
 			// The host lock precedes the process lock, so invalidate runs after this call returns.
 			go p.host.invalidate(p)
+			p.host.recordFailure(p.key.instance, StatusChecksumMismatch)
 			return nil, nil, capabilityUnavailable(errors.New("plugin executable differs from its pinned digest"))
 		}
+		p.host.recordFailure(p.key.instance, StatusStartFailed)
 		return nil, nil, capabilityUnavailable(errors.New("plugin process did not complete its handshake"))
 	}
 	raw, err := protocol.Dispense(pluginsdk.PluginName)
 	stub, ok := raw.(*pluginsdk.Client)
 	if err != nil || !ok {
 		client.Kill()
+		p.host.recordFailure(p.key.instance, StatusStartFailed)
 		return nil, nil, capabilityUnavailable(errors.New("plugin process does not offer the invocation service"))
 	}
 	p.client, p.stub = client, stub
+	p.host.recordStarted(p.key.instance)
 	return stub, client, nil
 }
 
@@ -368,27 +377,43 @@ func (p *pluginProcess) running() bool {
 	return p.client != nil && !p.client.Exited()
 }
 
+// unsentError marks a failure that happened before the request reached the plugin, so the plugin
+// cannot have acted on it. Its text and chain are those of the wrapped error.
+type unsentError struct{ cause error }
+
+func (e *unsentError) Error() string { return e.cause.Error() }
+func (e *unsentError) Unwrap() error { return e.cause }
+
+// isUnsent reports whether err happened before the request was sent to the plugin.
+func isUnsent(err error) bool {
+	var unsent *unsentError
+	return errors.As(err, &unsent)
+}
+
 // invoke performs one request on the process, one at a time. A transport failure or an expired
 // deadline kills the process so an uncooperative plugin cannot keep running; the next call starts
 // a new one. Expiry of the invocation's own deadline is RESOURCE_LIMIT; caller cancellation stays
-// a cancellation and any other transport failure is INVALID_INPUT.
+// a cancellation and any other transport failure is INVALID_INPUT. A failure before the request
+// was sent (waiting for the call slot, starting the process) is marked with isUnsent.
 func (p *pluginProcess) invoke(ctx context.Context, input []byte) ([]byte, error) {
 	select {
 	case p.slot <- struct{}{}:
 	case <-ctx.Done():
-		return nil, invocationErr(ctx)
+		return nil, &unsentError{cause: invocationErr(ctx)}
 	}
 	defer func() { <-p.slot }()
 	p.beginUse()
 	defer p.endUse()
 	stub, client, err := p.connection()
 	if err != nil {
-		return nil, err
+		return nil, &unsentError{cause: err}
 	}
 	response, err := stub.Invoke(ctx, input, MaxOutputBytes)
 	if err != nil {
 		p.stopIf(client)
-		return nil, invokeFailure(ctx, err)
+		failure := invokeFailure(ctx, err)
+		p.host.recordFailure(p.key.instance, invocationFailureCode(failure))
+		return nil, failure
 	}
 	return response, nil
 }

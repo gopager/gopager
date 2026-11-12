@@ -26,7 +26,10 @@ One Go module, `github.com/gopager/gopager`.
 | `internal/httpapi/` | HTTP adapters for the application routes: `management_*.go` (one file per resource), `messages.go`, `ingest.go`, `gateway_credentials.go`, `processing*.go`, and the shared `route.go` (route helper with pre-authentication), `json.go`, `request.go`, `errors.go` |
 | `api/openapi/v1.yaml` | HTTP API schema |
 | `api/plugin/v2/plugin.proto` | Plugin gRPC service definition |
-| `pluginsdk/` | Public Go SDK for plugin executables (handshake, `Serve`, gRPC client/server) |
+| `pluginsdk/` | Public Go SDK for plugin executables (handshake, `Serve`, `ServeDelivery`, gRPC client/server, typed values) |
+| `pluginsdk/safehttp/` | HTTP client with destination, port, TLS and redirect rules for plugins that call configured URLs |
+| `pluginsdk/plugintest/` | Test harness that runs a built Delivery plugin through the server's plugin and Delivery hosts |
+| `plugins/` | First-party Delivery plugins `pushover/` and `webhook/`, each its own Go module with `manifest.template.json`, and `build.sh` |
 | `docs/` | Product and code documentation |
 | `internal/platform/` | Store-neutral foundation: `Config`/roles, `ErrorCode`/`Failure`, `Clock`, `TransactionContext`/`TxFunc`, health handlers, process lifecycle (`StartWithAPI`, readiness, shutdown) |
 | `internal/platform/postgres/` | PostgreSQL implementation of `platform.Store` and `platform.Clock`: pgx pool, TLS rule, Goose migration runner, transactions, SQLSTATE → error code mapping |
@@ -43,8 +46,8 @@ One Go module, `github.com/gopager/gopager`.
 | `internal/readmodel/` | Message feed, detail and filter-option service, filters, page tokens, projections and the ports they need |
 | `internal/commands/` | Administrative command receipts |
 | `internal/events/` | Domain fact types appended to the event store |
-| `internal/processing/` | Workflow model, evaluation, budgets, CEL predicates, regex, plugin host and installed artifacts |
-| `internal/processing/management/` | Workflow and instance management commands, reads, retry, preview |
+| `internal/processing/` | Workflow model, evaluation, budgets, CEL predicates, regex, plugin host, installed artifacts, the Delivery host and Secret handling |
+| `internal/processing/management/` | Workflow and instance management commands, reads, inspection, Secret writes, personal configuration and per-Unit values, retry, preview |
 | `internal/processing/worker/` | Dispatcher and worker service executing due processing work |
 | `internal/processing/publication/` | Publication of processing results to the source owner |
 | `internal/processing/execution/` | Identity binding for installed plugin execution |
@@ -59,6 +62,7 @@ One Go module, `github.com/gopager/gopager`.
 | `internal/persistence/ent/borrowed/` | Ent driver that runs inside an existing platform transaction; hosts most store integration tests |
 | `internal/persistence/ent/*store/` | Repository adapters per domain: `identitystore`, `unitstore`, `assignmentstore`, `ingeststore`, `processingstore`, `eventstore` (sequenced domain event log), `commandstore` |
 | `internal/persistence/ent/deliverystore/` | PostgreSQL implementation of the Delivery store in raw SQL: Subscriptions, Deliveries with fenced claims, attempts, admission windows and Unit parameters |
+| `internal/persistence/ent/pluginconfigstore/` | Encrypted Secret rows, personal plugin configuration and per-Unit target values in raw SQL |
 | `internal/persistence/ent/layoutstore/` | Layout definitions, versions and Agencies in raw SQL |
 | `internal/persistence/ent/attributestore/` | Attribute schemas, Agencies and the catalog revision in raw SQL |
 | `internal/persistence/ent/agencyscope/` | Translation of an `authz.AgencyVisibility` into a SQL condition |
@@ -78,14 +82,17 @@ go build -o gopager ./cmd/gopager       # the executable
 ## Formatting and Linting
 
 ```sh
-make                    # same as make lint
+make                    # the default goal "all": make lint, then make plugins-test
 make fmt                # gofmt -w cmd internal
 make fmt-check          # fail and list files that need gofmt
 make vet                # go vet ./...
 make golangci           # golangci-lint run ./... (pinned version)
 make docs-check         # Markdown links, heading anchors and configured ID references (tools/doccheck)
-make lint               # fmt-check, vet, golangci, docs-check
-make test               # quick tier: go test ./...
+make lint               # fmt-check, vet, golangci, docs-check, plugins-lint
+make test               # quick tier: make plugins-test, then go test ./...
+make plugins            # build the first-party plugins into build/plugins/<id>/<version>/
+make plugins-test       # go test -race -count=1 ./... in every module under plugins/
+make plugins-lint       # gofmt -l plugins and go vet ./... in every plugin module
 make test-integration   # all tests incl. PostgreSQL, shuffled, with JUnit and JSON reports (gotestsum, pinned)
 make test-race          # test-integration with the race detector (the CI tier)
 make test-slowest       # tests over 1 s from the last test-integration / test-race run
@@ -94,7 +101,7 @@ make generate-check     # go generate ./..., then fail if the Ent output differs
 make vuln               # govulncheck ./... (pinned version, needs network)
 ```
 
-`gofmt` covers `cmd/` and `internal/` (including generated Ent code and tests). Only the `test-integration`, `test-race` and `test-stress` targets need Docker.
+`gofmt` covers `cmd/` and `internal/` (including generated Ent code and tests); `make plugins-lint` covers `plugins/`. Only the `test-integration`, `test-race` and `test-stress` targets need Docker.
 
 `make docs-check` runs `go run ./tools/doccheck`. It checks every Markdown file for relative links and heading anchors. Further rules come from `.doccheck.json` files, which the tool discovers anywhere in the scanned tree; each declares, relative to its own directory, families of numbered references with the register, file names or headings that define the valid numbers, and a list of accepted findings with a reason. The schema is documented on the `config` type in `tools/doccheck/config.go`; a configuration error exits with status 2. Without a configuration file only links and anchors are checked. The rules for the development documents live in `development/.doccheck.json` and disappear with that directory. An ignore entry that no longer matches is reported as `stale-ignore`, so the list cannot hide new problems.
 
@@ -214,6 +221,16 @@ Plugin executables for tests are built from source, never committed:
 - Manifests: `internal/processing/testdata/instance-*.json`. Their `artifact.digest` is a placeholder; tests copy the binary to a temp plugin directory as `plugin` (mode `0755`) and rewrite the digest with the SHA-256 of the freshly built binary (see `pluginFixtureRoot` in `cmd/gopager/processing_management_test.go`).
 
 To add a fixture, create `internal/processing/testdata/<name>/main.go` with `package main` calling `pluginsdk.Serve`, then call `pluginfixture.Binary(t, "<name>")`. Plugin authoring: [Plugins](plugins.md).
+
+### Plugin modules and plugintest
+
+The first-party plugins under `plugins/` are separate Go modules, each with a `replace github.com/gopager/gopager => ../..` directive, so `go test ./...` and `go vet ./...` at the repository root do not cover them. `make plugins-test` and `make plugins-lint` run them, and the default `make` and `make test` include those targets. Their tests need only Go (no Docker): unit tests call the handler against `httptest` fakes, and the `*_plugintest_test.go` files use [`pluginsdk/plugintest`](../pluginsdk/plugintest/doc.go) to build the real executable with `plugintest.BuildPlugin`, install it under its `manifest.template.json` and drive attempts through the server's plugin host and Delivery host. A harness checks the manifest with the server's rules, so an invalid manifest fails the plugin's own test. Plugins that call a fake on loopback must enable their private-destinations switch in the test configuration. When you change a manifest template, the property classification or a result code, change the matching test and [the plugin documentation](plugins.md#9-first-party-delivery-plugins) in the same commit.
+
+### Building the first-party plugins
+
+`plugins/build.sh <outdir>` (`make plugins` uses `build/plugins`) builds each plugin with `CGO_ENABLED=0 go build -trimpath` into `<outdir>/<id>/<version>/<id>` and writes `manifest.json` from `manifest.template.json`, replacing the `@DIGEST@` placeholder with the SHA-256 of the executable. The result is exactly the layout of a plugin directory ([Plugins](plugins.md#6-packaging-and-installation)). To add a first-party plugin, create the module, its template, add its name to `PLUGINS` in the [Makefile](../Makefile), to `plugins` in `plugins/build.sh` and to the module download and build steps of the [Dockerfile](../deploy/compose/Dockerfile).
+
+**Docker image.** The [Dockerfile](../deploy/compose/Dockerfile) copies each plugin's `go.mod` and `go.sum` first and downloads their dependencies in their own layer, so source changes do not invalidate it. After the main binary it runs `plugins/build.sh /out/plugins`, makes the tree world-readable and not group- or world-writable, and copies it with root ownership to `/usr/lib/gopager/plugins` in the runtime image; [compose.yaml](../deploy/compose/compose.yaml) points `GOPAGER_PROCESSING_ARTIFACT_ROOT` there. The digests in the shipped manifests therefore always match the executables of the same build.
 
 ## Code Generation
 

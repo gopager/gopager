@@ -145,7 +145,7 @@ func (f *deliveryFixture) instance(enabled bool) uuid.UUID {
 		f.t.Fatal(err)
 	}
 	actor, _ := uuid.Parse(f.admin.PrincipalID)
-	value := processing.InstanceConfiguration{ID: uuid.New(), Revision: 1, Enabled: enabled, ExecutionPrincipalID: uuid.New(),
+	value := processing.InstanceConfiguration{ID: uuid.New(), Revision: 1, Enabled: enabled, ExecutionPrincipalID: uuid.New(), TargetUse: &processing.TargetUse{Everyone: true},
 		CreatedBy: actor, Configuration: config, Main: processing.ProvisionedArtifact{ManifestPath: "target/manifest.json",
 			Pin: processing.ArtifactPin{PluginID: "target", Version: "1", CapabilityID: "deliver", Digest: strings.Repeat("b", 64)}}}
 	f.saveInstance(value, 0)
