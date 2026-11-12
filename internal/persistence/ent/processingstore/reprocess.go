@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
+	"github.com/gopager/gopager/internal/persistence/rowcheck"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
 )
@@ -20,6 +21,7 @@ const reprocessColumns = `id, revision, workflow_id, definition_version_id, work
 	message_time_from, message_time_to, cutoff_at, cursor, state, scanned, readmitted, retracted,
 	requested_by, due_at, worker_id, lease_until, failure_code, attempts, created_at, updated_at`
 
+// scanReprocess reads one request row in the order of reprocessColumns from row and returns it.
 func scanReprocess(row interface{ Scan(...any) error }) (processing.ReprocessRequest, error) {
 	var r processing.ReprocessRequest
 	err := row.Scan(&r.ID, &r.Revision, &r.WorkflowID, &r.DefinitionVersionID, &r.WorkflowRevision,
@@ -223,7 +225,7 @@ func (s *Store) ApplyReprocessStep(ctx context.Context, tx platform.TransactionC
 			lease_until=$6, updated_at=$7, attempts=0, failure_code=NULL
 		WHERE id=$1 AND worker_id=$2 AND state='running'`, request.ID, request.WorkerID, transmission,
 		markedTransmissions, int64(len(withdrawn)), now.Add(processing.ReprocessLeaseDuration), now)
-	return withdrawn, requireOneRow(updated, err)
+	return withdrawn, rowcheck.RequireOne(updated, err)
 }
 
 // markOrRetract marks the Transmission's current candidates of the Workflow with the request,
@@ -280,7 +282,7 @@ func (s *Store) FinishReprocess(ctx context.Context, tx platform.TransactionCont
 	updated, err := executor.ExecContext(ctx, `UPDATE processing_reprocess_requests
 		SET state=$3, worker_id=NULL, lease_until=NULL, failure_code=NULL, attempts=0, revision=revision+1, updated_at=$4
 		WHERE id=$1 AND worker_id=$2 AND state='running'`, request.ID, request.WorkerID, state, now)
-	return requireOneRow(updated, err)
+	return rowcheck.RequireOne(updated, err)
 }
 
 // RescheduleReprocess releases the claim and makes the request due again at due.
@@ -298,20 +300,5 @@ func (s *Store) RescheduleReprocess(ctx context.Context, tx platform.Transaction
 		SET state='pending', worker_id=NULL, lease_until=NULL, due_at=$3, failure_code=$4,
 			attempts=attempts+1, revision=revision+1, updated_at=$5
 		WHERE id=$1 AND worker_id=$2 AND state='running'`, request.ID, request.WorkerID, due.UTC(), failureCode, now)
-	return requireOneRow(updated, err)
-}
-
-// requireOneRow turns a write that touched no row, meaning the claim was lost, into a revision conflict.
-func requireOneRow(result sql.Result, err error) error {
-	if err != nil {
-		return err
-	}
-	count, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if count != 1 {
-		return authz.ErrRevisionConflict
-	}
-	return nil
+	return rowcheck.RequireOne(updated, err)
 }

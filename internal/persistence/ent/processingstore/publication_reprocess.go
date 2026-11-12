@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
+	"github.com/gopager/gopager/internal/persistence/rowcheck"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
 )
@@ -30,5 +31,5 @@ func (s *Store) ReplacePublished(ctx context.Context, tx platform.TransactionCon
 	}
 	cleared, err := executor.ExecContext(ctx, `UPDATE processing_candidates SET reprocess_id=NULL
 		WHERE id=$1 AND reprocess_id=$2`, item.Candidate.ID, *item.ReprocessID)
-	return retracted, requireOneRow(cleared, err)
+	return retracted, rowcheck.RequireOne(cleared, err)
 }

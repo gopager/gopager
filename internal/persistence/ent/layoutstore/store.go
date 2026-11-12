@@ -14,6 +14,7 @@ import (
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/persistence/ent/agencyscope"
 	"github.com/gopager/gopager/internal/persistence/ent/attributestore"
+	"github.com/gopager/gopager/internal/persistence/rowcheck"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
 	"github.com/gopager/gopager/internal/processing/presentation"
@@ -180,7 +181,7 @@ func (s *Store) Update(ctx context.Context, tx platform.TransactionContext, id u
 	}
 	result, err := executor.ExecContext(ctx, `UPDATE layout_definitions SET name = $3, revision = revision + 1, updated_at = $4
 		WHERE id = $1 AND revision = $2`, id, expected, name, now)
-	if err := requireOneRow(result, err); err != nil {
+	if err := rowcheck.RequireOne(result, err); err != nil {
 		return err
 	}
 	if _, err := executor.ExecContext(ctx, `DELETE FROM layout_definition_agencies WHERE layout_id = $1`, id); err != nil {
@@ -211,22 +212,7 @@ func (s *Store) Delete(ctx context.Context, tx platform.TransactionContext, id u
 		return authz.ErrRevisionConflict
 	}
 	result, err := executor.ExecContext(ctx, `DELETE FROM layout_definitions WHERE id = $1 AND revision = $2`, id, expected)
-	return requireOneRow(result, err)
-}
-
-// requireOneRow reports a statement that matched no row as a revision conflict.
-func requireOneRow(result sql.Result, err error) error {
-	if err != nil {
-		return err
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected != 1 {
-		return authz.ErrRevisionConflict
-	}
-	return nil
+	return rowcheck.RequireOne(result, err)
 }
 
 // SchemaAssignments implements presentation.Store.

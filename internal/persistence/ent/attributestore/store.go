@@ -14,6 +14,7 @@ import (
 	"github.com/gopager/gopager/internal/attributes"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/persistence/ent/agencyscope"
+	"github.com/gopager/gopager/internal/persistence/rowcheck"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/platform/postgres"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -194,7 +195,7 @@ func (s *Store) Update(ctx context.Context, tx platform.TransactionContext, sche
 	result, err := executor.ExecContext(ctx, `UPDATE attribute_schemas SET label = $3, description = $4, fields = $5::jsonb,
 		deprecated = $6, revision = revision + 1, updated_at = $7 WHERE key = $1 AND revision = $2`,
 		schema.Key, expected, schema.Label, schema.Description, fields, schema.Deprecated, schema.UpdatedAt)
-	if err := requireOneRow(result, err); err != nil {
+	if err := rowcheck.RequireOne(result, err); err != nil {
 		return err
 	}
 	if _, err := executor.ExecContext(ctx, `DELETE FROM attribute_schema_agencies WHERE schema_key = $1`, schema.Key); err != nil {
@@ -247,7 +248,7 @@ func (s *Store) Delete(ctx context.Context, tx platform.TransactionContext, key 
 		return authz.ErrRevisionConflict
 	}
 	result, err := executor.ExecContext(ctx, `DELETE FROM attribute_schemas WHERE key = $1 AND revision = $2`, key, expected)
-	if err := requireOneRow(result, err); err != nil {
+	if err := rowcheck.RequireOne(result, err); err != nil {
 		return err
 	}
 	return stripDeletedEntries(ctx, executor, key)
@@ -301,21 +302,6 @@ func (s *Store) LockCatalog(ctx context.Context, tx platform.TransactionContext)
 	}
 	_, err = executor.ExecContext(ctx, `SELECT 1 FROM attribute_catalog WHERE id = 1 FOR SHARE`)
 	return err
-}
-
-// requireOneRow reports a statement that matched no row as a revision conflict.
-func requireOneRow(result sql.Result, err error) error {
-	if err != nil {
-		return err
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected != 1 {
-		return authz.ErrRevisionConflict
-	}
-	return nil
 }
 
 // SchemaAssignment is the assignment of an existing Attribute schema.

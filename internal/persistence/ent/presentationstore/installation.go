@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
+	"github.com/gopager/gopager/internal/persistence/rowcheck"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing/presentation"
 )
@@ -55,22 +56,7 @@ func (s *Store) UpdateInstallation(ctx context.Context, tx platform.TransactionC
 	result, err := executor.ExecContext(ctx, `UPDATE installation_settings SET title = $2, banner = $3, severity = $4,
 		default_layout_id = $5, revision = revision + 1, updated_at = $6 WHERE id = 1 AND revision = $1`,
 		expected, input.Title, input.Banner, input.Severity, input.DefaultLayoutID, now)
-	return requireOneRow(result, err)
-}
-
-// requireOneRow reports a statement that matched no row as a revision conflict.
-func requireOneRow(result sql.Result, err error) error {
-	if err != nil {
-		return err
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected != 1 {
-		return authz.ErrRevisionConflict
-	}
-	return nil
+	return rowcheck.RequireOne(result, err)
 }
 
 // LayoutReferenced implements presentation.ReferenceGuard.

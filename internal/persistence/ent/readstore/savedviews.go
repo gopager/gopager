@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
+	"github.com/gopager/gopager/internal/persistence/rowcheck"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/readmodel"
 )
@@ -91,7 +92,7 @@ func (s *Store) UpdateSavedView(ctx context.Context, tx platform.TransactionCont
 	}
 	result, err := executor.ExecContext(ctx, `UPDATE saved_views SET name = $3, definition = $4::jsonb, revision = revision + 1,
 		updated_at = $5 WHERE id = $1 AND revision = $2`, id, expected, name, definition, now)
-	return requireOneRow(result, err)
+	return rowcheck.RequireOne(result, err)
 }
 
 // DeleteSavedView implements readmodel.SavedViewStore.
@@ -101,21 +102,5 @@ func (s *Store) DeleteSavedView(ctx context.Context, tx platform.TransactionCont
 		return err
 	}
 	result, err := executor.ExecContext(ctx, `DELETE FROM saved_views WHERE id = $1 AND revision = $2`, id, expected)
-	return requireOneRow(result, err)
-}
-
-// requireOneRow reports a statement that matched no row as a revision conflict: the view
-// changed or vanished between the read and the write.
-func requireOneRow(result sql.Result, err error) error {
-	if err != nil {
-		return err
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected != 1 {
-		return authz.ErrRevisionConflict
-	}
-	return nil
+	return rowcheck.RequireOne(result, err)
 }
