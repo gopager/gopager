@@ -34,6 +34,10 @@ type StoredTransmission struct {
 	NetworkID uuid.UUID
 	// Targets are the original targets in order.
 	Targets []protocols.Target
+	// AssignedUnits holds, per target position, the Unit the target is persisted as assigned to,
+	// nil when it is not assigned to one. A preview evaluates freshly matched targets, so it
+	// refuses a Transmission whose matching no longer equals this.
+	AssignedUnits []*uuid.UUID
 }
 
 // StoredTransmissionReader reads the evidence of an accepted Transmission without side effects,
@@ -95,7 +99,8 @@ func (o *Owner) CaptureStoredPreview(ctx context.Context, tx platform.Transactio
 		return management.PreviewCapture{}, err
 	}
 	// Matching works on whole seconds, like the observation time of a synthetic sample.
-	capture, err := o.captureInput(ctx, tx, workflow, definition, input, record.ObservedAt.UTC().Truncate(time.Second))
+	capture, err := o.captureInput(ctx, tx, workflow, definition, input, record.ObservedAt.UTC().Truncate(time.Second),
+		&record.AssignedUnits)
 	if err != nil {
 		return management.PreviewCapture{}, err
 	}

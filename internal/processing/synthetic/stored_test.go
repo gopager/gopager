@@ -53,9 +53,10 @@ func storedOwner(t *testing.T, network Network, record StoredTransmission, acces
 func storedRecord(network Network) StoredTransmission {
 	function := uint8(1)
 	return StoredTransmission{MessageID: uuid.New(), Protocol: protocols.POCSAG, NetworkID: network.ID,
-		Payload:    json.RawMessage(`{"form":"text","value":"stored alarm"}`),
-		ObservedAt: time.Date(2026, 11, 2, 9, 30, 15, 500, time.UTC),
-		Targets:    []protocols.Target{{Address: protocols.NumericAddress(123), Function: &function}}}
+		Payload:       json.RawMessage(`{"form":"text","value":"stored alarm"}`),
+		ObservedAt:    time.Date(2026, 11, 2, 9, 30, 15, 500, time.UTC),
+		Targets:       []protocols.Target{{Address: protocols.NumericAddress(123), Function: &function}},
+		AssignedUnits: []*uuid.UUID{nil}}
 }
 
 func TestStoredPreviewProjectsTheStoredTransmission(t *testing.T) {
@@ -142,6 +143,7 @@ func TestStoredPreviewRefusesATransmissionWithTargetsTheEditorCannotSee(t *testi
 	network := Network{ID: uuid.New(), Name: "Dispatch", Protocol: protocols.POCSAG, AgencyID: testAgency}
 	record := storedRecord(network)
 	record.Targets = append(record.Targets, protocols.Target{Address: protocols.NumericAddress(124), Function: record.Targets[0].Function})
+	record.AssignedUnits = append(record.AssignedUnits, nil)
 	visible := []int{0}
 	owner := storedOwner(t, network, record, &storedAccess{visible: &visible})
 	_, err := owner.CaptureStoredPreview(context.Background(), testTx{ctx: context.Background()},
@@ -190,5 +192,51 @@ func TestStoredPreviewRecheckFencesALostReadGrant(t *testing.T) {
 	access.visible = &none
 	if err := owner.CheckInstalledSource(context.Background(), tx, binding, authority, call, nil, true); !errors.Is(err, authz.ErrForbidden) {
 		t.Fatalf("target hidden after capture not fenced: %v", err)
+	}
+}
+
+// storedOwnerMatching is storedOwner whose matcher assigns every target to the Unit.
+func storedOwnerMatching(t *testing.T, network Network, record StoredTransmission, unit uuid.UUID) *Owner {
+	t.Helper()
+	owner, err := NewOwner(testMatcher{unitID: &unit}, testNetworks{network: network},
+		testClock{now: time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)}, &testScope{},
+		WithStoredTransmissions(storedReader{record: record}, &storedAccess{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return owner
+}
+
+func TestStoredPreviewEvaluatesWhenTheRematchedUnitsEqualThePersistedOnes(t *testing.T) {
+	t.Parallel()
+	network := Network{ID: uuid.New(), Name: "Dispatch", Protocol: protocols.POCSAG, AgencyID: testAgency}
+	unit := uuid.New()
+	record := storedRecord(network)
+	record.AssignedUnits = []*uuid.UUID{&unit}
+	owner := storedOwnerMatching(t, network, record, unit)
+	capture, err := owner.CaptureStoredPreview(context.Background(), testTx{ctx: context.Background()},
+		testAuthority("payload", "gateway", "address", "unit"), testWorkflow(nil), processing.Definition{}, uuid.New())
+	if err != nil {
+		t.Fatalf("matching context refused: %v", err)
+	}
+	owner.ReleaseSyntheticPreview(capture.Projection.TransmissionID)
+}
+
+func TestStoredPreviewRefusesAStaleTargetContext(t *testing.T) {
+	t.Parallel()
+	network := Network{ID: uuid.New(), Name: "Dispatch", Protocol: protocols.POCSAG, AgencyID: testAgency}
+	persisted, moved := uuid.New(), uuid.New()
+	for name, stored := range map[string]*uuid.UUID{"moved to another Unit": &persisted, "was unassigned": nil} {
+		record := storedRecord(network)
+		record.AssignedUnits = []*uuid.UUID{stored}
+		owner := storedOwnerMatching(t, network, record, moved)
+		capture, err := owner.CaptureStoredPreview(context.Background(), testTx{ctx: context.Background()},
+			testAuthority("payload", "gateway", "address", "unit"), testWorkflow(nil), processing.Definition{}, uuid.New())
+		if !errors.Is(err, authz.ErrRevisionConflict) {
+			t.Fatalf("%s: err = %v, want a revision conflict", name, err)
+		}
+		if len(capture.Projection.Targets) != 0 || len(owner.active) != 0 {
+			t.Fatalf("%s: a refused capture must return and retain nothing", name)
+		}
 	}
 }

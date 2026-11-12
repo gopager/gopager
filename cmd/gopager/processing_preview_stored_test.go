@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -103,6 +104,29 @@ func TestStoredPreviewRefusesATransmissionWithAnInvisibleTarget(t *testing.T) {
 		VALUES ($1, $2, 1, now(), $3)`, uuid.New(), stored, managementOperatorID(t, f.store))
 	before := processingPreviewSideEffects(t, f.store)
 	f.preview(storedBody(version, stored), http.StatusForbidden)
+	if after := processingPreviewSideEffects(t, f.store); after != before {
+		t.Fatalf("refused preview wrote rows: before=%v after=%v", before, after)
+	}
+}
+
+// TestStoredPreviewRefusesATargetWhoseRuleMovedItBeforeCorrection proves that an editor who can read
+// only the Unit a stored target is persisted with does not receive the context of the Unit an
+// address rule has since moved it to: until a correction has run the preview is a revision
+// conflict, and it returns nothing of the other Unit.
+func TestStoredPreviewRefusesATargetWhoseRuleMovedItBeforeCorrection(t *testing.T) {
+	t.Parallel()
+	f := newPreviewHTTPFixture(t, []string{"unit", "address", "payload", "gateway", "derived"})
+	version := f.saveVersion(storedTextDefinition(t, "x"))
+	readable, hidden := f.seed.unit("Engine 1", nil), f.seed.unit("Engine 2", nil)
+	stored := f.storedTransmission("x", readable)
+	f.preview(storedBody(version, stored), http.StatusOK)
+
+	f.seed.exec(`UPDATE address_rules SET unit_id = $1 WHERE unit_id = $2`, hidden, readable)
+	before := processingPreviewSideEffects(t, f.store)
+	response := f.preview(storedBody(version, stored), http.StatusConflict)
+	if response.Code != "REVISION_CONFLICT" || strings.Contains(string(response.Data), hidden.String()) {
+		t.Fatalf("response = %+v, want a conflict that names nothing of the other Unit", response)
+	}
 	if after := processingPreviewSideEffects(t, f.store); after != before {
 		t.Fatalf("refused preview wrote rows: before=%v after=%v", before, after)
 	}

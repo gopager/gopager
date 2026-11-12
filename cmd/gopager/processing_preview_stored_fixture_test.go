@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,6 +20,9 @@ import (
 	"github.com/gopager/gopager/internal/processing/synthetic"
 	"github.com/gopager/gopager/internal/protocols"
 )
+
+// storedAddresses hands out distinct address ranges to the stored Transmissions of parallel tests.
+var storedAddresses atomic.Int64
 
 // previewHTTPFixture is the composed API with a Workflow editor session, one POCSAG Network and
 // the helpers to store a Workflow version, seed stored Transmissions and preview.
@@ -125,7 +130,16 @@ func (f *previewHTTPFixture) storedTransmission(text string, units ...uuid.UUID)
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	// The seeded targets carry no original document; give them the one intake would have stored.
+	// Give each target an address of its own, the rule that assigns it to its Unit and the original
+	// document intake would have stored, so that matching the target again resolves to the same Unit.
+	base := 100000 + int(storedAddresses.Add(1))*100
+	for position, unit := range units {
+		f.seed.exec(`UPDATE transmission_targets SET address_number = $3 WHERE transmission_id = $1 AND position = $2`,
+			id, position, base+position)
+		f.seed.exec(`INSERT INTO address_rules (id, network_id, unit_id, protocol, selector)
+			VALUES ($1, $2, $3, 'pocsag', $4::jsonb)`, uuid.New(), f.network.ID, unit,
+			fmt.Sprintf(`{"from":%d,"to":%d,"mode":"function-bit"}`, base+position, base+position))
+	}
 	f.seed.exec(`UPDATE transmission_targets SET original = json_build_object('address', address_number, 'function', function)
 		WHERE transmission_id = $1`, id)
 	return id

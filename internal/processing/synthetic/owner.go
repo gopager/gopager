@@ -179,14 +179,18 @@ func (o *Owner) CaptureSyntheticPreview(ctx context.Context, tx platform.Transac
 	if err != nil {
 		return management.PreviewCapture{}, err
 	}
-	return o.captureInput(ctx, tx, workflow, definition, input, observed)
+	return o.captureInput(ctx, tx, workflow, definition, input, observed, nil)
 }
 
 // captureInput resolves a validated input against the current Network and Assignment context,
 // projects it and retains its captured context. Synthetic and stored previews share it, so a
-// stored sample is evaluated exactly like a synthetic one.
+// stored sample is evaluated exactly like a synthetic one. A stored sample passes the Units its
+// targets are persisted as assigned to: when the fresh matching differs, an address rule changed
+// since intake and no correction has caught up, so the editor's check against the persisted
+// context would not hold for what is evaluated; the preview is refused as a revision conflict.
 func (o *Owner) captureInput(ctx context.Context, tx platform.TransactionContext,
 	workflow processing.WorkflowConfiguration, definition processing.Definition, input Input, observed time.Time,
+	persisted *[]*uuid.UUID,
 ) (management.PreviewCapture, error) {
 	network, err := o.networks.ReadSyntheticNetwork(ctx, tx, input.NetworkID)
 	if err != nil {
@@ -202,6 +206,9 @@ func (o *Owner) captureInput(ctx context.Context, tx platform.TransactionContext
 	}
 	if matched.Revision <= 0 || len(matched.Resolutions) != len(input.Targets) {
 		return management.PreviewCapture{}, unavailable(errors.New("current target matcher returned incomplete context"))
+	}
+	if persisted != nil && !sameAssignedUnits(matched.Resolutions, *persisted) {
+		return management.PreviewCapture{}, authz.ErrRevisionConflict
 	}
 	var unitAttributes declarations.UnitAttributes
 	if o.unitAttributes != nil {
@@ -867,3 +874,21 @@ func unavailable(err error) error {
 
 var _ management.PreviewSourceOwner = (*Owner)(nil)
 var _ processing.SourceDeclarationOwner = (processing.SourceDeclarationOwner)(nil)
+
+// sameAssignedUnits reports whether every resolution assigns its target position to the Unit the
+// target is persisted with, or leaves it unassigned where it is persisted unassigned.
+func sameAssignedUnits(resolutions []assignments.Resolution, persisted []*uuid.UUID) bool {
+	if len(resolutions) != len(persisted) {
+		return false
+	}
+	for _, resolution := range resolutions {
+		if resolution.TargetPosition < 0 || resolution.TargetPosition >= len(persisted) {
+			return false
+		}
+		want := persisted[resolution.TargetPosition]
+		if (want == nil) != (resolution.UnitID == nil) || want != nil && *want != *resolution.UnitID {
+			return false
+		}
+	}
+	return true
+}

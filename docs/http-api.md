@@ -1083,7 +1083,8 @@ field name; an output without a value is omitted ([Workflows](workflows.md#outpu
 whose protocol differs from the input returns `503 AUTHORITY_UNAVAILABLE`.
 `storedTransmissionId` evaluates an accepted Transmission like a synthetic sample: the editor must be able to read it
 (`404 NOT_FOUND` otherwise) and every field group the preview carries (`403 FORBIDDEN` otherwise), and nothing
-is written ([Workflows](workflows.md#preview)).
+is written. When an address rule moved a target to another Unit since intake and no correction has caught up, the
+persisted and the freshly matched context differ and the request is `409 REVISION_CONFLICT` ([Workflows](workflows.md#preview)).
 A failed evaluation is not an HTTP error: the preview answers `200` with
 `{"failure":{"code","reason","stepId"}}` instead of the result, where `reason` is
 `resource-limit`, `capability-unavailable`, `conversion-failed` or `evaluation-failed` and `stepId` (omitted when no step
