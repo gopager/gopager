@@ -10,8 +10,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -22,6 +24,7 @@ import (
 	"github.com/gopager/gopager/internal/fields"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/platform"
+	"github.com/gopager/gopager/internal/platform/postgres"
 	"github.com/gopager/gopager/internal/processing"
 	"github.com/gopager/gopager/internal/readmodel"
 )
@@ -649,13 +652,38 @@ func TestLiveStreamMergesResynchronizeWithoutDisclosingIDs(t *testing.T) {
 	base := microsecondNow().Add(-time.Hour)
 	reader, _ := f.caller([]string{"message.read"}, authz.Scope{Kind: "unit", References: []string{a.String()}}, []string{"payload", "unit"})
 	query := "?from=" + rfc(base.Add(-time.Hour))
+	// A stream may replay the creation of Messages committed shortly before its position (the
+	// position trails transactions still running anywhere in the cluster); such an upsert of an
+	// already loaded Message is harmless and skipped, every other event is checked.
+	// Only Messages the reader can see (Unit A) are skipped, so a disclosed hidden Message still fails.
+	known := map[uuid.UUID]bool{}
+	message := func(at time.Time, text string, unit uuid.UUID) uuid.UUID {
+		id := f.newMessage(at, text, unit)
+		known[id] = unit == a
+		return id
+	}
+	// next returns the next event other than a replayed upsert of a known Message; want is never
+	// skipped.
+	next := func(t *testing.T, stream *sseClient, want ...uuid.UUID) sseEvent {
+		t.Helper()
+		for {
+			event := stream.next(t)
+			var data struct {
+				MessageID uuid.UUID `json:"messageId"`
+			}
+			if event.Event != "upsert" || json.Unmarshal([]byte(event.Data), &data) != nil ||
+				!known[data.MessageID] || slices.Contains(want, data.MessageID) {
+				return event
+			}
+		}
+	}
 	open := func() *sseClient {
 		t.Helper()
 		return f.openStream(reader, query+"&position="+f.feed(reader, query, http.StatusOK).Data.Position)
 	}
 	expectResync := func(t *testing.T, stream *sseClient, hidden ...uuid.UUID) {
 		t.Helper()
-		event := stream.next(t)
+		event := next(t, stream)
 		if event.Event != "resync-required" {
 			t.Fatalf("event %+v, want resync-required", event)
 		}
@@ -668,33 +696,44 @@ func TestLiveStreamMergesResynchronizeWithoutDisclosingIDs(t *testing.T) {
 	}
 
 	t.Run("a visible merge resynchronizes", func(t *testing.T) {
-		survivor := f.newMessage(base, "survivor", a)
-		absorbed := f.newMessage(base.Add(time.Minute), "absorbed", a)
+		survivor := message(base, "survivor", a)
+		absorbed := message(base.Add(time.Minute), "absorbed", a)
 		stream := open()
 		f.appendIntake(f.mergeInto(survivor, absorbed, base))
 		expectResync(t, stream)
 	})
 	t.Run("a hidden absorbed Message is never named", func(t *testing.T) {
-		survivor := f.newMessage(base.Add(2*time.Minute), "readable", a)
-		hidden := f.newMessage(base.Add(3*time.Minute), "hidden", b)
+		survivor := message(base.Add(2*time.Minute), "readable", a)
+		hidden := message(base.Add(3*time.Minute), "hidden", b)
 		stream := open()
 		f.appendIntake(f.mergeInto(survivor, hidden, base.Add(2*time.Minute)))
 		expectResync(t, stream, hidden)
 	})
 	t.Run("a merge of hidden Messages yields nothing", func(t *testing.T) {
-		survivor := f.newMessage(base.Add(4*time.Minute), "hidden survivor", b)
-		absorbed := f.newMessage(base.Add(5*time.Minute), "hidden absorbed", c)
+		survivor := message(base.Add(4*time.Minute), "hidden survivor", b)
+		absorbed := message(base.Add(5*time.Minute), "hidden absorbed", c)
 		stream := open()
 		f.appendIntake(f.mergeInto(survivor, absorbed, base.Add(4*time.Minute)))
-		stream.quiet(t)
-		visible := f.newMessage(base.Add(6*time.Minute), "still live", a)
-		stream.expect(t, "upsert", visible)
+		visible := message(base.Add(6*time.Minute), "still live", a)
+		if event := next(t, stream, visible); event.Event != "upsert" || !strings.Contains(event.Data, visible.String()) {
+			t.Fatalf("event %+v, want only the upsert of %s after a hidden merge", event, visible)
+		}
 	})
 	t.Run("a chain of merges resolves to the final survivor", func(t *testing.T) {
-		loaded := f.newMessage(base.Add(7*time.Minute), "loaded", a)
-		middle := f.newMessage(base.Add(8*time.Minute), "middle", b)
-		final := f.newMessage(base.Add(9*time.Minute), "final", b)
+		// A transaction left open across the setup makes the stream position trail the
+		// creations, so the stream replays the loaded Message before the merges arrive.
+		release := holdTransaction(t, f.store)
+		defer release()
+		loaded := message(base.Add(7*time.Minute), "loaded", a)
+		middle := message(base.Add(8*time.Minute), "middle", b)
+		final := message(base.Add(9*time.Minute), "final", b)
 		stream := open()
+		release()
+		// The marker wakes the stream; its batch also replays the creations held back so far.
+		marker := message(base.Add(10*time.Minute), "marker", a)
+		if event := next(t, stream, marker); event.Event != "upsert" || !strings.Contains(event.Data, marker.String()) {
+			t.Fatalf("event %+v, want the upsert of the marker %s", event, marker)
+		}
 		// The middle Message absorbs the loaded one and is itself absorbed before the stream reads
 		// either fact, so the first fact's survivor no longer exists.
 		first := f.mergeInto(middle, loaded, base.Add(7*time.Minute))
@@ -744,4 +783,35 @@ func (f *liveFixture) tokenKey() []byte {
 		f.t.Fatal(err)
 	}
 	return key
+}
+
+// holdTransaction keeps a transaction with an assigned ID open until the returned function is
+// called (at most once has an effect), so that snapshots taken meanwhile have it as their xmin.
+func holdTransaction(t *testing.T, store *postgres.Store) func() {
+	t.Helper()
+	started, done := make(chan error, 1), make(chan struct{})
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		var once sync.Once
+		_ = store.WithinTransaction(context.Background(), func(tx platform.TransactionContext) error {
+			executor, err := store.Resolve(tx)
+			if err == nil {
+				_, err = executor.ExecContext(tx.Context(), `SELECT pg_current_xact_id()`)
+			}
+			once.Do(func() { started <- err })
+			<-done
+			return errors.New("release the held transaction")
+		})
+	}()
+	if err := <-started; err != nil {
+		t.Fatal(err)
+	}
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			close(done)
+			<-finished
+		})
+	}
 }

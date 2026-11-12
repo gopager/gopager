@@ -91,12 +91,23 @@ func TestInstalledLoadDoesNotStartPlugin(t *testing.T) {
 	if err != nil || again.InputSchema["text"].Kind != StringValue || *again.ConfigurationPolicy.Secret {
 		t.Fatalf("manifest view aliases inspected configuration: %+v, %v", again, err)
 	}
-	var result any
-	if err := artifact.call(ctx, []byte(`{}`), &result, 5*time.Second, nil); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
-		t.Fatalf("plugin without handshake was not an explicit capability failure: %v", err)
+	// On Linux, executing a script that was just written can fail with "text file busy" while a
+	// parallel test forks with the file still open for writing; the script then never runs. A
+	// few attempts tell that transient failure from an invocation that never starts the plugin.
+	started := false
+	for attempt := 0; attempt < 5 && !started; attempt++ {
+		var result any
+		if err := artifact.call(ctx, []byte(`{}`), &result, 5*time.Second, nil); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
+			t.Fatalf("plugin without handshake was not an explicit capability failure: %v", err)
+		}
+		_, err := os.Stat(marker)
+		started = err == nil
+		if !started {
+			time.Sleep(100 * time.Millisecond)
+		}
 	}
-	if _, err := os.Stat(marker); err != nil {
-		t.Fatalf("invocation did not start the plugin from its artifact directory: %v", err)
+	if !started {
+		t.Fatal("invocation did not start the plugin from its artifact directory")
 	}
 	if err := root.WriteFile("plugin", []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
