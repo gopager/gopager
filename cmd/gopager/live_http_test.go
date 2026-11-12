@@ -498,6 +498,16 @@ func TestLiveStreamBoundsAndResync(t *testing.T) {
 		})
 		requireResync(t, stream)
 	})
+	t.Run("a configuration change of an Attribute schema", func(t *testing.T) {
+		stream := f.openStream(bearer, query+"&position="+fresh())
+		stream.beat(t)
+		f.appendFact(func(ctx context.Context, tx platform.TransactionContext) error {
+			_, err := f.core.facts.AppendMasterDataFact(ctx, tx, events.MasterDataFact{ID: uuid.New(),
+				Aggregate: events.EntityRef{Type: "attributeSchema", ID: uuid.New()}, Revision: 2, OccurredAt: microsecondNow(), ChangeKind: "updated"})
+			return err
+		})
+		requireResync(t, stream)
+	})
 	t.Run("a revoked credential ends the stream with an error and no output", func(t *testing.T) {
 		revoked, principal := f.caller([]string{"message.read"}, authz.Scope{Kind: "all"}, []string{"payload", "unit"})
 		stream := f.openStream(revoked, query+"&position="+fresh())

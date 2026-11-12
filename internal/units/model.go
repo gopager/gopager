@@ -8,7 +8,8 @@
 // events.MasterDataFact. Repository, ContextReader and RuleOwner are the ports
 // implemented by persistence and the assignment rules owner. Settings,
 // Defaults, ResolveSettings and MaterializeSettings implement the Unit setting
-// inheritance from Organization defaults.
+// inheritance from Organization defaults, Unit attributes included; AttributeCatalog
+// supplies the `unit` Attribute schemas that attribute values are checked against.
 package units
 
 import (
@@ -142,11 +143,13 @@ type DefaultSetting[T any] struct {
 	Value *T     `json:"value,omitempty"`
 }
 
-// Settings are the stored per-Unit (or per-template) presentation settings.
+// Settings are the stored per-Unit (or per-template) settings: presentation settings and Unit
+// attributes.
 type Settings struct {
 	Color            FieldSetting[string]         `json:"color"`
 	Icon             FieldSetting[string]         `json:"icon"`
 	FunctionMeanings FieldSetting[map[int]string] `json:"functionMeanings"`
+	Attributes       AttributeSettings            `json:"attributes"`
 }
 
 // Defaults are an Organization's setting defaults, inherited by Unit settings
@@ -155,6 +158,7 @@ type Defaults struct {
 	Color            DefaultSetting[string]         `json:"color"`
 	Icon             DefaultSetting[string]         `json:"icon"`
 	FunctionMeanings DefaultSetting[map[int]string] `json:"functionMeanings"`
+	Attributes       AttributeDefaults              `json:"attributes"`
 }
 
 // EffectiveValue is a resolved setting value. Source is "unit",
@@ -169,6 +173,7 @@ type EffectiveSettings struct {
 	Color            EffectiveValue[string]         `json:"color"`
 	Icon             EffectiveValue[string]         `json:"icon"`
 	FunctionMeanings EffectiveValue[map[int]string] `json:"functionMeanings"`
+	Attributes       EffectiveAttributes            `json:"attributes"`
 }
 
 // Organization is an Organization DTO with the setting defaults its Units

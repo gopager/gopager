@@ -37,6 +37,8 @@ type selection struct {
 	filter      *processing.Predicate
 	layoutID    *uuid.UUID
 	splitByUnit bool
+	// targets supply the input bindings whose fields must stay available.
+	targets []TargetReference
 }
 
 // compiled is a selection checked against one registry snapshot.
@@ -114,6 +116,11 @@ func compileSelection(ctx context.Context, tx platform.TransactionContext, deps 
 			result.layoutKind = resolved.Layout.OutputKind
 		}
 	}
+	bound, err := bindingFields(chosen.targets, result.declarations)
+	if err != nil {
+		return nil, err
+	}
+	bindingGroups(bound, groups)
 	if chosen.splitByUnit {
 		groups["unit"] = true
 	}
@@ -180,7 +187,7 @@ func (c *compiled) unreadable(readable map[string]bool) bool {
 func healthCheck(ctx context.Context, tx platform.TransactionContext, deps Dependencies, subscription Subscription,
 	readable map[string]bool) (*compiled, string, error) {
 	result, err := compileSelection(ctx, tx, deps, selection{filter: subscription.Filter, layoutID: subscription.LayoutID,
-		splitByUnit: subscription.SplitByUnit})
+		splitByUnit: subscription.SplitByUnit, targets: subscription.Targets})
 	var failure *fault
 	if errors.As(err, &failure) {
 		return nil, failure.reason, nil

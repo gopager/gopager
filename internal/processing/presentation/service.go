@@ -159,11 +159,23 @@ func (s *Service) attributeKeys(ctx context.Context, tx platform.TransactionCont
 	}
 	var keys []string
 	for _, reference := range program.Fields() {
-		if reference.Namespace == "attributes" && len(reference.Path) > 0 && !slices.Contains(keys, reference.Path[0]) {
-			keys = append(keys, reference.Path[0])
+		if key, ok := schemaKey(reference); ok && !slices.Contains(keys, key) {
+			keys = append(keys, key)
 		}
 	}
 	return keys, nil
+}
+
+// schemaKey returns the Attribute schema a field reference names: a Message attribute
+// `attributes.<key>…` or a Unit attribute `unit.attributes.<key>…`.
+func schemaKey(reference processing.FieldRef) (string, bool) {
+	switch {
+	case reference.Namespace == "attributes" && len(reference.Path) > 0:
+		return reference.Path[0], true
+	case reference.Namespace == "unit" && len(reference.Path) > 1 && reference.Path[0] == "attributes":
+		return reference.Path[1], true
+	}
+	return "", false
 }
 
 // authorizeNewReferences requires ManageAction in at least one Agency of every Attribute schema

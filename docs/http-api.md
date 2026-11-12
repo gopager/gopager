@@ -485,6 +485,7 @@ or `unset`). Create and update commands return `{"id","revision"}`.
 - **Settings** cover `color` (`#RRGGBB`, stored upper case), `icon` (1–128 ASCII letters, digits, `.`, `_`, `-`; the server stores the identifier and has no icon catalog) and `functionMeanings` (POCSAG function `0..3` mapped to a label of 1–256 scalars). A Unit setting is `inherit`, `value` or `unset`; `inherit` resolves to the Organization's current default, or to `unset` without an Organization. A null effective value means unset, never a fabricated default. An Organization change reaches only Units that still inherit that setting. Color and icon changes never cause correction work.
 - **Templates** are standalone: creating a Unit from a template copies the template's current Organization reference and effective settings in one transaction, requires an explicit Unit name and collection list, and leaves no link, so later template or Organization edits do not change the Unit.
 - **Organization deletion** requires `organization.delete` plus `unit.update` for every Unit and `unit-template.update` for every template it detaches, checked against the complete set before the change. In one transaction it materializes each still-inherited effective value on the Unit or template as `value` or `unset`, detaches them, keeps explicit overrides and deletes the Organization. A stale revision of any affected Unit or template rolls back everything; an unmanageable reference returns a generic `FORBIDDEN` or `REVISION_CONFLICT` without foreign IDs. No correction work is scheduled.
+- **Unit attributes** are values of `unit` [Attribute schemas](#attribute-schemas). They are the member `attributes` of `settings` (Unit and template) and `defaults` (Organization): `{"<schemaKey>": {"<field>": {"mode": …, "value": {"kind": …, "value": …}}}}` per top-level field (an object field is set as a whole), with typed values as in Workflows. On a Unit or template a field is `inherit`, `value` or `unset`; a missing field and an omitted `attributes` member mean `inherit`, and responses hold only `value` and `unset` entries. In Organization defaults a missing field is `unset`, only `value` entries are kept and an explicit `unset` is accepted and dropped. Every Unit entry (`value` or `unset`) must name a `unit` schema assigned to the Unit's Agency and a declared top-level field, and a value must decode against the field's type, otherwise `400 INVALID_INPUT`; Organization defaults and templates have no Agency and are checked against existence, subject and type only. Deprecated schemas and fields still accept values. `inherit` resolves to the Organization's `value` default (source `organization`) only when the schema is assigned to the Unit's Agency, so a Unit never shows a value of a schema its Agency lacks; templates resolve without that condition. `effectiveSettings.attributes` lists only fields with an effective value, each with its `source` (`unit` or `organization`). Organization deletion materializes every still-inherited field that has an effective value as a `value` entry; other fields stay absent. A Unit created from a template receives, for every field of every `unit` schema assigned to its Agency, the template's effective value or else `unset`; entries of other schemas are not copied. Bulk update items carry the complete `settings`, `attributes` included, and each item is validated against its own Unit's Agency (preview reports `INVALID_INPUT`; execution stays all or nothing). A Unit update that changes the Agency carries the complete `attributes`; an entry of a schema not assigned to the new Agency is `400 INVALID_INPUT`, and inherited values follow the new Agency's assignments. Attribute edits need the same rights as other setting edits (`unit.update`, `unit-template.*`, `organization.update`), write the same `updated` and `defaults-changed` facts, and change no grant, schedule no correction work and re-admit nothing to Processing.
 - **Unit deletion** marks the Unit non-selectable, disables its rules and records correction work atomically; the response is `pending` until the correction ran. Current grants on the ID stop applying. Unit updates carry the complete supported field set and collection list, so they cannot erase fields owned by later features.
 - **Bulk** operations take 1–100 distinct Unit IDs, each with its `expectedRevision`. Preview is read-only and reveals only caller-safe per-item results. Execution repeats all checks under ordered row locks and is all or nothing: one stale, unauthorized, invalid, duplicate or over-limit item aborts every item. Bulk update changes only the explicitly supported shared settings (not name, Organization, membership, templates or rules); bulk delete behaves like single Unit deletion. One compact receipt covers the command; an identical retry returns it.
 - **Rights.** Template operations need explicit `unit-template.*` rights with `all` scope. Creating a Unit from a template needs `unit.create` and `unit-template.read` (plus `organization.read` for a referenced Organization); an inline new Organization needs `organization.create` and `unit.create`. An Organization without members needs `all` scope. References (Organization, template) never grant access to anything.
@@ -549,7 +550,7 @@ reads its group:
 | Group | Projection | Filters |
 | --- | --- | --- |
 | `payload` | `payload`, `protocol`, `incomplete` | `text`, `protocol`, `filter` fields `message.protocol`, `message.form`, `message.text`, `message.numeric` |
-| `unit` | `units` (`unitId`, `name`, `agencyId`, `organizationId`, `encrypted`), `withoutUnit`, targets' `unitId` and `encrypted`, Unit, Organization and Agency options | `unit`, `organization`, `agency`, `withoutUnit`, `filter` fields `message.unitIds`, `message.unitNames` |
+| `unit` | `units` (`unitId`, `name`, `agencyId`, `organizationId`, `encrypted`, `attributes`), `withoutUnit`, targets' `unitId` and `encrypted`, Unit, Organization and Agency options | `unit`, `organization`, `agency`, `withoutUnit`, `filter` fields `message.unitIds`, `message.unitNames`, `unit.attributes.*` |
 | `address` | targets' `address` and `function` | none |
 | `gateway` | Transmissions' `observedAt`, `networkId`, `networkName`, Network options | `network` |
 | `quality` | `qualityMetrics` | none |
@@ -592,6 +593,7 @@ differ only below a microsecond are equal.
 | `message.text`, `message.numeric` | string | `payload` | its Payload value, when its form is `text` or `numeric` |
 | `message.unitIds`, `message.unitNames` | list of string | `unit` | the caller's eligible Unit appearances |
 | `attributes.<schemaKey>.<field>[.<property>…]` | the declared type | `derived` | effective attribute values (below) |
+| `unit.attributes.<schemaKey>.<field>[.<property>…]` | the declared type | `unit` | effective Unit attribute values of an appearance's Unit (below) |
 
 Each field reference resolves to a set of candidate scalars: an absent value contributes nothing, a
 list its elements, an attribute the effective value of every position the caller may see. A
@@ -604,6 +606,17 @@ deprecated or non-filterable field, a mistyped operand or an exceeded bound is `
 (`RESOURCE_LIMIT` for bounds); a predicate that reads a field group the caller cannot read is
 `403 FORBIDDEN`. The Query side compiles the predicate to SQL; the same rules run in Go for
 Subscription filters, and one test checks both.
+
+**Unit attributes.** Every `units[]` item of a feed item, detail and live event carries `attributes`: the Unit's
+effective values as `[{schemaKey, field, value, source}]`, sorted by schema key and field. `source` is `unit` for the
+Unit's own value and `organization` for the default of its Organization. The list is empty when the Unit has none.
+A predicate that contains any `unit.attributes.*` leaf is correlated per appearance: the whole predicate must hold on
+one eligible appearance that also meets the simple filters (`unitId`, `withoutUnit`, `organizationId`, `agencyId`,
+`networkId`, `protocol`). On that appearance the `unit.attributes.*` leaves read the appearance's Unit only (a
+Unit-less appearance has no candidates) and every other field reads the Message as before; `not` negates per
+appearance. So `unit.attributes.station.town = "A"` and `unit.attributes.station.kind = "engine"` together need one
+Unit with both values, and `not` of the first selects a Message that has an appearance whose Unit is not in A. A
+predicate without such leaves keeps its meaning. A list value contributes its elements.
 
 **Effective attribute values.** The candidates of an attribute are the published results of the
 Message's supporting readable Transmissions whose stored field groups the caller can read all of.
@@ -718,7 +731,7 @@ previous Message time meets the loaded range.
   merge's joining Transmission, also after later merges) is readable for the caller, and nothing
   otherwise. It never produces `remove` events for the absorbed Messages: the fact does not say
   which of them the caller could read, and naming the others would disclose them.
-- A configuration change of a Unit, Unit collection, Organization or Agency produces
+- A configuration change of a Unit, Unit collection, Organization, Agency or an Agency assignment of a `unit` Attribute schema produces
   `resync-required`, because it can change membership, names and Agencies of every view. Address
   rule changes are current at the next read. Gateway state, operation and identity facts produce no
   Message event.
@@ -1090,7 +1103,11 @@ targets on behalf of a subscriber. Properties and limits are in the OpenAPI sche
   Subscription becomes `invalid` ([Health](#subscription-health)); a field never reads as absent for
   that reason.
 - **Filter.** `filter` is the same predicate tree as in [workflows](workflows.md), over the registry
-  fields below. A save compiles it strictly: an unknown or deprecated field is `400 INVALID_INPUT`.
+  fields below. A save compiles it strictly: an unknown or deprecated field is `400 INVALID_INPUT`. A filter with
+  `unit.attributes.*` fields is correlated like a Message search: it matches when it matches with one relevant Unit
+  bound (the leaves read that Unit only), or with no Unit bound when the Message has an eligible Unit-less appearance
+  or no relevant Unit; a `splitByUnit` Delivery has its one Unit. So a Subscription selects the same Messages as the
+  Message search with the same predicate.
 - **Targets.** 1 to 8 distinct instances with the Delivery capability. `revision` is 0 (or absent)
   or the instance's current revision, and the response always shows the revision that was saved.
   A different `revision` is `409 REVISION_CONFLICT`. `inputs` are typed constants for inputs
@@ -1098,6 +1115,18 @@ targets on behalf of a subscriber. Properties and limits are in the OpenAPI sche
   that is missing, disabled or without an available provider makes the request
   `503 AUTHORITY_UNAVAILABLE` with `parameters.status` `unavailable` and `parameters.instanceId`
   ([Errors](#errors)). If the Subscription has a layout, every target must support the layout's output kind.
+- **Input bindings.** `inputBindings` maps up to 64 input names of the target's descriptor to a Unit attribute field
+  `{"namespace":"unit","path":["attributes",schemaKey,field,…]}` whose value fills the input; it may be omitted or
+  empty. A save requires the input to be declared, the field to be a non-deprecated Delivery field below
+  `unit.attributes`, its field group `unit` to be readable by the subscriber and its type to be the input's kind
+  (otherwise `400 INVALID_INPUT`). Precedence per input, most specific last: the instance configuration, the
+  constant in `inputs`, the binding, then the Unit parameter of the instance. The bound value is the effective value
+  of the Delivery's Units: a Unit without a value or with an explicit null does not count; Units with different values
+  fail an unsplit Delivery with `parameter-conflict`; with no value the constant stays, and if nothing is left a
+  required input fails the Delivery with `input-invalid`. A split Delivery uses its one Unit. If the field is lost or
+  the subscriber loses the group, the Subscription becomes `invalid` with `field-unavailable`
+  ([Health](#subscription-health)). An Attribute schema used by a binding cannot be deleted
+  ([Attribute schemas](#attribute-schemas)).
 - **Layout.** `layoutId` names a [layout](#layouts). The author (for a global Subscription, the caller who saves
   it, not the technical account) must hold `presentation.manage` or `message.read` in one Agency the Layout is
   assigned to; an unknown or unusable Layout is `400 INVALID_INPUT`. Without one, the built-in layout of
@@ -1161,14 +1190,17 @@ cannot read is rejected when saved and makes the Subscription invalid when the r
 | `unit.id`, `unit.name` | string | `unit` |
 | `gateway.id`, `gateway.name`, `gateway.oldState`, `gateway.newState` | string | `gateway` |
 | `gateway.contactTime` | timestamp | `gateway` |
+| `unit.attributes` with path `[schemaKey, field, property…]` | the Attribute schema's declared type of the Unit attribute field or object property | `unit` |
 | `attributes` with path `[schemaKey, field, property…]` | the Attribute schema's declared type of the field or object property | `derived` |
 
 A filter on a field holds when any candidate value satisfies it (a list contributes its elements). For
 `attributes` the candidates are the Message's untargeted effective value and the effective values of target positions
 assigned to a Unit relevant to the Delivery (with `splitByUnit` that Delivery's Unit, otherwise all of the Message's
 Units the subscriber may see); a value that does not match the declared type is ignored. A Layout `field`, `chip` or
-`when` reads one value: the untargeted effective value, else the one of the lowest relevant target position. A
-published result counts only when all field groups stored with it are readable. A `processing.completed` fact
+`when` reads one value: the untargeted effective value, else the one of the lowest relevant target position. For
+`unit.attributes` the candidates are the effective values of the Delivery's Units (see Filter above for the per-Unit
+evaluation) and a Layout reads the value of the first relevant Unit, in the order of name and then Unit ID, that has
+one. A published result counts only when all field groups stored with it are readable. A `processing.completed` fact
 creates a Delivery when its published result is readable that way, independent of whether the result holds an
 effective value (it may hold none, or a later result may have replaced its values).
 
@@ -1309,12 +1341,27 @@ Workflows) or of Units (`subject` `unit`, maintained by managers). Schemas: `Att
 - **Deprecation.** `deprecated` on a schema or a field hides it from new references; stored values stay readable and
   existing references keep working.
 - **Referencing.** Adding a reference to a schema needs the right of the referencing resource in one of the schema's
-  Agencies: `workflow.update` to save a Workflow version that writes a schema no earlier version writes, and
-  `presentation.manage` to add a schema to a layout; otherwise `403 FORBIDDEN`. Existing references stay valid when the
+  Agencies: `workflow.update` to save a Workflow version that writes a schema, or reads its Unit attributes
+  (`target.unit.attributes.<key>…`), where no earlier version does so, and `presentation.manage` to add a schema to a
+  layout through `attributes.<key>…` or `unit.attributes.<key>…`; otherwise `403 FORBIDDEN`. Existing references stay valid when the
   schema loses that Agency, but not when the schema was deleted and re-created under the same key since the
   referencing version was saved: that is a different schema.
-- **Delete.** A schema that an active Workflow version (as an output), the current version of a layout, a Subscription
-  filter or a saved view references is `409 REVISION_CONFLICT`, like a stale revision. The conflict does not say which.
+- **Delete.** A schema that an active Workflow version (as an output or a `target.unit.attributes` source field), the
+  current version of a layout, a Subscription filter, a Subscription target input binding or a saved view references
+  (through `attributes.…` or `unit.attributes.…`) is `409 REVISION_CONFLICT`, like a stale revision. The conflict does not say which.
+  The same holds for a `unit` schema of which an undeleted Unit, Unit template or Organization stores an entry
+  ([Unit attributes](#master-data-semantics)); in the same transaction the entries of deleted Units, templates and
+  Organizations are removed, so a later schema with the same key never meets them.
+- **Removing an Agency.** An update that removes an Agency from a `unit` schema is `409 REVISION_CONFLICT` while an
+  undeleted Unit of that Agency stores an entry of the schema; inherited values of such Units simply stop resolving.
+  Schema changes and Unit, template or Organization writes with attribute entries are serialized, so a concurrent write
+  cannot slip an entry past the check.
+- **Configuration fact.** An update that changes the Agencies of a `unit` schema (adds or removes one) records one
+  `configuration.changed` fact with aggregate `attributeSchema` and `changeKind` `updated` in the same transaction,
+  because the Agencies decide which Units inherit Organization defaults of the schema, so inherited values and filter
+  membership change; deleting a `unit` schema records one with `changeKind` `deleted`, because it removes the schema's
+  entries from deleted Units that history still shows. Live Message streams answer both with `resync-required`. Other
+  updates, `message` schemas and creation record no fact. The fact is not a Delivery trigger.
 - **Agencies and rights.** A schema is assigned to 1 to 256 distinct Agencies. Create, update and delete need
   `attribute-schema.manage` in every Agency involved (new set; stored and new set; stored set). A schema is visible to a
   caller holding any of `message.read`, `workflow.read`, `presentation.manage`, `subscription.manage-own`,

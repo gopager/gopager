@@ -98,7 +98,7 @@ func composeCore(store *postgres.Store) (*core, error) {
 		return nil, err
 	}
 	if c.unitService, err = units.NewService(store, c.resolver, store, c.units, c.assignments,
-		c.receipts, c.facts); err != nil {
+		c.receipts, c.facts, units.WithAttributeCatalog(attributes.NewUnitCatalog(c.attributes))); err != nil {
 		return nil, err
 	}
 	if c.rules, err = c.newRuleService(c.intake); err != nil {

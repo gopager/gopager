@@ -24,7 +24,7 @@ type PreviewCapture struct {
 type PreviewSourceOwner interface {
 	processing.InvocationSourceOwner
 	CaptureSyntheticPreview(context.Context, platform.TransactionContext, authz.Authority,
-		processing.WorkflowConfiguration, json.RawMessage) (PreviewCapture, error)
+		processing.WorkflowConfiguration, processing.Definition, json.RawMessage) (PreviewCapture, error)
 	CaptureStoredPreview(context.Context, platform.TransactionContext, authz.Authority,
 		processing.WorkflowConfiguration, uuid.UUID) (PreviewCapture, error)
 }
@@ -162,7 +162,7 @@ func (s *PreviewService) Preview(ctx context.Context, proof identity.Proof, inpu
 		switch mode {
 		case previewSynthetic:
 			capture, readErr = s.sourceOwner.CaptureSyntheticPreview(tx.Context(), tx, authority,
-				workflow, append(json.RawMessage(nil), input.SyntheticJSON...))
+				workflow, definition, append(json.RawMessage(nil), input.SyntheticJSON...))
 		case previewStored:
 			capture, readErr = s.sourceOwner.CaptureStoredPreview(tx.Context(), tx, authority,
 				workflow, input.StoredTransmissionID)

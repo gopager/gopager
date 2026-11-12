@@ -64,6 +64,23 @@ type ScopeAuthorizer interface {
 		uuid.UUID, uuid.UUID, uuid.UUID, time.Time) error
 }
 
+// UnitAttributeOwner reads the Unit attributes a preview captures for its targets: the declared
+// target fields the previewed definition reads and the effective attributes of the given Units,
+// inside the caller's transaction.
+type UnitAttributeOwner interface {
+	ReadUnitAttributes(context.Context, platform.TransactionContext, processing.Definition, []uuid.UUID,
+	) (declarations.UnitAttributes, error)
+}
+
+// Option configures an Owner.
+type Option func(*Owner)
+
+// WithUnitAttributes makes previews capture Unit attributes like a real run does. Without it a
+// preview of a Workflow reading a Unit attribute fails, because the field is not captured.
+func WithUnitAttributes(attributes UnitAttributeOwner) Option {
+	return func(o *Owner) { o.unitAttributes = attributes }
+}
+
 // Input is the JSON document describing one synthetic Transmission. SchemaVersion must
 // be 1; Form (and Subtype for FLEX binary) must be declared for Protocol; Payload is
 // required for every form except tone-only, where it must be absent; ObservedAt is an
@@ -88,8 +105,10 @@ type Owner struct {
 	networks NetworkOwner
 	clock    platform.Clock
 	scope    ScopeAuthorizer
-	mu       sync.Mutex
-	active   map[uuid.UUID]captured
+	// unitAttributes is nil when previews capture no Unit attributes.
+	unitAttributes UnitAttributeOwner
+	mu             sync.Mutex
+	active         map[uuid.UUID]captured
 }
 
 type captured struct {
@@ -106,12 +125,18 @@ type captured struct {
 // NewOwner returns an Owner. matcher and clock are required and an invalid-input
 // failure is returned without them. networks and scope may be nil; operations that need
 // them then fail as unavailable.
-func NewOwner(matcher Matcher, networks NetworkOwner, clock platform.Clock, scope ScopeAuthorizer) (*Owner, error) {
+func NewOwner(matcher Matcher, networks NetworkOwner, clock platform.Clock, scope ScopeAuthorizer,
+	options ...Option,
+) (*Owner, error) {
 	if matcher == nil || clock == nil {
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing synthetic source dependency"))
 	}
-	return &Owner{matcher: matcher, networks: networks, clock: clock, scope: scope,
-		active: make(map[uuid.UUID]captured)}, nil
+	owner := &Owner{matcher: matcher, networks: networks, clock: clock, scope: scope,
+		active: make(map[uuid.UUID]captured)}
+	for _, option := range options {
+		option(owner)
+	}
+	return owner, nil
 }
 
 // CaptureSyntheticPreview decodes and validates raw as an Input, resolves it against the
@@ -120,9 +145,11 @@ func NewOwner(matcher Matcher, networks NetworkOwner, clock platform.Clock, scop
 // every field with its owner classification: evaluation runs as the system, and the editor's
 // field permissions are applied to the definition at save time and to the result when it is
 // rechecked, never by hiding inputs. The captured context is retained under the projection's
-// TransmissionID until ReleaseSyntheticPreview is called; the caller must release it.
+// TransmissionID until ReleaseSyntheticPreview is called; the caller must release it. Only the Unit
+// attributes that definition reads are captured.
 func (o *Owner) CaptureSyntheticPreview(ctx context.Context, tx platform.TransactionContext,
-	authority authz.Authority, workflow processing.WorkflowConfiguration, raw json.RawMessage) (management.PreviewCapture, error) {
+	authority authz.Authority, workflow processing.WorkflowConfiguration, definition processing.Definition,
+	raw json.RawMessage) (management.PreviewCapture, error) {
 	if o == nil || ctx == nil || tx == nil || o.matcher == nil || o.clock == nil {
 		return management.PreviewCapture{}, invalid(errors.New("missing synthetic capture participant"))
 	}
@@ -162,7 +189,14 @@ func (o *Owner) CaptureSyntheticPreview(ctx context.Context, tx platform.Transac
 	if matched.Revision <= 0 || len(matched.Resolutions) != len(input.Targets) {
 		return management.PreviewCapture{}, unavailable(errors.New("current target matcher returned incomplete context"))
 	}
-	projection, err := project(input, network, observed, matched)
+	var unitAttributes declarations.UnitAttributes
+	if o.unitAttributes != nil {
+		unitAttributes, err = o.unitAttributes.ReadUnitAttributes(ctx, tx, definition, assignedUnits(matched.Resolutions))
+		if err != nil {
+			return management.PreviewCapture{}, err
+		}
+	}
+	projection, err := project(input, network, observed, matched, unitAttributes)
 	if err != nil {
 		return management.PreviewCapture{}, err
 	}
@@ -472,7 +506,9 @@ func observation(value *string, now time.Time) (time.Time, error) {
 	return instant.Truncate(time.Second), nil
 }
 
-func project(input Input, network Network, observed time.Time, match assignments.MatchResult) (processing.SourceProjection, error) {
+func project(input Input, network Network, observed time.Time, match assignments.MatchResult,
+	unitAttributes declarations.UnitAttributes,
+) (processing.SourceProjection, error) {
 	transmission := uuid.New()
 	projection := processing.SourceProjection{TransmissionID: transmission, Synthetic: true, Protocol: input.Protocol,
 		Form: input.Form, Subtype: input.Subtype, ObservedAt: observed, SourceRevision: 1,
@@ -516,6 +552,7 @@ func project(input Input, network Network, observed time.Time, match assignments
 			Schema: processing.FieldSchema{Kind: processing.ListValue, Optional: true,
 				Element: &processing.FieldSchema{Kind: processing.StringValue}}, Groups: []string{"unit"}},
 	}
+	projection.TargetDeclarations = append(projection.TargetDeclarations, unitAttributes.Declared...)
 	for position, target := range input.Targets {
 		index := uint32(position)
 		fields := make([]processing.CapturedField, 0, len(projection.TargetDeclarations))
@@ -572,6 +609,11 @@ func project(input Input, network Network, observed time.Time, match assignments
 			appendField([]string{"unit", "collections"}, processing.FieldSchema{Kind: processing.ListValue, Optional: true,
 				Element: &processing.FieldSchema{Kind: processing.StringValue}}, nil, "unit")
 		}
+		attributeFields, err := unitAttributes.TargetFields(resolution.UnitID, dependency("unit", &index))
+		if err != nil {
+			return processing.SourceProjection{}, err
+		}
+		fields = append(fields, attributeFields...)
 		projection.Targets = append(projection.Targets, processing.TargetContext{Position: index, Fields: fields})
 	}
 	declared := declarations.Builtin()
@@ -740,6 +782,17 @@ func evaluateScope(workflow processing.WorkflowConfiguration, network Network, t
 	default:
 		return processing.EvaluationScope{}, nil, authz.ErrInvalidInput
 	}
+}
+
+// assignedUnits returns the Units the resolutions assign.
+func assignedUnits(resolutions []assignments.Resolution) []uuid.UUID {
+	var ids []uuid.UUID
+	for _, resolution := range resolutions {
+		if resolution.UnitID != nil {
+			ids = append(ids, *resolution.UnitID)
+		}
+	}
+	return ids
 }
 
 func allPositions(count int) []uint32 {

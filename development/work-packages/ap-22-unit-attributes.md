@@ -11,7 +11,7 @@
 - **Inputs:**
   - [AP-08 handover](../execution/ap-08.md#handover): Units, Organization defaults with `inherit | value | unset`, templates, Organization deletion, Unit bulk operations.
   - [AP-21 handover](ap-21-attribute-schemas.md#handover): Attribute-schema catalog with subject `unit`, field registry and provider seam, typed feed predicate, Agency binding, shared icon rule.
-  - [AP-12 handover](ap-12-plugin-host.md#handover): plugin-declared Delivery target inputs and the per-Unit parameter API (`integration_unit_parameters`).
+  - [AP-11 handover](../execution/ap-11.md#handover) ([D-157](../decisions/05-events-and-delivery.md#d-157), replaces the AP-12 handover): the target descriptor port `delivery.TargetDescriptor.Inputs` with typed input kinds, `integration_unit_parameters` and the input precedence of materialization.
   - An absent handover of an earlier open AP is an input gap reported at start.
 - **Owned contract slices:** the Unit-attributes bullet of [C-04](../contracts/c-04-master-data.md#planned-and-not-yet-implemented), the Unit-attribute part of [C-07](../contracts/c-07-query-live.md#planned-and-not-yet-implemented), the target-input bullet of [C-09](../contracts/c-09-delivery.md#planned-attribute-references-and-subscription-health); new cases at the next free F-numbers; glossary term Unit attribute.
 - **Reference (read when needed):** [D-150](../decisions/04-processing-and-plugins.md#d-150), [D-151](../decisions/06-identity-and-authorization.md#d-151), [D-152](../decisions/07-query-and-live.md#d-152), [D-128](../decisions/01-platform-and-storage.md#d-128), [HTTP API: Master data semantics](../../docs/http-api.md#master-data-semantics).
@@ -40,9 +40,9 @@ None. D-150 fixes inheritance, no rights effect and no automatic reprocessing.
 
 ## Tasks
 
-- [ ] T095 [AP-22] Implement Unit attribute values with Organization inheritance, templates, bulk update and Agency checks.
+- [x] T095 [AP-22] Implement Unit attribute values with Organization inheritance, templates, bulk update and Agency checks.
   - **Done when:** values validate against `unit` schemas assigned to the Unit's Agency; `inherit | value | unset` resolve like Unit settings, including Organization deletion and template copy; bulk update sets attributes all-or-nothing; a Unit's Agency change with values of unassigned schemas is rejected; removing a schema's Agency or deleting a schema used by Unit values is `409`; edits change no grants and create no correction or Processing work.
-- [ ] T096 [AP-22] Expose Unit attributes to search, Subscriptions, Layouts, Workflows and Delivery target inputs.
+- [x] T096 [AP-22] Expose Unit attributes to search, Subscriptions, Layouts, Workflows and Delivery target inputs.
   - **Done when:** feed, saved views and Subscription filters select by `unit.attributes…` correlated with the same Unit appearance; Layouts render Unit attributes with their labels and icons; Workflows read `target.unit.attributes…` with group `unit` and results keep the values of their run; a target input bound to a Unit attribute receives the Delivery Unit's effective value; the new F-cases pass.
 
 ## Documentation to Update

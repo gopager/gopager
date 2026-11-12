@@ -98,7 +98,7 @@ const (
 
 // configurationResyncAggregates are the aggregates of configuration.changed whose change can
 // alter every view.
-var configurationResyncAggregates = map[string]bool{"unit": true, "unitCollection": true, "organization": true, "agency": true}
+var configurationResyncAggregates = map[string]bool{"unit": true, "unitCollection": true, "organization": true, "agency": true, "attributeSchema": true}
 
 // decodeLiveFact reads one fact for a view that loaded the range [from, until). Types outside
 // the handled set are ignored; a handled type with a schema this reader does not know, or an

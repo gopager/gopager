@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: GoPager API
-  version: 1.9.0
+  version: 1.10.0
   description: |
     GoPager application API. Human guide: docs/http-api.md.
 
@@ -4216,7 +4216,9 @@ paths:
         deprecation and Agencies at `expectedRevision` (stale: 409). Only compatible changes are accepted (400): fields and
         optional object properties may be added; nothing is removed; the subject and the type of existing fields do not
         change; labels, descriptions, icons and deprecation may change. Deprecation hides a schema or field from new
-        references while stored values stay readable.
+        references while stored values stay readable. Removing an Agency from a `unit` schema is 409 `REVISION_CONFLICT`
+        while an undeleted Unit of that Agency stores an entry of the schema (inherited values of such Units simply stop
+        resolving).
       security:
       - sessionCookie: []
         csrfToken: []
@@ -4257,7 +4259,9 @@ paths:
       summary: Delete an Attribute schema
       description: |
         Requires `attribute-schema.manage` in every Agency of the schema. A schema that an active Workflow version, a
-        Layout, a Subscription filter or a saved view references is 409 `REVISION_CONFLICT`, like a stale revision.
+        Layout, a Subscription filter or a saved view references is 409 `REVISION_CONFLICT`, like a stale revision. So is a
+        `unit` schema of which an undeleted Unit, Unit template or Organization stores an entry; the entries of deleted
+        Units, templates and Organizations are removed with the schema.
       security:
       - sessionCookie: []
         csrfToken: []
@@ -5212,6 +5216,7 @@ components:
       - color
       - icon
       - functionMeanings
+      - attributes
       properties:
         color:
           $ref: '#/components/schemas/UnitSettingColor'
@@ -5219,6 +5224,8 @@ components:
           $ref: '#/components/schemas/UnitSettingIcon'
         functionMeanings:
           $ref: '#/components/schemas/UnitSettingFunctionMeanings'
+        attributes:
+          $ref: '#/components/schemas/UnitAttributeSettings'
     SettingsInput:
       type: object
       description: Requested settings. An omitted member means `inherit`.
@@ -5229,10 +5236,78 @@ components:
           $ref: '#/components/schemas/UnitSettingIconInput'
         functionMeanings:
           $ref: '#/components/schemas/UnitSettingFunctionMeaningsInput'
+        attributes:
+          $ref: '#/components/schemas/UnitAttributeSettings'
       additionalProperties: false
+    UnitAttributeSettings:
+      type: object
+      description: |
+        Unit attribute entries by `unit` Attribute schema key and top-level field name. A missing field means `inherit`;
+        responses hold only `value` and `unset` entries. On a Unit, every entry names a `unit` schema assigned to the
+        Unit's Agency and a declared field, and its value decodes against the field's type (400 otherwise). Templates are
+        checked for existence, subject and type only. An omitted member means that every field inherits.
+      additionalProperties:
+        type: object
+        additionalProperties:
+          $ref: '#/components/schemas/UnitAttributeSetting'
+    UnitAttributeSetting:
+      type: object
+      description: One Unit attribute field. An omitted `mode` means `inherit`; `value` is set exactly when `mode` is `value`.
+      properties:
+        mode:
+          type: string
+          enum:
+          - inherit
+          - unset
+          - value
+        value:
+          $ref: '#/components/schemas/TypedValue'
+      additionalProperties: false
+    UnitAttributeDefaults:
+      type: object
+      description: |
+        Organization defaults for Unit attributes by `unit` Attribute schema key and top-level field name. A missing field
+        is `unset`; responses hold only `value` entries.
+      additionalProperties:
+        type: object
+        additionalProperties:
+          $ref: '#/components/schemas/UnitAttributeDefault'
+    UnitAttributeDefault:
+      type: object
+      required:
+      - mode
+      properties:
+        mode:
+          type: string
+          enum:
+          - unset
+          - value
+        value:
+          $ref: '#/components/schemas/TypedValue'
+      additionalProperties: false
+    UnitEffectiveAttributes:
+      type: object
+      description: |
+        Resolved Unit attribute values by schema key and field name; only fields with an effective value are listed. An
+        inherited value resolves only when the schema is assigned to the Unit's Agency.
+      additionalProperties:
+        type: object
+        additionalProperties:
+          type: object
+          required:
+          - value
+          - source
+          properties:
+            value:
+              $ref: '#/components/schemas/TypedValue'
+            source:
+              type: string
+              enum:
+              - unit
+              - organization
     Defaults:
       type: object
-      description: Organization defaults; no inheritance, so every member needs a `mode`.
+      description: Organization defaults; no inheritance, so every presentation member needs a `mode`. An omitted `attributes` member means no attribute defaults.
       required:
       - color
       - icon
@@ -5244,6 +5319,8 @@ components:
           $ref: '#/components/schemas/DefaultIcon'
         functionMeanings:
           $ref: '#/components/schemas/DefaultFunctionMeanings'
+        attributes:
+          $ref: '#/components/schemas/UnitAttributeDefaults'
       additionalProperties: false
     EffectiveSettings:
       type: object
@@ -5251,6 +5328,7 @@ components:
       - color
       - icon
       - functionMeanings
+      - attributes
       properties:
         color:
           type: object
@@ -5306,6 +5384,8 @@ components:
               - unit
               - organization
               - unset
+        attributes:
+          $ref: '#/components/schemas/UnitEffectiveAttributes'
     Agency:
       type: object
       description: The operating authority of one alerting domain (for example a county fire dispatch centre). It owns Units and Networks; every Unit and every Network belongs to exactly one Agency.
@@ -8221,6 +8301,7 @@ components:
       - name
       - agencyId
       - encrypted
+      - attributes
       properties:
         unitId:
           type: string
@@ -8240,6 +8321,31 @@ components:
           type: string
           format: date-time
           description: Detail only.
+        attributes:
+          type: array
+          description: The Unit's effective attribute values, sorted by schema key and field; empty when it has none.
+          items:
+            $ref: '#/components/schemas/MessageUnitAttribute'
+    MessageUnitAttribute:
+      type: object
+      required:
+      - schemaKey
+      - field
+      - value
+      - source
+      properties:
+        schemaKey:
+          type: string
+        field:
+          type: string
+        value:
+          $ref: '#/components/schemas/TypedValue'
+        source:
+          type: string
+          enum:
+          - unit
+          - organization
+          description: Whether the value is the Unit's own or the default of its Organization.
     MessageAttribute:
       type: object
       description: The effective value of one attribute field at one position, the present value of the latest
@@ -9086,7 +9192,8 @@ components:
             type: string
             minLength: 1
           description: One element for the fixed fields (for example `["occurredAt"]` in `event`); `attributes` takes
-            the Attribute schema key, the field and, for an object field, the property names below it.
+            the Attribute schema key, the field and, for an object field, the property names below it; `unit` takes `attributes`
+            and then the same three parts for a Unit attribute.
       additionalProperties: false
     DeliveryPredicate:
       type: object
@@ -9181,6 +9288,14 @@ components:
           type: object
           additionalProperties:
             $ref: '#/components/schemas/TypedValue'
+        inputBindings:
+          type: object
+          maxProperties: 64
+          description: Input names of the target's descriptor mapped to the Unit attribute field that fills them
+            (`namespace` `unit`, `path` `["attributes", schemaKey, field, …]`). The field must be of the input's kind
+            and its field group readable by the subscriber. A constant of the same input is the fallback. May be omitted.
+          additionalProperties:
+            $ref: '#/components/schemas/DeliveryFieldRef'
     SubscriptionInput:
       type: object
       description: The writable part of a Subscription.

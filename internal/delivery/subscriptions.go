@@ -10,6 +10,7 @@ import (
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/commands"
 	"github.com/gopager/gopager/internal/events"
+	"github.com/gopager/gopager/internal/fields"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
@@ -354,7 +355,8 @@ func canonical(input SubscriptionInput) (SubscriptionInput, error) {
 	targets := make([]TargetReference, 0, len(input.Targets))
 	for _, target := range input.Targets {
 		if target.InstanceID == uuid.Nil || seen[target.InstanceID] || target.Revision < 0 ||
-			(target.CapabilityKind != "" && target.CapabilityKind != CapabilityDelivery) || len(target.Inputs) > MaxTargetInputs {
+			(target.CapabilityKind != "" && target.CapabilityKind != CapabilityDelivery) || len(target.Inputs) > MaxTargetInputs ||
+			len(target.InputBindings) > MaxTargetInputs {
 			return SubscriptionInput{}, authz.ErrInvalidInput
 		}
 		seen[target.InstanceID] = true
@@ -364,6 +366,9 @@ func canonical(input SubscriptionInput) (SubscriptionInput, error) {
 			}
 		}
 		target.CapabilityKind = CapabilityDelivery
+		if len(target.InputBindings) == 0 {
+			target.InputBindings = nil
+		}
 		if target.Inputs == nil {
 			target.Inputs = map[string]processing.Value{}
 		}
@@ -430,7 +435,7 @@ func (s *Subscriptions) apply(ctx context.Context, tx platform.TransactionContex
 		return err
 	}
 	check, err := compileSelection(ctx, tx, s.deps, selection{filter: input.Filter, layoutID: input.LayoutID,
-		splitByUnit: input.SplitByUnit})
+		splitByUnit: input.SplitByUnit, targets: input.Targets})
 	var failure *fault
 	if errors.As(err, &failure) {
 		return failure.err
@@ -445,7 +450,7 @@ func (s *Subscriptions) apply(ctx context.Context, tx platform.TransactionContex
 		return authz.ErrInvalidInput
 	}
 	layoutKind := check.layoutKind
-	targets, err := s.checkTargets(ctx, tx, input.Targets, layoutKind)
+	targets, err := s.checkTargets(ctx, tx, input.Targets, layoutKind, check.declarations)
 	if err != nil {
 		return err
 	}
@@ -457,9 +462,10 @@ func (s *Subscriptions) apply(ctx context.Context, tx platform.TransactionContex
 }
 
 // checkTargets requires every target to be the current revision of an enabled instance with an
-// available descriptor that supports the layout's output kind and declares the given inputs.
+// available descriptor that supports the layout's output kind and declares the given inputs and
+// input bindings.
 func (s *Subscriptions) checkTargets(ctx context.Context, tx platform.TransactionContext, targets []TargetReference,
-	layoutKind string) ([]TargetReference, error) {
+	layoutKind string, declarations fields.Declarations) ([]TargetReference, error) {
 	checked := make([]TargetReference, 0, len(targets))
 	for _, target := range targets {
 		instance, err := s.deps.Instances.CurrentInstance(ctx, tx, target.InstanceID)
@@ -490,6 +496,9 @@ func (s *Subscriptions) checkTargets(ctx context.Context, tx platform.Transactio
 			if !declared || validInput(field, value) != nil {
 				return nil, authz.ErrInvalidInput
 			}
+		}
+		if err := checkBindings(target.InputBindings, descriptor, declarations); err != nil {
+			return nil, err
 		}
 		target.Revision = instance.Revision
 		checked = append(checked, target)

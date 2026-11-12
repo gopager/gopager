@@ -9,6 +9,7 @@ import (
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/fields"
 	"github.com/gopager/gopager/internal/platform"
+	"github.com/gopager/gopager/internal/processing"
 )
 
 // Store is the persistence port of the read side. Every method runs in the caller's
@@ -87,6 +88,16 @@ type PayloadRecord struct {
 	Incomplete bool
 }
 
+// UnitAttribute is the effective value of one Unit attribute field: the Unit's own value
+// (Source "unit") or the default of its Organization (Source "organization"). Fields without an
+// effective value are not listed.
+type UnitAttribute struct {
+	SchemaKey string           `json:"schemaKey"`
+	Field     string           `json:"field"`
+	Value     processing.Value `json:"value"`
+	Source    string           `json:"source"`
+}
+
 // UnitRecord is an eligible Unit appearance.
 type UnitRecord struct {
 	UnitID          uuid.UUID
@@ -95,6 +106,8 @@ type UnitRecord struct {
 	OrganizationID  *uuid.UUID
 	Encrypted       bool
 	FirstObservedAt time.Time
+	// Attributes are the Unit's effective attribute values, sorted by schema key and field.
+	Attributes []UnitAttribute
 }
 
 // WithoutUnitRecord is an eligible Unit-less appearance.

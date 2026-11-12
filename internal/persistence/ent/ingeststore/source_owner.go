@@ -46,6 +46,8 @@ type ProcessingSourceOwner struct {
 	publication *publication.Service
 	// registries yields the field registry of the catalog visible in a transaction.
 	registries *attributes.RegistrySource
+	// unitAttributes reads the Unit attributes captured with each target.
+	unitAttributes *UnitAttributeReader
 }
 
 type sourceSnapshot struct {
@@ -65,8 +67,11 @@ type sourceSnapshot struct {
 	observedAt       time.Time
 	networkName      string
 	matched          assignments.MatchResult
-	targetsCurrent   bool
-	suppressed       map[int]bool
+	// projected is the match as the source projection sees it: the processing context revision and
+	// without the targets suppressed for this Transmission.
+	projected      assignments.MatchResult
+	targetsCurrent bool
+	suppressed     map[int]bool
 }
 
 type selectedWorkflow struct {
@@ -102,7 +107,11 @@ func NewProcessingSourceOwner(store *Store, matcher *assignments.Service, reposi
 	if err != nil {
 		return nil, err
 	}
-	owner := &ProcessingSourceOwner{registries: registries, store: store, matcher: matcher, repository: repository,
+	unitAttributes, err := NewUnitAttributeReader(store)
+	if err != nil {
+		return nil, err
+	}
+	owner := &ProcessingSourceOwner{registries: registries, unitAttributes: unitAttributes, store: store, matcher: matcher, repository: repository,
 		facts: facts, clock: clock, artifacts: artifacts, executions: executions, principals: principals}
 	publisher, err := publication.New(repository, owner, facts, clock)
 	if err != nil {
@@ -151,6 +160,10 @@ func (o *ProcessingSourceOwner) CaptureCandidate(ctx context.Context, tx platfor
 		return worker.Capture{}, platform.NewFailure(platform.CodeRevisionConflict, errors.New("candidate Workflow configuration changed"))
 	}
 	definition, err := o.readDefinition(ctx, tx, selected.id, selected.version)
+	if err != nil {
+		return worker.Capture{}, err
+	}
+	snapshot, err = o.withUnitAttributes(ctx, tx, snapshot, definition)
 	if err != nil {
 		return worker.Capture{}, err
 	}
@@ -566,8 +579,12 @@ func (o *ProcessingSourceOwner) readSource(ctx context.Context, tx platform.Tran
 			projectedMatch.Resolutions[position].AddressRuleID = nil
 		}
 	}
+	snapshot.projected = projectedMatch
+	// Unit attributes are left out: identity checks need none, and a run captures only the ones its
+	// Workflow reads, see withUnitAttributes.
 	snapshot.projection, err = projectProcessingSource(ctx, transmission, snapshot.network, snapshot.networkName,
-		snapshot.protocol, snapshot.payload, snapshot.observedAt, snapshot.sourceRevision, projectedMatch, snapshot.targets)
+		snapshot.protocol, snapshot.payload, snapshot.observedAt, snapshot.sourceRevision, projectedMatch, snapshot.targets,
+		declarations.UnitAttributes{})
 	if err != nil {
 		return sourceSnapshot{}, err
 	}
@@ -576,6 +593,28 @@ func (o *ProcessingSourceOwner) readSource(ctx context.Context, tx platform.Tran
 		return sourceSnapshot{}, err
 	}
 	snapshot.identity, err = snapshot.captured.Identity()
+	return snapshot, err
+}
+
+// withUnitAttributes returns the snapshot with the Unit attributes the definition reads captured
+// on every target. The source identity is unchanged: attributes are outside the context revision.
+func (o *ProcessingSourceOwner) withUnitAttributes(ctx context.Context, tx platform.TransactionContext,
+	snapshot sourceSnapshot, definition processing.Definition,
+) (sourceSnapshot, error) {
+	unitAttributes, err := o.unitAttributes.ReadUnitAttributes(ctx, tx, definition, matchedUnits(snapshot.projected.Resolutions))
+	if err != nil {
+		return sourceSnapshot{}, err
+	}
+	if len(unitAttributes.Declared) == 0 {
+		return snapshot, nil
+	}
+	snapshot.projection, err = projectProcessingSource(ctx, snapshot.transmission, snapshot.network, snapshot.networkName,
+		snapshot.protocol, snapshot.payload, snapshot.observedAt, snapshot.sourceRevision, snapshot.projected, snapshot.targets,
+		unitAttributes)
+	if err != nil {
+		return sourceSnapshot{}, err
+	}
+	snapshot.captured, err = processing.CaptureSource(ctx, snapshot.projection)
 	return snapshot, err
 }
 

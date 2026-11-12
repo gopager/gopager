@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/commands"
+	"github.com/gopager/gopager/internal/events"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/units"
@@ -32,16 +33,18 @@ type Service struct {
 	clock        platform.Clock
 	store        Store
 	receipts     commands.Repository
+	facts        events.MasterDataAppender
 }
 
 // NewService composes the schema service. It fails with authz.ErrInvalidInput on a missing
 // dependency.
 func NewService(transactions identity.Transactions, resolver identity.AuthorityResolver, clock platform.Clock,
-	store Store, receipts commands.Repository) (*Service, error) {
-	if transactions == nil || resolver == nil || clock == nil || store == nil || receipts == nil {
+	store Store, receipts commands.Repository, facts events.MasterDataAppender) (*Service, error) {
+	if transactions == nil || resolver == nil || clock == nil || store == nil || receipts == nil || facts == nil {
 		return nil, authz.ErrInvalidInput
 	}
-	return &Service{transactions: transactions, resolver: resolver, clock: clock, store: store, receipts: receipts}, nil
+	return &Service{transactions: transactions, resolver: resolver, clock: clock, store: store, receipts: receipts,
+		facts: facts}, nil
 }
 
 // SchemaInput is the editable content of a schema. The key is fixed at creation.
@@ -67,6 +70,10 @@ func sortedAgencies(agencies []uuid.UUID) []uuid.UUID {
 	slices.SortFunc(out, func(a, b uuid.UUID) int { return slices.Compare(a[:], b[:]) })
 	return out
 }
+
+// schemaID derives the UUID that stands for a schema key where an identifier is a UUID: command
+// receipts and the aggregate of schema facts.
+func schemaID(key string) uuid.UUID { return uuid.NewSHA1(uuid.NameSpaceOID, []byte(key)) }
 
 // caller is what a schema operation needs to know about its caller.
 type caller struct {
@@ -219,7 +226,7 @@ func (s *Service) Create(ctx context.Context, proof identity.Proof, command uuid
 		// The receipt keeps a UUID; a key is a string, and a replay carries the same key.
 		if err := s.receipts.SaveCommandReceipt(tx.Context(), tx, commands.Receipt{ActorID: who.principal,
 			CommandID: command, Operation: createOperation, Fingerprint: fingerprint,
-			Result: commands.Result{ID: uuid.NewSHA1(uuid.NameSpaceOID, []byte(schema.Key)), Revision: 1}, RecordedAt: now}); err != nil {
+			Result: commands.Result{ID: schemaID(schema.Key), Revision: 1}, RecordedAt: now}); err != nil {
 			return err
 		}
 		result = schema
@@ -230,7 +237,9 @@ func (s *Service) Create(ctx context.Context, proof identity.Proof, command uuid
 
 // Update replaces label, description, fields, deprecation and Agencies at the expected revision.
 // The change must keep the schema compatible (CheckChange), and the caller needs ManageAction in
-// the stored and the new Agencies.
+// the stored and the new Agencies. Changing the Agencies of a unit schema records a
+// configuration.changed fact in the same transaction, because the Agencies decide which Unit
+// inherits Organization defaults of the schema.
 func (s *Service) Update(ctx context.Context, proof identity.Proof, key string, expected int64, input SchemaInput,
 	check func(identity.Authentication) error) (Schema, error) {
 	if !ValidKey(key) || expected <= 0 {
@@ -260,15 +269,37 @@ func (s *Service) Update(ctx context.Context, proof identity.Proof, key string, 
 		if err := s.store.Update(tx.Context(), tx, next, expected); err != nil {
 			return err
 		}
+		if err := s.recordAgencyChange(tx, current, next, now); err != nil {
+			return err
+		}
 		result = next
 		return nil
 	})
 	return result, err
 }
 
+// recordAgencyChange appends the configuration fact of an Agency change of a unit schema, which
+// changes inherited values and so the content of live views. Other updates change no Unit's
+// effective attributes and record nothing.
+func (s *Service) recordAgencyChange(tx platform.TransactionContext, current, next Schema, now time.Time) error {
+	if next.Subject != SubjectUnit || slices.Equal(sortedAgencies(current.Agencies), next.Agencies) {
+		return nil
+	}
+	return s.recordUnitSchemaFact(tx, next.Key, next.Revision, "updated", now)
+}
+
+// recordUnitSchemaFact appends the configuration fact of a unit schema change that live views must
+// resync on.
+func (s *Service) recordUnitSchemaFact(tx platform.TransactionContext, key string, revision int64, change string, now time.Time) error {
+	_, err := s.facts.AppendMasterDataFact(tx.Context(), tx, events.MasterDataFact{ID: uuid.New(),
+		Aggregate: events.EntityRef{Type: "attributeSchema", ID: schemaID(key)}, Revision: revision,
+		OccurredAt: now, ChangeKind: change})
+	return err
+}
+
 // Delete removes a schema at the expected revision and returns its revision reached. The caller
 // needs ManageAction in every Agency of the schema. A schema that is still referenced is
-// authz.ErrRevisionConflict.
+// authz.ErrRevisionConflict. Deleting a unit schema appends a configuration fact.
 func (s *Service) Delete(ctx context.Context, proof identity.Proof, key string, expected int64,
 	check func(identity.Authentication) error) (Deleted, error) {
 	if !ValidKey(key) || expected <= 0 {
@@ -289,6 +320,13 @@ func (s *Service) Delete(ctx context.Context, proof identity.Proof, key string, 
 		}
 		if err := s.store.Delete(tx.Context(), tx, key, expected); err != nil {
 			return err
+		}
+		// The deletion removes the schema's entries from deleted Units, whose values history views
+		// still show, so live views resync.
+		if current.Subject == SubjectUnit {
+			if err := s.recordUnitSchemaFact(tx, key, revision, "deleted", now); err != nil {
+				return err
+			}
 		}
 		result = Deleted{Key: key, Revision: revision}
 		return nil

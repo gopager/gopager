@@ -125,6 +125,22 @@ func (s *Store) lockCatalog(ctx context.Context, tx platform.TransactionContext)
 // deleted and re-created under the same key is a different schema.
 func (s *Store) NewOutputSchemaAgencies(ctx context.Context, tx platform.TransactionContext, workflow uuid.UUID,
 	keys []string) (map[string][]uuid.UUID, error) {
+	return s.newSchemaAgencies(ctx, tx, workflow, keys, `jsonb_exists(v.definition->'outputs', k)`)
+}
+
+// NewReadSchemaAgencies implements processing.ConfigurationRepository with the rules of
+// NewOutputSchemaAgencies for versions that read `target.unit.attributes.<key>…`.
+func (s *Store) NewReadSchemaAgencies(ctx context.Context, tx platform.TransactionContext, workflow uuid.UUID,
+	keys []string) (map[string][]uuid.UUID, error) {
+	return s.newSchemaAgencies(ctx, tx, workflow, keys, `jsonb_path_exists(v.definition,
+		'$.** ? (@.namespace == "target" && @.path[0] == "unit" && @.path[1] == "attributes" && @.path[2] == $key)',
+		jsonb_build_object('key', k))`)
+}
+
+// newSchemaAgencies returns the Agencies of the existing schemas among keys that no version of
+// the Workflow holds yet; held is the SQL condition on version v that it holds the key k.
+func (s *Store) newSchemaAgencies(ctx context.Context, tx platform.TransactionContext, workflow uuid.UUID,
+	keys []string, held string) (map[string][]uuid.UUID, error) {
 	if len(keys) == 0 {
 		return map[string][]uuid.UUID{}, nil
 	}
@@ -136,7 +152,7 @@ func (s *Store) NewOutputSchemaAgencies(ctx context.Context, tx platform.Transac
 		return nil, err
 	}
 	rows, err := executor.QueryContext(ctx, `SELECT k FROM unnest($1::text[]) AS k WHERE NOT EXISTS (
-		SELECT 1 FROM processing_workflow_versions v WHERE v.workflow_id = $2 AND jsonb_exists(v.definition->'outputs', k)
+		SELECT 1 FROM processing_workflow_versions v WHERE v.workflow_id = $2 AND `+held+`
 			AND v.created_at >= (SELECT s.created_at FROM attribute_schemas s WHERE s.key = k))`,
 		keys, workflow)
 	if err != nil {

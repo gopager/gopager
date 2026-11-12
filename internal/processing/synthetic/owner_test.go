@@ -109,7 +109,14 @@ func testWorkflow(narrowing *processing.WorkflowNarrowing) processing.WorkflowCo
 func capture(t *testing.T, owner *Owner, network Network, tx testTx, authority authz.Authority,
 	workflow processing.WorkflowConfiguration, raw string) (processing.SourceProjection, processing.EvaluationScope) {
 	t.Helper()
-	result, err := owner.CaptureSyntheticPreview(context.Background(), tx, authority, workflow,
+	return captureDefinition(t, owner, tx, authority, workflow, processing.Definition{}, raw)
+}
+
+func captureDefinition(t *testing.T, owner *Owner, tx testTx, authority authz.Authority,
+	workflow processing.WorkflowConfiguration, definition processing.Definition, raw string,
+) (processing.SourceProjection, processing.EvaluationScope) {
+	t.Helper()
+	result, err := owner.CaptureSyntheticPreview(context.Background(), tx, authority, workflow, definition,
 		json.RawMessage(raw))
 	if err != nil {
 		t.Fatal(err)
@@ -221,7 +228,7 @@ func TestSyntheticOwnerCapturesEveryFieldRegardlessOfEditorRightsAndFailsClosedW
 		t.Fatal(err)
 	}
 	_, err = missing.CaptureSyntheticPreview(context.Background(), tx, authority,
-		testWorkflow(nil), json.RawMessage(raw))
+		testWorkflow(nil), processing.Definition{}, json.RawMessage(raw))
 	if platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
 		t.Fatalf("missing Network owner was not explicit: %v", err)
 	}
@@ -248,12 +255,12 @@ func TestSyntheticOwnerRejectsUnfrozenInputAndOutOfScopeNetwork(t *testing.T) {
 	for _, raw := range cases {
 		raw = replaceNetworkID(raw, network.ID)
 		if _, err := owner.CaptureSyntheticPreview(context.Background(), tx, authority, testWorkflow(nil),
-			json.RawMessage(raw)); err == nil {
+			processing.Definition{}, json.RawMessage(raw)); err == nil {
 			t.Fatalf("invalid synthetic request accepted: %s", raw)
 		}
 	}
 	raw := replaceNetworkID(`{"schemaVersion":1,"protocol":"pocsag","form":"text","networkId":"NETWORK","payload":{"value":"x"},"targets":[]}`, network.ID)
-	if _, err := owner.CaptureSyntheticPreview(context.Background(), tx, authority, workflow, json.RawMessage(raw)); !errors.Is(err, authz.ErrForbidden) {
+	if _, err := owner.CaptureSyntheticPreview(context.Background(), tx, authority, workflow, processing.Definition{}, json.RawMessage(raw)); !errors.Is(err, authz.ErrForbidden) {
 		t.Fatalf("Network outside configured scope accepted: %v", err)
 	}
 }

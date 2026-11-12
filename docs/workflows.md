@@ -142,6 +142,9 @@ The server defines a fixed catalog. Only these references are accepted:
 | `target.function` | integer | yes | `address` | target has a function |
 | `target.unit.id` | string (UUID) | yes | `unit` | target is assigned to a unit |
 | `target.unit.collections` | list of string (UUID) | yes | `unit` | target is assigned to a unit |
+| `target.unit.attributes.<schemaKey>.<field>[.<property>…]` | the schema field's kind | yes | `unit` | target is assigned to a unit with an effective value of that field (see below) |
+
+**Unit attributes.** Every field of a `unit` [Attribute schema](http-api.md#attribute-schemas), and every object property below it (list elements excluded), is a target field `target.unit.attributes.<schemaKey>.<field>[.<property>…]` of field group `unit`. Its value is the effective Unit attribute of the target's assigned Unit (own value, else the Organization default when the schema is assigned to the Unit's Agency) at the moment the run captures its source. A run captures only the Unit attributes its Workflow version reads (also in a preview of a definition), so a large Unit schema never enlarges the source of a Workflow that ignores it. Unit attributes are not part of the assignment context revision: editing them does not invalidate a running or pending run, a result keeps the values of its run, and no edit reprocesses Messages; only an explicit Reprocess evaluates them again.
 
 Every captured source field carries the owner's **dependency**: the transmission, network, source/context revision, optional target position, and the field group declared for it. Derived values (step outputs and final outputs) carry none. A definition is classified **once per definition version**, not per value: its outputs are `derived` plus the union of the field groups of every source field the definition reads (see [Classification](#classification)).
 

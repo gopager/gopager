@@ -29,15 +29,22 @@ type Service struct {
 	rules        RuleOwner
 	commands     commands.Repository
 	facts        events.MasterDataAppender
+	attributes   AttributeCatalog
 }
 
-// NewService composes only the approved early Unit/collection operations.
-func NewService(transactions identity.Transactions, resolver *identity.Resolver, clock platform.Clock, repository Repository, rules RuleOwner, receipts commands.Repository, facts events.MasterDataAppender) (*Service, error) {
+// NewService composes the Unit, collection, Organization and template operations. Options add
+// optional dependencies such as WithAttributeCatalog.
+func NewService(transactions identity.Transactions, resolver *identity.Resolver, clock platform.Clock, repository Repository,
+	rules RuleOwner, receipts commands.Repository, facts events.MasterDataAppender, options ...Option) (*Service, error) {
 	if transactions == nil || resolver == nil || clock == nil || repository == nil || rules == nil || receipts == nil || facts == nil {
 		return nil, platform.NewFailure(platform.CodeInvalidInput, errors.New("missing Unit service dependency"))
 	}
-	return &Service{transactions: transactions, resolver: resolver, clock: clock, repository: repository,
-		rules: rules, commands: receipts, facts: facts}, nil
+	service := &Service{transactions: transactions, resolver: resolver, clock: clock, repository: repository,
+		rules: rules, commands: receipts, facts: facts}
+	for _, option := range options {
+		option(service)
+	}
+	return service, nil
 }
 
 // within resolves current authority and performs DTO construction under the same protected transaction.
@@ -212,7 +219,13 @@ func (s *Service) CreateUnit(ctx context.Context, proof identity.Proof, command 
 			result, err = receipt.Check("unit.create", hash)
 			return err
 		}
+		if err := s.checkUnitAttributes(tx.Context(), tx, input.Settings, input.AgencyID); err != nil {
+			return err
+		}
 		if input.NewOrganization != nil {
+			if err := s.checkDefaultAttributes(tx.Context(), tx, input.NewOrganization.Defaults); err != nil {
+				return err
+			}
 			organizationID := uuid.New()
 			organization := Organization{ID: organizationID, Revision: 1,
 				Name: input.NewOrganization.Name, Defaults: input.NewOrganization.Defaults}
@@ -286,6 +299,9 @@ func (s *Service) ChangeUnit(ctx context.Context, proof identity.Proof, id uuid.
 			}
 		}
 		if err := s.checkMembership(tx.Context(), tx, authority, current.CollectionIDs, input.CollectionIDs, now); err != nil {
+			return err
+		}
+		if err := s.checkUnitAttributes(tx.Context(), tx, proposed.Settings, proposed.AgencyID); err != nil {
 			return err
 		}
 		if current.Name == proposed.Name && current.AgencyID == proposed.AgencyID &&

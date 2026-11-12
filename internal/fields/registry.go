@@ -46,6 +46,17 @@ func (r *Registry) Lookup(scope Scope, ref processing.FieldRef, strict bool) (Fi
 
 // List returns the non-deprecated fields of a scope, sorted by Path.
 func (r *Registry) List(scope Scope) []Field {
+	return r.list(scope, false)
+}
+
+// ListAll returns every field of a scope, deprecated ones included, sorted by Path. Owners that
+// capture values use it: a deprecation hides a field from new references, but a reference saved
+// before must keep its value.
+func (r *Registry) ListAll(scope Scope) []Field {
+	return r.list(scope, true)
+}
+
+func (r *Registry) list(scope Scope, withDeprecated bool) []Field {
 	seen := make(map[string]bool)
 	var result []Field
 	for _, provider := range r.providers {
@@ -55,7 +66,7 @@ func (r *Registry) List(scope Scope) []Field {
 				continue
 			}
 			seen[key] = true
-			if field.In(scope) && !field.Deprecated {
+			if field.In(scope) && (withDeprecated || !field.Deprecated) {
 				result = append(result, field)
 			}
 		}

@@ -21,6 +21,7 @@ import (
 func projectProcessingSource(ctx context.Context, transmission uuid.UUID, network uuid.UUID, networkName string,
 	protocol protocols.Protocol, payload protocols.TransmissionPayload, observedAt time.Time,
 	sourceRevision int64, matched assignments.MatchResult, targets []protocols.Target,
+	unitAttributes declarations.UnitAttributes,
 ) (processing.SourceProjection, error) {
 	if ctx == nil || transmission == uuid.Nil || network == uuid.Nil || sourceRevision <= 0 ||
 		len(targets) != len(matched.Resolutions) {
@@ -97,6 +98,7 @@ func projectProcessingSource(ctx context.Context, transmission uuid.UUID, networ
 			Schema: processing.FieldSchema{Kind: processing.ListValue, Optional: true,
 				Element: &processing.FieldSchema{Kind: processing.StringValue}}, Groups: []string{"unit"}},
 	}
+	projection.TargetDeclarations = append(projection.TargetDeclarations, unitAttributes.Declared...)
 	for position, target := range targets {
 		index := uint32(position)
 		resolution := matched.Resolutions[position]
@@ -109,6 +111,11 @@ func projectProcessingSource(ctx context.Context, transmission uuid.UUID, networ
 		if err != nil {
 			return processing.SourceProjection{}, err
 		}
+		attributeFields, err := unitAttributes.TargetFields(resolution.UnitID, dependency("unit", &index))
+		if err != nil {
+			return processing.SourceProjection{}, err
+		}
+		fields = append(fields, attributeFields...)
 		projection.Targets = append(projection.Targets, processing.TargetContext{Position: index, Fields: fields})
 	}
 	return projection, nil

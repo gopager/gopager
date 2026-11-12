@@ -19,6 +19,12 @@ type view struct {
 	gateway      *GatewayView
 	groups       map[string]bool
 	declarations fields.Declarations
+	// withoutUnit reports whether a Unit-less appearance is eligible for this view: a split
+	// view has none, an unsplit view has the Message's Unit-less appearances.
+	withoutUnit bool
+	// bound restricts the Unit-attribute candidates to at most one Unit while a filter is
+	// evaluated per binding; nil means every relevant Unit contributes.
+	bound *[]readmodel.UnitRecord
 	// unitSet indexes units for relevantUnit; nil until first use.
 	unitSet map[uuid.UUID]struct{}
 }
@@ -38,6 +44,9 @@ func (v *view) candidates(ref processing.FieldRef) ([]processing.Value, fields.F
 	}
 	if ref.Namespace == attributesNamespace {
 		return v.attributeCandidates(ref.Path), field
+	}
+	if isUnitAttribute(ref) {
+		return v.unitAttributeCandidates(ref.Path[1:]), field
 	}
 	if len(ref.Path) != 1 {
 		return nil, field

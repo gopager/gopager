@@ -121,6 +121,9 @@ func (s *Service) CreateOrganization(ctx context.Context, proof identity.Proof, 
 			result, err = receipt.Check("organization.create", fingerprint)
 			return err
 		}
+		if err := s.checkDefaultAttributes(tx.Context(), tx, input.Defaults); err != nil {
+			return err
+		}
 		value := Organization{ID: uuid.New(), Revision: 1, Name: input.Name, Defaults: input.Defaults}
 		if err := s.repository.SaveOrganization(tx.Context(), tx, authority, value, 0, now); err != nil {
 			return err
@@ -153,6 +156,9 @@ func (s *Service) ChangeOrganization(ctx context.Context, proof identity.Proof, 
 		}
 		next, err := commands.NextRevision(current.Revision, expected)
 		if err != nil {
+			return err
+		}
+		if err := s.checkDefaultAttributes(tx.Context(), tx, input.Defaults); err != nil {
 			return err
 		}
 		if current.Name == input.Name && reflect.DeepEqual(current.Defaults, input.Defaults) {
@@ -194,6 +200,12 @@ func (s *Service) DeleteOrganization(ctx context.Context, proof identity.Proof, 
 		if err != nil {
 			return err
 		}
+		schemas := AttributeSchemas{}
+		if !organization.Defaults.Attributes.Empty() {
+			if schemas, err = s.unitSchemas(tx.Context(), tx); err != nil {
+				return err
+			}
+		}
 		for i := range members {
 			if err := s.authorizeUnitUses(tx.Context(), tx, authority, "unit.update", members[i], now); err != nil {
 				return authz.ErrForbidden
@@ -202,7 +214,8 @@ func (s *Service) DeleteOrganization(ctx context.Context, proof identity.Proof, 
 			if err != nil {
 				return err
 			}
-			members[i].Settings = MaterializeSettings(members[i].Settings, organization.Defaults)
+			members[i].Settings = MaterializeSettings(members[i].Settings, organization.Defaults,
+				schemas.AssignedTo(members[i].AgencyID))
 			members[i].OrganizationID, members[i].Revision = nil, revision
 		}
 		for i := range templates {
@@ -213,7 +226,7 @@ func (s *Service) DeleteOrganization(ctx context.Context, proof identity.Proof, 
 			if err != nil {
 				return err
 			}
-			templates[i].Settings = MaterializeSettings(templates[i].Settings, organization.Defaults)
+			templates[i].Settings = MaterializeSettings(templates[i].Settings, organization.Defaults, nil)
 			templates[i].OrganizationID, templates[i].Revision = nil, revision
 		}
 		for _, member := range members {
@@ -295,6 +308,9 @@ func (s *Service) CreateUnitTemplate(ctx context.Context, proof identity.Proof, 
 			result, err = receipt.Check("unit-template.create", fingerprint)
 			return err
 		}
+		if err := s.checkTemplateAttributes(tx.Context(), tx, input.Settings); err != nil {
+			return err
+		}
 		value := UnitTemplate{ID: uuid.New(), Revision: 1, Name: input.Name,
 			OrganizationID: input.OrganizationID, Settings: input.Settings}
 		if err := s.repository.SaveUnitTemplate(tx.Context(), tx, value, 0); err != nil {
@@ -370,6 +386,9 @@ func (s *Service) ChangeUnitTemplate(ctx context.Context, proof identity.Proof, 
 			return err
 		}
 		if err := s.authorizeTemplateReference(tx.Context(), tx, authority, input.OrganizationID, now); err != nil {
+			return err
+		}
+		if err := s.checkTemplateAttributes(tx.Context(), tx, input.Settings); err != nil {
 			return err
 		}
 		if current.Name == input.Name && equalUUIDPointer(current.OrganizationID, input.OrganizationID) &&
@@ -485,8 +504,14 @@ func (s *Service) CreateUnitFromTemplate(ctx context.Context, proof identity.Pro
 			}
 			return nil
 		}
+		schemas, err := s.unitSchemas(tx.Context(), tx)
+		if err != nil {
+			return err
+		}
+		settings := templateSettingsFromEffective(template.EffectiveSettings)
+		settings.Attributes = CopyAttributes(template.EffectiveSettings.Attributes, schemas, input.AgencyID)
 		value := Unit{ID: id, Revision: 1, Name: input.Name, AgencyID: input.AgencyID, OrganizationID: template.OrganizationID,
-			CollectionIDs: input.CollectionIDs, Settings: templateSettingsFromEffective(template.EffectiveSettings)}
+			CollectionIDs: input.CollectionIDs, Settings: settings}
 		if err := s.repository.SaveUnit(tx.Context(), tx, authority, value, 0, now); err != nil {
 			return err
 		}
@@ -546,6 +571,10 @@ func (s *Service) prepareBulk(ctx context.Context, tx platform.TransactionContex
 	if len(values) != len(input.Items) {
 		return nil, authz.ErrNotFound
 	}
+	schemas, err := s.bulkAttributeSchemas(ctx, tx, input)
+	if err != nil {
+		return nil, err
+	}
 	for i := range values {
 		item := input.Items[i]
 		if values[i].ID != item.ID {
@@ -556,6 +585,9 @@ func (s *Service) prepareBulk(ctx context.Context, tx platform.TransactionContex
 		}
 		if err := s.authorizeUnitUses(ctx, tx, authority, action, values[i], now); err != nil {
 			return nil, authz.ErrNotFound
+		}
+		if err := checkBulkItem(schemas, item, values[i].AgencyID); err != nil {
+			return nil, err
 		}
 	}
 	return values, nil
@@ -578,6 +610,14 @@ func (s *Service) PreviewBulkUnits(ctx context.Context, proof identity.Proof, in
 		if input.Operation == "delete" {
 			action = "unit.delete"
 		}
+		schemas := AttributeSchemas{}
+		if s.attributes != nil {
+			// A preview writes nothing, so it reads the schemas without the write lock.
+			var err error
+			if schemas, err = s.attributes.UnitSchemas(tx.Context(), tx); err != nil {
+				return err
+			}
+		}
 		for i, item := range input.Items {
 			preview := BulkItemPreview{ID: item.ID, ExpectedRevision: item.ExpectedRevision, Valid: false}
 			value, err := s.repository.ReadUnit(tx.Context(), tx, authority, action, item.ID, now)
@@ -591,7 +631,7 @@ func (s *Service) PreviewBulkUnits(ctx context.Context, proof identity.Proof, in
 				return err
 			} else if _, err := commands.NextRevision(value.Revision, item.ExpectedRevision); errors.Is(err, authz.ErrRevisionConflict) {
 				preview.Code = "REVISION_CONFLICT"
-			} else if err != nil {
+			} else if err != nil || checkBulkItem(schemas, item, value.AgencyID) != nil {
 				preview.Code = "INVALID_INPUT"
 			} else {
 				preview.Valid = true
