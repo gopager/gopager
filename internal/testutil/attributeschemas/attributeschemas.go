@@ -23,10 +23,20 @@ func Insert(t testing.TB, store *postgres.Store, key string, fields map[string]a
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now().UTC().Truncate(time.Microsecond)
-	schema := attributes.Schema{Key: key, Label: key, Subject: attributes.SubjectMessage, Fields: fields,
-		Agencies: []uuid.UUID{}, Revision: 1, CreatedAt: now, UpdatedAt: now}
 	err = store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
+		executor, err := store.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		// The application stamps versions with the database clock; a container clock that drifts
+		// from the host's must not make the schema look created after the versions saved next.
+		var now time.Time
+		if err := executor.QueryRowContext(tx.Context(), `SELECT clock_timestamp()`).Scan(&now); err != nil {
+			return err
+		}
+		now = now.UTC().Truncate(time.Microsecond)
+		schema := attributes.Schema{Key: key, Label: key, Subject: attributes.SubjectMessage, Fields: fields,
+			Agencies: []uuid.UUID{}, Revision: 1, CreatedAt: now, UpdatedAt: now}
 		return schemas.Insert(tx.Context(), tx, schema, uuid.New())
 	})
 	if err != nil && !errors.Is(err, authz.ErrRevisionConflict) {
