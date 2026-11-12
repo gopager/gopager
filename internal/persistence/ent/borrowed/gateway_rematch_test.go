@@ -377,18 +377,20 @@ func (r failingReadmission) ReadmitProcessing(ctx context.Context, tx platform.T
 func TestGatewayRemapResumesAfterRestartWithConcurrentChanges(t *testing.T) {
 	t.Parallel()
 	f := newRematchFixture(t)
-	receipts := make([]ingest.Receipt, 150)
+	// A small batch keeps the scope multi-batch with few Transmissions.
+	const batch = 10
+	receipts := make([]ingest.Receipt, batch+batch/2)
 	for i := range receipts {
 		receipts[i] = f.submit(t, fmt.Sprintf("bulk-%03d", i), "", 100)
 	}
 	first := f.replace(t, mapping("a", f.networks[1], 0))
-	allowed := 100
+	allowed := batch
 	networks, err := ingest.NewNetworkReResolver(f.intake, f.rules)
 	if err != nil {
 		t.Fatal(err)
 	}
 	crashing, err := assignments.NewCorrectionRunner(f.store, f.store, f.rules, networks, f.ruleStore, f.facts,
-		failingReadmission{ProcessingReadmission: f.owner, allowed: &allowed})
+		failingReadmission{ProcessingReadmission: f.owner, allowed: &allowed}, assignments.WithCorrectionBatchSize(batch))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -400,8 +402,8 @@ func TestGatewayRemapResumesAfterRestartWithConcurrentChanges(t *testing.T) {
 		count(*) FILTER (WHERE EXISTS (SELECT 1 FROM transmission_targets target
 			WHERE target.transmission_id=t.id AND target.network_id<>t.network_id))
 		FROM transmissions t WHERE t.gateway_id=$1`, []any{f.gateway, f.networks[1]}, &moved, &halfMoved)
-	if moved != 100 || halfMoved != 0 {
-		t.Fatalf("after the crashed second batch: moved=%d half-moved=%d, want 100 and 0", moved, halfMoved)
+	if moved != batch || halfMoved != 0 {
+		t.Fatalf("after the crashed second batch: moved=%d half-moved=%d, want %d and 0", moved, halfMoved, batch)
 	}
 	second := f.replace(t, mapping("a", f.networks[0], 0), mapping("b", f.networks[1], 1))
 	if _, err := f.rules.CreateRule(t.Context(), f.proof, uuid.New(), ruleInput(f.networks[1], f.unitB, 100, 100, 1),

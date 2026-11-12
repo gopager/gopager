@@ -15,7 +15,8 @@ import (
 )
 
 const (
-	correctionBatchSize = 100
+	// DefaultCorrectionBatchSize is the number of Transmissions one correction transaction moves.
+	DefaultCorrectionBatchSize = 100
 	correctionLease     = 30 * time.Second
 	correctionPoll      = 500 * time.Millisecond
 	correctionMaxRetry  = 30 * time.Second
@@ -41,21 +42,39 @@ type CorrectionRunner struct {
 	repository   CorrectionWorkRepository
 	facts        events.CorrectionAppender
 	readmission  ProcessingReadmission
+	batchSize    int
+}
+
+// CorrectionRunnerOption adjusts a CorrectionRunner at construction.
+type CorrectionRunnerOption func(*CorrectionRunner)
+
+// WithCorrectionBatchSize sets how many Transmissions one correction transaction moves
+// (DefaultCorrectionBatchSize when not set). A smaller batch exercises multi-batch scopes with
+// little data; a value below 1 is invalid input at construction.
+func WithCorrectionBatchSize(size int) CorrectionRunnerOption {
+	return func(r *CorrectionRunner) { r.batchSize = size }
 }
 
 // NewCorrectionRunner returns a runner using the given ports; networks re-resolves the Network
 // of the Transmissions of a gateway scope. It returns authz.ErrInvalidInput if any dependency
-// is nil.
+// is nil or an option is invalid.
 func NewCorrectionRunner(transactions identity.Transactions, clock platform.Clock, matcher CorrectionMatcher,
 	networks NetworkResolver, repository CorrectionWorkRepository, facts events.CorrectionAppender,
-	readmission ProcessingReadmission,
+	readmission ProcessingReadmission, options ...CorrectionRunnerOption,
 ) (*CorrectionRunner, error) {
 	if transactions == nil || clock == nil || matcher == nil || networks == nil || repository == nil ||
 		facts == nil || readmission == nil {
 		return nil, authz.ErrInvalidInput
 	}
-	return &CorrectionRunner{transactions: transactions, clock: clock, matcher: matcher, networks: networks,
-		repository: repository, facts: facts, readmission: readmission}, nil
+	runner := &CorrectionRunner{transactions: transactions, clock: clock, matcher: matcher, networks: networks,
+		repository: repository, facts: facts, readmission: readmission, batchSize: DefaultCorrectionBatchSize}
+	for _, option := range options {
+		option(runner)
+	}
+	if runner.batchSize < 1 {
+		return nil, authz.ErrInvalidInput
+	}
+	return runner, nil
 }
 
 // Run calls RunOnce every 500ms until ctx is cancelled, returning ctx.Err().
@@ -112,7 +131,7 @@ func correctionRetryDelay(failures int) time.Duration {
 }
 
 // RunOnce claims one due correction scope and processes it in batches of up to
-// 100 transmissions, each batch in its own transaction that, for a gateway scope,
+// the runner's batch size (DefaultCorrectionBatchSize unless set), each batch in its own transaction that, for a gateway scope,
 // re-resolves each transmission's Network first, re-matches the targets, applies
 // changed resolutions and Network moves, appends one assignment.changed correction
 // fact per changed or moved transmission and re-admits Processing once for every
@@ -149,7 +168,7 @@ func (r *CorrectionRunner) RunOnce(ctx context.Context) (bool, error) {
 	for {
 		var hasItems bool
 		err := r.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-			items, err := r.repository.ReadCorrectionBatch(tx.Context(), tx, lease, correctionBatchSize)
+			items, err := r.repository.ReadCorrectionBatch(tx.Context(), tx, lease, r.batchSize)
 			if err != nil {
 				return err
 			}
