@@ -1067,7 +1067,7 @@ Definition format: [workflows](workflows.md).
 | POST | `/instances/inspection` | `plugin.configure` (all) | 200 | Verify a manifest and executable without starting the plugin |
 | GET | `/instances/{id}/personal-configuration` | `subscription.manage-own` (own account) | 200 | The caller's own personal values |
 | PUT | `/instances/{id}/personal-configuration` | `subscription.manage-own` (own account) | 200 | Create (`expectedRevision` `"0"`) or replace the caller's personal values |
-| DELETE | `/instances/{id}/personal-configuration` | `subscription.manage-own` (own account) | 200 | Delete them at `expectedRevision` |
+| DELETE | `/instances/{id}/personal-configuration` | `subscription.manage-own` (own account) | 200 | Delete them at `expectedRevision`; the result carries the revision of the deletion (one higher), which a later create continues from |
 | GET | `/instances/{id}/unit-parameters` | `plugin.configure` (all) | 200 | Per-Unit values (`offset`, `limit`, optional `unitId`) |
 | PUT | `/instances/{id}/unit-parameters/{unitId}` | `plugin.configure` (all) | 200 | Replace one Unit's values |
 | DELETE | `/instances/{id}/unit-parameters/{unitId}` | `plugin.configure` (all) | 200 | Remove one Unit's values |

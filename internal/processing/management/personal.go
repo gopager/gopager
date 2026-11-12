@@ -301,7 +301,8 @@ func (p *PersonalService) Delete(ctx context.Context, proof identity.Proof, comm
 		if err := p.store.DeletePersonalConfiguration(tx.Context(), tx, id, principal, expected); err != nil {
 			return err
 		}
-		result = commands.Result{ID: id, Revision: expected}
+		// Deletion leaves a tombstone one revision ahead, so revisions never repeat for the owner.
+		result = commands.Result{ID: id, Revision: expected + 1}
 		return p.instances.management.receipts.SaveCommandReceipt(tx.Context(), tx, commands.Receipt{
 			ActorID: principal, CommandID: command, Operation: operation, Fingerprint: fingerprint,
 			Result: result, RecordedAt: now})

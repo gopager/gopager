@@ -3850,7 +3850,7 @@ paths:
               $ref: '#/components/schemas/PersonalConfigurationDeleteRequest'
       responses:
         '200':
-          description: The instance ID and the deleted revision.
+          description: The instance ID and the revision of the deletion (the expected revision plus one).
           content:
             application/json:
               schema:

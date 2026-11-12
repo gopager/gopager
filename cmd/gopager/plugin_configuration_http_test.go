@@ -194,7 +194,10 @@ func TestPluginPersonalConfigurationStaysPerOwner(t *testing.T) {
 	}
 
 	deleteBody := mustJSON(t, map[string]any{"schemaVersion": 1, "commandId": uuid.New(), "expectedRevision": "2"})
-	f.userRequest(alice, http.MethodDelete, path, deleteBody, http.StatusOK)
+	deleted := f.userRequest(alice, http.MethodDelete, path, deleteBody, http.StatusOK)
+	if _, revision := managementResultID(t, deleted); revision != "3" {
+		t.Fatalf("delete revision = %s, want the tombstone revision 3", revision)
+	}
 	f.userRequest(alice, http.MethodGet, path, "", http.StatusNotFound)
 	if rows := f.scalar(`SELECT count(*)::text FROM configuration_secrets WHERE owner_id = $1`, aliceID); rows != "0" {
 		t.Fatalf("the owner's Secret rows stayed after delete: %s", rows)
