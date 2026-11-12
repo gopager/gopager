@@ -231,7 +231,7 @@ Scope kinds each action accepts (`internal/authz/grants.go` is the source; a gra
 | `unit.*`, `organization.*`, `unit-collection.*`, `address-rule.*`, `suppression.*`, `assignment-correction.read`, `assignment-correction.retry` | `all`, `agency`, `unit`, `unitCollection` |
 | `unit-template.*`, `agency.create`, `agency.delete`, `grouping.configure`, `notice.manage`, `plugin.configure`, `operations.manage`, `saved-view.manage-global` | `all` only |
 | `agency.read`, `agency.update`, `gateway.*`, `network.*` | `all`, `agency` |
-| `account.*`, `grant.manage`, `password.local`, `recovery.*`, `session.manage-own`, `key.*`, `subscription.manage-*` | `all`, `account` |
+| `account.*`, `grant.manage`, `password.local`, `recovery.*`, `session.manage-own`, `key.*`, `preference.manage-own`, `subscription.manage-*` | `all`, `account` |
 | `gateway.diagnostics.read`, `gateway.credential.rotate` | `all`, `agency`, `gateway` |
 | `delivery.read`, `delivery.retry`, `delivery.redeliver` | `all`, `agency`, `unit`, `unitCollection`, `account` |
 | `workflow.*`, `presentation.manage` | `all`, `agency`, `unit` |
@@ -277,6 +277,9 @@ Scope evaluation per resource:
 | Subscription | `subscription.manage-own` on the caller's own account for personal Subscriptions; `subscription.manage-global` on the technical subscriber's account for global ones. See [Subscriptions](#subscriptions). |
 | Delivery | `delivery.read`, `delivery.retry` and `delivery.redeliver`, each matched against the subscriber's account, the Agencies and Units the Delivery concerns and their Unit collections, within the grant's maximum data age. See [Deliveries](#deliveries). |
 | Layout | The Agencies the layout is assigned to: visible with `presentation.manage` or `message.read` in one of them; changes need `presentation.manage` in every one. See [Layouts](#layouts). |
+| Layout assignment | A Unit assignment: `presentation.manage` on the Unit (Agency, Unit, collections) and the Layout assigned to the Unit's Agency. An Organization assignment: `presentation.manage` in every Agency of the Layout. See [Layout assignments](#layout-assignments). |
+| Installation settings | Reading is public. Changing needs `notice.manage` with scope `all`. See [Installation](#installation). |
+| Preferences | `preference.manage-own` on the caller's own account, through the caller's own Session only. See [Preferences](#preferences). |
 | Attribute schema | The Agencies the schema is assigned to: visible through any right that picks or fills attributes; changes need `attribute-schema.manage` in every one. See [Attribute schemas](#attribute-schemas). |
 
 ## Conventions
@@ -320,6 +323,9 @@ Every application error, except for unmatched routes, has this shape:
   redelivery whose instance is missing, disabled or without a provider: it then holds
   `{"status":"unavailable","instanceId":"…"}`; `DEPENDENCY_UNAVAILABLE` carries `dependency` and
   `EXTERNAL_UNCERTAIN` carries `deliveryId`, and `CAPABILITY_UNDECLARED` carries `capability` (see the table below).
+  An `INVALID_INPUT` that the server can pin to one request field carries `{"field":"<name>"}`, the JSON name of
+  that field (`title`, `banner`, `severity`, `defaultLayoutId`, `locale`, `timeZone`, `timeGapMinutes`, `layoutId`,
+  `scopeKind`, `scopeId`, `outputKind`, `expectedRevision`); other invalid input has no `field`.
 - `requestId` is a fresh UUID per error response. The server logs the same `requestId` with the
   code and HTTP status (`API error response`), so an operator can correlate a client's report with
   the log; see [Operations](operations.md#exit-status-and-logging).
@@ -1343,6 +1349,7 @@ schemas `Delivery` and `DeliveryAttempt`.
 | PUT | `/layouts/{id}` | `presentation.manage` | 200 | Replace `name`, `agencies` and `definition` at `expectedRevision`; appends a version |
 | DELETE | `/layouts/{id}` | `presentation.manage` | 200 | Delete at `expectedRevision`; returns `{"id","revision"}` |
 | GET | `/layouts/{id}/versions/{version}` | see below | 200 | Read one immutable version |
+| GET | `/layouts/editor-metadata` | see below | 200 | Block kinds, output kinds, bounds and readable fields for an editor |
 
 A layout is a named, versioned arrangement of registry fields that a Subscription renders a Domain event with. It is
 data, not a template: it has no expressions, loops or markup. Schemas: `Layout`, `LayoutDefinition`, `LayoutBlock`.
@@ -1380,11 +1387,92 @@ data, not a template: it has no expressions, loops or markup. Schemas: `Layout`,
 - **Versions.** Every save appends an immutable version whose number is the layout's new revision (create is version 1).
   A Delivery records the layout and version it was rendered with. `{version}` is a positive decimal number; an
   unknown version is `404`.
-- **Delete.** A layout that a Subscription still references is `409 REVISION_CONFLICT`, like a stale revision. The
-  conflict does not say which. Change the Subscription first.
+- **Delete.** A layout that a Subscription, a [layout assignment](#layout-assignments) or the [installation
+  default](#installation) still references is `409 REVISION_CONFLICT`, like a stale revision. The conflict does not
+  say which. Change the reference first.
+- **Choosing a layout.** A Subscription's own `layoutId` always wins. Without one, a rendering for a set of Units
+  (a Delivery's relevant Units, a card's eligible Units) takes, for its output kind, the layer values of those
+  Units: a Unit's own [assignment](#layout-assignments), else its Organization's assignment when that Layout is
+  assigned to the Unit's Agency, else none. When every Unit with a value has the same Layout, that Layout applies
+  at its current version. When they differ, the installation default applies (the built-in default when it has
+  another output kind) and the rendering is marked as a layer conflict; neither order nor a combination ever
+  chooses. Units without a value do not veto. With no value at all, the installation default applies when its output
+  kind matches, else the built-in default of the output kind. An assignment whose Layout lost the Unit's Agency, and
+  assignments of deleted Units and Organizations, are skipped.
+- **Editor metadata.** `GET /layouts/editor-metadata` needs `presentation.manage`, `subscription.manage-own` or
+  `subscription.manage-global` (any scope; `403 FORBIDDEN` otherwise). It returns `blockKinds` (each `kind` with its
+  allowed and `required` `properties`), `outputKinds`, `bounds` (`blocks`, `depth`, `literalBytes`, `labelBytes`,
+  `templateBytes`, `urlFields`, `fallbackMin`, `fallbackMax`, `outputBytes`) and `fields`: the registry fields of
+  scope `delivery`, sorted by path, that the caller's field permissions let them read, each with `ref`, `type`,
+  `group` (absent when no permission is needed), `label`, `icon` (when declared) and `deprecated`. Schema:
+  `LayoutEditorMetadata`.
 - `POST` takes a `commandId`; an identical replay returns the layout as it is now, or `404` if it was deleted
   since. `GET /layouts` uses [offset paging](#pagination).
 - Layouts write no domain event.
+
+### Layout assignments
+
+| Method | Path | Right | Success | Purpose |
+| --- | --- | --- | --- | --- |
+| GET | `/layout-assignments` | `presentation.manage` | 200 | List the assignments the caller may manage (`scopeKind`, `scopeId`, `offset`, `limit`) |
+| PUT | `/layout-assignments/{scopeKind}/{scopeId}/{outputKind}` | `presentation.manage` | 200 | Assign a Layout (`layoutId`, `expectedRevision`) |
+| DELETE | `/layout-assignments/{scopeKind}/{scopeId}/{outputKind}` | `presentation.manage` | 200 | Remove at `expectedRevision`; returns `{"id","revision"}` with the scope ID |
+
+An assignment makes a Layout the one a Unit (`scopeKind` `unit`) or an Organization (`organization`) renders with for
+one output kind (`text`, `markdown` or `json`); there is at most one per scope and output kind. Schema: `LayoutAssignment`.
+
+- **Write.** `PUT` creates with `expectedRevision` `"0"` (or absent) and replaces with the current revision; a stale
+  revision, or a create over an existing assignment, is `409 REVISION_CONFLICT`. The Layout must exist and have the
+  path's output kind, and for a Unit it must be assigned to the Unit's Agency; otherwise `400 INVALID_INPUT` with
+  `parameters.field` `layoutId`. A malformed `scopeKind`, `scopeId` or `outputKind` is `400`.
+- **Rights.** A caller without `presentation.manage` anywhere gets `403`. A Unit scope needs `presentation.manage` on
+  the Unit (its Agency, the Unit and its collections); an Organization scope needs it in every Agency of the Layout.
+  An unknown or deleted Unit or Organization is `404 NOT_FOUND`. Replacing or removing an assignment needs the right
+  for the Layout it currently names. Deleting a Unit or Organization removes its assignments.
+- **List.** `GET` returns only assignments the caller may change, ordered by scope kind, scope ID and output kind,
+  with [offset paging](#pagination); `scopeKind` and `scopeId` are optional filters. Layouts are resolved through
+  these assignments as described under [Layouts](#layouts).
+- Assignments write no domain event.
+
+### Installation
+
+| Method | Path | Right | Success | Purpose |
+| --- | --- | --- | --- | --- |
+| GET | `/installation` | none (public) | 200 | Title, banner and default Layout |
+| PUT | `/installation` | `notice.manage` (`all`) | 200 | Replace every field at `expectedRevision` |
+
+The installation settings are one record: `title` (1 to 128 characters), an optional plain-text `banner` (1 to 2048
+characters) with its `severity` (`info`, `warning` or `critical`; present exactly when the banner is), an optional
+`defaultLayoutId` and the `revision`. Schema: `Installation`.
+
+- `GET` needs no session, key or other credential, so every client, the guest and signed-out visitors included, can
+  show the title and banner. A credential sent with it is ignored. The record is seeded with the title `GoPager` at
+  revision `"1"` and no banner or default Layout.
+- `PUT` replaces all fields (a missing `banner`, `severity` or `defaultLayoutId` clears it) and needs
+  `expectedRevision`; a stale revision is `409 REVISION_CONFLICT`. The default Layout must exist, else `400
+  INVALID_INPUT` with `parameters.field` `defaultLayoutId`; any other invalid field is named the same way. Anonymous
+  requests are `401`, callers without `notice.manage` are `403`.
+- The default Layout applies to the output kind of that Layout, see [Layouts](#layouts). A banner change appends no
+  fact and sends no event: clients read the record again when they load.
+
+### Preferences
+
+| Method | Path | Right | Success | Purpose |
+| --- | --- | --- | --- | --- |
+| GET | `/me/preferences` | `preference.manage-own` | 200 | The caller's preferences, or the defaults |
+| PUT | `/me/preferences` | `preference.manage-own` | 200 | Replace them at `expectedRevision` |
+
+Preferences are `locale` (a BCP 47 language tag, at most 35 bytes, stored in canonical form), `timeZone` (an IANA name
+such as `Europe/Vienna`; empty and `Local` are refused), `timeGapMinutes` (0 to 1440) and `revision`. An account
+that never saved any gets `{"locale":"en","timeZone":"UTC","timeGapMinutes":0,"revision":"0"}`. Schema: `Preferences`.
+
+- `PUT` replaces all three values; `expectedRevision` `"0"` (or absent) is the first save, later saves send the
+  current revision, and a stale one is `409 REVISION_CONFLICT`. An invalid value is `400 INVALID_INPUT` with
+  `parameters.field` `locale`, `timeZone` or `timeGapMinutes`.
+- Only an interactive account acting through its own Session owns preferences. An access key (also of a human
+  account) and a technical account get `403 FORBIDDEN`; the guest gets `401 LOGIN_REQUIRED`. The account also needs
+  `preference.manage-own` (scope `all` or `account`).
+- Preferences change no wire format: dates and enumerations stay in their locale-independent form.
 
 ### Attribute schemas
 
