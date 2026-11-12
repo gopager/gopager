@@ -230,8 +230,11 @@ func (s *PreviewService) preview(ctx context.Context, proof identity.Proof, inpu
 	}
 	result, err = program.EvaluateScoped(run.Context(), source, capture.Scope, run)
 	if err != nil {
+		references := program.SourceReferences()
 		explained, err := explainAfterRecheck(ctx, err, func() error {
-			return s.recheckDependencies(ctx, proof, workflow, binding, nil)
+			return s.management.within(ctx, proof, false, nil, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
+				return s.checkFailureContext(tx.Context(), tx, authority, now, workflow, binding, references)
+			})
 		})
 		return processing.Evaluation{}, explained, err
 	}
@@ -248,16 +251,21 @@ func (s *PreviewService) recheckPreview(ctx context.Context, proof identity.Proo
 	if err != nil {
 		return err
 	}
-	return s.recheckDependencies(ctx, proof, workflow, binding, dependencies)
-}
-
-// recheckDependencies runs the final fence for the given result dependencies (none for a failed
-// evaluation) under the caller's current authority.
-func (s *PreviewService) recheckDependencies(ctx context.Context, proof identity.Proof,
-	workflow processing.WorkflowConfiguration, binding processing.ExecutionBinding, dependencies []processing.Dependency) error {
 	return s.management.within(ctx, proof, false, nil, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
 		return s.checkPreviewContext(tx.Context(), tx, authority, now, workflow, binding, dependencies)
 	})
+}
+
+// checkFailureContext is the final fence before a failed evaluation is explained: the editor must
+// read every field group the definition reads, because a failing step can tell something about a
+// value of such a group, and the Workflow, authority and source must pass checkPreviewContext.
+func (s *PreviewService) checkFailureContext(ctx context.Context, tx platform.TransactionContext,
+	authority authz.Authority, now time.Time, workflow processing.WorkflowConfiguration,
+	binding processing.ExecutionBinding, references []processing.SourceReference) error {
+	if err := requireReadableGroups(authority, references); err != nil {
+		return err
+	}
+	return s.checkPreviewContext(ctx, tx, authority, now, workflow, binding, nil)
 }
 
 // checkPreviewContext validates the captured result while the caller holds current-authority locks.
