@@ -55,6 +55,6 @@ func (s *Service) ProjectForDelivery(ctx context.Context, tx platform.Transactio
 	if len(result.Items) == 0 {
 		return DeliveryProjection{}, false, nil
 	}
-	projection := current.viewer.projection(result.Items[0])
+	projection := current.viewer.projection(result.Items[0], current.viewer.sortedGroups())
 	return projection, true, nil
 }

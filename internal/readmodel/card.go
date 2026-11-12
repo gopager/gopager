@@ -44,14 +44,20 @@ func WithCards(renderer CardRenderer) Option {
 
 // projection builds the Delivery view of a record the way the caller reads it: the feed item,
 // the eligible appearances and the readable groups, sorted.
-func (v viewer) projection(record FeedRecord) DeliveryProjection {
+func (v viewer) projection(record FeedRecord, groups []string) DeliveryProjection {
+	return DeliveryProjection{Item: v.feedItem(record, false), Units: slices.Clone(record.Units),
+		WithoutUnit: slices.Clone(record.WithoutUnit), Groups: groups, ResultVisible: record.ResultVisible}
+}
+
+// sortedGroups returns the viewer's readable field groups, sorted. A page computes them once and
+// shares them between its projections, which only read them.
+func (v viewer) sortedGroups() []string {
 	groups := make([]string, 0, len(v.groups))
 	for group := range v.groups {
 		groups = append(groups, group)
 	}
 	slices.Sort(groups)
-	return DeliveryProjection{Item: v.feedItem(record, false), Units: slices.Clone(record.Units),
-		WithoutUnit: slices.Clone(record.WithoutUnit), Groups: groups, ResultVisible: record.ResultVisible}
+	return groups
 }
 
 // attachCards renders the cards of the records and sets them on the items, which are the
@@ -62,8 +68,9 @@ func (s *Service) attachCards(ctx context.Context, tx platform.TransactionContex
 		return nil
 	}
 	projections := make([]DeliveryProjection, 0, len(records))
+	groups := current.viewer.sortedGroups()
 	for _, record := range records {
-		projections = append(projections, current.viewer.projection(record))
+		projections = append(projections, current.viewer.projection(record, groups))
 	}
 	cards, err := s.cards.RenderCards(ctx, tx, projections)
 	if err != nil {
