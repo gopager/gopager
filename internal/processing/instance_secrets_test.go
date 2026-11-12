@@ -220,6 +220,9 @@ func TestSecretResolverFailuresAreUnavailable(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "empty"), []byte("\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(dir, "token"), []byte("file-value"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Mkdir(filepath.Join(dir, "dir"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -246,6 +249,8 @@ func TestSecretResolverFailuresAreUnavailable(t *testing.T) {
 		"no cipher":       {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretStored, ID: row}, Owner: &owner}, rows: map[uuid.UUID]StoredSecret{row: stored}, mutate: func(r *SecretResolver) { r.Cipher = nil }},
 		"foreign owner":   {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretStored, ID: row}, Owner: &other}, rows: map[uuid.UUID]StoredSecret{row: stored}},
 		"admin used row":  {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretStored, ID: row}}, rows: map[uuid.UUID]StoredSecret{row: stored}},
+		"personal env":    {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretEnv, Name: "GOPAGER_PLUGIN_SECRET_A"}, Owner: &owner}},
+		"personal file":   {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretFile, Path: "token"}, Owner: &owner}},
 		"foreign instace": {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretStored, ID: row}, Owner: &owner}, rows: map[uuid.UUID]StoredSecret{row: wrongInstance}},
 	}
 	for name, tc := range cases {

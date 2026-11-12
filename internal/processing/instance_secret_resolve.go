@@ -71,6 +71,12 @@ func (r SecretResolver) resolveOne(instanceID uuid.UUID, request SecretRequest,
 	var value []byte
 	var version string
 	var err error
+	// Files and environment variables are placed by the operator for administrative
+	// configuration; a personal value may only use a Secret its owner stored, so a User cannot
+	// route an operator-placed Secret into their own recipient settings.
+	if request.Owner != nil && request.Reference.Source != SecretStored {
+		return nil, "", capabilityUnavailable(errSecretUnavailable)
+	}
 	switch request.Reference.Source {
 	case SecretStored:
 		value, version, err = r.resolveStored(instanceID, request, rows)
