@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 2,
+  "sdkMajor": 2,
+  "sdkMinor": 1,
+  "capability": "delivery",
+  "pluginId": "test-delivery",
+  "version": "1",
+  "capabilityId": "send",
+  "artifact": {
+    "path": "plugin",
+    "digest": "{{digest}}"
+  },
+  "delivery": {
+    "outputKinds": ["text", "markdown", "json"],
+    "inputs": [
+      {"name": "priority", "kind": "integer"},
+      {"name": "sound", "kind": "string", "maxBytes": 64}
+    ],
+    "dependencies": [
+      {"kind": "network", "description": "provider API"},
+      {"kind": "secret", "description": "API token"}
+    ],
+    "sendsPerMinute": 600,
+    "idempotent": true
+  },
+  "resources": {"memoryMiB": 32, "note": "test fixture"},
+  "configurationSchema": {
+    "kind": "object",
+    "properties": {
+      "title": {"kind": "string"},
+      "apiToken": {"kind": "string"},
+      "userKey": {"kind": "string", "optional": true}
+    }
+  },
+  "configurationPolicy": {
+    "configurationScope": "admin",
+    "secret": false,
+    "properties": {
+      "title": {"configurationScope": "admin", "secret": false},
+      "apiToken": {"configurationScope": "admin", "secret": true},
+      "userKey": {"configurationScope": "user", "secret": true}
+    }
+  }
+}

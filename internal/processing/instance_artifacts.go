@@ -36,14 +36,7 @@ func (i *LocalInstanceInspector) InspectInstance(ctx context.Context, configurat
 	if err != nil {
 		return err
 	}
-	if hasSecretPolicy(manifest.ConfigurationPolicy) {
-		return capabilityUnavailable(errors.New("instance Secret owner unavailable"))
-	}
-	if err := validateAdministrativeConfiguration(manifest.ConfigurationSchema,
-		manifest.ConfigurationPolicy, configuration.Configuration); err != nil {
-		return err
-	}
-	return nil
+	return manifest.validateInstance(configuration)
 }
 
 // ProjectInstanceConfiguration returns declared configuration with Secret and user-scoped values redacted.
@@ -100,6 +93,9 @@ func projectConfigurationField(schema FieldSchema, policy ConfigurationPolicy, v
 	}
 	if *policy.Secret || policy.Scope == "user" {
 		view.Redacted = true
+		if *policy.Secret {
+			view.Source = secretSourceOf(value)
+		}
 		return view, nil
 	}
 	switch schema.Kind {
