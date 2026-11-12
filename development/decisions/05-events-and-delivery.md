@@ -118,3 +118,21 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Consequences:** [AP-12](../work-packages/ap-12-plugin-host.md) T069 amended; [C-09 Configuration Authority](../contracts/c-09-delivery.md#configuration-authority) notes the open rule; the [AP-11 record](../execution/ap-11.md) links this decision.
 - **Owner detail:** [C-09](../contracts/c-09-delivery.md), AP-12
 
+
+<a id="d-157"></a>
+## D-157 AP-22 runs before AP-12 on the AP-11 target-input port
+
+- **Status:** accepted
+- **Date:** 2026-11-12
+- **Decision:** [AP-22](../work-packages/ap-22-unit-attributes.md) runs before [AP-12](../work-packages/ap-12-plugin-host.md). Its input "AP-12 handover" (plugin-declared Delivery target inputs, per-Unit parameter API) is replaced by the completed [AP-11 handover](../execution/ap-11.md#handover): the target descriptor port `delivery.TargetDescriptor.Inputs` (typed `InputField` kinds), `integration_unit_parameters` and the input precedence of materialization. AP-22 verifies the target-input binding with fake targets, as AP-11 verified its input path. AP-12 maps its manifests onto the same descriptor and keeps the binding working; real-plugin evidence of the binding belongs to AP-17.
+- **Rationale:** AP-12 was open without a handover, but AP-22 consumes only contracts that AP-11 already fixed (AP-12 T069 maps manifests onto AP-11's descriptor and does not change input kinds), and AP-22 does not author Unit parameters. The overlapping write scopes (OpenAPI, HTTP adapters, Ent schema and generated code, composition) require the two APs to run one after the other; the smaller AP-22 lands first, directly on [AP-21](../work-packages/ap-21-attribute-schemas.md). Running AP-12 first, or leaving the binding open until AP-12, were considered and rejected by the user.
+- **Consequences:** The AP-22 inputs and the AP-12 compatibility context are amended; the [execution path](../work-packages.md#revised-execution-path) lists AP-22 before AP-12. No completed AP changes; producers in the requirement mapping are unchanged.
+
+<a id="d-158"></a>
+## D-158 AP-22 write scope: target-input bindings in `00013_events_delivery.sql`
+
+- **Status:** accepted
+- **Date:** 2026-11-12
+- **Decision:** [AP-22](../work-packages/ap-22-unit-attributes.md) T096 adds the column `input_bindings jsonb NOT NULL DEFAULT '{}'` to `subscription_targets` by editing `internal/persistence/migrations/00013_events_delivery.sql` in place ([D-128](01-platform-and-storage.md#d-128)); the store reads and writes it with `inputs`.
+- **Rationale:** A Subscription target stores, per input, a binding to a Unit attribute next to its constant inputs, and the table is created by AP-11's migration, which the AP-22 write scope did not list. A separate table in a new migration was considered and rejected by the user as more joins and cascade handling for one small map; staying in scope would have left the target-input binding of T096 unbuilt.
+- **Consequences:** The [AP-11 record](../execution/ap-11.md) receives a follow-up with the rerun evidence; the AP-22 record links this decision under Blockers and Deviations. No open AP's assignment changes.
