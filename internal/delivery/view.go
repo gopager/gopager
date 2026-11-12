@@ -27,6 +27,9 @@ type view struct {
 	bound *[]readmodel.UnitRecord
 	// unitSet indexes units for relevantUnit; nil until first use.
 	unitSet map[uuid.UUID]struct{}
+	// withoutEvent marks a view that renders a Message outside any Domain event, whose event
+	// fields are absent.
+	withoutEvent bool
 }
 
 var (

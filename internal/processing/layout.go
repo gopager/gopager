@@ -94,11 +94,16 @@ type LayoutURL struct {
 	Fields   []FieldRef `json:"fields"`
 }
 
-// LayoutRequest selects the layout a delivery needs: an explicitly configured layout, or the
-// built-in default for the output kind when LayoutID is nil.
+// LayoutRequest selects the layout a rendering needs: an explicitly configured layout, or, when
+// LayoutID is nil, the layout the installation, Organization and Unit layers choose for the
+// output kind and the Units, falling back to the built-in default of the output kind.
 type LayoutRequest struct {
 	LayoutID   *uuid.UUID
 	OutputKind string
+	// UnitIDs are the Units the rendering is for: a Delivery's relevant Units or a Message's
+	// eligible Unit appearances. Only these Units' layers take part, so a hidden Unit never
+	// chooses a layout.
+	UnitIDs []uuid.UUID
 }
 
 // ResolvedLayout is a layout together with its identity. ID uuid.Nil and Version 0 denote the

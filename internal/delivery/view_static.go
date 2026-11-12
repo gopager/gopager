@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/gopager/gopager/internal/processing"
@@ -9,6 +10,9 @@ import (
 
 // static resolves a static catalog field.
 func (v *view) static(key string) (processing.Value, bool) {
+	if v.withoutEvent && strings.HasPrefix(key, "event.") {
+		return processing.Value{}, false
+	}
 	switch key {
 	case "event.type":
 		return stringValue(v.event.Type), true
