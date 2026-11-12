@@ -39,5 +39,6 @@ ALTER TABLE processing_candidates ADD CONSTRAINT processing_candidates_reprocess
 CREATE INDEX processing_candidates_reprocess ON processing_candidates (reprocess_id) WHERE reprocess_id IS NOT NULL;
 
 -- +goose Down
+DROP INDEX processing_candidates_reprocess;
 ALTER TABLE processing_candidates DROP CONSTRAINT processing_candidates_reprocess;
 DROP TABLE processing_reprocess_requests;
