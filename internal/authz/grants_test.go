@@ -81,3 +81,20 @@ func TestValidFieldAcceptsTheFixedGroups(t *testing.T) {
 		}
 	}
 }
+
+// TestPreferenceActionIsSelfService expects the own-preferences action to share the scopes of the
+// other self-service account actions.
+func TestPreferenceActionIsSelfService(t *testing.T) {
+	t.Parallel()
+	if !authz.ValidAction("preference.manage-own") {
+		t.Fatal("preference.manage-own is not in the catalog")
+	}
+	for _, kind := range []string{"all", "account"} {
+		if !authz.ActionAllowsScope("preference.manage-own", kind) {
+			t.Fatalf("preference.manage-own rejects scope %q", kind)
+		}
+	}
+	if authz.ActionAllowsScope("preference.manage-own", "agency") {
+		t.Fatal("preference.manage-own accepts an Agency scope")
+	}
+}

@@ -102,7 +102,7 @@ func buildActionScopes() map[string][]string {
 	add("grouping.configure", "all")
 	add("account.read account.create account.update account.delete account.delete-own grant.manage "+
 		"password.local recovery.request recovery.issue recovery.consume session.manage-own "+
-		"key.create-own key.manage-own key.manage-technical subscription.manage-own subscription.manage-global",
+		"key.create-own key.manage-own key.manage-technical preference.manage-own subscription.manage-own subscription.manage-global",
 		"all", "account")
 	add("delivery.read delivery.retry delivery.redeliver", "all", "agency", "unit", "unitCollection", "account")
 	add("workflow.read workflow.create workflow.update workflow.delete workflow.preview workflow.activate workflow.reprocess presentation.manage",

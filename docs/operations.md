@@ -192,7 +192,7 @@ Bootstrap opens no listener, completes within 30 s, and can succeed only once pe
 | Master data | `unit.*`, `organization.*`, `unit-collection.*`, `unit-template.*` (each `read`, `create`, `update`, `delete`) |
 | Assignment | `address-rule.*`, `suppression.*` (each `read`, `create`, `update`, `delete`), `assignment-correction.read`, `assignment-correction.retry` |
 | Gateways | `gateway.*`, `network.*` (each `read`, `create`, `update`, `delete`), `grouping.configure` |
-| Accounts | `account.read`, `account.create`, `account.update`, `account.delete`, `account.delete-own`, `grant.manage`, `password.local`, `recovery.request`, `recovery.issue`, `recovery.consume`, `session.manage-own`, `key.create-own`, `key.manage-own`, `key.manage-technical` |
+| Accounts | `account.read`, `account.create`, `account.update`, `account.delete`, `account.delete-own`, `grant.manage`, `password.local`, `recovery.request`, `recovery.issue`, `recovery.consume`, `session.manage-own`, `key.create-own`, `key.manage-own`, `key.manage-technical`, `preference.manage-own` |
 | Subscriptions and delivery | `subscription.manage-own`, `subscription.manage-global`, `delivery.read`, `delivery.retry`, `delivery.redeliver` |
 | Processing | `workflow.read`, `workflow.create`, `workflow.update`, `workflow.delete`, `workflow.preview`, `workflow.activate`, `workflow.reprocess`, `presentation.manage`, `plugin.configure` |
 | Attribute schemas | `attribute-schema.manage` |
