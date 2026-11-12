@@ -28,9 +28,9 @@ type installationUpdate struct {
 	DefaultLayoutID  *uuid.UUID `json:"defaultLayoutId"`
 }
 
-// checkSchemaVersion accepts an absent (0) or the current (1) schemaVersion of a request body.
+// checkSchemaVersion requires the current schemaVersion (1) of a request body.
 func checkSchemaVersion(version int) error {
-	if version != 0 && version != 1 {
+	if version != 1 {
 		return authz.ErrInvalidInput
 	}
 	return nil

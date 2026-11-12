@@ -64,7 +64,7 @@ func TestInstallationRoutes(t *testing.T) {
 	}
 	manager := f.session(f.human([]string{"notice.manage"}, authz.Scope{Kind: "all"}, []string{"payload"}))
 	layout := f.textLayoutRow("text", f.agency)
-	body := fmt.Sprintf(`{"expectedRevision":"1","title":"Control room","banner":"Planned downtime","severity":"warning","defaultLayoutId":%q}`, layout)
+	body := fmt.Sprintf(`{"schemaVersion":1,"expectedRevision":"1","title":"Control room","banner":"Planned downtime","severity":"warning","defaultLayoutId":%q}`, layout)
 	f.presentationCall(manager, http.MethodPut, "/api/v1/installation", body, http.StatusOK)
 	read = f.presentationCall(credentials{}, http.MethodGet, "/api/v1/installation", "", http.StatusOK)
 	if err := json.Unmarshal(read.Data, &settings); err != nil || settings.Title != "Control room" || settings.Revision != "2" ||
@@ -74,17 +74,17 @@ func TestInstallationRoutes(t *testing.T) {
 	if got := f.presentationCall(manager, http.MethodPut, "/api/v1/installation", body, http.StatusConflict); got.Code != "REVISION_CONFLICT" {
 		t.Fatalf("stale = %+v", got)
 	}
-	missing := fmt.Sprintf(`{"expectedRevision":"2","title":"t","defaultLayoutId":%q}`, uuid.New())
+	missing := fmt.Sprintf(`{"schemaVersion":1,"expectedRevision":"2","title":"t","defaultLayoutId":%q}`, uuid.New())
 	if got := f.presentationCall(manager, http.MethodPut, "/api/v1/installation", missing, http.StatusBadRequest); got.Parameters["field"] != "defaultLayoutId" {
 		t.Fatalf("missing default Layout = %+v", got)
 	}
-	noBanner := `{"expectedRevision":"2","title":"t","banner":"b"}`
+	noBanner := `{"schemaVersion":1,"expectedRevision":"2","title":"t","banner":"b"}`
 	if got := f.presentationCall(manager, http.MethodPut, "/api/v1/installation", noBanner, http.StatusBadRequest); got.Parameters["field"] != "severity" {
 		t.Fatalf("banner without severity = %+v", got)
 	}
 	reader := f.session(f.human([]string{"message.read"}, authz.Scope{Kind: "all"}, []string{"payload"}))
-	f.presentationCall(reader, http.MethodPut, "/api/v1/installation", `{"expectedRevision":"2","title":"t"}`, http.StatusForbidden)
-	f.presentationCall(credentials{}, http.MethodPut, "/api/v1/installation", `{"expectedRevision":"2","title":"t"}`, http.StatusUnauthorized)
+	f.presentationCall(reader, http.MethodPut, "/api/v1/installation", `{"schemaVersion":1,"expectedRevision":"2","title":"t"}`, http.StatusForbidden)
+	f.presentationCall(credentials{}, http.MethodPut, "/api/v1/installation", `{"schemaVersion":1,"expectedRevision":"2","title":"t"}`, http.StatusUnauthorized)
 }
 
 func TestPreferenceRoutes(t *testing.T) {
@@ -96,7 +96,7 @@ func TestPreferenceRoutes(t *testing.T) {
 	if string(read.Data) != `{"locale":"en","timeZone":"UTC","timeGapMinutes":0,"revision":"0"}` {
 		t.Fatalf("defaults = %s", read.Data)
 	}
-	first := `{"expectedRevision":"0","locale":"de-AT","timeZone":"Europe/Vienna","timeGapMinutes":30}`
+	first := `{"schemaVersion":1,"expectedRevision":"0","locale":"de-AT","timeZone":"Europe/Vienna","timeGapMinutes":30}`
 	saved := f.presentationCall(session, http.MethodPut, "/api/v1/me/preferences", first, http.StatusOK)
 	if string(saved.Data) != `{"locale":"de-AT","timeZone":"Europe/Vienna","timeGapMinutes":30,"revision":"1"}` {
 		t.Fatalf("saved = %s", saved.Data)
@@ -105,9 +105,9 @@ func TestPreferenceRoutes(t *testing.T) {
 		t.Fatalf("second first-save = %+v", got)
 	}
 	for field, body := range map[string]string{
-		"locale":         `{"expectedRevision":"1","locale":"x y","timeZone":"UTC","timeGapMinutes":0}`,
-		"timeZone":       `{"expectedRevision":"1","locale":"en","timeZone":"Local","timeGapMinutes":0}`,
-		"timeGapMinutes": `{"expectedRevision":"1","locale":"en","timeZone":"UTC","timeGapMinutes":1441}`,
+		"locale":         `{"schemaVersion":1,"expectedRevision":"1","locale":"x y","timeZone":"UTC","timeGapMinutes":0}`,
+		"timeZone":       `{"schemaVersion":1,"expectedRevision":"1","locale":"en","timeZone":"Local","timeGapMinutes":0}`,
+		"timeGapMinutes": `{"schemaVersion":1,"expectedRevision":"1","locale":"en","timeZone":"UTC","timeGapMinutes":1441}`,
 	} {
 		if got := f.presentationCall(session, http.MethodPut, "/api/v1/me/preferences", body, http.StatusBadRequest); got.Parameters["field"] != field {
 			t.Fatalf("%s: %+v", field, got)
@@ -137,7 +137,7 @@ func TestLayoutAssignmentRoutes(t *testing.T) {
 	}
 
 	created := f.presentationCall(manager, http.MethodPut, path("unit", unit, "text"),
-		fmt.Sprintf(`{"expectedRevision":"0","layoutId":%q}`, layout), http.StatusOK)
+		fmt.Sprintf(`{"schemaVersion":1,"expectedRevision":"0","layoutId":%q}`, layout), http.StatusOK)
 	var assignment struct {
 		LayoutID string `json:"layoutId"`
 		Revision string `json:"revision"`
@@ -146,22 +146,22 @@ func TestLayoutAssignmentRoutes(t *testing.T) {
 		t.Fatalf("created = %s, %v", created.Data, err)
 	}
 	f.presentationCall(manager, http.MethodPut, path("unit", unit, "text"),
-		fmt.Sprintf(`{"expectedRevision":"0","layoutId":%q}`, layout), http.StatusConflict)
+		fmt.Sprintf(`{"schemaVersion":1,"expectedRevision":"0","layoutId":%q}`, layout), http.StatusConflict)
 	f.presentationCall(manager, http.MethodPut, path("unit", unit, "markdown"),
-		fmt.Sprintf(`{"layoutId":%q}`, layout), http.StatusBadRequest)
+		fmt.Sprintf(`{"schemaVersion":1,"layoutId":%q}`, layout), http.StatusBadRequest)
 	if got := f.presentationCall(manager, http.MethodPut, path("unit", unit, "text"),
-		fmt.Sprintf(`{"expectedRevision":"1","layoutId":%q}`, foreign), http.StatusBadRequest); got.Parameters["field"] != "layoutId" {
+		fmt.Sprintf(`{"schemaVersion":1,"expectedRevision":"1","layoutId":%q}`, foreign), http.StatusBadRequest); got.Parameters["field"] != "layoutId" {
 		t.Fatalf("layout of another Agency = %+v", got)
 	}
 	f.presentationCall(manager, http.MethodPut, path("unit", uuid.New(), "text"),
-		fmt.Sprintf(`{"layoutId":%q}`, layout), http.StatusNotFound)
+		fmt.Sprintf(`{"schemaVersion":1,"layoutId":%q}`, layout), http.StatusNotFound)
 	f.presentationCall(manager, http.MethodPut, path("organization", uuid.New(), "text"),
-		fmt.Sprintf(`{"layoutId":%q}`, layout), http.StatusNotFound)
+		fmt.Sprintf(`{"schemaVersion":1,"layoutId":%q}`, layout), http.StatusNotFound)
 	// An Organization's Layout needs the right in every Agency of the Layout.
 	f.presentationCall(manager, http.MethodPut, path("organization", organization, "text"),
-		fmt.Sprintf(`{"layoutId":%q}`, both), http.StatusForbidden)
+		fmt.Sprintf(`{"schemaVersion":1,"layoutId":%q}`, both), http.StatusForbidden)
 	f.presentationCall(manager, http.MethodPut, path("organization", organization, "text"),
-		fmt.Sprintf(`{"layoutId":%q}`, layout), http.StatusOK)
+		fmt.Sprintf(`{"schemaVersion":1,"layoutId":%q}`, layout), http.StatusOK)
 
 	list := f.presentationCall(manager, http.MethodGet, "/api/v1/layout-assignments?scopeKind=unit&scopeId="+unit.String(), "", http.StatusOK)
 	var page struct {
@@ -178,9 +178,9 @@ func TestLayoutAssignmentRoutes(t *testing.T) {
 
 	// A referenced Layout stays until its assignment is gone.
 	f.presentationCall(manager, http.MethodDelete, "/api/v1/layouts/"+layout.String(), `{"schemaVersion":1,"expectedRevision":"1"}`, http.StatusConflict)
-	f.presentationCall(manager, http.MethodDelete, path("unit", unit, "text"), `{"expectedRevision":"7"}`, http.StatusConflict)
-	f.presentationCall(manager, http.MethodDelete, path("unit", unit, "text"), `{"expectedRevision":"1"}`, http.StatusOK)
-	f.presentationCall(manager, http.MethodDelete, path("organization", organization, "text"), `{"expectedRevision":"1"}`, http.StatusOK)
+	f.presentationCall(manager, http.MethodDelete, path("unit", unit, "text"), `{"schemaVersion":1,"expectedRevision":"7"}`, http.StatusConflict)
+	f.presentationCall(manager, http.MethodDelete, path("unit", unit, "text"), `{"schemaVersion":1,"expectedRevision":"1"}`, http.StatusOK)
+	f.presentationCall(manager, http.MethodDelete, path("organization", organization, "text"), `{"schemaVersion":1,"expectedRevision":"1"}`, http.StatusOK)
 	f.presentationCall(manager, http.MethodDelete, "/api/v1/layouts/"+layout.String(), `{"schemaVersion":1,"expectedRevision":"1"}`, http.StatusOK)
 }
 
@@ -190,9 +190,9 @@ func TestInstallationDefaultLayoutCannotBeDeleted(t *testing.T) {
 	manager := f.session(f.human([]string{"presentation.manage", "notice.manage"}, authz.Scope{Kind: "all"}, []string{"payload"}))
 	layout := f.textLayoutRow("text", f.agency)
 	f.presentationCall(manager, http.MethodPut, "/api/v1/installation",
-		fmt.Sprintf(`{"expectedRevision":"1","title":"t","defaultLayoutId":%q}`, layout), http.StatusOK)
+		fmt.Sprintf(`{"schemaVersion":1,"expectedRevision":"1","title":"t","defaultLayoutId":%q}`, layout), http.StatusOK)
 	f.presentationCall(manager, http.MethodDelete, "/api/v1/layouts/"+layout.String(), `{"schemaVersion":1,"expectedRevision":"1"}`, http.StatusConflict)
-	f.presentationCall(manager, http.MethodPut, "/api/v1/installation", `{"expectedRevision":"2","title":"t"}`, http.StatusOK)
+	f.presentationCall(manager, http.MethodPut, "/api/v1/installation", `{"schemaVersion":1,"expectedRevision":"2","title":"t"}`, http.StatusOK)
 	f.presentationCall(manager, http.MethodDelete, "/api/v1/layouts/"+layout.String(), `{"schemaVersion":1,"expectedRevision":"1"}`, http.StatusOK)
 }
 
