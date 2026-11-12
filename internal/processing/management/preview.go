@@ -230,10 +230,10 @@ func (s *PreviewService) preview(ctx context.Context, proof identity.Proof, inpu
 	}
 	result, err = program.EvaluateScoped(run.Context(), source, capture.Scope, run)
 	if err != nil {
-		if explained, ok := previewFailure(ctx, err); ok {
-			return processing.Evaluation{}, explained, nil
-		}
-		return processing.Evaluation{}, nil, err
+		explained, err := explainAfterRecheck(ctx, err, func() error {
+			return s.recheckDependencies(ctx, proof, workflow, binding, nil)
+		})
+		return processing.Evaluation{}, explained, err
 	}
 	if err = s.recheckPreview(ctx, proof, workflow, binding, result); err != nil {
 		return processing.Evaluation{}, nil, err
@@ -248,6 +248,13 @@ func (s *PreviewService) recheckPreview(ctx context.Context, proof identity.Proo
 	if err != nil {
 		return err
 	}
+	return s.recheckDependencies(ctx, proof, workflow, binding, dependencies)
+}
+
+// recheckDependencies runs the final fence for the given result dependencies (none for a failed
+// evaluation) under the caller's current authority.
+func (s *PreviewService) recheckDependencies(ctx context.Context, proof identity.Proof,
+	workflow processing.WorkflowConfiguration, binding processing.ExecutionBinding, dependencies []processing.Dependency) error {
 	return s.management.within(ctx, proof, false, nil, func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
 		return s.checkPreviewContext(tx.Context(), tx, authority, now, workflow, binding, dependencies)
 	})

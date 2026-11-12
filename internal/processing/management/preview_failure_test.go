@@ -96,3 +96,27 @@ func TestAnExpiredCallerIsNotExplained(t *testing.T) {
 		t.Fatal("a step failure under a live caller is not explained")
 	}
 }
+
+// TestAFailureIsExplainedOnlyAfterTheFinalRecheck expects a failed evaluation to pass the same
+// final authority and source fence as a result before it is explained: an editor who lost the
+// right during the evaluation gets the error, not a 200 explanation.
+func TestAFailureIsExplainedOnlyAfterTheFinalRecheck(t *testing.T) {
+	t.Parallel()
+	failed := &processing.StepFailure{StepID: "lookup", Err: platform.NewFailure(platform.CodeInvalidInput, errors.New("cause"))}
+	rechecks := 0
+	revoked := func() error { rechecks++; return authz.ErrForbidden }
+	if failure, err := explainAfterRecheck(context.Background(), failed, revoked); !errors.Is(err, authz.ErrForbidden) || failure != nil {
+		t.Fatalf("revoked editor = %+v, %v, want FORBIDDEN", failure, err)
+	}
+	current := func() error { rechecks++; return nil }
+	if failure, err := explainAfterRecheck(context.Background(), failed, current); err != nil || failure == nil || failure.StepID != "lookup" {
+		t.Fatalf("current editor = %+v, %v, want the explanation", failure, err)
+	}
+	storage := platform.NewFailure(platform.CodeStorageUnavailable, errors.New("down"))
+	if _, err := explainAfterRecheck(context.Background(), storage, current); !errors.Is(err, storage) {
+		t.Fatalf("an unexplained error = %v, want it unchanged", err)
+	}
+	if rechecks != 2 {
+		t.Fatalf("rechecks = %d, want one per explained failure", rechecks)
+	}
+}

@@ -70,3 +70,18 @@ func explainedCode(code platform.ErrorCode) bool {
 	}
 	return false
 }
+
+// explainAfterRecheck returns the explanation of an evaluation error, or the error itself when it
+// is not explained. An explanation is returned only after recheck, the final authority and source
+// fence a successful result also passes, so an editor who lost the right or the source during the
+// evaluation gets that error instead of an explanation.
+func explainAfterRecheck(caller context.Context, err error, recheck func() error) (*PreviewFailure, error) {
+	failure, explained := previewFailure(caller, err)
+	if !explained {
+		return nil, err
+	}
+	if err := recheck(); err != nil {
+		return nil, err
+	}
+	return failure, nil
+}

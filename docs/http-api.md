@@ -1090,7 +1090,8 @@ A failed evaluation is not an HTTP error: the preview answers `200` with
 `resource-limit`, `capability-unavailable`, `conversion-failed` or `evaluation-failed` and `stepId` (omitted when no step
 failed) names the failing step. No raw error text is returned. Only `INVALID_INPUT`, `RESOURCE_LIMIT`,
 `INCOMPATIBLE_VERSION` and `AUTHORITY_UNAVAILABLE` are explained (an `INTERNAL_ERROR` stays an HTTP error); request, authorization,
-session, storage and concurrency errors keep their HTTP status, also when a step raised them.
+session, storage and concurrency errors keep their HTTP status, also when a step raised them, and an explanation
+follows the same final rights check as a result.
 
 Candidate retry requeues a `failed`, unpublished candidate and returns
 `{"candidateId","revision"}` in `data`. If the candidate's source, workflow version or
