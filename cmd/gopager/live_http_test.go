@@ -133,6 +133,33 @@ type sseEvent struct{ Event, ID, Data string }
 type sseClient struct {
 	events    chan sseEvent
 	heartbeat chan sseEvent
+
+	// received records every event as it arrived, so that a failed assertion can show the whole
+	// stream, including the fact position each frame ID carries.
+	mu       sync.Mutex
+	received []sseEvent
+}
+
+// record keeps an arrived event for history.
+func (c *sseClient) record(event sseEvent) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.received = append(c.received, event)
+}
+
+// history lists the events received so far as "event id messageId" lines.
+func (c *sseClient) history() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var out strings.Builder
+	for _, event := range c.received {
+		var data struct {
+			MessageID string `json:"messageId"`
+		}
+		_ = json.Unmarshal([]byte(event.Data), &data)
+		fmt.Fprintf(&out, "\n  %s %s %s", event.Event, event.ID, data.MessageID)
+	}
+	return out.String()
 }
 
 // openStream opens the stream and requires the 200 event-stream response.
@@ -184,6 +211,7 @@ func (f *liveFixture) tryStream(bearer, query string, headers ...string) (*sseCl
 			line = strings.TrimSuffix(line, "\n")
 			switch {
 			case line == "":
+				client.record(current)
 				if current.Event == "heartbeat" {
 					select {
 					case client.heartbeat <- current:
@@ -239,7 +267,7 @@ func (c *sseClient) quiet(t *testing.T) {
 	select {
 	case event, open := <-c.events:
 		if open {
-			t.Fatalf("unexpected event %+v", event)
+			t.Fatalf("unexpected event %+v; received:%s", event, c.history())
 		}
 		t.Fatal("stream closed unexpectedly")
 	case <-time.After(600 * time.Millisecond):
@@ -267,7 +295,7 @@ func (c *sseClient) expect(t *testing.T, kind string, message uuid.UUID) sseEven
 		MessageID string `json:"messageId"`
 	}
 	if event.Event != kind || json.Unmarshal([]byte(event.Data), &data) != nil || data.MessageID != message.String() {
-		t.Fatalf("event %+v, want %s of %s", event, kind, message)
+		t.Fatalf("event %+v, want %s of %s; received:%s", event, kind, message, c.history())
 	}
 	return event
 }
