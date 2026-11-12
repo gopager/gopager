@@ -244,10 +244,14 @@ type rendering struct {
 	instanceRevision int64
 	descriptor       TargetDescriptor
 	available        bool
+	// denied reports that the subscriber has no target use for the instance. A denied target is
+	// never a pending dependency: no Delivery is created for it.
+	denied bool
 }
 
 // render resolves the current target, the layout and the inputs for one split. An unavailable
-// target yields available=false; materialization failures yield a code.
+// target yields available=false; materialization failures yield a code. A subscriber without
+// target use for the instance yields denied=true, so a revoked use stops every future send.
 func render(ctx context.Context, tx platform.TransactionContext, deps Dependencies, subscription Subscription,
 	target TargetReference, current *view) (rendering, error) {
 	instance, err := deps.Instances.CurrentInstance(ctx, tx, target.InstanceID)
@@ -259,6 +263,9 @@ func render(ctx context.Context, tx platform.TransactionContext, deps Dependenci
 	}
 	if !instance.Enabled {
 		return rendering{instanceRevision: instance.Revision}, nil
+	}
+	if !instance.AllowsTargetUse(subscription.SubscriberID) {
+		return rendering{instanceRevision: instance.Revision, denied: true}, nil
 	}
 	descriptor, err := deps.Targets.Describe(ctx, instance)
 	if err == nil {
@@ -474,6 +481,9 @@ func materialize(ctx context.Context, tx platform.TransactionContext, deps Depen
 			result, err := render(ctx, tx, deps, subscription, target, partView)
 			if err != nil {
 				return nil, err
+			}
+			if result.denied {
+				continue
 			}
 			records = append(records, newRecord(subscription, current, part, target, result, now, expires))
 		}

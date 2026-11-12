@@ -320,6 +320,10 @@ func (r *Runner) current(ctx context.Context, tx platform.TransactionContext, no
 	if err != nil {
 		return currentState{}, "", err
 	}
+	if !instance.AllowsTargetUse(record.SubscriberID) {
+		// Revoked target use stops the send even for a prepared Delivery.
+		return currentState{}, CodeAuthorityRevoked, nil
+	}
 	if subject == nil {
 		// The fact or its data is gone, or the subscriber may no longer see it. Self-contained
 		// input may still be sent when the data was removed under unchanged authority.

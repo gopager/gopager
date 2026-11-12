@@ -134,7 +134,7 @@ func processInstance(t *testing.T, store *postgres.Store) uuid.UUID {
 	if err != nil {
 		t.Fatal(err)
 	}
-	value := processing.InstanceConfiguration{ID: uuid.New(), Revision: 1, Enabled: true, ExecutionPrincipalID: uuid.New(),
+	value := processing.InstanceConfiguration{ID: uuid.New(), Revision: 1, Enabled: true, ExecutionPrincipalID: uuid.New(), TargetUse: &processing.TargetUse{Everyone: true},
 		CreatedBy: actor, Configuration: config, Main: processing.ProvisionedArtifact{ManifestPath: "target/manifest.json",
 			Pin: processing.ArtifactPin{PluginID: "target", Version: "1", CapabilityID: "deliver", Digest: strings.Repeat("c", 64)}}}
 	if err := store.WithinTransaction(context.Background(), func(tx platform.TransactionContext) error {
