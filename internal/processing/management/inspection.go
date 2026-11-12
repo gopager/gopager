@@ -37,11 +37,11 @@ type InspectedSecretProperty struct {
 // under global plugin.configure. A manifest that declares access its capability does not grant
 // fails with processing.ErrCapabilityUndeclared.
 func (s *InstanceService) InspectArtifact(ctx context.Context, proof identity.Proof,
-	artifact processing.ProvisionedArtifact) (ManifestInspection, error) {
+	artifact processing.ProvisionedArtifact, check func(identity.Authentication) error) (ManifestInspection, error) {
 	if artifact.ManifestPath == "" {
 		return ManifestInspection{}, authz.ErrInvalidInput
 	}
-	if err := s.withConfigureRead(ctx, proof, func(platform.TransactionContext, authz.Authority, time.Time) error {
+	if err := s.withConfigureRead(ctx, proof, check, func(platform.TransactionContext, authz.Authority, time.Time) error {
 		return nil
 	}); err != nil {
 		return ManifestInspection{}, err

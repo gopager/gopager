@@ -72,6 +72,6 @@ func (api processingWorkflowAPI) registerInstances(mux *http.ServeMux) {
 		if input.SchemaVersion != 1 {
 			return nil, authz.ErrInvalidInput
 		}
-		return api.instances.InspectArtifact(r.Context(), proof, input.Main)
+		return api.instances.InspectArtifact(r.Context(), proof, input.Main, check)
 	}, http.StatusOK))
 }

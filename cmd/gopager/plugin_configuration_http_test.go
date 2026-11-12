@@ -272,6 +272,9 @@ func TestPluginInspectionAndCapabilityGuard(t *testing.T) {
 		return f.rawRequest(http.MethodPost, "/api/v1/instances/inspection",
 			mustJSON(t, map[string]any{"schemaVersion": 1, "main": f.main(manifest)}))
 	}
+	// A session POST without the CSRF token is refused like any other state-changing request.
+	managementRequest(t, f.admin, f.origin, http.MethodPost, "/api/v1/instances/inspection",
+		mustJSON(t, map[string]any{"schemaVersion": 1, "main": f.main("manifest.json")}), "", "", http.StatusForbidden)
 	status, body := inspect("manifest.json")
 	if status != http.StatusOK {
 		t.Fatalf("inspection = %d %v", status, body)

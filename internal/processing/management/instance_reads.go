@@ -72,12 +72,15 @@ func instanceSummary(configuration processing.InstanceConfiguration) (InstanceSu
 	return summary, nil
 }
 
+// withConfigureRead runs read under global plugin.configure. check is the transport's request
+// check (Origin and CSRF for a session); a read sent with an unsafe method, such as an inspection
+// POST, must pass it so that a cross-site request cannot trigger it, while GET reads pass nil.
 func (s *InstanceService) withConfigureRead(ctx context.Context, proof identity.Proof,
-	read func(platform.TransactionContext, authz.Authority, time.Time) error) error {
+	check func(identity.Authentication) error, read func(platform.TransactionContext, authz.Authority, time.Time) error) error {
 	if s == nil || s.management == nil || s.repository == nil || ctx == nil || read == nil {
 		return authz.ErrInvalidInput
 	}
-	return s.management.within(ctx, proof, false, nil, func(tx platform.TransactionContext,
+	return s.management.within(ctx, proof, false, check, func(tx platform.TransactionContext,
 		authority authz.Authority, now time.Time) error {
 		if err := authz.Authorize(authority, "plugin.configure", nil, authz.Target{}, now); err != nil {
 			return err
@@ -92,7 +95,7 @@ func (s *InstanceService) ReadInstance(ctx context.Context, proof identity.Proof
 		return InstanceView{}, authz.ErrInvalidInput
 	}
 	var configuration processing.InstanceConfiguration
-	if err := s.withConfigureRead(ctx, proof, func(tx platform.TransactionContext, authority authz.Authority,
+	if err := s.withConfigureRead(ctx, proof, nil, func(tx platform.TransactionContext, authority authz.Authority,
 		now time.Time) error {
 		var err error
 		configuration, err = s.repository.ReadCurrentInstance(tx.Context(), tx, authority, id, now)
@@ -111,7 +114,7 @@ func (s *InstanceService) ReadInstance(ctx context.Context, proof identity.Proof
 	if loadErr == nil {
 		view.Capability, view.Configuration = manifest.EffectiveCapability(), &projected
 	}
-	if err := s.withConfigureRead(ctx, proof, func(tx platform.TransactionContext, authority authz.Authority,
+	if err := s.withConfigureRead(ctx, proof, nil, func(tx platform.TransactionContext, authority authz.Authority,
 		now time.Time) error {
 		current, err := s.repository.ReadCurrentInstance(tx.Context(), tx, authority, id, now)
 		if err != nil {
@@ -134,7 +137,7 @@ func (s *InstanceService) ListInstances(ctx context.Context, proof identity.Proo
 		return processing.Page[InstanceSummary]{}, err
 	}
 	var configurations processing.Page[processing.InstanceConfiguration]
-	if err := s.withConfigureRead(ctx, proof, func(tx platform.TransactionContext, authority authz.Authority,
+	if err := s.withConfigureRead(ctx, proof, nil, func(tx platform.TransactionContext, authority authz.Authority,
 		now time.Time) error {
 		var err error
 		configurations, err = s.repository.ListInstances(tx.Context(), tx, authority, input, now)

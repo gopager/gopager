@@ -59,7 +59,7 @@ func (u *UnitParameterService) List(ctx context.Context, proof identity.Proof, i
 	}
 	var instance processing.InstanceConfiguration
 	var result processing.Page[processing.UnitParameters]
-	if err := u.instances.withConfigureRead(ctx, proof, func(tx platform.TransactionContext, authority authz.Authority,
+	if err := u.instances.withConfigureRead(ctx, proof, nil, func(tx platform.TransactionContext, authority authz.Authority,
 		now time.Time) error {
 		var err error
 		if instance, err = u.instances.repository.ReadCurrentInstance(tx.Context(), tx, authority, id, now); err != nil {
