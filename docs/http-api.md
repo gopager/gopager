@@ -1309,6 +1309,14 @@ schemas `Delivery` and `DeliveryAttempt`.
 | `rate-limited` | Deferred to the next [sending admission](#delivery-sending-admission) window (`retry-pending`). |
 | `dependency-unavailable` | Data or the target was unavailable; the start is deferred by 60 seconds. |
 
+- **Provider code.** `providerCode` is the safe reason code the target plugin returned, for example
+  `recipient-missing`, `destination-denied`, `rate-limited`, `rejected`, `unexpected-response` or
+  `provider-unavailable`. It is a lowercase code of 1 to 64 letters, digits or hyphens, without Secrets or input.
+  An attempt shows the code of its own result; the Delivery shows the code of its latest finished attempt, so a
+  later attempt without a code clears it. It is absent when the plugin gave no code, the code was not of that
+  shape, or the call itself failed (including `lease-lost`). A redelivery starts without one. It is the plugin's
+  own vocabulary and not part of the `outcomeCode` set above, which stays unchanged.
+
 - **Retry.** `POST .../retry` makes a `failed` Delivery with outcome `transient` or `retry-exhausted` due again,
   before its expiry, at the `expectedRevision`. A stale revision, any other state or outcome, or a Delivery past its
   expiry is `409 REVISION_CONFLICT`. An `uncertain` Delivery is `409 EXTERNAL_UNCERTAIN`: its effect may have

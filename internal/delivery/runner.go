@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"regexp"
 	"slices"
 	"time"
 
@@ -478,8 +479,22 @@ func (r *Runner) stillVisible(ctx context.Context, tx platform.TransactionContex
 	return nil
 }
 
-// finish records an attempt's outcome under the claim. A lost claim leaves the Delivery to
-// ReclaimLost, which records it as uncertain.
+// providerCodePattern is the shape of a provider code that may be stored and shown.
+var providerCodePattern = regexp.MustCompile(`^[a-z0-9-]{1,64}$`)
+
+// safeProviderCode returns the provider's code of an attempt, or nil when the call failed or the
+// code is not a safe classification.
+func safeProviderCode(result AttemptResult, callErr error) *string {
+	if callErr != nil || !providerCodePattern.MatchString(result.Code) {
+		return nil
+	}
+	code := result.Code
+	return &code
+}
+
+// finish records an attempt's outcome under the claim. The Delivery carries the provider code of
+// this attempt, so it always reflects the latest finished attempt. A lost claim leaves the Delivery
+// to ReclaimLost, which records it as uncertain.
 func (r *Runner) finish(ctx context.Context, tx platform.TransactionContext, claim Claim, begun *started,
 	result AttemptResult, callErr error) error {
 	now, err := r.clock.Now(ctx, tx)
@@ -510,7 +525,9 @@ func (r *Runner) finish(ctx context.Context, tx platform.TransactionContext, cla
 		attemptState, code = string(StatusTransient), CodeTransient
 		record = r.reschedule(record, result.RetryAfter, now)
 	}
-	if err := r.deps.Store.FinishAttempt(ctx, tx, claim, record.ID, begun.attempt, attemptState, code, receipt, now); err != nil {
+	providerCode := safeProviderCode(result, callErr)
+	record.ProviderCode = providerCode
+	if err := r.deps.Store.FinishAttempt(ctx, tx, claim, record.ID, begun.attempt, attemptState, code, providerCode, receipt, now); err != nil {
 		return err
 	}
 	return r.deps.Store.SaveClaimed(ctx, tx, claim, record, now)

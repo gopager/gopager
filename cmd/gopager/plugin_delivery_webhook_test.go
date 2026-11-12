@@ -100,10 +100,11 @@ func TestWebhookReceiverFailureOutcomes(t *testing.T) {
 		want    string
 		attempt string
 		retry   bool
+		code    string
 	}{
-		"500 is uncertain":           {http.StatusInternalServerError, "uncertain/uncertain/1", "1:uncertain:uncertain:1", false},
-		"503 is retried later":       {http.StatusServiceUnavailable, "retry-pending/transient/1", "1:transient:transient:1", true},
-		"a rejection is not retried": {http.StatusBadRequest, "failed/permanent/1", "1:permanent:permanent:1", false},
+		"500 is uncertain":           {http.StatusInternalServerError, "uncertain/uncertain/1", "1:uncertain:uncertain:1", false, "unexpected-response"},
+		"503 is retried later":       {http.StatusServiceUnavailable, "retry-pending/transient/1", "1:transient:transient:1", true, "provider-unavailable"},
+		"a rejection is not retried": {http.StatusBadRequest, "failed/permanent/1", "1:permanent:permanent:1", false, "rejected"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -118,6 +119,10 @@ func TestWebhookReceiverFailureOutcomes(t *testing.T) {
 			}
 			if got := s.attemptStates(ids[0]); got != test.attempt {
 				t.Fatalf("attempts = %s, want %s", got, test.attempt)
+			}
+			view := s.deliveryView(s.bearer, ids[0])
+			if stringOf(view.ProviderCode) != test.code || len(view.Attempts) != 1 || stringOf(view.Attempts[0].ProviderCode) != test.code {
+				t.Fatalf("provider code %q, attempts %+v, want %q", stringOf(view.ProviderCode), view.Attempts, test.code)
 			}
 			if got := s.text(`SELECT receipt->>'status' FROM delivery_attempts WHERE delivery_id = $1`, ids[0]); got != strconv.Itoa(test.status) {
 				t.Fatalf("receipt status = %s, want %d", got, test.status)

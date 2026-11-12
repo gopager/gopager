@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: GoPager API
-  version: 1.11.0
+  version: 1.12.0
   description: |
     GoPager application API. Human guide: docs/http-api.md.
 
@@ -10211,6 +10211,10 @@ components:
           - uncertain
         outcomeCode:
           $ref: '#/components/schemas/DeliveryOutcomeCode'
+        providerCode:
+          type: string
+          pattern: '^[a-z0-9-]{1,64}$'
+          description: The target provider's safe reason code of this attempt, for example `recipient-missing`. Absent when the provider gave none or the call failed. Not part of the `outcomeCode` set.
         instanceRevision:
           $ref: '#/components/schemas/Revision'
         startedAt:
@@ -10279,6 +10283,10 @@ components:
           $ref: '#/components/schemas/DeliveryState'
         outcomeCode:
           $ref: '#/components/schemas/DeliveryOutcomeCode'
+        providerCode:
+          type: string
+          pattern: '^[a-z0-9-]{1,64}$'
+          description: The target provider's safe reason code of the latest finished attempt. Absent when that attempt had none. Not part of the `outcomeCode` set.
         attemptCount:
           type: integer
           minimum: 0

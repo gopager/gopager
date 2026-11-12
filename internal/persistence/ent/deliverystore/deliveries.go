@@ -15,7 +15,7 @@ import (
 
 const deliveryColumns = `d.id, d.revision, d.origin, d.redelivery_of, d.subscription_id, d.subscription_revision,
 	d.subscriber_id, d.domain_event_id, d.event_type, d.correlation_id, d.causation_id, d.target_instance_id, d.split_key,
-	d.state, d.outcome_code, d.attempts, d.layout_id, d.layout_version, d.input::text, d.context::text, d.message_id,
+	d.state, d.outcome_code, d.provider_code, d.attempts, d.layout_id, d.layout_version, d.input::text, d.context::text, d.message_id,
 	array_to_json(d.unit_ids)::text, array_to_json(d.agency_ids)::text, d.age_anchor, d.access_revision,
 	d.claim_token, d.claim_expires_at, d.next_attempt_at, d.expires_at, d.created_at, d.updated_at, d.finished_at`
 
@@ -24,16 +24,25 @@ type deliveryContext struct {
 	InstanceRevision int64 `json:"instanceRevision,string"`
 }
 
+// optionalText returns the string of a nullable column, or nil.
+func optionalText(value sql.NullString) *string {
+	if !value.Valid {
+		return nil
+	}
+	text := value.String
+	return &text
+}
+
 // scanDelivery reads one row of deliveryColumns.
 func scanDelivery(row interface{ Scan(...any) error }) (delivery.DeliveryRecord, error) {
 	var record delivery.DeliveryRecord
 	var redelivery, correlation, layout, message uuid.NullUUID
-	var outcome, input sql.NullString
+	var outcome, providerCode, input sql.NullString
 	var context, units, agencies string
 	var claimExpires, finished sql.NullTime
 	if err := row.Scan(&record.ID, &record.Revision, &record.Origin, &redelivery, &record.SubscriptionID,
 		&record.SubscriptionRevision, &record.SubscriberID, &record.DomainEventID, &record.EventType, &correlation,
-		&record.CausationID, &record.TargetInstanceID, &record.SplitKey, &record.State, &outcome, &record.AttemptCount,
+		&record.CausationID, &record.TargetInstanceID, &record.SplitKey, &record.State, &outcome, &providerCode, &record.AttemptCount,
 		&layout, &record.LayoutVersion, &input, &context, &message, &units, &agencies, &record.AgeAnchor,
 		&record.AccessRevision, &record.ClaimToken, &claimExpires, &record.Due, &record.ExpiresAt, &record.CreatedAt,
 		&record.UpdatedAt, &finished); err != nil {
@@ -52,6 +61,7 @@ func scanDelivery(row interface{ Scan(...any) error }) (delivery.DeliveryRecord,
 		code := outcome.String
 		record.OutcomeCode = &code
 	}
+	record.ProviderCode = optionalText(providerCode)
 	if input.Valid {
 		var decoded delivery.DeliveryInput
 		if err := json.Unmarshal([]byte(input.String), &decoded); err != nil {
@@ -219,7 +229,7 @@ func (s *Store) ReclaimLost(ctx context.Context, tx platform.TransactionContext,
 	rows, err := executor.QueryContext(ctx, `WITH lost AS (
 			SELECT id FROM deliveries WHERE state = 'started' AND claim_expires_at <= $1
 			ORDER BY claim_expires_at, id LIMIT $2 FOR UPDATE SKIP LOCKED)
-		UPDATE deliveries d SET state = 'uncertain', outcome_code = 'lease-lost', input = NULL, finished_at = $1,
+		UPDATE deliveries d SET state = 'uncertain', outcome_code = 'lease-lost', provider_code = NULL, input = NULL, finished_at = $1,
 			updated_at = $1, revision = d.revision + 1, claim_expires_at = NULL
 		FROM lost WHERE d.id = lost.id RETURNING d.id`, now.UTC(), limit)
 	if err != nil {
@@ -297,11 +307,11 @@ func (s *Store) SaveClaimed(ctx context.Context, tx platform.TransactionContext,
 	}
 	return requireOne(executor.ExecContext(ctx, `UPDATE deliveries SET state = $3, outcome_code = $4, attempts = $5,
 		next_attempt_at = $6, input = $7, context = $8, finished_at = $9, access_revision = $10, layout_id = $11,
-		layout_version = $12, revision = revision + 1, updated_at = $13,
+		layout_version = $12, revision = revision + 1, updated_at = $13, provider_code = $14,
 		claim_expires_at = CASE WHEN $3::varchar = 'started' THEN claim_expires_at ELSE NULL END
 		WHERE id = $1 AND claim_token = $2 AND claim_expires_at > $13`,
 		claim.DeliveryID, claim.Token, record.State, outcome, record.AttemptCount, record.Due.UTC(), input, contextValue,
-		finished, record.AccessRevision, nullable(record.LayoutID), record.LayoutVersion, now.UTC()))
+		finished, record.AccessRevision, nullable(record.LayoutID), record.LayoutVersion, now.UTC(), record.ProviderCode))
 }
 
 // claimHeld is the fencing condition for attempt writes.
@@ -323,7 +333,7 @@ func (s *Store) InsertAttempt(ctx context.Context, tx platform.TransactionContex
 
 // FinishAttempt implements delivery.Store.
 func (s *Store) FinishAttempt(ctx context.Context, tx platform.TransactionContext, claim delivery.Claim, id uuid.UUID,
-	number int, state, code string, receipt json.RawMessage, now time.Time) error {
+	number int, state, code string, providerCode *string, receipt json.RawMessage, now time.Time) error {
 	executor, err := s.executor(tx)
 	if err != nil {
 		return err
@@ -333,8 +343,8 @@ func (s *Store) FinishAttempt(ctx context.Context, tx platform.TransactionContex
 		stored = string(receipt)
 	}
 	return requireOne(executor.ExecContext(ctx, `UPDATE delivery_attempts SET state = $5, outcome_code = $6, receipt = $7,
-		finished_at = $3 WHERE delivery_id = $1 AND number = $4 AND state = 'started' AND `+claimHeld,
-		id, claim.Token, now.UTC(), number, state, code, stored))
+		provider_code = $8, finished_at = $3 WHERE delivery_id = $1 AND number = $4 AND state = 'started' AND `+claimHeld,
+		id, claim.Token, now.UTC(), number, state, code, stored, providerCode))
 }
 
 // SetRetry implements delivery.Store.
@@ -383,7 +393,7 @@ func (s *Store) Attempts(ctx context.Context, tx platform.TransactionContext, id
 
 // attempts reads the attempts of one Delivery in order.
 func attempts(ctx context.Context, executor postgres.Executor, id uuid.UUID) ([]delivery.Attempt, error) {
-	rows, err := executor.QueryContext(ctx, `SELECT number, id, state, outcome_code, instance_revision, started_at,
+	rows, err := executor.QueryContext(ctx, `SELECT number, id, state, outcome_code, provider_code, instance_revision, started_at,
 		finished_at, receipt::text FROM delivery_attempts WHERE delivery_id = $1 ORDER BY number`, id)
 	if err != nil {
 		return nil, err
@@ -392,9 +402,9 @@ func attempts(ctx context.Context, executor postgres.Executor, id uuid.UUID) ([]
 	items := []delivery.Attempt{}
 	for rows.Next() {
 		var attempt delivery.Attempt
-		var code, receipt sql.NullString
+		var code, providerCode, receipt sql.NullString
 		var finished sql.NullTime
-		if err := rows.Scan(&attempt.Number, &attempt.ID, &attempt.State, &code, &attempt.InstanceRevision,
+		if err := rows.Scan(&attempt.Number, &attempt.ID, &attempt.State, &code, &providerCode, &attempt.InstanceRevision,
 			&attempt.StartedAt, &finished, &receipt); err != nil {
 			return nil, err
 		}
@@ -403,6 +413,7 @@ func attempts(ctx context.Context, executor postgres.Executor, id uuid.UUID) ([]
 			value := code.String
 			attempt.OutcomeCode = &value
 		}
+		attempt.ProviderCode = optionalText(providerCode)
 		if finished.Valid {
 			at := finished.Time.UTC()
 			attempt.FinishedAt = &at

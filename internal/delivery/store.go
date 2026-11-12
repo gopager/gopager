@@ -128,15 +128,16 @@ type Store interface {
 	ReclaimLost(ctx context.Context, tx platform.TransactionContext, now time.Time, limit int) (int, error)
 	// Renew extends a claim's lease to now plus lease.
 	Renew(ctx context.Context, tx platform.TransactionContext, claim Claim, now time.Time, lease time.Duration) error
-	// SaveClaimed writes the Delivery's state, outcome, counters, due time, input, materialization
+	// SaveClaimed writes the Delivery's state, outcome, provider code, counters, due time, input, materialization
 	// context and finish time under the claim and increments its revision. Any state other than
 	// started releases the claim.
 	SaveClaimed(ctx context.Context, tx platform.TransactionContext, claim Claim, record DeliveryRecord, now time.Time) error
 	// InsertAttempt records a started attempt under the claim.
 	InsertAttempt(ctx context.Context, tx platform.TransactionContext, claim Claim, deliveryID uuid.UUID, attempt AttemptRecord, now time.Time) error
-	// FinishAttempt records an attempt's outcome under the claim.
+	// FinishAttempt records an attempt's outcome under the claim: its state, the enumerated outcome
+	// code, the provider's safe code (nil when there is none) and an optional receipt.
 	FinishAttempt(ctx context.Context, tx platform.TransactionContext, claim Claim, deliveryID uuid.UUID, number int,
-		state, code string, receipt json.RawMessage, now time.Time) error
+		state, code string, providerCode *string, receipt json.RawMessage, now time.Time) error
 	// Delivery returns one Delivery or authz.ErrNotFound; lock takes a row lock for update.
 	Delivery(ctx context.Context, tx platform.TransactionContext, id uuid.UUID, lock bool) (DeliveryRecord, error)
 	// Attempts returns the attempts of a Delivery in order.
