@@ -1,6 +1,6 @@
 ---
 name: execute-work-package
-description: "Execute an entire AP or work package to verified completion within its assigned scope. Use when starting, implementing, resuming or completing an AP. The order to execute is the start approval: work in the AP's own worktree and feature branch without asking for confirmation. Continue through all assigned tasks, verification and handover; never stop before the AP is complete. Ask the user only for open user decisions, missing information, impossible or contradicting plans and scope crossings; leave items open only with the user's explicit agreement."
+description: "Execute an entire AP or work package to verified completion within its assigned scope. Use when starting, implementing, resuming or completing an AP. The order to execute is the start approval: work in the AP's own worktree and feature branch without asking for confirmation. Continue through all assigned tasks, verification, handover and an open pull request against main whose Copilot review has no annotations left; never stop before the AP is complete. Never commit AP work to main. Ask the user only for open user decisions, missing information, impossible or contradicting plans and scope crossings; leave items open only with the user's explicit agreement."
 argument-hint: "AP ID or assignment path"
 ---
 
@@ -16,4 +16,7 @@ The order to execute the AP is its start approval. Do not ask for confirmation t
 4. Anything outside the scope: [scope change](../../../development/work-packages/shared-rules.md#scope-change) — classify, analyze impact, request approval, then apply it yourself.
 5. [Continue](../../../development/work-packages/shared-rules.md#mandatory-continuation-and-stop-conditions) until the AP is complete. **Never stop with open items on your own.** When something blocks an item (missing information, a plan that is impossible or needs a decision), ask the user right away (structured question) and keep working on independent items; an item stays open only if the user explicitly agrees.
 6. [Handover](../../../development/work-packages/shared-rules.md#handover): `make`, `go test ./...`, `make docs-check`, diff within scope, handover section complete.
-7. Report task states, evidence and open points concisely.
+7. [Pull request and review](../../../development/work-packages/shared-rules.md#pull-request-and-review): push the branch, open the pull request against `main`, request Copilot's review if it was not requested automatically and wait for it. Check every annotation against the REQ user stories and acceptance criteria and the AP's tasks, fix the valid ones, answer the rest with the reason, push and re-request the review. Repeat until Copilot's review of the head commit has no annotations and the required checks pass.
+8. Report the pull request link, task states, evidence and open points concisely. The user merges the pull request.
+
+**Never commit AP work to `main`** and never merge or push it there, locally or remotely; never merge the AP's pull request yourself.
