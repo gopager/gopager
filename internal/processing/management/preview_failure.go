@@ -43,7 +43,12 @@ func (r PreviewResult) MarshalJSON() ([]byte, error) {
 // limit are explained when their code describes the evaluated Workflow; authorization, session,
 // storage and concurrency failures (also when a step raised them) and cancellation are not a
 // property of the Workflow and stay errors, so they keep their HTTP status and retry semantics.
-func previewFailure(err error) (*PreviewFailure, bool) {
+// A failure while the caller's own context has ended (cancelled or past its deadline) is the
+// caller's, not the Workflow's, and stays an error too.
+func previewFailure(caller context.Context, err error) (*PreviewFailure, bool) {
+	if caller.Err() != nil {
+		return nil, false
+	}
 	step, failedStep := processing.FailedStep(err)
 	code := platform.FailureCode(err)
 	var failure *platform.Failure

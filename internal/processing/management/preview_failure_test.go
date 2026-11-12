@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/platform"
@@ -16,7 +17,7 @@ func TestEvaluationFailureIsExplainedWithoutRawText(t *testing.T) {
 	t.Parallel()
 	secret := errors.New("dial tcp 10.0.0.7: secret-host refused")
 	step := &processing.StepFailure{StepID: "lookup", Err: platform.NewFailure(platform.CodeAuthorityUnavailable, secret)}
-	failure, ok := previewFailure(step)
+	failure, ok := previewFailure(context.Background(), step)
 	if !ok || failure.Code != "AUTHORITY_UNAVAILABLE" || failure.Reason != "capability-unavailable" || failure.StepID != "lookup" {
 		t.Fatalf("failure = %+v, %v", failure, ok)
 	}
@@ -28,7 +29,7 @@ func TestEvaluationFailureIsExplainedWithoutRawText(t *testing.T) {
 		strings.Contains(string(encoded), "secret-host") {
 		t.Fatalf("encoded = %s", encoded)
 	}
-	limit, ok := previewFailure(platform.NewFailure(platform.CodeResourceLimit, errors.New("budget")))
+	limit, ok := previewFailure(context.Background(), platform.NewFailure(platform.CodeResourceLimit, errors.New("budget")))
 	if !ok || limit.Code != "RESOURCE_LIMIT" || limit.Reason != "resource-limit" || limit.StepID != "" {
 		t.Fatalf("limit = %+v, %v", limit, ok)
 	}
@@ -41,7 +42,7 @@ func TestOnlyEvaluationFailuresAreAnsweredAsFailures(t *testing.T) {
 	t.Parallel()
 	for _, err := range []error{authz.ErrForbidden, authz.ErrNotFound, authz.ErrRevisionConflict, context.Canceled,
 		platform.NewFailure(platform.CodeStorageUnavailable, errors.New("down")), errors.New("plain")} {
-		if failure, ok := previewFailure(err); ok {
+		if failure, ok := previewFailure(context.Background(), err); ok {
 			t.Errorf("%v answered as %+v", err, failure)
 		}
 	}
@@ -67,15 +68,31 @@ func TestWrappedRequestFailuresOfAStepStayErrors(t *testing.T) {
 	for _, code := range []platform.ErrorCode{platform.CodeForbidden, platform.CodeLoginRequired, platform.CodeNotFound,
 		platform.CodeStorageUnavailable, platform.CodeCommitUncertain, platform.CodeRevisionConflict} {
 		err := &processing.StepFailure{StepID: "lookup", Err: platform.NewFailure(code, errors.New("cause"))}
-		if failure, ok := previewFailure(err); ok {
+		if failure, ok := previewFailure(context.Background(), err); ok {
 			t.Fatalf("%s inside a step became the explanation %+v", code, failure)
 		}
 	}
 	for _, code := range []platform.ErrorCode{platform.CodeInvalidInput, platform.CodeIncompatibleVersion,
 		platform.CodeAuthorityUnavailable, platform.CodeInternalError} {
 		err := &processing.StepFailure{StepID: "lookup", Err: platform.NewFailure(code, errors.New("cause"))}
-		if failure, ok := previewFailure(err); !ok || failure.StepID != "lookup" {
+		if failure, ok := previewFailure(context.Background(), err); !ok || failure.StepID != "lookup" {
 			t.Fatalf("%s inside a step = %+v, %v, want an explanation", code, failure, ok)
 		}
+	}
+}
+
+// TestAnExpiredCallerIsNotExplained expects a step failure caused by the caller's own expired
+// deadline to stay an error, while the same failure under a live caller is explained.
+func TestAnExpiredCallerIsNotExplained(t *testing.T) {
+	t.Parallel()
+	err := &processing.StepFailure{StepID: "lookup",
+		Err: platform.NewFailure(platform.CodeInternalError, context.DeadlineExceeded)}
+	expired, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	if failure, ok := previewFailure(expired, err); ok {
+		t.Fatalf("an expired caller became the explanation %+v", failure)
+	}
+	if _, ok := previewFailure(context.Background(), err); !ok {
+		t.Fatal("a step failure under a live caller is not explained")
 	}
 }

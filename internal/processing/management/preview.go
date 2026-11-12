@@ -230,7 +230,7 @@ func (s *PreviewService) preview(ctx context.Context, proof identity.Proof, inpu
 	}
 	result, err = program.EvaluateScoped(run.Context(), source, capture.Scope, run)
 	if err != nil {
-		if explained, ok := previewFailure(err); ok {
+		if explained, ok := previewFailure(ctx, err); ok {
 			return processing.Evaluation{}, explained, nil
 		}
 		return processing.Evaluation{}, nil, err
