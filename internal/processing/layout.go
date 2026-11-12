@@ -112,6 +112,9 @@ type ResolvedLayout struct {
 	ID      uuid.UUID
 	Version int64
 	Layout  Layout
+	// Conflict reports that the Units of the request chose different layouts, so that the
+	// installation default (or the built-in default) was used instead of any of them.
+	Conflict bool
 }
 
 // LayoutResolver loads the layout a delivery renders with. The delivery side implements it;
@@ -213,21 +216,8 @@ func checkLayoutText(value string, limit int, required bool) error {
 }
 
 func (b LayoutBlock) validate(depth int, count *int) error {
-	var allowed property
-	switch b.Kind {
-	case blockText:
-		allowed = propText
-	case blockField, blockChip:
-		allowed = propField | propLabel | propIcon
-	case blockLink:
-		allowed = propLabel | propURL
-	case blockSection:
-		allowed = propTitle | propBlocks
-	case blockConditional:
-		allowed = propWhen | propThen | propElse
-	case blockFallback:
-		allowed = propBlocks
-	default:
+	allowed, known := allowedProperties(b.Kind)
+	if !known {
 		return invalid(errors.New("unknown layout block kind"))
 	}
 	if b.properties()&^allowed != 0 {
