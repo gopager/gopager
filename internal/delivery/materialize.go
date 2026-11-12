@@ -234,12 +234,7 @@ func appendUnique(ids []uuid.UUID, id uuid.UUID) []uuid.UUID {
 // view returns the field view of one split.
 func (s *subject) view(part split, declarations fields.Declarations) *view {
 	return &view{event: s.event, message: s.message, units: part.units, gateway: s.gateway, groups: s.groups,
-		declarations: declarations}
-}
-
-// matches evaluates the compiled filter on a split; no filter matches everything.
-func matches(filter *fields.Filter, current *view) bool {
-	return filter == nil || filter.Match(current)
+		declarations: declarations, withoutUnit: part.key == "" && s.message != nil && len(s.message.WithoutUnit) > 0}
 }
 
 // rendering is the input of one Delivery or the failure code that replaces it.
@@ -328,8 +323,8 @@ func render(ctx context.Context, tx platform.TransactionContext, deps Dependenci
 	return result, nil
 }
 
-// resolveInputs applies the Subscription target constants, then the Unit parameters of the
-// Delivery's Units, for the inputs the descriptor declares, and validates the result. Units that
+// resolveInputs applies the Subscription target constants, then the Unit attribute bindings, then
+// the Unit parameters of the Delivery's Units, for the inputs the descriptor declares, and validates the result. Units that
 // disagree on a value yield parameter-conflict; an invalid or missing value yields input-invalid.
 func resolveInputs(ctx context.Context, tx platform.TransactionContext, deps Dependencies, descriptor TargetDescriptor,
 	target TargetReference, units []readmodel.UnitRecord) (map[string]processing.Value, string, error) {
@@ -338,6 +333,9 @@ func resolveInputs(ctx context.Context, tx platform.TransactionContext, deps Dep
 		if _, declared := descriptor.input(name); declared {
 			inputs[name] = value
 		}
+	}
+	if code := applyBindings(inputs, descriptor, target, units); code != "" {
+		return nil, code, nil
 	}
 	if len(units) > 0 {
 		ids := make([]uuid.UUID, 0, len(units))

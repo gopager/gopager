@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -461,6 +462,47 @@ func TestSubscriptionHealthIsRecordedWithoutARevisionAndHidesTheSubscriptionFrom
 		active, err := w.store.ActiveSubscriptions(tx.Context(), tx, "message.created", now.Add(time.Hour))
 		if err != nil || len(active) != 1 {
 			t.Errorf("active after save = %+v, %v", active, err)
+		}
+		return nil
+	})
+}
+
+// TestTargetInputBindingsRoundTrip proves that a target's input bindings are stored with the
+// Subscription and read back, and that a target without bindings reads back none.
+func TestTargetInputBindingsRoundTrip(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	bindings := map[string]processing.FieldRef{
+		"recipient": {Namespace: "unit", Path: []string{"attributes", "contact", "pager"}}}
+	updated := w.subscription
+	updated.Revision = 2
+	updated.Targets = []delivery.TargetReference{{InstanceID: w.instance, CapabilityKind: delivery.CapabilityDelivery,
+		Revision: 1, InputBindings: bindings}}
+	w.within(func(tx platform.TransactionContext) error {
+		return w.store.UpdateSubscription(tx.Context(), tx, updated, 1)
+	})
+	w.within(func(tx platform.TransactionContext) error {
+		stored, err := w.store.Subscription(tx.Context(), tx, w.subscription.ID, delivery.NoLock)
+		if err != nil {
+			return err
+		}
+		if len(stored.Targets) != 1 || !reflect.DeepEqual(stored.Targets[0].InputBindings, bindings) {
+			t.Errorf("stored bindings = %+v", stored.Targets)
+		}
+		return nil
+	})
+	plain := updated
+	plain.Revision, plain.Targets = 3, []delivery.TargetReference{{InstanceID: w.instance, CapabilityKind: delivery.CapabilityDelivery, Revision: 1}}
+	w.within(func(tx platform.TransactionContext) error {
+		return w.store.UpdateSubscription(tx.Context(), tx, plain, 2)
+	})
+	w.within(func(tx platform.TransactionContext) error {
+		stored, err := w.store.Subscription(tx.Context(), tx, w.subscription.ID, delivery.NoLock)
+		if err != nil {
+			return err
+		}
+		if len(stored.Targets[0].InputBindings) != 0 {
+			t.Errorf("bindings after a save without any = %+v", stored.Targets[0].InputBindings)
 		}
 		return nil
 	})

@@ -72,7 +72,7 @@ func withTargets(ctx context.Context, executor postgres.Executor, subscriptions 
 		ids[i], index[subscription.ID] = subscription.ID, i
 		subscriptions[i].Targets = []delivery.TargetReference{}
 	}
-	rows, err := executor.QueryContext(ctx, `SELECT subscription_id, instance_id, capability_kind, instance_revision, inputs::text
+	rows, err := executor.QueryContext(ctx, `SELECT subscription_id, instance_id, capability_kind, instance_revision, inputs::text, input_bindings::text
 		FROM subscription_targets WHERE subscription_id = ANY($1::uuid[]) ORDER BY subscription_id, position`, ids)
 	if err != nil {
 		return err
@@ -81,11 +81,14 @@ func withTargets(ctx context.Context, executor postgres.Executor, subscriptions 
 	for rows.Next() {
 		var owner uuid.UUID
 		var target delivery.TargetReference
-		var inputs string
-		if err := rows.Scan(&owner, &target.InstanceID, &target.CapabilityKind, &target.Revision, &inputs); err != nil {
+		var inputs, bindings string
+		if err := rows.Scan(&owner, &target.InstanceID, &target.CapabilityKind, &target.Revision, &inputs, &bindings); err != nil {
 			return err
 		}
 		if err := json.Unmarshal([]byte(inputs), &target.Inputs); err != nil {
+			return platform.NewFailure(platform.CodeInternalError, err)
+		}
+		if err := json.Unmarshal([]byte(bindings), &target.InputBindings); err != nil {
 			return platform.NewFailure(platform.CodeInternalError, err)
 		}
 		i := index[owner]
@@ -122,9 +125,18 @@ func insertTargets(ctx context.Context, executor postgres.Executor, subscription
 		if err != nil {
 			return authz.ErrInvalidInput
 		}
+		if target.InputBindings == nil {
+			target.InputBindings = map[string]processing.FieldRef{}
+		}
+		bindings, err := json.Marshal(target.InputBindings)
+		if err != nil {
+			return authz.ErrInvalidInput
+		}
 		if _, err := executor.ExecContext(ctx, `INSERT INTO subscription_targets
-			(subscription_id, position, instance_id, capability_kind, instance_revision, inputs) VALUES ($1, $2, $3, $4, $5, $6)`,
-			subscription.ID, position, target.InstanceID, target.CapabilityKind, target.Revision, string(inputs)); err != nil {
+			(subscription_id, position, instance_id, capability_kind, instance_revision, inputs, input_bindings)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			subscription.ID, position, target.InstanceID, target.CapabilityKind, target.Revision, string(inputs),
+			string(bindings)); err != nil {
 			return err
 		}
 	}

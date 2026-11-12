@@ -224,6 +224,7 @@ func TestUnknownAgencyIsInvalidInput(t *testing.T) {
 func TestDeleteRefusesReferencedSchema(t *testing.T) {
 	t.Parallel()
 	reference := `{"namespace":"attributes","path":["%s","code"]}`
+	unitReference := `{"namespace":"unit","path":["attributes","%s","code"]}`
 	for name, insert := range map[string]func(w *world, key string){
 		"active Workflow version": func(w *world, key string) {
 			workflow, version := uuid.New(), uuid.New()
@@ -243,9 +244,60 @@ func TestDeleteRefusesReferencedSchema(t *testing.T) {
 				VALUES ($1, 1, 'global', $2, $2, 'active', ARRAY['message.created'], $3::jsonb, false, now(), now())`,
 				uuid.New(), uuid.New(), `{"all":[{"field":`+fmt.Sprintf(reference, key)+`}]}`)
 		},
+		"Subscription target input binding": func(w *world, key string) {
+			instance, version, subscription := uuid.New(), uuid.New(), uuid.New()
+			err := w.store.WithinTransaction(context.Background(), func(tx platform.TransactionContext) error {
+				executor, err := w.store.Resolve(tx)
+				if err != nil {
+					return err
+				}
+				for _, statement := range []struct {
+					query string
+					args  []any
+				}{
+					{`INSERT INTO processing_instances (id, revision) VALUES ($1, 1)`, []any{instance}},
+					{`INSERT INTO processing_instance_versions (id, instance_id, revision, configuration) VALUES ($1, $2, 1, jsonb_build_object('id', $3::text, 'revision', '1'))`, []any{version, instance, instance.String()}},
+					{`INSERT INTO subscriptions (id, revision, kind, subscriber_id, created_by, state, event_types, split_by_unit, created_at, updated_at)
+						VALUES ($1, 1, 'global', $2, $2, 'active', ARRAY['message.created'], false, now(), now())`, []any{subscription, uuid.New()}},
+					{`INSERT INTO subscription_targets (subscription_id, position, instance_id, capability_kind, instance_revision, inputs, input_bindings)
+						VALUES ($1, 0, $2, 'delivery', 1, '{}', $3::jsonb)`,
+						[]any{subscription, instance, `{"recipient":{"namespace":"unit","path":["attributes","` + key + `","code"]}}`}},
+				} {
+					if _, err := executor.ExecContext(tx.Context(), statement.query, statement.args...); err != nil {
+						return err
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+		},
 		"saved view": func(w *world, key string) {
 			w.run(t, `INSERT INTO saved_views (id, ownership, name, definition, created_at, updated_at) VALUES ($1, 'global', 'v', $2::jsonb, now(), now())`,
 				uuid.New(), `{"filters":[{"field":`+fmt.Sprintf(reference, key)+`}]}`)
+		},
+		"Workflow reading a target Unit attribute": func(w *world, key string) {
+			workflow, version := uuid.New(), uuid.New()
+			w.run(t, `INSERT INTO processing_workflows (id, name, created_at, updated_at) VALUES ($1, 'w', now(), now())`, workflow)
+			w.run(t, `INSERT INTO processing_workflow_versions (id, workflow_id, definition, created_at, created_by) VALUES ($1, $2, $3::jsonb, now(), $4)`,
+				version, workflow, `{"steps":[{"input":{"namespace":"target","path":["unit","attributes","`+key+`","code"]}}]}`, uuid.New())
+			w.run(t, `UPDATE processing_workflows SET active_version_id = $2 WHERE id = $1`, workflow, version)
+		},
+		"Layout reading a Unit attribute": func(w *world, key string) {
+			layout := uuid.New()
+			w.run(t, `INSERT INTO layout_definitions (id, revision, name, output_kind, created_by, created_at, updated_at) VALUES ($1, 1, 'l', 'text', $2, now(), now())`, layout, uuid.New())
+			w.run(t, `INSERT INTO layout_definition_versions (layout_id, version, definition, created_by, created_at) VALUES ($1, 1, $2::jsonb, $3, now())`,
+				layout, `{"blocks":[{"kind":"field","field":`+fmt.Sprintf(unitReference, key)+`}]}`, uuid.New())
+		},
+		"Subscription filter on a Unit attribute": func(w *world, key string) {
+			w.run(t, `INSERT INTO subscriptions (id, revision, kind, subscriber_id, created_by, state, event_types, filter, split_by_unit, created_at, updated_at)
+				VALUES ($1, 1, 'global', $2, $2, 'active', ARRAY['message.created'], $3::jsonb, false, now(), now())`,
+				uuid.New(), uuid.New(), `{"all":[{"field":`+fmt.Sprintf(unitReference, key)+`}]}`)
+		},
+		"saved view on a Unit attribute": func(w *world, key string) {
+			w.run(t, `INSERT INTO saved_views (id, ownership, name, definition, created_at, updated_at) VALUES ($1, 'global', 'v', $2::jsonb, now(), now())`,
+				uuid.New(), `{"filters":[{"field":`+fmt.Sprintf(unitReference, key)+`}]}`)
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

@@ -119,12 +119,14 @@ const (
 
 // TargetReference names one configured instance with the Delivery capability. Revision is the
 // instance revision current when the Subscription was saved; Inputs are typed constants for
-// inputs the instance's descriptor declares.
+// inputs the instance's descriptor declares. InputBindings name, per declared input, the Unit
+// attribute field whose value fills it; a constant of the same input is the fallback.
 type TargetReference struct {
-	InstanceID     uuid.UUID                   `json:"instanceId"`
-	CapabilityKind string                      `json:"capabilityKind"`
-	Revision       int64                       `json:"revision,string"`
-	Inputs         map[string]processing.Value `json:"inputs"`
+	InstanceID     uuid.UUID                      `json:"instanceId"`
+	CapabilityKind string                         `json:"capabilityKind"`
+	Revision       int64                          `json:"revision,string"`
+	Inputs         map[string]processing.Value    `json:"inputs"`
+	InputBindings  map[string]processing.FieldRef `json:"inputBindings,omitempty"`
 }
 
 // Subscription selects Domain event types for a subscriber and sends authorized, rendered

@@ -53,7 +53,8 @@ CREATE INDEX subscriptions_subscriber ON subscriptions (subscriber_id);
 CREATE INDEX subscriptions_active_types ON subscriptions USING gin (event_types) WHERE state = 'active';
 CREATE INDEX subscriptions_layout ON subscriptions (layout_id) WHERE layout_id IS NOT NULL;
 
--- Each target is a configured instance with the Delivery capability; inputs are typed constants.
+-- Each target is a configured instance with the Delivery capability; inputs are typed constants
+-- and input_bindings map input names to the Unit attribute field references that fill them.
 CREATE TABLE subscription_targets (
     subscription_id uuid NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
     position smallint NOT NULL CHECK (position BETWEEN 0 AND 7),
@@ -61,6 +62,7 @@ CREATE TABLE subscription_targets (
     capability_kind varchar NOT NULL CHECK (capability_kind = 'delivery'),
     instance_revision bigint NOT NULL CHECK (instance_revision > 0),
     inputs jsonb NOT NULL CHECK (jsonb_typeof(inputs) = 'object'),
+    input_bindings jsonb NOT NULL DEFAULT '{}' CHECK (jsonb_typeof(input_bindings) = 'object'),
     PRIMARY KEY (subscription_id, position),
     UNIQUE (subscription_id, instance_id)
 );

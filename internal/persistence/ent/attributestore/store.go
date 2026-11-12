@@ -203,15 +203,25 @@ func (s *Store) Update(ctx context.Context, tx platform.TransactionContext, sche
 	return insertAgencies(ctx, executor, schema.Key, schema.Agencies)
 }
 
-// referenced reports whether anything refers to the key. A field reference is an object with
-// namespace "attributes" whose path starts with the key; Workflow outputs are keyed by it.
+// fieldReference is the JSON path condition of a field reference to the schema $key: a Message
+// attribute (`attributes.<key>…`), a Unit attribute (`unit.attributes.<key>…`) or a Workflow's
+// target Unit attribute (`target.unit.attributes.<key>…`).
+const fieldReference = `'$.** ? ((@.namespace == "attributes" && @.path[0] == $key)
+	|| (@.namespace == "unit" && @.path[0] == "attributes" && @.path[1] == $key)
+	|| (@.namespace == "target" && @.path[0] == "unit" && @.path[1] == "attributes" && @.path[2] == $key))',
+	jsonb_build_object('key', $1::text)`
+
+// referenced reports whether anything refers to the key: an active Workflow version writing or
+// reading it, a current Layout version, a Subscription filter or target-input binding, or a saved
+// view. Workflow outputs are keyed by the schema key.
 const referenced = `SELECT
 	EXISTS (SELECT 1 FROM processing_workflows w JOIN processing_workflow_versions v ON v.id = w.active_version_id
-		WHERE NOT w.deleted AND jsonb_exists(v.definition->'outputs', $1))
+		WHERE NOT w.deleted AND (jsonb_exists(v.definition->'outputs', $1) OR jsonb_path_exists(v.definition, ` + fieldReference + `)))
 	OR EXISTS (SELECT 1 FROM layout_definitions l JOIN layout_definition_versions v ON v.layout_id = l.id AND v.version = l.revision
-		WHERE jsonb_path_exists(v.definition, '$.** ? (@.namespace == "attributes" && @.path[0] == $key)', jsonb_build_object('key', $1::text)))
-	OR EXISTS (SELECT 1 FROM subscriptions WHERE jsonb_path_exists(filter, '$.** ? (@.namespace == "attributes" && @.path[0] == $key)', jsonb_build_object('key', $1::text)))
-	OR EXISTS (SELECT 1 FROM saved_views WHERE jsonb_path_exists(definition, '$.** ? (@.namespace == "attributes" && @.path[0] == $key)', jsonb_build_object('key', $1::text)))`
+		WHERE jsonb_path_exists(v.definition, ` + fieldReference + `))
+	OR EXISTS (SELECT 1 FROM subscriptions WHERE jsonb_path_exists(filter, ` + fieldReference + `))
+	OR EXISTS (SELECT 1 FROM subscription_targets WHERE jsonb_path_exists(input_bindings, ` + fieldReference + `))
+	OR EXISTS (SELECT 1 FROM saved_views WHERE jsonb_path_exists(definition, ` + fieldReference + `))`
 
 // Delete implements attributes.Store.
 func (s *Store) Delete(ctx context.Context, tx platform.TransactionContext, key string, expected int64) error {

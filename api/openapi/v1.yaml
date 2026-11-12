@@ -8301,6 +8301,7 @@ components:
       - name
       - agencyId
       - encrypted
+      - attributes
       properties:
         unitId:
           type: string
@@ -8320,6 +8321,31 @@ components:
           type: string
           format: date-time
           description: Detail only.
+        attributes:
+          type: array
+          description: The Unit's effective attribute values, sorted by schema key and field; empty when it has none.
+          items:
+            $ref: '#/components/schemas/MessageUnitAttribute'
+    MessageUnitAttribute:
+      type: object
+      required:
+      - schemaKey
+      - field
+      - value
+      - source
+      properties:
+        schemaKey:
+          type: string
+        field:
+          type: string
+        value:
+          $ref: '#/components/schemas/TypedValue'
+        source:
+          type: string
+          enum:
+          - unit
+          - organization
+          description: Whether the value is the Unit's own or the default of its Organization.
     MessageAttribute:
       type: object
       description: The effective value of one attribute field at one position, the present value of the latest
@@ -9166,7 +9192,8 @@ components:
             type: string
             minLength: 1
           description: One element for the fixed fields (for example `["occurredAt"]` in `event`); `attributes` takes
-            the Attribute schema key, the field and, for an object field, the property names below it.
+            the Attribute schema key, the field and, for an object field, the property names below it; `unit` takes `attributes`
+            and then the same three parts for a Unit attribute.
       additionalProperties: false
     DeliveryPredicate:
       type: object
@@ -9261,6 +9288,14 @@ components:
           type: object
           additionalProperties:
             $ref: '#/components/schemas/TypedValue'
+        inputBindings:
+          type: object
+          maxProperties: 64
+          description: Input names of the target's descriptor mapped to the Unit attribute field that fills them
+            (`namespace` `unit`, `path` `["attributes", schemaKey, field, …]`). The field must be of the input's kind
+            and its field group readable by the subscriber. A constant of the same input is the fallback. May be omitted.
+          additionalProperties:
+            $ref: '#/components/schemas/DeliveryFieldRef'
     SubscriptionInput:
       type: object
       description: The writable part of a Subscription.
