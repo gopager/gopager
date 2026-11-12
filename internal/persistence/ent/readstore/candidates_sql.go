@@ -1,6 +1,8 @@
 package readstore
 
 import (
+	"fmt"
+
 	"github.com/gopager/gopager/internal/fields"
 	"github.com/gopager/gopager/internal/processing"
 )
@@ -22,15 +24,15 @@ func (b *feedBuilder) candidates(field *fields.Field) string {
 
 // attributeCandidates renders the candidates of attributes.<schemaKey>.<field>[.<property>…]:
 // the effective values of the field at every position the caller may see, descended into the
-// object properties of the path.
+// object properties of the path. The values come from the per-Message aggregate of fieldValues,
+// so that every leaf on the field reuses one computation.
 func (b *feedBuilder) attributeCandidates(field *fields.Field) string {
 	path := field.Ref.Path
-	value := "e.value"
+	value := "el.x"
 	for _, property := range path[2:] {
 		value = "(" + value + "->'value'->" + b.params.add(property) + "::text)"
 	}
-	restriction := " AND k.key = " + b.params.add(path[0]) + "::text AND f.key = " + b.params.add(path[1]) + "::text"
-	values := "SELECT " + value + " AS x FROM (" + b.effectiveAttributes("m.id", restriction) + ") e"
+	values := "SELECT " + value + " AS x FROM jsonb_array_elements(" + b.fieldValues(path[0], path[1]) + ") el(x)"
 	scalar := scalarSchema(field.Type)
 	if field.Type.Kind != processing.ListValue {
 		return "SELECT r.x FROM (" + values + ") r WHERE " + admissible("r.x", scalar)
@@ -38,6 +40,27 @@ func (b *feedBuilder) attributeCandidates(field *fields.Field) string {
 	return `SELECT el.x FROM (` + values + `) r CROSS JOIN LATERAL jsonb_array_elements(
 			CASE WHEN r.x->>'kind' = 'list' AND jsonb_typeof(r.x->'value') = 'array' THEN r.x->'value' ELSE '[]'::jsonb END
 		) AS el(x) WHERE ` + admissible("el.x", scalar)
+}
+
+// fieldValues returns the jsonb array of the effective typed values of an attribute field of the
+// page Message m, at every position the caller may see. The first use of a field registers a
+// lateral aggregate for the page's FROM clause (see lateralFields); the expression is the same
+// for every later leaf on the field, so the effective-value subquery runs once per Message and
+// field, not once per condition.
+func (b *feedBuilder) fieldValues(schemaKey, field string) string {
+	key := schemaKey + "\x00" + field
+	if alias, ok := b.fieldAliases[key]; ok {
+		return alias + ".vals"
+	}
+	if b.fieldAliases == nil {
+		b.fieldAliases = map[string]string{}
+	}
+	alias := fmt.Sprintf("ev%d", len(b.fieldAliases)+1)
+	b.fieldAliases[key] = alias
+	restriction := " AND k.key = " + b.params.add(schemaKey) + "::text AND f.key = " + b.params.add(field) + "::text"
+	b.lateralFields = append(b.lateralFields, " CROSS JOIN LATERAL (SELECT COALESCE(jsonb_agg(e.value), '[]'::jsonb) AS vals FROM ("+
+		b.effectiveAttributes("m.id", restriction)+") e) "+alias)
+	return alias + ".vals"
 }
 
 // admissible renders when the typed value x is a candidate of the scalar type: of its kind, or an

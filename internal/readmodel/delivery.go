@@ -22,18 +22,19 @@ type DeliveryProjection struct {
 	WithoutUnit []WithoutUnitRecord
 	// Groups are the field groups the subscriber may read, sorted.
 	Groups []string
-	// PublishedResults are the published results of the Message that the subscriber may read.
-	// A result belongs here even when none of its values is effective, because a later result
-	// replaced them or because it holds none.
-	PublishedResults []uuid.UUID
+	// ResultVisible reports whether the published result asked for in ProjectForDelivery is one
+	// the subscriber may read. It is so even when none of the result's values is effective,
+	// because a later result replaced them or because it holds none.
+	ResultVisible bool
 }
 
 // ProjectForDelivery returns the Message as the holder of authority may read it, inside the
 // caller's transaction, in which authority was resolved at now. The boolean is false when the
-// authority holds no message.read grant or no appearance of the Message is eligible. Attribute
-// values appear only when the holder may read all of the stored field groups of their results, as in the feed.
+// authority holds no message.read grant or no appearance of the Message is eligible. A non-nil
+// result is the published result whose visibility DeliveryProjection.ResultVisible reports.
+// Attribute values appear only when the holder may read all of the stored field groups of their results, as in the feed.
 func (s *Service) ProjectForDelivery(ctx context.Context, tx platform.TransactionContext, authority authz.Authority,
-	now time.Time, messageID uuid.UUID) (DeliveryProjection, bool, error) {
+	now time.Time, messageID, resultID uuid.UUID) (DeliveryProjection, bool, error) {
 	if messageID == uuid.Nil {
 		return DeliveryProjection{}, false, authz.ErrInvalidInput
 	}
@@ -44,8 +45,11 @@ func (s *Service) ProjectForDelivery(ctx context.Context, tx platform.Transactio
 	if !current.rows.Read.Granted() {
 		return DeliveryProjection{}, false, nil
 	}
-	result, err := s.store.Feed(tx.Context(), tx, FeedQuery{Access: current.rows, IDs: []uuid.UUID{messageID},
-		DerivedGroups: current.derivedGroups(), WithPublishedResults: true})
+	query := FeedQuery{Access: current.rows, IDs: []uuid.UUID{messageID}, DerivedGroups: current.derivedGroups()}
+	if resultID != uuid.Nil {
+		query.PublishedResult = &resultID
+	}
+	result, err := s.store.Feed(tx.Context(), tx, query)
 	if err != nil {
 		return DeliveryProjection{}, false, err
 	}
@@ -60,5 +64,5 @@ func (s *Service) ProjectForDelivery(ctx context.Context, tx platform.Transactio
 	slices.Sort(groups)
 	return DeliveryProjection{Item: current.viewer.feedItem(record, false), Units: slices.Clone(record.Units),
 		WithoutUnit: slices.Clone(record.WithoutUnit), Groups: groups,
-		PublishedResults: slices.Clone(record.PublishedResults)}, true, nil
+		ResultVisible: record.ResultVisible}, true, nil
 }

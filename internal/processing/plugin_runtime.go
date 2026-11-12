@@ -15,6 +15,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/gopager/gopager/pluginsdk"
 )
@@ -386,12 +388,32 @@ func (p *pluginProcess) invoke(ctx context.Context, input []byte) ([]byte, error
 	response, err := stub.Invoke(ctx, input, MaxOutputBytes)
 	if err != nil {
 		p.stopIf(client)
-		if err := invocationErr(ctx); err != nil {
-			return nil, err
-		}
-		return nil, invalid(errors.New("plugin invocation failed"))
+		return nil, invokeFailure(ctx, err)
 	}
 	return response, nil
+}
+
+// remoteDeadlineSkew is how close to the caller's deadline a deadline or cancellation reported by
+// the plugin side counts as that same deadline rather than as the plugin's own failure.
+const remoteDeadlineSkew = 250 * time.Millisecond
+
+// invokeFailure classifies a failed plugin invocation. gRPC hands the caller's deadline to the
+// plugin process, whose side can expire a moment before the caller's context does and report
+// DeadlineExceeded (or Canceled) first; within remoteDeadlineSkew of the caller's deadline the
+// caller waits the remaining moment for its own context and reports the deadline. Earlier, such a
+// status comes from the plugin itself (for example a shorter internal operation the SDK passes
+// through), so it is the plugin's failure and returns at once, freeing the process slot.
+func invokeFailure(ctx context.Context, err error) error {
+	if err := invocationErr(ctx); err != nil {
+		return err
+	}
+	if code := status.Code(err); code == codes.DeadlineExceeded || code == codes.Canceled {
+		if deadline, bounded := ctx.Deadline(); bounded && time.Until(deadline) <= remoteDeadlineSkew {
+			<-ctx.Done()
+			return invocationErr(ctx)
+		}
+	}
+	return invalid(errors.New("plugin invocation failed"))
 }
 
 // call performs one bounded invocation on the artifact's process.

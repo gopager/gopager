@@ -22,7 +22,7 @@ func (v *view) attributeCandidates(path []string) []processing.Value {
 		if attribute.SchemaKey != path[0] || attribute.Field != path[1] {
 			continue
 		}
-		if attribute.TargetPosition != nil && (attribute.UnitID == nil || !v.relevantUnit(attribute.UnitID.String())) {
+		if attribute.TargetPosition != nil && (attribute.UnitID == nil || !v.relevantUnit(*attribute.UnitID)) {
 			continue
 		}
 		if value, ok := descend(attribute.Value, path[2:]); ok {

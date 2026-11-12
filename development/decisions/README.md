@@ -178,3 +178,4 @@ Add a decision to the ADR file of its topic with status, date, supersession, the
 | D-153 | AP-21 write scope: Workflow selection in the intake store and the health fact store | accepted | 2026-11-11 | [04-processing-and-plugins](04-processing-and-plugins.md#d-153) |
 | D-154 | Everything on its latest version in the AP-21 pull request | accepted | 2026-11-12 | [01-platform-and-storage](01-platform-and-storage.md#d-154) |
 | D-155 | Test run time: test-only costs are configurable | accepted | 2026-11-12 | [09-process-and-documentation](09-process-and-documentation.md#d-155) |
+| D-156 | AP-21 follow-ups after the merge | accepted | 2026-11-12 | [04-processing-and-plugins](04-processing-and-plugins.md#d-156) |

@@ -2,8 +2,8 @@ package delivery
 
 import (
 	"context"
-	"slices"
 
+	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/fields"
 	"github.com/gopager/gopager/internal/processing"
 	"github.com/gopager/gopager/internal/readmodel"
@@ -19,6 +19,8 @@ type view struct {
 	gateway      *GatewayView
 	groups       map[string]bool
 	declarations fields.Declarations
+	// unitSet indexes units for relevantUnit; nil until first use.
+	unitSet map[uuid.UUID]struct{}
 }
 
 var (
@@ -66,14 +68,16 @@ func (v *view) LookupField(_ context.Context, ref processing.FieldRef) (processi
 	return processing.FieldValue{State: processing.FieldAbsent}, nil
 }
 
-// unitIDs returns the IDs of the view's relevant Units.
-func (v *view) unitIDs() []string {
-	ids := make([]string, len(v.units))
-	for i, unit := range v.units {
-		ids[i] = unit.UnitID.String()
+// relevantUnit reports whether the Unit is one of the view's relevant Units. The set is built on
+// the first call because a view is asked once per attribute value; its Units must not change after
+// that, and a view is not shared between goroutines.
+func (v *view) relevantUnit(id uuid.UUID) bool {
+	if v.unitSet == nil {
+		v.unitSet = make(map[uuid.UUID]struct{}, len(v.units))
+		for _, unit := range v.units {
+			v.unitSet[unit.UnitID] = struct{}{}
+		}
 	}
-	return ids
+	_, ok := v.unitSet[id]
+	return ok
 }
-
-// relevantUnit reports whether the Unit is one of the view's relevant Units.
-func (v *view) relevantUnit(id string) bool { return slices.Contains(v.unitIDs(), id) }

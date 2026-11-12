@@ -371,7 +371,7 @@ func measureProjection(t *testing.T, f *deliveryFixture, runtime *deliveryRuntim
 		}
 		project := func(subscriber, message uuid.UUID) (time.Duration, error) {
 			start := time.Now()
-			_, _, err := runtime.deps.Projector.ProjectForDelivery(ctx, tx, authorities[subscriber], now, message)
+			_, _, err := runtime.deps.Projector.ProjectForDelivery(ctx, tx, authorities[subscriber], now, message, uuid.Nil)
 			return time.Since(start), err
 		}
 		for _, message := range picks {

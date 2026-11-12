@@ -236,3 +236,43 @@ func TestAttributeFiltersMatchTheEffectiveValue(t *testing.T) {
 func principalForUnits(units ...uuid.UUID) authz.Authority {
 	return principal(grant(scope("unit", units...), nil, "message.read", "message.detail"))
 }
+
+// TestPublishedResultVisibilityAnswersOnlyForTheAskedResult shows that the feed checks the one
+// result it is asked about: an unreadable or unrelated result of the same Message neither
+// hides nor grants it, and a result of another Message is never visible.
+func TestPublishedResultVisibilityAnswersOnlyForTheAskedResult(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	agency := w.agency("county")
+	a := w.unit(agency, "A", nil)
+	network := w.network(agency, "N", "pocsag")
+	message := w.message(base, "text", "alarm")
+	other := w.message(base.Add(time.Second), "text", "other")
+	transmission := w.assigned(message, network, a, agency, base, "")
+	otherTransmission := w.assigned(other, network, a, agency, base, "")
+	workflowOne, versionOne := w.workflow()
+	workflowTwo, versionTwo := w.workflow()
+	readable := w.result(transmission, workflowOne, versionOne, message, base.Add(time.Minute), `["derived"]`, untargeted())
+	unreadable := w.result(transmission, workflowTwo, versionTwo, message, base.Add(time.Minute), `["derived","quality"]`, untargeted())
+	foreign := w.result(otherTransmission, workflowOne, versionOne, other, base.Add(time.Minute), `["derived"]`, untargeted())
+	cases := []struct {
+		name   string
+		result *uuid.UUID
+		groups []string
+		want   bool
+	}{
+		{"readable result", &readable, []string{"derived"}, true},
+		{"unreadable result beside a readable one", &unreadable, []string{"derived"}, false},
+		{"readable result beside an unreadable one", &readable, []string{"derived"}, true},
+		{"result of another message", &foreign, []string{"derived"}, false},
+		{"no result asked", nil, []string{"derived"}, false},
+		{"no readable groups", &readable, nil, false},
+	}
+	for _, c := range cases {
+		got := w.feed(principalForUnits(a), base.Add(time.Hour), readmodel.FeedQuery{IDs: []uuid.UUID{message},
+			DerivedGroups: c.groups, PublishedResult: c.result}).Items[0]
+		if got.ResultVisible != c.want {
+			t.Errorf("%s: ResultVisible = %v, want %v", c.name, got.ResultVisible, c.want)
+		}
+	}
+}

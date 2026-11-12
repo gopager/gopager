@@ -46,6 +46,10 @@ type feedBuilder struct {
 	query  readmodel.FeedQuery
 	detail bool
 	groups string
+	// fieldAliases maps an attribute field to the alias of its lateral aggregate, and
+	// lateralFields holds the join clauses to append to the page's FROM clause.
+	fieldAliases  map[string]string
+	lateralFields []string
 }
 
 // groupsParam registers the caller's readable field groups on first use as a jsonb array, so
@@ -162,6 +166,7 @@ func (b *feedBuilder) pageCTE() string {
 	if exact != "" {
 		where += " AND " + exact
 	}
+	source += strings.Join(b.lateralFields, "")
 	return `page AS (
 	SELECT m.id, m.first_observed_at FROM ` + source + `
 	WHERE ` + where + `
@@ -232,12 +237,12 @@ result_rows AS (
 		COALESCE((SELECT jsonb_agg(DISTINCT s.network_agency) FROM sup s
 			WHERE s.message_id = p.id AND s.network_unresolved), '[]'::jsonb) AS unresolved,
 		` + b.attributesColumn() + ` AS attributes,
-		` + b.publishedResultsColumn() + ` AS published_results,
+		` + b.resultVisibleColumn() + ` AS result_visible,
 		` + b.transmissionsColumn() + ` AS transmissions
 	FROM page p LEFT JOIN LATERAL (SELECT s.payload, s.protocol, s.incomplete FROM sup s WHERE s.message_id = p.id
 		ORDER BY s.incomplete, s.accepted_at, s.id LIMIT 1) r ON true)
 SELECT s.tx_id, s.seq, r.id, r.first_observed_at, r.processing_status, r.correcting, r.payload, r.protocol, r.incomplete,
-	r.units, r.without_unit, r.unresolved, r.attributes, r.published_results, r.transmissions
+	r.units, r.without_unit, r.unresolved, r.attributes, r.result_visible, r.transmissions
 FROM snapshot s LEFT JOIN result_rows r ON true
 ORDER BY r.first_observed_at DESC NULLS LAST, r.id DESC`
 }
@@ -286,7 +291,7 @@ func (s *Store) run(ctx context.Context, tx platform.TransactionContext, query r
 		var row feedRow
 		if err := rows.Scan(&result.TxID, &result.Seq, &row.id, &row.time, &row.processing, &row.correcting, &row.payload,
 			&row.protocol, &row.incomplete, &row.units, &row.withoutUnit, &row.unresolved, &row.attributes,
-			&row.publishedResults, &row.transmissions); err != nil {
+			&row.resultVisible, &row.transmissions); err != nil {
 			return readmodel.FeedResult{}, nil, err
 		}
 		if row.id == nil {
@@ -311,19 +316,19 @@ func (s *Store) run(ctx context.Context, tx platform.TransactionContext, query r
 
 // feedRow is one scanned row of the statement.
 type feedRow struct {
-	id               *uuid.UUID
-	time             *time.Time
-	processing       *string
-	correcting       *bool
-	payload          *string
-	protocol         *string
-	incomplete       *bool
-	units            []byte
-	withoutUnit      []byte
-	unresolved       []byte
-	attributes       []byte
-	publishedResults []byte
-	transmissions    []byte
+	id            *uuid.UUID
+	time          *time.Time
+	processing    *string
+	correcting    *bool
+	payload       *string
+	protocol      *string
+	incomplete    *bool
+	units         []byte
+	withoutUnit   []byte
+	unresolved    []byte
+	attributes    []byte
+	resultVisible *bool
+	transmissions []byte
 }
 
 // record decodes the JSON aggregates of a row.
@@ -365,7 +370,7 @@ func (r feedRow) record() (readmodel.FeedRecord, []readmodel.TransmissionRecord,
 	for _, decode := range []struct {
 		data   []byte
 		target any
-	}{{r.units, &units}, {r.withoutUnit, &withoutUnit}, {r.unresolved, &record.UnresolvedAgencies}, {r.attributes, &attributes}, {r.publishedResults, &record.PublishedResults}} {
+	}{{r.units, &units}, {r.withoutUnit, &withoutUnit}, {r.unresolved, &record.UnresolvedAgencies}, {r.attributes, &attributes}} {
 		if err := json.Unmarshal(decode.data, decode.target); err != nil {
 			return readmodel.FeedRecord{}, nil, err
 		}
@@ -374,6 +379,7 @@ func (r feedRow) record() (readmodel.FeedRecord, []readmodel.TransmissionRecord,
 		record.Units = append(record.Units, readmodel.UnitRecord{UnitID: unit.UnitID, Name: unit.Name, AgencyID: unit.AgencyID,
 			OrganizationID: unit.OrganizationID, Encrypted: unit.Encrypted, FirstObservedAt: unit.FirstObservedAt.UTC()})
 	}
+	record.ResultVisible = r.resultVisible != nil && *r.resultVisible
 	for _, entry := range withoutUnit {
 		record.WithoutUnit = append(record.WithoutUnit, readmodel.WithoutUnitRecord{AgencyID: entry.AgencyID,
 			FirstObservedAt: entry.FirstObservedAt.UTC()})

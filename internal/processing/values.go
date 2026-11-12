@@ -238,6 +238,11 @@ func (v Value) native(schema FieldSchema, depth int, decodedBytes *int) (any, er
 		if err != nil {
 			return nil, invalid(err)
 		}
+		// A UTC instant after year 9999 cannot be written back as RFC 3339 (a Layout would render
+		// a five-digit year that strict parsers reject), so it is limited like the lower bound.
+		if instant.UTC().Year() > 9999 {
+			return nil, invalid(errors.New("timestamp after year 9999"))
+		}
 		// PostgreSQL has no year zero; such a value would fail every later cast of the stored
 		// value, so it is rejected here, where all typed values are checked.
 		if instant.Year() < 1 || instant.UTC().Year() < 1 {

@@ -70,6 +70,8 @@ CREATE TABLE messages (
     last_observed_at timestamptz NOT NULL
 );
 CREATE INDEX messages_identity ON messages (identity_form, identity_subtype, identity_value, last_observed_at);
+-- The feed pages by (first_observed_at, id) descending; the index serves that keyset order directly.
+CREATE INDEX messages_first_observed ON messages (first_observed_at DESC, id DESC);
 -- Published Processing results belong to the Message of their Transmission; a merge moves them.
 ALTER TABLE processing_results ADD CONSTRAINT processing_results_message
     FOREIGN KEY (message_id) REFERENCES messages(id);
@@ -141,6 +143,8 @@ CREATE TABLE message_units (
 );
 CREATE UNIQUE INDEX message_units_message_unit ON message_units (message_id, unit_id) WHERE unit_id IS NOT NULL;
 CREATE UNIQUE INDEX message_units_message_targetless ON message_units (message_id, agency_id) WHERE unit_id IS NULL;
+-- The feed's eligibility check probes message_units by Message; the partial unique indexes above cannot serve it.
+CREATE INDEX message_units_message ON message_units (message_id);
 CREATE INDEX message_units_unit_age ON message_units (unit_id, age_anchor);
 CREATE INDEX message_units_agency_time ON message_units (agency_id, first_observed_at);
 
