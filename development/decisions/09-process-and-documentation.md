@@ -170,8 +170,8 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Rationale:** Both tests asserted a timing their subject does not guarantee; the live replay was reproduced locally with a held transaction, the exec failure only in CI.
 - **Consequences:** Follow-ups in the [AP-08](../execution/ap-08.md) and [AP-10](../execution/ap-10.md) records; the AP-13 record links this decision under Blockers and Deviations. No open AP changes.
 
-<a id="d-168"></a>
-## D-168 Live stream tests record what they received
+<a id="d-169"></a>
+## D-169 Live stream tests record what they received
 
 - **Status:** accepted
 - **Date:** 2026-11-12
