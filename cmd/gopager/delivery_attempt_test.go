@@ -33,9 +33,6 @@ func newBareScene(t *testing.T, limits delivery.AdmissionLimits) *attemptScene {
 	t.Helper()
 	f := newDeliveryFixture(t, limits)
 	s := &attemptScene{deliveryFixture: f}
-	if limits != (delivery.AdmissionLimits{}) {
-		s.windowRoom(25 * time.Second)
-	}
 	s.subscriberBearer, s.subscriberID = f.subscriber("payload", "unit")
 	s.manager, _ = f.caller([]string{"delivery.read", "delivery.retry", "delivery.redeliver"}, authz.Scope{Kind: "all"},
 		[]string{"payload"})
@@ -55,18 +52,6 @@ func newAttemptScene(t *testing.T, limits delivery.AdmissionLimits) *attemptScen
 func (s *attemptScene) subscribeTo(bearer string) uuid.UUID {
 	return s.subscribe(bearer, map[string]any{"eventTypes": []string{"message.created"},
 		"targets": []any{target(s.instanceID)}})
-}
-
-// windowRoom sleeps until the current one-minute admission window has at least left remaining.
-func (s *attemptScene) windowRoom(left time.Duration) {
-	for {
-		now := s.now()
-		remaining := now.Truncate(time.Minute).Add(time.Minute).Sub(now)
-		if remaining > left {
-			return
-		}
-		time.Sleep(remaining + 100*time.Millisecond)
-	}
 }
 
 // scan reads one row of a statement into dest.

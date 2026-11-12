@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -567,29 +569,33 @@ func TestLiveStreamsAreAuthorizedPerCaller(t *testing.T) {
 
 func TestLiveStreamRequestRules(t *testing.T) {
 	t.Parallel()
-	f := newLiveFixture(t, 2)
-	bearer, _ := f.caller([]string{"message.read"}, authz.Scope{Kind: "all"}, []string{"payload"})
-	from := "from=" + rfc(microsecondNow().Add(-time.Hour))
-	for name, query := range map[string]string{"no position": "?" + from, "no from": "?position=1-2-3",
-		"unknown parameter": "?" + from + "&position=1-2-3&x=1", "invalid text": "?" + from + "&position=1-2-3&text=%FF"} {
-		if client, status, body := f.tryStream(bearer, query); client != nil || status != http.StatusBadRequest ||
-			!strings.Contains(body, "INVALID_INPUT") {
-			t.Errorf("%s: %d %s", name, status, body)
+	withinOneAdmissionWindow(t, newAdmissionClockStore(t), func(int) error {
+		f := newLiveFixture(t, 2)
+		bearer, _ := f.caller([]string{"message.read"}, authz.Scope{Kind: "all"}, []string{"payload"})
+		from := "from=" + rfc(microsecondNow().Add(-time.Hour))
+		var failures []error
+		for name, query := range map[string]string{"no position": "?" + from, "no from": "?position=1-2-3",
+			"unknown parameter": "?" + from + "&position=1-2-3&x=1", "invalid text": "?" + from + "&position=1-2-3&text=%FF"} {
+			if client, status, body := f.tryStream(bearer, query); client != nil || status != http.StatusBadRequest ||
+				!strings.Contains(body, "INVALID_INPUT") {
+				failures = append(failures, fmt.Errorf("%s: %d %s", name, status, body))
+			}
 		}
-	}
-	if _, status, _ := f.tryStream("", "?"+from+"&position=1-2-3"); status != http.StatusForbidden {
-		t.Errorf("a guest without grants = %d, want 403 before streaming", status)
-	}
-	if _, status, _ := f.tryStream("Bearer unknown", "?"+from+"&position=1-2-3"); status != http.StatusUnauthorized {
-		t.Errorf("an unknown key = %d, want 401", status)
-	}
-	// Two admissions of the limit of two are used by two opens; the feed shares the window.
-	f.openStream(bearer, "?"+from+"&position=1-2-3")
-	f.openStream(bearer, "?"+from+"&position=1-2-3")
-	if client, status, body := f.tryStream(bearer, "?"+from+"&position=1-2-3"); client != nil || status != http.StatusTooManyRequests ||
-		!strings.Contains(body, "RATE_LIMITED") {
-		t.Errorf("third open = %d %s, want 429 RATE_LIMITED", status, body)
-	}
+		if _, status, _ := f.tryStream("", "?"+from+"&position=1-2-3"); status != http.StatusForbidden {
+			failures = append(failures, fmt.Errorf("a guest without grants = %d, want 403 before streaming", status))
+		}
+		if _, status, _ := f.tryStream("Bearer unknown", "?"+from+"&position=1-2-3"); status != http.StatusUnauthorized {
+			failures = append(failures, fmt.Errorf("an unknown key = %d, want 401", status))
+		}
+		// Two admissions of the limit of two are used by two opens; the feed shares the window.
+		f.openStream(bearer, "?"+from+"&position=1-2-3")
+		f.openStream(bearer, "?"+from+"&position=1-2-3")
+		if client, status, body := f.tryStream(bearer, "?"+from+"&position=1-2-3"); client != nil || status != http.StatusTooManyRequests ||
+			!strings.Contains(body, "RATE_LIMITED") {
+			failures = append(failures, fmt.Errorf("third open = %d %s, want 429 RATE_LIMITED", status, body))
+		}
+		return errors.Join(failures...)
+	})
 }
 
 // mergeInto moves the absorbed Message's Transmissions and appearances to the survivor and
