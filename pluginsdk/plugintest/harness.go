@@ -197,11 +197,22 @@ func (h *Harness) Subscriber() uuid.UUID { return h.subscriber }
 // NewSubscriber returns a fresh subscriber ID.
 func (h *Harness) NewSubscriber() uuid.UUID { return uuid.New() }
 
-// SetEnv defines an environment variable that SecretEnv references can read.
+// SetEnv defines an environment variable that SecretEnv references can read. The name is the part
+// after the plugin's namespace, see SecretEnv.
 func (h *Harness) SetEnv(name, value string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.env[name] = value
+	h.env[h.secretEnvName(name)] = value
+}
+
+// secretEnvName is the full name of a variable in the plugin's namespace.
+func (h *Harness) secretEnvName(name string) string {
+	return processing.SecretEnvPluginPrefix(h.pin.PluginID) + name
+}
+
+// secretFilePath is the path below the Secret file root of a file in the plugin's directory.
+func (h *Harness) secretFilePath(name string) string {
+	return h.pin.PluginID + "/" + name
 }
 
 // lookupEnv is the injected environment of the Delivery host.
@@ -212,12 +223,12 @@ func (h *Harness) lookupEnv(name string) (string, bool) {
 	return value, found
 }
 
-// WriteSecretFile creates or replaces a file below the Secret file root, which SecretFile
-// references name relative to it. Content is written as given, so include a trailing newline to
+// WriteSecretFile creates or replaces a file in the plugin's directory below the Secret file root,
+// which SecretFile references name relative to it. Content is written as given, so include a trailing newline to
 // mimic an editor.
 func (h *Harness) WriteSecretFile(name, content string) {
 	h.t.Helper()
-	target := filepath.Join(h.secretDir, filepath.FromSlash(name))
+	target := filepath.Join(h.secretDir, filepath.FromSlash(h.secretFilePath(name)))
 	if !filepath.IsLocal(filepath.FromSlash(name)) {
 		h.t.Fatalf("plugintest: secret file %q leaves the secret file root", name)
 	}

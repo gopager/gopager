@@ -54,7 +54,8 @@ func hasScope(policy ConfigurationPolicy, scope string) bool {
 
 // ConfigurationSecretReferences returns the references held at Secret paths of a configuration
 // value (administrative, personal or merged), keyed by dotted path. A Secret property holding
-// anything but a valid reference string is invalid input; absent and null properties are skipped.
+// anything but a valid reference string is invalid input, as is a file or environment reference
+// outside the plugin's namespace; absent and null properties are skipped.
 func (m InstalledManifest) ConfigurationSecretReferences(value Value) (map[string]SecretReference, error) {
 	references := map[string]SecretReference{}
 	_, err := rewriteSecrets(m.ConfigurationSchema, m.ConfigurationPolicy, value, "", func(path string, leaf Value) (Value, error) {
@@ -68,6 +69,9 @@ func (m InstalledManifest) ConfigurationSecretReferences(value Value) (map[strin
 		reference, err := ParseSecretReference(encoded)
 		if err != nil {
 			return Value{}, err
+		}
+		if !reference.BelongsTo(m.PluginID) {
+			return Value{}, invalid(errors.New("secret reference belongs to another plugin"))
 		}
 		references[path] = reference
 		return leaf, nil

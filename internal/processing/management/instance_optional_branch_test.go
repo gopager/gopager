@@ -23,7 +23,7 @@ func (i manifestInspector) InspectManifest(context.Context, processing.Provision
 // optionalBranchManifest declares an optional object "auth" holding a required administrative Secret.
 func optionalBranchManifest() processing.InstalledManifest {
 	return processing.InstalledManifest{
-		Capability: processing.CapabilityDelivery,
+		PluginID: "pushover", Capability: processing.CapabilityDelivery,
 		ConfigurationSchema: processing.FieldSchema{Kind: processing.ObjectValue, Properties: map[string]processing.FieldSchema{
 			"auth": {Kind: processing.ObjectValue, Optional: true, Properties: map[string]processing.FieldSchema{
 				"token": {Kind: processing.StringValue}}}}},
@@ -40,7 +40,7 @@ func TestUpdateOmittingOptionalBranchDropsItsSecret(t *testing.T) {
 	t.Parallel()
 	manifest := optionalBranchManifest()
 	service := &InstanceService{inspector: manifestInspector{manifest}, secrets: secretSettings{cipher: newCipher(t, 1)}}
-	previousValue, err := manifest.WithSecretReferences(processing.EmptyConfiguration(), map[string]string{"auth.token": "file:token"})
+	previousValue, err := manifest.WithSecretReferences(processing.EmptyConfiguration(), map[string]string{"auth.token": "file:pushover/token"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestUpdateOmittingOptionalBranchDropsItsSecret(t *testing.T) {
 	if _, err := service.completeConfiguration(t.Context(), &kept, previous, InstanceInput{Configuration: empty}); err != nil {
 		t.Fatalf("keeping the branch: %v", err)
 	}
-	if !strings.Contains(string(kept.Configuration.Value), "file:token") {
+	if !strings.Contains(string(kept.Configuration.Value), "file:pushover/token") {
 		t.Fatalf("the branch lost its Secret: %s", kept.Configuration.Value)
 	}
 }

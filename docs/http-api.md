@@ -1091,8 +1091,8 @@ instance inspection returns `503 AUTHORITY_UNAVAILABLE`. Plugin and manifest det
 - **Secrets.** A Secret property is a string property the manifest marks `secret`. It never
   appears in `configuration` (400 `INVALID_INPUT`); a write carries `secrets`, a map from the
   dotted property path to `{"value": "<plaintext>"}` (sealed into the encrypted store as a new
-  immutable row), `{"reference": "file:<relative path>"}` or `{"reference":
-  "env:GOPAGER_PLUGIN_SECRET_<NAME>"}`, or `null` (remove; only for an optional property). A path
+  immutable row), `{"reference": "file:<plugin ID>/<path>"}` or `{"reference":
+  "env:GOPAGER_PLUGIN_SECRET_<ID>__<NAME>"}` (both bound to the instance's plugin; another plugin's file or variable is `INVALID_INPUT`), or `null` (remove; only for an optional property). A path
   left out keeps the previous revision's Secret. Only administrative Secret paths are valid here;
   a `secret:` reference, an unknown or personal path, or both `value` and `reference` are
   `INVALID_INPUT`. A stored value needs the configured master key, otherwise the write is `503

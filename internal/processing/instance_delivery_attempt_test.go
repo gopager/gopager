@@ -239,18 +239,21 @@ func TestDeliveryAttemptSecretSourcesAndFailures(t *testing.T) {
 	env := newDeliveryEnv(t)
 	host := env.hostFor(nil)
 	subscriber := uuid.New()
-	env.env["GOPAGER_PLUGIN_SECRET_TOK"] = "env-token-value"
-	if err := env.filesRoot.WriteFile("tok", []byte("file-token-value\n"), 0o600); err != nil {
+	env.env["GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__TOK"] = "env-token-value"
+	if err := env.filesRoot.Mkdir("test-delivery", 0o700); err != nil {
 		t.Fatal(err)
 	}
-	for reference, head := range map[string]string{"env:GOPAGER_PLUGIN_SECRET_TOK": "env-to", "file:tok": "file-t"} {
+	if err := env.filesRoot.WriteFile("test-delivery/tok", []byte("file-token-value\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for reference, head := range map[string]string{"env:GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__TOK": "env-to", "file:test-delivery/tok": "file-t"} {
 		instance := env.instance("T", reference)
 		outcome, err := host.Attempt(t.Context(), env.request(instance, subscriber, "config-summary"))
 		if err != nil || mustJSON(t, outcome.Receipt)["apiToken"].(map[string]any)["head"] != head {
 			t.Fatalf("%s: %+v %v", reference, outcome, err)
 		}
 	}
-	missing := env.instance("T", "env:GOPAGER_PLUGIN_SECRET_NOPE")
+	missing := env.instance("T", "env:GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__NOPE")
 	outcome, err := host.Attempt(t.Context(), env.request(missing, subscriber, "accept"))
 	if err != nil || outcome.Status != AttemptTransient || outcome.Code != CodeConfigurationUnavailable {
 		t.Fatalf("unresolvable Secret: %+v %v", outcome, err)
@@ -309,7 +312,7 @@ func TestDeliveryAttemptRejectsProcessingManifest(t *testing.T) {
 	manifest.PluginID, manifest.Version, manifest.CapabilityID = env.pin.PluginID, env.pin.Version, env.pin.CapabilityID
 	manifest.Artifact.Digest = env.pin.Digest
 	writeManifest(t, env.root, manifest)
-	instance := env.instance("T", "env:GOPAGER_PLUGIN_SECRET_X")
+	instance := env.instance("T", "env:GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__X")
 	host := env.hostFor(nil)
 	if _, err := host.Describe(t.Context(), instance); platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
 		t.Fatalf("Describe accepted a processing manifest: %v", err)
@@ -348,5 +351,28 @@ func TestDeliveryAttemptCancelledByCaller(t *testing.T) {
 	cancel()
 	if _, err := host.Attempt(ctx, env.request(instance, uuid.New(), "accept")); err == nil {
 		t.Fatal("cancelled attempt returned an outcome")
+	}
+}
+
+func TestDeliveryRejectsAnotherPluginsSecretReference(t *testing.T) {
+	t.Parallel()
+	env := newDeliveryEnv(t)
+	host := env.hostFor(nil)
+	env.env["GOPAGER_PLUGIN_SECRET_PUSHOVER__TOKEN"] = "operator-secret"
+	if err := env.filesRoot.Mkdir("pushover", 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.filesRoot.WriteFile("pushover/token", []byte("operator-secret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, reference := range []string{"env:GOPAGER_PLUGIN_SECRET_PUSHOVER__TOKEN", "file:pushover/token"} {
+		instance := env.instance("T", reference)
+		if _, err := host.Describe(t.Context(), instance); platform.FailureCode(err) != platform.CodeInvalidInput {
+			t.Errorf("%s: Describe accepted a foreign reference: %v", reference, err)
+		}
+		outcome, err := host.Attempt(t.Context(), env.request(instance, uuid.New(), "config-summary"))
+		if err != nil || outcome.Status != AttemptTransient || outcome.Code != CodeConfigurationUnavailable {
+			t.Errorf("%s: foreign reference resolved: %+v %v", reference, outcome, err)
+		}
 	}
 }

@@ -47,13 +47,14 @@ type SecretResolver struct {
 }
 
 // Resolve reads each request: stored rows come from rows and must belong to the instance and the
-// requested owner, files are read through the Secret file root, variables through LookupEnv. Any
-// failure is AUTHORITY_UNAVAILABLE without detail and leaves no plaintext behind.
-func (r SecretResolver) Resolve(instanceID uuid.UUID, requests []SecretRequest,
+// requested owner, files are read through the Secret file root, variables through LookupEnv; files
+// and variables must lie in the namespace of pluginID. Any failure is AUTHORITY_UNAVAILABLE
+// without detail and leaves no plaintext behind.
+func (r SecretResolver) Resolve(pluginID string, instanceID uuid.UUID, requests []SecretRequest,
 	rows map[uuid.UUID]StoredSecret) (ResolvedSecrets, error) {
 	resolved := ResolvedSecrets{Values: make(map[string][]byte, len(requests)), Versions: make(map[string]string, len(requests))}
 	for _, request := range requests {
-		value, version, err := r.resolveOne(instanceID, request, rows)
+		value, version, err := r.resolveOne(pluginID, instanceID, request, rows)
 		if err != nil {
 			resolved.Wipe()
 			return ResolvedSecrets{}, err
@@ -66,7 +67,7 @@ func (r SecretResolver) Resolve(instanceID uuid.UUID, requests []SecretRequest,
 // errSecretUnavailable is the detail-free cause of every resolution failure.
 var errSecretUnavailable = errors.New("secret unavailable")
 
-func (r SecretResolver) resolveOne(instanceID uuid.UUID, request SecretRequest,
+func (r SecretResolver) resolveOne(pluginID string, instanceID uuid.UUID, request SecretRequest,
 	rows map[uuid.UUID]StoredSecret) ([]byte, string, error) {
 	var value []byte
 	var version string
@@ -75,6 +76,10 @@ func (r SecretResolver) resolveOne(instanceID uuid.UUID, request SecretRequest,
 	// configuration; a personal value may only use a Secret its owner stored, so a User cannot
 	// route an operator-placed Secret into their own recipient settings.
 	if request.Owner != nil && request.Reference.Source != SecretStored {
+		return nil, "", capabilityUnavailable(errSecretUnavailable)
+	}
+	// A revision saved before references were bound to a plugin must not leak another plugin's Secret.
+	if !request.Reference.BelongsTo(pluginID) {
 		return nil, "", capabilityUnavailable(errSecretUnavailable)
 	}
 	switch request.Reference.Source {

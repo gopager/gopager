@@ -73,21 +73,23 @@ func TestPluginInstanceSecretsAreStoredAndNeverShown(t *testing.T) {
 		t.Fatalf("secret rows = %s, want 2 (old rows stay with their revision)", rows)
 	}
 	f.adminRequest(http.MethodPut, path, f.instanceBody("3", true,
-		map[string]any{"apiToken": map[string]any{"reference": "file:tokens/api"}}, everyone), http.StatusOK)
+		map[string]any{"apiToken": map[string]any{"reference": "file:test-delivery/tokens/api"}}, everyone), http.StatusOK)
 	viewed := f.adminRequest(http.MethodGet, path, "", http.StatusOK)
 	if !strings.Contains(string(viewed.Data), `"source":"file"`) || strings.Contains(string(viewed.Data), "tokens/api") {
 		t.Fatalf("file reference view wrong: %s", viewed.Data)
 	}
 
 	for name, secrets := range map[string]map[string]any{
-		"stored reference": {"apiToken": map[string]any{"reference": "secret:" + uuid.NewString()}},
-		"both":             {"apiToken": map[string]any{"value": "x", "reference": "file:a"}},
-		"neither":          {"apiToken": map[string]any{}},
-		"unknown path":     {"nothing": map[string]any{"value": "x"}},
-		"personal path":    {"userKey": map[string]any{"value": "x"}},
-		"remove required":  {"apiToken": nil},
-		"bad environment":  {"apiToken": map[string]any{"reference": "env:HOME"}},
-		"parent file path": {"apiToken": map[string]any{"reference": "file:../x"}},
+		"stored reference":          {"apiToken": map[string]any{"reference": "secret:" + uuid.NewString()}},
+		"both":                      {"apiToken": map[string]any{"value": "x", "reference": "file:a"}},
+		"neither":                   {"apiToken": map[string]any{}},
+		"unknown path":              {"nothing": map[string]any{"value": "x"}},
+		"personal path":             {"userKey": map[string]any{"value": "x"}},
+		"remove required":           {"apiToken": nil},
+		"bad environment":           {"apiToken": map[string]any{"reference": "env:HOME"}},
+		"parent file path":          {"apiToken": map[string]any{"reference": "file:../x"}},
+		"another plugin's variable": {"apiToken": map[string]any{"reference": "env:GOPAGER_PLUGIN_SECRET_PUSHOVER__TOKEN"}},
+		"another plugin's file":     {"apiToken": map[string]any{"reference": "file:pushover/token"}},
 	} {
 		if response := f.adminRequest(http.MethodPut, path, f.instanceBody("4", true, secrets, everyone),
 			http.StatusBadRequest); response.Code != "INVALID_INPUT" {
@@ -117,7 +119,7 @@ func TestPluginInstanceWithoutMasterKey(t *testing.T) {
 		t.Fatalf("a Secret row was stored without a key: %s", rows)
 	}
 	f.adminRequest(http.MethodPost, "/api/v1/instances", f.instanceBody("0", true,
-		map[string]any{"apiToken": map[string]any{"reference": "file:tokens/api"}}, everyone), http.StatusCreated)
+		map[string]any{"apiToken": map[string]any{"reference": "file:test-delivery/tokens/api"}}, everyone), http.StatusCreated)
 }
 
 func TestPluginPersonalConfigurationStaysPerOwner(t *testing.T) {
@@ -294,7 +296,7 @@ func TestPluginInspectionAndCapabilityGuard(t *testing.T) {
 	save := mustJSON(t, map[string]any{"schemaVersion": 1, "commandId": uuid.New(), "expectedRevision": "0", "enabled": true,
 		"executionPrincipalId": f.operator, "main": f.main("overreach.json"), "targetUse": everyone,
 		"configuration": typedObject(map[string]any{"title": typedString("T")}),
-		"secrets":       map[string]any{"apiToken": map[string]any{"reference": "file:t"}}})
+		"secrets":       map[string]any{"apiToken": map[string]any{"reference": "file:test-delivery/t"}}})
 	if status, body := f.rawRequest(http.MethodPost, "/api/v1/instances", save); status != http.StatusForbidden ||
 		body["code"] != "CAPABILITY_UNDECLARED" {
 		t.Fatalf("saving an overreaching manifest = %d %v", status, body)

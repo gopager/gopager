@@ -9568,8 +9568,9 @@ components:
     SecretInput:
       type: object
       description: Exactly one of `value` (a new plaintext, 1 byte to 64 KiB UTF-8, sealed into the encrypted store;
-        503 `AUTHORITY_UNAVAILABLE` without a configured master key) or `reference` (`file:<relative path>` below the
-        operator's Secret file root, or `env:GOPAGER_PLUGIN_SECRET_<NAME>`; stored references `secret:` are refused).
+        503 `AUTHORITY_UNAVAILABLE` without a configured master key) or `reference` (`file:<plugin ID>/<path>` below the
+        operator's Secret file root, or `env:GOPAGER_PLUGIN_SECRET_<ID>__<NAME>` of the instance's plugin (another plugin's
+        file or variable is refused); stored references `secret:` are refused).
         Personal writes accept only `value`.
       properties:
         value:

@@ -56,7 +56,7 @@ func TestDescribeRules(t *testing.T) {
 			i.Configuration = objectOf(t, map[string]Value{"title": stringLeaf(t, "T")})
 		},
 		"personal value": func(i *InstanceConfiguration) {
-			i.Configuration = objectOf(t, map[string]Value{"title": stringLeaf(t, "T"), "apiToken": stringLeaf(t, "env:GOPAGER_PLUGIN_SECRET_A"), "userKey": stringLeaf(t, "env:GOPAGER_PLUGIN_SECRET_B")})
+			i.Configuration = objectOf(t, map[string]Value{"title": stringLeaf(t, "T"), "apiToken": stringLeaf(t, "env:GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__A"), "userKey": stringLeaf(t, "env:GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__B")})
 		},
 		"bad pin": func(i *InstanceConfiguration) { i.Main.Pin.Version = "2" },
 	} {

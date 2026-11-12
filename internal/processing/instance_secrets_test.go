@@ -151,12 +151,15 @@ func TestParseSecretReference(t *testing.T) {
 func resolverFixture(t *testing.T) (SecretResolver, string) {
 	t.Helper()
 	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "test-delivery"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	root, err := os.OpenRoot(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = root.Close() })
-	env := map[string]string{"GOPAGER_PLUGIN_SECRET_A": "env-value", "GOPAGER_PLUGIN_SECRET_EMPTY": ""}
+	env := map[string]string{"GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__A": "env-value", "GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__EMPTY": ""}
 	return SecretResolver{Cipher: testCipher(t, 3), Files: root, LookupEnv: func(name string) (string, bool) {
 		value, ok := env[name]
 		return value, ok
@@ -172,16 +175,16 @@ func TestSecretResolver(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "api.txt"), []byte("file-value\r\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "test-delivery", "api.txt"), []byte("file-value\r\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	requests := []SecretRequest{
 		{Path: "personal", Reference: SecretReference{Source: SecretStored, ID: row}, Owner: &owner},
-		{Path: "auth.file", Reference: SecretReference{Source: SecretFile, Path: "api.txt"}},
-		{Path: "auth.env", Reference: SecretReference{Source: SecretEnv, Name: "GOPAGER_PLUGIN_SECRET_A"}},
+		{Path: "auth.file", Reference: SecretReference{Source: SecretFile, Path: "test-delivery/api.txt"}},
+		{Path: "auth.env", Reference: SecretReference{Source: SecretEnv, Name: "GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__A"}},
 	}
 	rows := map[uuid.UUID]StoredSecret{row: stored}
-	resolved, err := resolver.Resolve(instance, requests, rows)
+	resolved, err := resolver.Resolve("test-delivery", instance, requests, rows)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,17 +195,17 @@ func TestSecretResolver(t *testing.T) {
 	sum := sha256.Sum256([]byte("file-value\r\n"))
 	if resolved.Versions["personal"] != "secret:"+row.String() ||
 		resolved.Versions["auth.file"] != "file:"+hex.EncodeToString(sum[:])[:16] ||
-		resolved.Versions["auth.env"] != "env:GOPAGER_PLUGIN_SECRET_A" {
+		resolved.Versions["auth.env"] != "env:GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__A" {
 		t.Fatalf("wrong versions: %v", resolved.Versions)
 	}
 	resolved.Wipe()
 	if len(resolved.Values) != 0 {
 		t.Fatal("Wipe kept values")
 	}
-	if err := os.WriteFile(filepath.Join(dir, "api.txt"), []byte("changed"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "test-delivery", "api.txt"), []byte("changed"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	next, err := resolver.Resolve(instance, requests[1:2], nil)
+	next, err := resolver.Resolve("test-delivery", instance, requests[1:2], nil)
 	if err != nil || next.Versions["auth.file"] == "file:"+hex.EncodeToString(sum[:])[:16] {
 		t.Fatalf("file version did not follow the content: %v %v", next.Versions, err)
 	}
@@ -214,19 +217,19 @@ func TestSecretResolverFailuresAreUnavailable(t *testing.T) {
 	instance, owner := uuid.New(), uuid.New()
 	row := uuid.New()
 	stored, _ := resolver.Cipher.Seal(row, instance, &owner, []byte("v"))
-	if err := os.WriteFile(filepath.Join(dir, "big"), bytes.Repeat([]byte("a"), MaxSecretFileBytes+1), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "test-delivery", "big"), bytes.Repeat([]byte("a"), MaxSecretFileBytes+1), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "empty"), []byte("\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "test-delivery", "empty"), []byte("\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "token"), []byte("file-value"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Mkdir(filepath.Join(dir, "dir"), 0o700); err != nil {
+	if err := os.Mkdir(filepath.Join(dir, "test-delivery", "dir"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink("/etc/hosts", filepath.Join(dir, "escape")); err != nil {
+	if err := os.Symlink("/etc/hosts", filepath.Join(dir, "test-delivery", "escape")); err != nil {
 		t.Fatal(err)
 	}
 	other := uuid.New()
@@ -236,21 +239,21 @@ func TestSecretResolverFailuresAreUnavailable(t *testing.T) {
 		rows    map[uuid.UUID]StoredSecret
 		mutate  func(*SecretResolver)
 	}{
-		"missing file":    {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretFile, Path: "nope"}}},
-		"oversized file":  {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretFile, Path: "big"}}},
-		"empty file":      {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretFile, Path: "empty"}}},
-		"directory":       {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretFile, Path: "dir"}}},
-		"symlink escape":  {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretFile, Path: "escape"}}},
-		"no file root":    {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretFile, Path: "big"}}, mutate: func(r *SecretResolver) { r.Files = nil }},
-		"unset env":       {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretEnv, Name: "GOPAGER_PLUGIN_SECRET_NOPE"}}},
-		"empty env":       {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretEnv, Name: "GOPAGER_PLUGIN_SECRET_EMPTY"}}},
-		"no env lookup":   {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretEnv, Name: "GOPAGER_PLUGIN_SECRET_A"}}, mutate: func(r *SecretResolver) { r.LookupEnv = nil }},
+		"missing file":    {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretFile, Path: "test-delivery/nope"}}},
+		"oversized file":  {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretFile, Path: "test-delivery/big"}}},
+		"empty file":      {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretFile, Path: "test-delivery/empty"}}},
+		"directory":       {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretFile, Path: "test-delivery/dir"}}},
+		"symlink escape":  {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretFile, Path: "test-delivery/escape"}}},
+		"no file root":    {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretFile, Path: "test-delivery/big"}}, mutate: func(r *SecretResolver) { r.Files = nil }},
+		"unset env":       {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretEnv, Name: "GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__NOPE"}}},
+		"empty env":       {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretEnv, Name: "GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__EMPTY"}}},
+		"no env lookup":   {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretEnv, Name: "GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__A"}}, mutate: func(r *SecretResolver) { r.LookupEnv = nil }},
 		"missing row":     {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretStored, ID: uuid.New()}, Owner: &owner}, rows: map[uuid.UUID]StoredSecret{row: stored}},
 		"no cipher":       {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretStored, ID: row}, Owner: &owner}, rows: map[uuid.UUID]StoredSecret{row: stored}, mutate: func(r *SecretResolver) { r.Cipher = nil }},
 		"foreign owner":   {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretStored, ID: row}, Owner: &other}, rows: map[uuid.UUID]StoredSecret{row: stored}},
 		"admin used row":  {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretStored, ID: row}}, rows: map[uuid.UUID]StoredSecret{row: stored}},
-		"personal env":    {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretEnv, Name: "GOPAGER_PLUGIN_SECRET_A"}, Owner: &owner}},
-		"personal file":   {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretFile, Path: "token"}, Owner: &owner}},
+		"personal env":    {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretEnv, Name: "GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__A"}, Owner: &owner}},
+		"personal file":   {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretFile, Path: "test-delivery/token"}, Owner: &owner}},
 		"foreign instace": {request: SecretRequest{Path: "a", Reference: SecretReference{Source: SecretStored, ID: row}, Owner: &owner}, rows: map[uuid.UUID]StoredSecret{row: wrongInstance}},
 	}
 	for name, tc := range cases {
@@ -258,7 +261,7 @@ func TestSecretResolverFailuresAreUnavailable(t *testing.T) {
 		if tc.mutate != nil {
 			tc.mutate(&local)
 		}
-		_, err := local.Resolve(instance, []SecretRequest{tc.request}, tc.rows)
+		_, err := local.Resolve("test-delivery", instance, []SecretRequest{tc.request}, tc.rows)
 		if platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
 			t.Errorf("%s: %v", name, err)
 		}

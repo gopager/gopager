@@ -65,11 +65,11 @@ func TestMergeConfiguration(t *testing.T) {
 	t.Parallel()
 	manifest := nestedManifest()
 	admin := objectOf(t, map[string]Value{"name": stringLeaf(t, "admin"),
-		"auth": objectOf(t, map[string]Value{"token": stringLeaf(t, "env:GOPAGER_PLUGIN_SECRET_A")})})
+		"auth": objectOf(t, map[string]Value{"token": stringLeaf(t, "env:GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__A")})})
 	personal := objectOf(t, map[string]Value{
 		"name": stringLeaf(t, "shadow"),
-		"auth": objectOf(t, map[string]Value{"token": stringLeaf(t, "env:GOPAGER_PLUGIN_SECRET_B")}),
-		"me":   objectOf(t, map[string]Value{"key": stringLeaf(t, "env:GOPAGER_PLUGIN_SECRET_C"), "nick": stringLeaf(t, "nick")}),
+		"auth": objectOf(t, map[string]Value{"token": stringLeaf(t, "env:GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__B")}),
+		"me":   objectOf(t, map[string]Value{"key": stringLeaf(t, "env:GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__C"), "nick": stringLeaf(t, "nick")}),
 		"junk": stringLeaf(t, "x"),
 	})
 	merged, err := manifest.mergeConfiguration(admin, &personal)
@@ -81,7 +81,7 @@ func TestMergeConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := json.Marshal(native)
-	want := `{"auth":{"token":"env:GOPAGER_PLUGIN_SECRET_A"},"me":{"key":"env:GOPAGER_PLUGIN_SECRET_C","nick":"nick"},"name":"admin"}`
+	want := `{"auth":{"token":"env:GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__A"},"me":{"key":"env:GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__C","nick":"nick"},"name":"admin"}`
 	if string(got) != want {
 		t.Fatalf("merged %s, want %s", got, want)
 	}
@@ -114,7 +114,7 @@ func TestInspectDeliveryInstanceAndProjection(t *testing.T) {
 			i.Configuration = objectOf(t, map[string]Value{"title": stringLeaf(t, "T"), "apiToken": stringLeaf(t, "plaintext")})
 		},
 		"user value in admin": func(i *InstanceConfiguration) {
-			i.Configuration = objectOf(t, map[string]Value{"title": stringLeaf(t, "T"), "apiToken": stringLeaf(t, "env:GOPAGER_PLUGIN_SECRET_A"), "userKey": stringLeaf(t, "env:GOPAGER_PLUGIN_SECRET_B")})
+			i.Configuration = objectOf(t, map[string]Value{"title": stringLeaf(t, "T"), "apiToken": stringLeaf(t, "env:GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__A"), "userKey": stringLeaf(t, "env:GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__B")})
 		},
 		"too many principals": func(i *InstanceConfiguration) {
 			i.TargetUse = &TargetUse{PrincipalIDs: make([]uuid.UUID, MaxTargetUsePrincipals+1)}
@@ -143,14 +143,14 @@ func TestInspectDeliveryInstanceAndProjection(t *testing.T) {
 		t.Fatalf("view reveals a reference: %s", encoded)
 	}
 
-	for reference, source := range map[string]string{"env:GOPAGER_PLUGIN_SECRET_A": "env", "file:path/to/token": "file"} {
+	for reference, source := range map[string]string{"env:GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__A": "env", "file:test-delivery/token": "file"} {
 		other := env.instance("T", reference)
 		view, err := inspector.ProjectInstanceConfiguration(t.Context(), other)
 		if err != nil || view.Fields["apiToken"].Source != source {
 			t.Fatalf("%s: %+v %v", reference, view.Fields["apiToken"], err)
 		}
 		encoded, _ := json.Marshal(view)
-		if strings.Contains(string(encoded), "GOPAGER_PLUGIN") || strings.Contains(string(encoded), "path/to") {
+		if strings.Contains(string(encoded), "GOPAGER_PLUGIN") || strings.Contains(string(encoded), "test-delivery/") {
 			t.Fatalf("view reveals location: %s", encoded)
 		}
 	}
@@ -183,7 +183,7 @@ func TestProjectPersonalConfiguration(t *testing.T) {
 
 	nested := nestedManifest()
 	nestedView, err := nested.ProjectPersonalConfiguration(objectOf(t, map[string]Value{
-		"me": objectOf(t, map[string]Value{"key": stringLeaf(t, "env:GOPAGER_PLUGIN_SECRET_C"), "nick": stringLeaf(t, "nick")})}))
+		"me": objectOf(t, map[string]Value{"key": stringLeaf(t, "env:GOPAGER_PLUGIN_SECRET_TEST_DELIVERY__C"), "nick": stringLeaf(t, "nick")})}))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -112,7 +112,7 @@ func (d *DeliveryHost) Attempt(ctx context.Context, request DeliveryAttemptReque
 		return unavailable(code), nil
 	}
 	resolver := SecretResolver{Cipher: d.cfg.Cipher, Files: d.cfg.SecretFiles, LookupEnv: d.cfg.LookupEnv}
-	resolved, err := resolver.Resolve(prepared.instance, prepared.requests, prepared.rows)
+	resolved, err := resolver.Resolve(prepared.manifest.PluginID, prepared.instance, prepared.requests, prepared.rows)
 	if err != nil {
 		return unavailable(CodeConfigurationUnavailable), nil
 	}

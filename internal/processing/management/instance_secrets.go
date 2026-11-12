@@ -104,7 +104,7 @@ func secretFingerprints(cipher *processing.SecretCipher, inputs map[string]*Secr
 // planSecrets applies the Secret writes of one command to the references of the previous state.
 // A path absent from inputs keeps its previous reference; null removes it (only for optional
 // properties); a value is sealed into a new row; a reference is taken over after checking its
-// form. Paths the manifest does not declare as Secrets of the scope are invalid input.
+// form and its plugin namespace. Paths the manifest does not declare as Secrets of the scope are invalid input.
 func planSecrets(settings secretSettings, manifest processing.InstalledManifest, target secretScope,
 	previous map[string]string, inputs map[string]*SecretInput) (secretPlan, error) {
 	declared := map[string]processing.SecretProperty{}
@@ -147,6 +147,13 @@ func planSecrets(settings secretSettings, manifest processing.InstalledManifest,
 		}
 		plan.rows = append(plan.rows, row)
 		plan.references[path] = "secret:" + row.ID.String()
+	}
+	// Retained references are checked too: a revision saved before references were bound to a
+	// plugin must be corrected, not carried over.
+	for _, reference := range plan.references {
+		if parsed, err := processing.ParseSecretReference(reference); err == nil && !parsed.BelongsTo(manifest.PluginID) {
+			return secretPlan{}, authz.ErrInvalidInput
+		}
 	}
 	return plan, nil
 }
