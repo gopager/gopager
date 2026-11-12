@@ -77,14 +77,23 @@ func (h *PluginHost) Status(instance uuid.UUID) PluginStatus {
 	if h == nil {
 		return status
 	}
+	// Collect the instance's processes under the host lock but ask them outside it: a starting
+	// process holds its own lock for the whole handshake, and waiting for it here would block
+	// every other instance's process acquisition on this node.
 	h.mu.Lock()
+	var candidates []*pluginProcess
 	for key, process := range h.processes {
-		if key.instance == instance && process.running() {
+		if key.instance == instance {
+			candidates = append(candidates, process)
+		}
+	}
+	h.mu.Unlock()
+	for _, process := range candidates {
+		if process.running() {
 			status.Running = true
 			break
 		}
 	}
-	h.mu.Unlock()
 	h.statusMu.Lock()
 	defer h.statusMu.Unlock()
 	record := h.statuses[instance]
