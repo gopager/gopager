@@ -15,6 +15,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/gopager/gopager/pluginsdk"
 )
@@ -386,12 +388,27 @@ func (p *pluginProcess) invoke(ctx context.Context, input []byte) ([]byte, error
 	response, err := stub.Invoke(ctx, input, MaxOutputBytes)
 	if err != nil {
 		p.stopIf(client)
-		if err := invocationErr(ctx); err != nil {
-			return nil, err
-		}
-		return nil, invalid(errors.New("plugin invocation failed"))
+		return nil, invokeFailure(ctx, err)
 	}
 	return response, nil
+}
+
+// invokeFailure classifies a failed plugin invocation. gRPC hands the caller's deadline to the
+// plugin process, whose side can expire a moment before the caller's context does and report
+// DeadlineExceeded (or Canceled) first; reporting that as invalid input would misclassify a
+// deadline, so the caller waits for its own context, which ends at the same deadline. Any other
+// failure is the plugin's.
+func invokeFailure(ctx context.Context, err error) error {
+	if err := invocationErr(ctx); err != nil {
+		return err
+	}
+	if code := status.Code(err); code == codes.DeadlineExceeded || code == codes.Canceled {
+		if _, bounded := ctx.Deadline(); bounded {
+			<-ctx.Done()
+			return invocationErr(ctx)
+		}
+	}
+	return invalid(errors.New("plugin invocation failed"))
 }
 
 // call performs one bounded invocation on the artifact's process.
