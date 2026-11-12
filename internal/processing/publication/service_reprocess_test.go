@@ -45,6 +45,8 @@ type fakeRepository struct {
 	item     processing.PublicationItem
 	applied  int
 	replaced int
+	// retract is how many other results a replacement withdraws.
+	retract int
 }
 
 func (r *fakeRepository) ReadPublicationItem(context.Context, platform.TransactionContext, processing.CandidateBinding) (processing.PublicationItem, error) {
@@ -56,13 +58,23 @@ func (r *fakeRepository) ApplyPublicationItem(context.Context, platform.Transact
 	return nil
 }
 
-func (r *fakeRepository) ReplacePublished(context.Context, platform.TransactionContext, processing.PublicationItem) error {
+func (r *fakeRepository) ReplacePublished(context.Context, platform.TransactionContext, processing.PublicationItem) ([]uuid.UUID, error) {
 	r.replaced++
-	return nil
+	ids := make([]uuid.UUID, r.retract)
+	for i := range ids {
+		ids[i] = uuid.New()
+	}
+	return ids, nil
 }
 
 type fakeFacts struct {
 	completions []events.ProcessingCompletionFact
+	retractions []events.ProcessingRetractionFact
+}
+
+func (f *fakeFacts) AppendProcessingRetraction(_ context.Context, _ platform.TransactionContext, fact events.ProcessingRetractionFact) (uuid.UUID, error) {
+	f.retractions = append(f.retractions, fact)
+	return uuid.New(), nil
 }
 
 func (*fakeFacts) AppendProcessingConfiguration(context.Context, platform.TransactionContext, events.ProcessingConfigurationFact) (uuid.UUID, error) {
@@ -75,7 +87,7 @@ func (f *fakeFacts) AppendProcessingCompletion(_ context.Context, _ platform.Tra
 }
 
 // publishItem runs Publish for one candidate state and returns what the service did.
-func publishItem(t *testing.T, state string, selected, marked bool, withResult bool) (*fakeRepository, *fakeFacts) {
+func publishItem(t *testing.T, state string, selected, marked bool, withResult bool, retract int) (*fakeRepository, *fakeFacts) {
 	t.Helper()
 	now := time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)
 	binding := processing.CandidateBinding{TransmissionID: uuid.New(), WorkflowID: uuid.New(),
@@ -93,7 +105,7 @@ func publishItem(t *testing.T, state string, selected, marked bool, withResult b
 		mark := uuid.New()
 		item.ReprocessID = &mark
 	}
-	repository, facts := &fakeRepository{item: item}, &fakeFacts{}
+	repository, facts := &fakeRepository{item: item, retract: retract}, &fakeFacts{}
 	source := fakeSource{candidate: binding, binding: processing.PublicationBinding{
 		Source: processing.SourceIdentity{TransmissionID: binding.TransmissionID, NetworkID: uuid.New(),
 			SourceRevision: 1, ContextRevision: 1},
@@ -110,26 +122,40 @@ func publishItem(t *testing.T, state string, selected, marked bool, withResult b
 
 func TestPublishReplacesEarlierResultsForMarkedCandidate(t *testing.T) {
 	t.Parallel()
-	repository, facts := publishItem(t, "completed", true, true, true)
+	repository, facts := publishItem(t, "completed", true, true, true, 1)
 	if repository.applied != 1 || repository.replaced != 1 {
 		t.Fatalf("applied=%d replaced=%d, want 1 and 1", repository.applied, repository.replaced)
 	}
 	if len(facts.completions) != 1 || !facts.completions[0].Historical {
 		t.Fatalf("completions = %+v, want one historical fact", facts.completions)
 	}
+	if len(facts.retractions) != 0 {
+		t.Fatal("a replacement is announced by its completion fact, not by a retraction fact")
+	}
 }
 
 func TestPublishNotSelectedMarkedCandidateRetractsWithoutFact(t *testing.T) {
 	t.Parallel()
-	repository, facts := publishItem(t, "completed", false, true, false)
+	repository, facts := publishItem(t, "completed", false, true, false, 2)
 	if repository.applied != 0 || repository.replaced != 1 || len(facts.completions) != 0 {
 		t.Fatalf("applied=%d replaced=%d facts=%d, want 0, 1 and 0", repository.applied, repository.replaced, len(facts.completions))
+	}
+	if len(facts.retractions) != 1 || len(facts.retractions[0].ResultIDs) != 2 {
+		t.Fatalf("retractions = %+v, want one fact naming both withdrawn results", facts.retractions)
+	}
+}
+
+func TestPublishNotSelectedMarkedCandidateWithNothingToRetractAppendsNoFact(t *testing.T) {
+	t.Parallel()
+	_, facts := publishItem(t, "completed", false, true, false, 0)
+	if len(facts.retractions) != 0 || len(facts.completions) != 0 {
+		t.Fatalf("retractions=%d completions=%d, want no fact", len(facts.retractions), len(facts.completions))
 	}
 }
 
 func TestPublishFailedMarkedCandidateReplacesNothing(t *testing.T) {
 	t.Parallel()
-	repository, facts := publishItem(t, "failed", false, true, false)
+	repository, facts := publishItem(t, "failed", false, true, false, 0)
 	if repository.applied != 0 || repository.replaced != 0 || len(facts.completions) != 0 {
 		t.Fatalf("applied=%d replaced=%d facts=%d, want all zero", repository.applied, repository.replaced, len(facts.completions))
 	}
@@ -137,7 +163,7 @@ func TestPublishFailedMarkedCandidateReplacesNothing(t *testing.T) {
 
 func TestPublishUnmarkedCandidateKeepsNormalFact(t *testing.T) {
 	t.Parallel()
-	repository, facts := publishItem(t, "completed", true, false, true)
+	repository, facts := publishItem(t, "completed", true, false, true, 0)
 	if repository.applied != 1 || repository.replaced != 0 {
 		t.Fatalf("applied=%d replaced=%d, want 1 and 0", repository.applied, repository.replaced)
 	}

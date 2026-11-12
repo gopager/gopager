@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
@@ -90,7 +91,12 @@ func (s *Service) Publish(ctx context.Context, tx platform.TransactionContext, t
 		if !item.Publishable() {
 			if item.ReplacesPublished() {
 				// Nothing new to attach, but the Reprocess still withdraws the earlier results.
-				if err := s.repository.ReplacePublished(ctx, tx, item); err != nil {
+				retracted, err := s.repository.ReplacePublished(ctx, tx, item)
+				if err != nil {
+					return err
+				}
+				// No completion fact accompanies this withdrawal, so announce it.
+				if err := s.announceRetraction(ctx, tx, binding, item, retracted, now); err != nil {
 					return err
 				}
 			}
@@ -113,7 +119,7 @@ func (s *Service) Publish(ctx context.Context, tx platform.TransactionContext, t
 		}
 		replaces := item.ReplacesPublished()
 		if replaces {
-			if err := s.repository.ReplacePublished(ctx, tx, item); err != nil {
+			if _, err := s.repository.ReplacePublished(ctx, tx, item); err != nil {
 				return err
 			}
 		}
@@ -129,6 +135,19 @@ func (s *Service) Publish(ctx context.Context, tx platform.TransactionContext, t
 		}
 	}
 	return s.source.ApplyProcessingStatus(ctx, tx, binding)
+}
+
+// announceRetraction appends the retraction fact of one Transmission and Workflow when results were
+// withdrawn.
+func (s *Service) announceRetraction(ctx context.Context, tx platform.TransactionContext, binding processing.PublicationBinding,
+	item processing.PublicationItem, retracted []uuid.UUID, now time.Time) error {
+	if len(retracted) == 0 {
+		return nil
+	}
+	_, err := s.facts.AppendProcessingRetraction(ctx, tx, events.ProcessingRetractionFact{
+		ID: uuid.New(), TransmissionID: item.Candidate.TransmissionID, MessageID: binding.MessageID,
+		MessageTime: binding.MessageTime, WorkflowID: item.Candidate.WorkflowID, ResultIDs: retracted, OccurredAt: now})
+	return err
 }
 
 // MissingSourceOwner is a placeholder publication source owner for deployments without the real

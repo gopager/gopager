@@ -193,23 +193,24 @@ func (s *Store) SnapshotTransmission(ctx context.Context, tx platform.Transactio
 // readmission left none, retracts the Workflow's published results of the Transmission, marks the
 // re-runs of other Workflows as historical and advances the fenced request's cursor and counts.
 func (s *Store) ApplyReprocessStep(ctx context.Context, tx platform.TransactionContext,
-	request processing.ReprocessRequest, transmission uuid.UUID, snapshot processing.ReprocessSnapshot) error {
+	request processing.ReprocessRequest, transmission uuid.UUID, snapshot processing.ReprocessSnapshot) ([]uuid.UUID, error) {
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	now, err := s.primary.Now(ctx, tx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var readmitted, retracted int64
+	var readmitted int64
+	var withdrawn []uuid.UUID
 	if !snapshot.Fresh {
-		readmitted, retracted, err = s.markOrRetract(ctx, tx, request, transmission)
+		readmitted, withdrawn, err = s.markOrRetract(ctx, tx, request, transmission)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if err := s.markCompanionReruns(ctx, tx, request, transmission, snapshot.Others); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	var markedTransmissions int64
@@ -220,30 +221,44 @@ func (s *Store) ApplyReprocessStep(ctx context.Context, tx platform.TransactionC
 		SET cursor=$3, scanned=scanned+1, readmitted=readmitted+$4, retracted=retracted+$5,
 			lease_until=$6, updated_at=$7, attempts=0, failure_code=NULL
 		WHERE id=$1 AND worker_id=$2 AND state='running'`, request.ID, request.WorkerID, transmission,
-		markedTransmissions, retracted, now.Add(processing.ReprocessLeaseDuration), now)
-	return requireOneRow(updated, err)
+		markedTransmissions, int64(len(withdrawn)), now.Add(processing.ReprocessLeaseDuration), now)
+	return withdrawn, requireOneRow(updated, err)
 }
 
 // markOrRetract marks the Transmission's current candidates of the Workflow with the request and
 // returns how many it marked, or, when there are none, retracts the Workflow's published results
 // and returns how many.
 func (s *Store) markOrRetract(ctx context.Context, tx platform.TransactionContext,
-	request processing.ReprocessRequest, transmission uuid.UUID) (readmitted, retracted int64, err error) {
+	request processing.ReprocessRequest, transmission uuid.UUID) (readmitted int64, retracted []uuid.UUID, err error) {
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {
-		return 0, 0, err
+		return 0, nil, err
 	}
 	marked, err := executor.ExecContext(ctx, `UPDATE processing_candidates SET reprocess_id=$3
 		WHERE transmission_id=$1 AND workflow_id=$2 AND state <> 'superseded'`, transmission, request.WorkflowID, request.ID)
 	if err != nil {
-		return 0, 0, err
+		return 0, nil, err
 	}
 	readmitted, err = marked.RowsAffected()
 	if err != nil || readmitted > 0 {
-		return readmitted, 0, err
+		return readmitted, nil, err
 	}
 	ids, err := s.RetractPublished(ctx, tx, transmission, request.WorkflowID, uuid.Nil)
-	return 0, int64(len(ids)), err
+	return 0, ids, err
+}
+
+// ReadTransmissionMessage returns the Message of the Transmission and its Message time.
+func (s *Store) ReadTransmissionMessage(ctx context.Context, tx platform.TransactionContext,
+	transmission uuid.UUID) (uuid.UUID, time.Time, error) {
+	executor, err := s.primary.Resolve(tx)
+	if err != nil {
+		return uuid.Nil, time.Time{}, err
+	}
+	var message uuid.UUID
+	var messageTime time.Time
+	err = executor.QueryRowContext(ctx, `SELECT m.id, m.first_observed_at FROM transmissions t
+		JOIN messages m ON m.id = t.message_id WHERE t.id=$1`, transmission).Scan(&message, &messageTime)
+	return message, messageTime.UTC(), err
 }
 
 // FinishReprocess ends the claimed request in the given terminal state.

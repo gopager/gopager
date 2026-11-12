@@ -69,5 +69,6 @@ type PublicationRepository interface {
 	// ReplacePublished retracts every published result of the item's Transmission and Workflow
 	// except the item's own result and clears the candidate's Reprocess mark, in the caller's
 	// transaction. It applies to items for which ReplacesPublished holds.
-	ReplacePublished(context.Context, platform.TransactionContext, PublicationItem) error
+	// It returns the IDs of the retracted results.
+	ReplacePublished(context.Context, platform.TransactionContext, PublicationItem) ([]uuid.UUID, error)
 }

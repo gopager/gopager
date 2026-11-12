@@ -107,7 +107,7 @@ func decodeLiveFact(record events.Record, from, until *time.Time) (liveFact, liv
 	var kind liveKind
 	switch record.Type {
 	case "message.created", "message.transmission-joined", "assignment.changed", "suppression.changed",
-		"message.merged", "processing.completed":
+		"message.merged", "processing.completed", "processing.retracted":
 	case "configuration.changed":
 		kind = kindResync
 	default:
@@ -133,7 +133,7 @@ func decodeLiveFact(record events.Record, from, until *time.Time) (liveFact, liv
 		fact.kind = kindAdd
 	case "message.merged":
 		fact.kind, fact.absorbed, fact.transmissionID = kindMerge, data.Absorbed, data.TransmissionID
-	case "processing.completed":
+	case "processing.completed", "processing.retracted":
 		fact.kind = kindChange
 	case "assignment.changed":
 		if data.Reason == "created" {

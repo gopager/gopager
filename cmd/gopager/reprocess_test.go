@@ -162,6 +162,9 @@ func TestReprocessRetractsATransmissionTheWorkflowNoLongerSelects(t *testing.T) 
 	if got := f.levels(transmission); len(got) != 0 {
 		t.Fatalf("levels = %v, want no attribute values of a retracted result", got)
 	}
+	if got := f.retractions(transmission); !slices.Equal(got, []string{"1"}) {
+		t.Fatalf("retraction facts = %v, want one naming the withdrawn result", got)
+	}
 }
 
 // TestFailedReprocessRunKeepsTheOldResultUntilARetrySucceeds expects a failed marked candidate to
@@ -381,5 +384,39 @@ func TestReprocessSkipsFreshIntakeThatRacedTheRequest(t *testing.T) {
 	}
 	if modes := f.replayModes(old); !slices.Equal(modes, []string{"normal", "reprocess"}) {
 		t.Fatalf("old replay modes = %v", modes)
+	}
+}
+
+// TestReprocessAnnouncesARetractionThatPublishesNoReplacement expects a marked candidate that
+// completes as not selected to retract the earlier result with one processing.retracted fact,
+// and no fact when there was nothing to retract.
+func TestReprocessAnnouncesARetractionThatPublishesNoReplacement(t *testing.T) {
+	t.Parallel()
+	f := newReprocessFixture(t)
+	from, to, firstTime, secondTime, _ := reprocessWindow()
+	v1 := f.saveVersion("3")
+	f.activate(v1)
+	published := f.submit("published", firstTime)
+	f.runWorker()
+	v2 := f.saveRejectingVersion()
+	f.activate(v2)
+	never := f.submit("never", secondTime) // v2 rejects it: no result was ever published
+	f.runWorker()
+
+	f.requestReprocess(v2, from, to)
+	f.runReprocess()
+	f.runWorker()
+
+	if got := f.levels(published); len(got) != 0 {
+		t.Fatalf("levels = %v, want the earlier result withdrawn", got)
+	}
+	if got := f.retractions(published); !slices.Equal(got, []string{"1"}) {
+		t.Fatalf("retraction facts = %v, want exactly one", got)
+	}
+	if modes := f.replayModes(published); !slices.Equal(modes, []string{"normal"}) {
+		t.Fatalf("replay modes = %v, want no completion fact for a replacement that does not exist", modes)
+	}
+	if got := f.retractions(never); len(got) != 0 {
+		t.Fatalf("retraction facts for a Transmission without results = %v, want none", got)
 	}
 }

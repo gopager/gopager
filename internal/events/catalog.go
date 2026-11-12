@@ -47,6 +47,7 @@ var catalog = []CatalogEntry{
 	{Type: string(AssignmentChanged), Producer: "assignment", SchemaVersion: 1, Deliverable: true, Projection: ProjectionMessage},
 	{Type: "suppression.changed", Producer: "assignment", SchemaVersion: 1, Deliverable: true, Projection: ProjectionMessage},
 	{Type: "processing.completed", Producer: "processing", SchemaVersion: 1, Deliverable: true, Projection: ProjectionMessage},
+	{Type: "processing.retracted", Producer: "processing", SchemaVersion: 1, Projection: ProjectionMessage},
 	{Type: string(GatewayStateChanged), Producer: "intake", SchemaVersion: 1, Deliverable: true, Projection: ProjectionGateway},
 	{Type: "correction.failed", Producer: "assignment", SchemaVersion: 1},
 	{Type: string(ConfigurationChanged), Producer: "", SchemaVersion: 1},

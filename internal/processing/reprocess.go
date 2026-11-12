@@ -133,7 +133,10 @@ type ReprocessWorkRepository interface {
 	// Workflows that the readmission re-pended or created and that have history for the
 	// Transmission get the mark as well, because their re-run is historical too. With a fresh
 	// snapshot it only advances the cursor and counts the Transmission as scanned.
-	ApplyReprocessStep(ctx context.Context, tx platform.TransactionContext, request ReprocessRequest, transmission uuid.UUID, snapshot ReprocessSnapshot) error
+	// It returns the IDs of the results it retracted.
+	ApplyReprocessStep(ctx context.Context, tx platform.TransactionContext, request ReprocessRequest, transmission uuid.UUID, snapshot ReprocessSnapshot) ([]uuid.UUID, error)
+	// ReadTransmissionMessage returns the Message of the Transmission and its Message time.
+	ReadTransmissionMessage(ctx context.Context, tx platform.TransactionContext, transmission uuid.UUID) (uuid.UUID, time.Time, error)
 	// FinishReprocess ends the claimed request as completed or superseded.
 	FinishReprocess(ctx context.Context, tx platform.TransactionContext, request ReprocessRequest, state string) error
 	// RescheduleReprocess releases the claim and makes the request due again at the given time,

@@ -246,8 +246,14 @@ func (f *reprocessFixture) reference(response managementResponse) (uuid.UUID, in
 // definition selects every POCSAG Transmission and writes incident.level as the given literal.
 func (f *reprocessFixture) definition(level string) processing.Definition {
 	f.t.Helper()
+	return f.definitionFor("pocsag", level)
+}
+
+// definitionFor is definition selecting Transmissions of the given protocol.
+func (f *reprocessFixture) definitionFor(selected, level string) processing.Definition {
+	f.t.Helper()
 	field := processing.FieldRef{Namespace: "source", Path: []string{"protocol"}}
-	protocol, err := processing.Literal(processing.StringValue, "pocsag")
+	protocol, err := processing.Literal(processing.StringValue, selected)
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -263,8 +269,20 @@ func (f *reprocessFixture) definition(level string) processing.Definition {
 // saveVersion saves a version writing the level and returns its ID.
 func (f *reprocessFixture) saveVersion(level string) uuid.UUID {
 	f.t.Helper()
+	return f.saveDefinition(f.definition(level))
+}
+
+// saveRejectingVersion saves a version that selects no POCSAG Transmission, so a run of it
+// completes as not selected.
+func (f *reprocessFixture) saveRejectingVersion() uuid.UUID {
+	f.t.Helper()
+	return f.saveDefinition(f.definitionFor("flex", "9"))
+}
+
+func (f *reprocessFixture) saveDefinition(definition processing.Definition) uuid.UUID {
+	f.t.Helper()
 	body, err := json.Marshal(workflowVersionMutation{SchemaVersion: 1, CommandID: uuid.New(),
-		ExpectedRevision: f.revision, Definition: f.definition(level)})
+		ExpectedRevision: f.revision, Definition: definition})
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -333,7 +351,7 @@ func (f *reprocessFixture) runWorker() {
 // reprocessRunner builds a Reprocess runner re-admitting through the given port.
 func (f *reprocessFixture) reprocessRunner(readmission reprocess.Readmission) *reprocess.Runner {
 	f.t.Helper()
-	runner, err := reprocess.New(f.store, f.store, f.repository, readmission)
+	runner, err := reprocess.New(f.store, f.store, f.repository, readmission, f.shared.facts)
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -413,6 +431,14 @@ func (f *reprocessFixture) replayModes(transmission uuid.UUID) []string {
 	f.t.Helper()
 	return f.queryStrings(`SELECT envelope->>'replayMode' FROM domain_events
 		WHERE type='processing.completed' AND envelope->'data'->>'transmissionId'=$1 ORDER BY seq`, transmission.String())
+}
+
+// retractions lists, for each processing.retracted fact of the Transmission in order, how many
+// results it names.
+func (f *reprocessFixture) retractions(transmission uuid.UUID) []string {
+	f.t.Helper()
+	return f.queryStrings(`SELECT jsonb_array_length(envelope->'data'->'resultIds')::text FROM domain_events
+		WHERE type='processing.retracted' AND envelope->'data'->>'transmissionId'=$1 ORDER BY seq`, transmission.String())
 }
 
 // marked counts the Transmission's candidates that carry a Reprocess mark.

@@ -416,6 +416,18 @@ func TestLiveStreamRemoveBasis(t *testing.T) {
 		})
 		stream.expect(t, "upsert", message)
 	})
+	t.Run("a retraction re-evaluates the Message", func(t *testing.T) {
+		message := f.newMessage(base.Add(6*time.Minute), "retracted", a)
+		stream.expect(t, "upsert", message)
+		now := microsecondNow()
+		f.appendFact(func(ctx context.Context, tx platform.TransactionContext) error {
+			_, err := f.core.facts.AppendProcessingRetraction(ctx, tx, events.ProcessingRetractionFact{
+				ID: uuid.New(), TransmissionID: uuid.New(), MessageID: message, MessageTime: base.Add(6 * time.Minute),
+				WorkflowID: uuid.New(), ResultIDs: []uuid.UUID{uuid.New()}, OccurredAt: now})
+			return err
+		})
+		stream.expect(t, "upsert", message)
+	})
 	t.Run("an unknown schema version requires a resync", func(t *testing.T) {
 		envelope, _ := json.Marshal(map[string]any{"schemaVersion": 2, "domainEventId": uuid.New(), "type": "message.created",
 			"data": map[string]any{"messageId": uuid.New(), "messageTime": base.Format(time.RFC3339Nano)}})

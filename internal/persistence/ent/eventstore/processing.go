@@ -59,6 +59,18 @@ func (s *Store) AppendProcessingCompletion(ctx context.Context, tx platform.Tran
 	})
 }
 
+// AppendProcessingRetraction records that results were withdrawn from a Message, in the caller's
+// transaction, so the withdrawal and its announcement commit together.
+func (s *Store) AppendProcessingRetraction(ctx context.Context, tx platform.TransactionContext, fact events.ProcessingRetractionFact) (uuid.UUID, error) {
+	return s.appendProcessing(ctx, tx, func() (events.ProcessingEnvelope, error) {
+		now, err := s.primary.Now(ctx, tx)
+		if err != nil {
+			return events.ProcessingEnvelope{}, err
+		}
+		return fact.Envelope(now)
+	})
+}
+
 var _ events.ProcessingAppender = (*Store)(nil)
 
 // AppendProcessingInstance records a nonsecret administrative pure-processing instance change.

@@ -40,6 +40,9 @@ func TestReprocessFactCreatesNoDelivery(t *testing.T) {
 	created2 := f.subCreated(bearer, subInput(instance, map[string]any{"eventTypes": []string{"processing.completed"},
 		"filter": levelAtLeast("2")}))
 	unit := f.unit("Engine 1", nil)
+	if response := f.subCreate(bearer, subInput(instance, map[string]any{"eventTypes": []string{"processing.retracted"}})); response.status == http.StatusCreated {
+		t.Fatal("a Subscription must not be able to select the non-deliverable retraction fact")
+	}
 
 	complete := func(label, replay string) uuid.UUID {
 		t.Helper()
@@ -53,6 +56,16 @@ func TestReprocessFactCreatesNoDelivery(t *testing.T) {
 	f.fanOutAll()
 	if listed := f.deliveries(bearer, "?subscriptionId="+created2.ID.String()); len(listed) != 0 {
 		t.Fatalf("Deliveries after a reprocess fact = %+v, want none", listed)
+	}
+
+	retracted := f.message(f.minuteAgo(), "RETRACTED", unit)
+	f.publishLevel(workflow, retracted, "3")
+	f.fact("processing.retracted", map[string]any{"messageId": retracted, "messageTime": f.now().Format(time.RFC3339Nano),
+		"transmissionId": uuid.New(), "workflowId": workflow, "resultIds": []uuid.UUID{uuid.New()}},
+		factOptions{replay: events.ReplayReprocess, aggregate: "processingResult"})
+	f.fanOutAll()
+	if listed := f.deliveries(bearer, "?subscriptionId="+created2.ID.String()); len(listed) != 0 {
+		t.Fatalf("Deliveries after a retraction fact = %+v, want none", listed)
 	}
 
 	complete("NORMAL", events.ReplayNormal)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
+	"github.com/gopager/gopager/internal/events"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
@@ -36,6 +37,7 @@ type Runner struct {
 	transactions identity.Transactions
 	repository   processing.ReprocessWorkRepository
 	readmission  Readmission
+	facts        events.ProcessingAppender
 	clock        platform.Clock
 	worker       uuid.UUID
 	wake         chan struct{}
@@ -43,11 +45,11 @@ type Runner struct {
 
 // New returns a runner; it fails with authz.ErrInvalidInput when a dependency is nil.
 func New(transactions identity.Transactions, clock platform.Clock, repository processing.ReprocessWorkRepository,
-	readmission Readmission) (*Runner, error) {
-	if transactions == nil || clock == nil || repository == nil || readmission == nil {
+	readmission Readmission, facts events.ProcessingAppender) (*Runner, error) {
+	if transactions == nil || clock == nil || repository == nil || readmission == nil || facts == nil {
 		return nil, authz.ErrInvalidInput
 	}
-	return &Runner{transactions: transactions, clock: clock, repository: repository, readmission: readmission,
+	return &Runner{transactions: transactions, clock: clock, repository: repository, readmission: readmission, facts: facts,
 		worker: uuid.New(), wake: make(chan struct{}, 1)}, nil
 }
 
@@ -148,7 +150,29 @@ func (r *Runner) step(tx platform.TransactionContext, request processing.Reproce
 	if err := r.readmission.ReadmitProcessing(ctx, tx, transmission); err != nil {
 		return uuid.Nil, false, err
 	}
-	return transmission, false, r.repository.ApplyReprocessStep(ctx, tx, request, transmission, snapshot)
+	retracted, err := r.repository.ApplyReprocessStep(ctx, tx, request, transmission, snapshot)
+	if err != nil || len(retracted) == 0 {
+		return transmission, false, err
+	}
+	return transmission, false, r.announceRetraction(tx, request, transmission, retracted)
+}
+
+// announceRetraction appends the fact that the step withdrew results without publishing a
+// replacement, in the step's transaction so that both commit together.
+func (r *Runner) announceRetraction(tx platform.TransactionContext, request processing.ReprocessRequest,
+	transmission uuid.UUID, retracted []uuid.UUID) error {
+	message, messageTime, err := r.repository.ReadTransmissionMessage(tx.Context(), tx, transmission)
+	if err != nil {
+		return err
+	}
+	now, err := r.clock.Now(tx.Context(), tx)
+	if err != nil {
+		return err
+	}
+	_, err = r.facts.AppendProcessingRetraction(tx.Context(), tx, events.ProcessingRetractionFact{
+		ID: uuid.New(), TransmissionID: transmission, MessageID: message, MessageTime: messageTime,
+		WorkflowID: request.WorkflowID, ResultIDs: retracted, OccurredAt: now})
+	return err
 }
 
 // fail releases the request for a later attempt after a failed step. An open correction on the

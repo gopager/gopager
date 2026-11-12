@@ -16,6 +16,8 @@ func TestCatalogCoversDeliverableTypes(t *testing.T) {
 		"suppression.changed": ProjectionMessage, "processing.completed": ProjectionMessage,
 		"gateway.state-changed": ProjectionGateway,
 	}
+	// Types recorded for readers of the Message but never a Delivery trigger.
+	messageOnly := map[string]Projection{"processing.retracted": ProjectionMessage}
 	seen := map[string]bool{}
 	for _, entry := range Catalog() {
 		if seen[entry.Type] {
@@ -26,6 +28,12 @@ func TestCatalogCoversDeliverableTypes(t *testing.T) {
 			t.Fatalf("%s: schema version %d", entry.Type, entry.SchemaVersion)
 		}
 		projection, want := deliverable[entry.Type]
+		if projection2, only := messageOnly[entry.Type]; only {
+			if entry.Deliverable || entry.Projection != projection2 || entry.Producer != "processing" {
+				t.Fatalf("%s: deliverable=%v projection=%q producer=%q", entry.Type, entry.Deliverable, entry.Projection, entry.Producer)
+			}
+			continue
+		}
 		if entry.Deliverable != want || entry.Projection != projection {
 			t.Fatalf("%s: deliverable=%v projection=%q", entry.Type, entry.Deliverable, entry.Projection)
 		}

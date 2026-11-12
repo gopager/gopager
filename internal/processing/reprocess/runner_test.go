@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
+	"github.com/gopager/gopager/internal/events"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
 	"github.com/gopager/gopager/internal/processing/reprocess"
@@ -35,6 +36,8 @@ type fakeWork struct {
 	pins          processing.WorkflowPins
 	transmissions []uuid.UUID
 	applied       []uuid.UUID
+	// retracted lists the results a step withdraws, by Transmission.
+	retracted     map[uuid.UUID][]uuid.UUID
 	state         string
 	rescheduledAt time.Time
 	failureCode   string
@@ -61,9 +64,13 @@ func (w *fakeWork) SnapshotTransmission(context.Context, platform.TransactionCon
 	return processing.ReprocessSnapshot{}, nil
 }
 
-func (w *fakeWork) ApplyReprocessStep(_ context.Context, _ platform.TransactionContext, _ processing.ReprocessRequest, id uuid.UUID, _ processing.ReprocessSnapshot) error {
+func (w *fakeWork) ApplyReprocessStep(_ context.Context, _ platform.TransactionContext, _ processing.ReprocessRequest, id uuid.UUID, _ processing.ReprocessSnapshot) ([]uuid.UUID, error) {
 	w.applied = append(w.applied, id)
-	return nil
+	return w.retracted[id], nil
+}
+
+func (w *fakeWork) ReadTransmissionMessage(context.Context, platform.TransactionContext, uuid.UUID) (uuid.UUID, time.Time, error) {
+	return uuid.New(), time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC), nil
 }
 
 func (w *fakeWork) FinishReprocess(_ context.Context, _ platform.TransactionContext, _ processing.ReprocessRequest, state string) error {
@@ -109,9 +116,13 @@ func newWork(count int) *fakeWork {
 	return work
 }
 
-func newRunner(t *testing.T, work *fakeWork, readmission *fakeReadmission) *reprocess.Runner {
+func newRunner(t *testing.T, work *fakeWork, readmission *fakeReadmission, facts ...*fakeFacts) *reprocess.Runner {
 	t.Helper()
-	runner, err := reprocess.New(fakeTransactions{}, fakeClock{}, work, readmission)
+	recorder := &fakeFacts{}
+	if len(facts) > 0 {
+		recorder = facts[0]
+	}
+	runner, err := reprocess.New(fakeTransactions{}, fakeClock{}, work, readmission, recorder)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +181,38 @@ func TestRunnerReschedulesAfterAStepFailureAndKeepsEarlierSteps(t *testing.T) {
 
 func TestRunnerRejectsMissingDependencies(t *testing.T) {
 	t.Parallel()
-	if _, err := reprocess.New(nil, fakeClock{}, &fakeWork{}, &fakeReadmission{}); !errors.Is(err, authz.ErrInvalidInput) {
+	if _, err := reprocess.New(nil, fakeClock{}, &fakeWork{}, &fakeReadmission{}, &fakeFacts{}); !errors.Is(err, authz.ErrInvalidInput) {
 		t.Fatalf("err = %v, want invalid input", err)
+	}
+}
+
+// fakeFacts records the retraction facts the runner appends.
+type fakeFacts struct {
+	retractions []events.ProcessingRetractionFact
+}
+
+func (*fakeFacts) AppendProcessingConfiguration(context.Context, platform.TransactionContext, events.ProcessingConfigurationFact) (uuid.UUID, error) {
+	return uuid.New(), nil
+}
+
+func (*fakeFacts) AppendProcessingCompletion(context.Context, platform.TransactionContext, events.ProcessingCompletionFact) (uuid.UUID, error) {
+	return uuid.New(), nil
+}
+
+func (f *fakeFacts) AppendProcessingRetraction(_ context.Context, _ platform.TransactionContext, fact events.ProcessingRetractionFact) (uuid.UUID, error) {
+	f.retractions = append(f.retractions, fact)
+	return uuid.New(), nil
+}
+
+func TestRunnerAppendsOneRetractionFactPerStepThatWithdrewResults(t *testing.T) {
+	t.Parallel()
+	work, facts := newWork(3), &fakeFacts{}
+	work.retracted = map[uuid.UUID][]uuid.UUID{work.transmissions[1]: {uuid.New(), uuid.New()}}
+	if _, err := newRunner(t, work, &fakeReadmission{}, facts).RunOnce(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if len(facts.retractions) != 1 || facts.retractions[0].TransmissionID != work.transmissions[1] ||
+		len(facts.retractions[0].ResultIDs) != 2 || facts.retractions[0].WorkflowID != work.request.WorkflowID {
+		t.Fatalf("retractions = %+v, want one fact for the second Transmission naming both results", facts.retractions)
 	}
 }

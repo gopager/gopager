@@ -1197,7 +1197,7 @@ targets on behalf of a subscriber. Properties and limits are in the OpenAPI sche
   these types are deliverable: `message.created`, `message.transmission-joined`,
   `message.merged`, `assignment.changed`, `suppression.changed`, `processing.completed` and
   `gateway.state-changed`. Any other type is `400 INVALID_INPUT`. Only facts recorded in normal
-  operation create Deliveries; a historical Reprocess never does, and a fact older than 24 hours
+  operation create Deliveries; `processing.retracted` (a Reprocess withdrew results) is recorded but not deliverable; a historical Reprocess never does, and a fact older than 24 hours
   at the time of fan-out creates none.
 - **Kinds and rights.** A `personal` Subscription acts as its owner and needs
   `subscription.manage-own` on the caller's account; `subscriberId` must be absent. A `global`
