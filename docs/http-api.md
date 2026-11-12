@@ -231,7 +231,8 @@ Scope kinds each action accepts (`internal/authz/grants.go` is the source; a gra
 | `unit.*`, `organization.*`, `unit-collection.*`, `address-rule.*`, `suppression.*`, `assignment-correction.read`, `assignment-correction.retry` | `all`, `agency`, `unit`, `unitCollection` |
 | `unit-template.*`, `agency.create`, `agency.delete`, `grouping.configure`, `notice.manage`, `plugin.configure`, `operations.manage`, `saved-view.manage-global` | `all` only |
 | `agency.read`, `agency.update`, `gateway.*`, `network.*` | `all`, `agency` |
-| `account.*`, `grant.manage`, `password.local`, `recovery.*`, `session.manage-own`, `key.*`, `preference.manage-own`, `subscription.manage-*` | `all`, `account` |
+| `account.*`, `grant.manage`, `password.local`, `recovery.*`, `session.manage-own`, `key.*`, `subscription.manage-*` | `all`, `account` |
+| `preference.manage-own` | `all` only |
 | `gateway.diagnostics.read`, `gateway.credential.rotate` | `all`, `agency`, `gateway` |
 | `delivery.read`, `delivery.retry`, `delivery.redeliver` | `all`, `agency`, `unit`, `unitCollection`, `account` |
 | `workflow.*`, `presentation.manage` | `all`, `agency`, `unit` |
@@ -1471,7 +1472,7 @@ that never saved any gets `{"locale":"en","timeZone":"UTC","timeGapMinutes":0,"r
   `parameters.field` `locale`, `timeZone` or `timeGapMinutes`.
 - Only an interactive account acting through its own Session owns preferences. An access key (also of a human
   account) and a technical account get `403 FORBIDDEN`; the guest gets `401 LOGIN_REQUIRED`. The account also needs
-  `preference.manage-own` (scope `all` or `account`).
+  `preference.manage-own` (scope `all`).
 - Preferences change no wire format: dates and enumerations stay in their locale-independent form.
 
 ### Attribute schemas
