@@ -150,20 +150,20 @@ func TestClaimsAreFencedByTokenAndLease(t *testing.T) {
 	var first []delivery.DeliveryRecord
 	w.within(func(tx platform.TransactionContext) error {
 		var err error
-		first, err = w.store.ClaimDue(tx.Context(), tx, now, delivery.LeaseDuration, 10, nil)
+		first, err = w.store.ClaimDue(tx.Context(), tx, now, delivery.LeaseDuration, 10, delivery.ClaimFilter{})
 		return err
 	})
 	if len(first) != 1 || first[0].ID != record.ID || first[0].ClaimToken != 1 {
 		t.Fatalf("first claim: %+v", first)
 	}
 	w.within(func(tx platform.TransactionContext) error {
-		again, err := w.store.ClaimDue(tx.Context(), tx, now, delivery.LeaseDuration, 10, nil)
+		again, err := w.store.ClaimDue(tx.Context(), tx, now, delivery.LeaseDuration, 10, delivery.ClaimFilter{})
 		if err == nil && len(again) != 0 {
 			err = errors.New("claimed twice under a live lease")
 		}
 		return err
 	})
-	other := []uuid.UUID{uuid.New()}
+	other := delivery.ClaimFilter{Restricted: true, Instances: []uuid.UUID{uuid.New()}, OverdueBefore: now.Add(-time.Hour)}
 	w.within(func(tx platform.TransactionContext) error {
 		filtered, err := w.store.ClaimDue(tx.Context(), tx, now.Add(2*delivery.LeaseDuration), delivery.LeaseDuration, 10, other)
 		if err == nil && len(filtered) != 0 {
@@ -176,7 +176,8 @@ func TestClaimsAreFencedByTokenAndLease(t *testing.T) {
 	var second []delivery.DeliveryRecord
 	w.within(func(tx platform.TransactionContext) error {
 		var err error
-		second, err = w.store.ClaimDue(tx.Context(), tx, later, delivery.LeaseDuration, 10, []uuid.UUID{w.instance})
+		second, err = w.store.ClaimDue(tx.Context(), tx, later, delivery.LeaseDuration, 10,
+			delivery.ClaimFilter{Restricted: true, Instances: []uuid.UUID{w.instance}, OverdueBefore: now.Add(-time.Hour)})
 		return err
 	})
 	if len(second) != 1 || second[0].ClaimToken != 2 {
@@ -506,4 +507,60 @@ func TestTargetInputBindingsRoundTrip(t *testing.T) {
 		}
 		return nil
 	})
+}
+
+// claimIDs claims up to ten due Deliveries with the filter and returns their IDs.
+func (w *world) claimIDs(now time.Time, filter delivery.ClaimFilter) []uuid.UUID {
+	w.t.Helper()
+	var ids []uuid.UUID
+	w.within(func(tx platform.TransactionContext) error {
+		claimed, err := w.store.ClaimDue(tx.Context(), tx, now, delivery.LeaseDuration, 10, filter)
+		for _, record := range claimed {
+			ids = append(ids, record.ID)
+		}
+		return err
+	})
+	return ids
+}
+
+// TestClaimFilterRestrictsToListedInstancesUnlessOverdue proves that an unrestricted filter claims
+// every due Delivery, that a restricted one claims only Deliveries of the listed instances or
+// those overdue, and that an empty restricted list claims only overdue Deliveries.
+func TestClaimFilterRestrictsToListedInstancesUnlessOverdue(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	now := w.now()
+	grace := now.Add(-delivery.PlacementGrace)
+	listed := w.prepared(now)
+	unlisted := w.prepared(now)
+	w.within(func(tx platform.TransactionContext) error {
+		executor, err := w.primary.Resolve(tx)
+		if err != nil {
+			return err
+		}
+		_, err = executor.ExecContext(tx.Context(), `UPDATE deliveries SET target_instance_id = $2 WHERE id = $1`,
+			unlisted.ID, uuid.New())
+		return err
+	})
+	restricted := func(overdue time.Time, instances ...uuid.UUID) delivery.ClaimFilter {
+		return delivery.ClaimFilter{Restricted: true, Instances: instances, OverdueBefore: overdue}
+	}
+	if got := w.claimIDs(now, restricted(grace)); len(got) != 0 {
+		t.Fatalf("an empty restricted list claimed fresh Deliveries: %v", got)
+	}
+	if got := w.claimIDs(now, restricted(grace, w.instance)); len(got) != 1 || got[0] != listed.ID {
+		t.Fatalf("restricted claim: %v, want only %s", got, listed.ID)
+	}
+	later := now.Add(delivery.PlacementGrace + delivery.LeaseDuration)
+	if got := w.claimIDs(later, restricted(later.Add(-delivery.PlacementGrace), w.instance)); len(got) != 2 {
+		t.Fatalf("overdue claim: %v, want both", got)
+	}
+	again := later.Add(2 * delivery.LeaseDuration)
+	if got := w.claimIDs(again, restricted(again.Add(-delivery.PlacementGrace))); len(got) != 2 {
+		t.Fatalf("an empty restricted list must claim overdue Deliveries: %v", got)
+	}
+	final := again.Add(2 * delivery.LeaseDuration)
+	if got := w.claimIDs(final, delivery.ClaimFilter{}); len(got) != 2 {
+		t.Fatalf("unrestricted claim: %v, want both", got)
+	}
 }
