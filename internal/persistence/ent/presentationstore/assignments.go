@@ -121,7 +121,9 @@ func (s *Store) ReadUnit(ctx context.Context, tx platform.TransactionContext, id
 		return presentation.UnitContext{}, err
 	}
 	var unit presentation.UnitContext
-	err = executor.QueryRowContext(ctx, `SELECT agency_id FROM units WHERE id = $1 AND NOT deleted`, id).Scan(&unit.AgencyID)
+	// FOR SHARE makes a concurrent deletion wait for this transaction, so its trigger removes an
+	// assignment written here instead of leaving one behind for a deleted Unit.
+	err = executor.QueryRowContext(ctx, `SELECT agency_id FROM units WHERE id = $1 AND NOT deleted FOR SHARE`, id).Scan(&unit.AgencyID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return presentation.UnitContext{}, authz.ErrNotFound
 	}
@@ -151,7 +153,8 @@ func (s *Store) OrganizationExists(ctx context.Context, tx platform.TransactionC
 		return false, err
 	}
 	var exists bool
-	err = executor.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM organizations WHERE id = $1 AND NOT deleted)`, id).Scan(&exists)
+	// FOR SHARE makes a concurrent deletion wait for this transaction (see ReadUnit).
+	err = executor.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM organizations WHERE id = $1 AND NOT deleted FOR SHARE)`, id).Scan(&exists)
 	return exists, err
 }
 

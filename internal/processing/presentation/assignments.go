@@ -55,9 +55,11 @@ type AssignmentStore interface {
 	// authz.ErrRevisionConflict (stale) or authz.ErrNotFound (absent).
 	Delete(ctx context.Context, tx platform.TransactionContext, scopeKind string, scopeID uuid.UUID, outputKind string, expected int64) error
 	// ReadUnit returns the Agency and collections of a Unit, or authz.ErrNotFound when the
-	// Unit does not exist or is deleted.
+	// Unit does not exist or is deleted. It holds the Unit against deletion until the caller's
+	// transaction ends, so an assignment written in it never outlives its Unit.
 	ReadUnit(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (UnitContext, error)
-	// OrganizationExists reports whether the Organization exists and is not deleted.
+	// OrganizationExists reports whether the Organization exists and is not deleted, holding it
+	// against deletion until the caller's transaction ends like ReadUnit.
 	OrganizationExists(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (bool, error)
 }
 
