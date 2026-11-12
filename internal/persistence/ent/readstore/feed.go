@@ -46,6 +46,10 @@ type feedBuilder struct {
 	query  readmodel.FeedQuery
 	detail bool
 	groups string
+	// fieldAliases maps an attribute field to the alias of its lateral aggregate, and
+	// lateralFields holds the join clauses to append to the page's FROM clause.
+	fieldAliases  map[string]string
+	lateralFields []string
 }
 
 // groupsParam registers the caller's readable field groups on first use as a jsonb array, so
@@ -162,6 +166,7 @@ func (b *feedBuilder) pageCTE() string {
 	if exact != "" {
 		where += " AND " + exact
 	}
+	source += strings.Join(b.lateralFields, "")
 	return `page AS (
 	SELECT m.id, m.first_observed_at FROM ` + source + `
 	WHERE ` + where + `
