@@ -35,6 +35,11 @@ type processingAPIRuntime struct {
 	correctionReadmission assignments.ProcessingReadmission
 }
 
+// readmission returns the source owner as the port the Reprocess runner re-admits through.
+func (r *processingAPIRuntime) readmission() assignments.ProcessingReadmission {
+	return r.correctionReadmission
+}
+
 // composeProcessingAPIRuntime builds the Processing management services, the plugin host and
 // the work source on top of the shared core. A non-nil previewNetworks replaces the production
 // Network owner for synthetic previews (tests only).
@@ -159,6 +164,10 @@ func composeProcessingAPIRuntimeWith(ctx context.Context, c *core, settings proc
 	if err != nil {
 		return nil, err
 	}
+	reprocess, err := processingmanagement.NewReprocess(workflows, c.processing)
+	if err != nil {
+		return nil, err
+	}
 	if root != nil {
 		inspector, err = processing.NewLocalInstanceInspector(host, root)
 		if err != nil {
@@ -195,7 +204,7 @@ func composeProcessingAPIRuntimeWith(ctx context.Context, c *core, settings proc
 	return &processingAPIRuntime{host: host, root: root, secretFiles: secretFiles, deliveryHost: deliveryHost,
 		executions:   executions,
 		workerSource: workerSource, workerPublisher: workerSource, correctionReadmission: workerSource,
-		routes: httpapi.ProcessingRoutes{Workflows: workflows, Reads: reads, Retries: retries,
+		routes: httpapi.ProcessingRoutes{Workflows: workflows, Reads: reads, Retries: retries, Reprocess: reprocess,
 			Preview: preview, Instances: instances, Personal: personal, UnitParameters: unitParameters},
 	}, nil
 }

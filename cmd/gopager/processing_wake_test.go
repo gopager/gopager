@@ -68,7 +68,7 @@ func TestNotificationWakesDispatcherBeforePollInterval(t *testing.T) {
 		t.Fatal(err)
 	}
 	listener := channelListener{signals: make(chan struct{}), channel: make(chan string, 1)}
-	runner := notifiedDispatcher{dispatcher: dispatcher, listener: listener}
+	runner := notifiedDispatcher{dispatcher: dispatcher, listener: listener, channel: processing.DueNotificationChannel}
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
 	go func() { done <- runner.Run(ctx) }()

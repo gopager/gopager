@@ -176,6 +176,11 @@ func run() (result error) {
 			return errors.Join(err, store.Close())
 		}
 		runners = append(runners, correctionRunner)
+		reprocessRunner, err := composeReprocessRunner(shared, processingRuntime.readmission())
+		if err != nil {
+			return errors.Join(err, store.Close())
+		}
+		runners = append(runners, reprocessRunner)
 		contactMonitor, err := ingestdomain.NewContactMonitor(shared.store, shared.store, shared.intake, config.GatewayContact)
 		if err != nil {
 			return errors.Join(err, store.Close())

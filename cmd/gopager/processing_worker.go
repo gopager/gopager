@@ -27,18 +27,19 @@ type wakeableRunner interface {
 	Wake()
 }
 
-// notifiedDispatcher runs a dispatcher and wakes it on every due-work notification, which
-// makes the dispatcher's poll interval only a fallback for missed notifications.
+// notifiedDispatcher runs a runner and wakes it on every notification of its channel, which
+// makes the runner's poll interval only a fallback for missed notifications.
 type notifiedDispatcher struct {
 	dispatcher wakeableRunner
 	listener   dueListener
+	channel    string
 }
 
 // Run listens for due-work notifications while the dispatcher runs and returns the dispatcher's
 // result after the listener has ended.
 func (n notifiedDispatcher) Run(ctx context.Context) error {
 	listenContext, stopListening := context.WithCancel(ctx)
-	signals, err := n.listener.Listen(listenContext, processing.DueNotificationChannel)
+	signals, err := n.listener.Listen(listenContext, n.channel)
 	if err != nil {
 		stopListening()
 		return err
@@ -69,7 +70,7 @@ func composeProcessingWorker(ctx context.Context, c *core, source worker.WorkSou
 	if err != nil {
 		return nil, err
 	}
-	return &processingWorkerRuntime{dispatcher: notifiedDispatcher{dispatcher: dispatcher, listener: store}}, nil
+	return &processingWorkerRuntime{dispatcher: notifiedDispatcher{dispatcher: dispatcher, listener: store, channel: processing.DueNotificationChannel}}, nil
 }
 
 // Close is retained for the composition lifecycle; the worker owns no compute host.
