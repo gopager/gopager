@@ -16,7 +16,7 @@ Add a decision to the ADR file of its topic with status, date, supersession, the
 | [06-identity-and-authorization.md](06-identity-and-authorization.md) | Identity and authorization | 19 (D-07..D-165) |
 | [07-query-and-live.md](07-query-and-live.md) | Query and live | 4 (D-16..D-152) |
 | [08-operations-and-http.md](08-operations-and-http.md) | Operations and HTTP | 3 (D-52..D-133) |
-| [09-process-and-documentation.md](09-process-and-documentation.md) | Process and documentation | 20 (D-19..D-162, D-167..D-169) |
+| [09-process-and-documentation.md](09-process-and-documentation.md) | Process and documentation | 21 (D-19..D-162, D-167..D-169, D-171) |
 | [10-foundation-redesign.md](10-foundation-redesign.md) | Foundation redesign | 2 (D-135..D-137) |
 
 ## Index
@@ -193,3 +193,4 @@ Add a decision to the ADR file of its topic with status, date, supersession, the
 | D-168 | Local security and code review before every code push | accepted | 2026-11-12 | [09-process-and-documentation](09-process-and-documentation.md#d-168) |
 | D-169 | Live stream tests record what they received | accepted | 2026-11-12 | [09-process-and-documentation](09-process-and-documentation.md#d-169) |
 | D-170 | One single-row write check for the stores | accepted | 2026-11-12 | [01-platform-and-storage](01-platform-and-storage.md#d-170) |
+| D-171 | One retry backoff for the runners | accepted | 2026-11-13 | [09-process-and-documentation](09-process-and-documentation.md#d-171) |

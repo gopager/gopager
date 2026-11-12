@@ -187,3 +187,12 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Decision:** CI failed `TestLiveStreamRemoveBasis` (AP-10) on the [AP-13](../work-packages/ap-13-processing-presentation-integration.md) pull request with a second `upsert` of a Message after its expected one (frame ID `1003-6`). The user chose to investigate it as a possible defect. It was not reproduced (55 runs under load, the CI shuffle seed), and no code path that sends one fact twice was found in the session, frame builder, stream handler or test client. The test SSE client in `cmd/gopager/live_http_test.go` now records every event it receives and prints that history, with each frame's fact position, when an assertion fails, so a recurrence shows both frames and the facts behind them. Test-only.
 - **Rationale:** Without the earlier frames' IDs the duplicate cannot be told apart from a second fact or a resent frame; changing the expectation without a cause would hide a possible delivery defect.
 - **Consequences:** Follow-up in the [AP-10](../execution/ap-10.md) record; the AP-13 record keeps the duplicate as an open point until a recurrence explains it or the user closes it. No open AP changes.
+
+<a id="d-171"></a>
+## D-171 One retry backoff for the runners
+
+- **Status:** accepted
+- **Date:** 2026-11-13
+- **Decision:** The local code review of the [AP-13](../work-packages/ap-13-processing-presentation-integration.md) pull request found the capped doubling retry delay three times: the correction runner (`internal/assignments`, AP-08 code), the Processing dispatcher and the Reprocess runner. The user approved one helper, `platform.Backoff(attempt, base, limit)` in `internal/platform`, used by all three with their delays unchanged (correction and Reprocess 1 s to 30 s, dispatcher from its poll interval to its cap).
+- **Rationale:** Three copies of one schedule can drift in their first delay or cap.
+- **Consequences:** Follow-up in the [AP-08](../execution/ap-08.md) record; the AP-13 record links this decision under Blockers and Deviations. No open AP changes.
