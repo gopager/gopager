@@ -134,7 +134,7 @@ func (c *cardRun) card(ctx context.Context, projection readmodel.DeliveryProject
 	if err != nil && !renderable(err) {
 		return nil, err
 	}
-	return c.fallback(ctx, reader)
+	return c.fallback(ctx, reader, resolved.Conflict)
 }
 
 // render compiles (once per Layout version) and renders the Layout. It returns a nil card and
@@ -171,7 +171,9 @@ func (c *cardRun) render(ctx context.Context, resolved processing.ResolvedLayout
 
 // fallback renders the built-in default json Layout. A default that cannot render either, for
 // example because of an oversized Payload, yields an empty card rather than failing the read.
-func (c *cardRun) fallback(ctx context.Context, reader processing.FieldReader) (*readmodel.Card, error) {
+// The conflict flag of the failed resolution is kept, because it describes the Message's Units
+// and not the rendering.
+func (c *cardRun) fallback(ctx context.Context, reader processing.FieldReader, conflict bool) (*readmodel.Card, error) {
 	card, err := c.render(ctx, processing.ResolvedLayout{Layout: c.renderer.defaults[processing.LayoutJSON]}, reader)
 	switch {
 	case err == nil && card != nil:
@@ -181,6 +183,7 @@ func (c *cardRun) fallback(ctx context.Context, reader processing.FieldReader) (
 		return nil, err
 	}
 	card.Fallback = true
+	card.LayoutConflict = conflict
 	return card, nil
 }
 

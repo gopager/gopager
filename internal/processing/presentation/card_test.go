@@ -153,6 +153,19 @@ func TestCardFallsBackToTheDefaultWhenTheLayoutCannotRender(t *testing.T) {
 	}
 }
 
+func TestCardKeepsTheLayoutConflictOnAFallback(t *testing.T) {
+	t.Parallel()
+	var blocks []processing.LayoutBlock
+	for range 200 {
+		blocks = append(blocks, processing.LayoutBlock{Kind: "field", Field: &processing.FieldRef{Namespace: "message", Path: []string{"text"}}})
+	}
+	layouts := &stubLayouts{resolved: processing.ResolvedLayout{Conflict: true, Layout: jsonLayout(blocks...)}}
+	card := renderOne(t, cardRenderer(t, layouts), projectionOf(strings.Repeat("x", 1000), "payload", "unit"))
+	if !card.Fallback || !card.LayoutConflict {
+		t.Fatalf("card = %+v, want a fallback that still reports the Layout conflict", card)
+	}
+}
+
 func TestCardFallsBackForUnresolvableLayouts(t *testing.T) {
 	t.Parallel()
 	unknown := jsonLayout(processing.LayoutBlock{Kind: "field", Field: &processing.FieldRef{Namespace: "message", Path: []string{"nothing"}}})
