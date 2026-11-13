@@ -1,8 +1,12 @@
 package reprocess_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -272,6 +276,39 @@ func TestRunnerRetriesEveryOtherFailureUntilTheAttemptLimit(t *testing.T) {
 		last := stepFailure(t, cause, processing.MaxReprocessAttempts-1)
 		if last.state != processing.ReprocessFailed || last.failureCode == "" || !last.rescheduledAt.IsZero() {
 			t.Errorf("%s: state=%q code=%q, want failed on the %dth consecutive failure keeping the last code", name, last.state, last.failureCode, processing.MaxReprocessAttempts)
+		}
+	}
+}
+
+func TestRunnerLogsEveryStepFailureWithCodesOnly(t *testing.T) { //nolint:paralleltest // replaces the process-wide slog default logger
+	var buffer bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buffer, nil)))
+	defer slog.SetDefault(previous)
+	cause := platform.NewFailure(platform.CodeStorageUnavailable, errors.New("secret-cause-text"))
+
+	retried := stepFailure(t, cause, 0)
+	rescheduled := buffer.String()
+	buffer.Reset()
+	failed := stepFailure(t, cause, processing.MaxReprocessAttempts-1)
+	ended := buffer.String()
+
+	for name, check := range map[string]struct {
+		line, level string
+		work        *fakeWork
+		attempts    string
+	}{
+		"rescheduled": {rescheduled, "level=WARN", retried, "attempts=1"},
+		"failed":      {ended, "level=ERROR", failed, "attempts=" + strconv.Itoa(processing.MaxReprocessAttempts)},
+	} {
+		for _, want := range []string{check.level, "request=" + check.work.request.ID.String(),
+			"workflow=" + check.work.request.WorkflowID.String(), check.attempts, "code=" + string(platform.CodeStorageUnavailable)} {
+			if !strings.Contains(check.line, want) {
+				t.Errorf("%s: log %q lacks %q", name, check.line, want)
+			}
+		}
+		if strings.Contains(check.line, "secret-cause-text") {
+			t.Errorf("%s: log %q leaks the cause text", name, check.line)
 		}
 	}
 }

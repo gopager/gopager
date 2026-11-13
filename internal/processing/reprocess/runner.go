@@ -186,8 +186,9 @@ func (r *Runner) fail(ctx context.Context, request processing.ReprocessRequest, 
 	if code == "" || code == string(platform.CodeInternalError) {
 		code = stepFailedCode
 	}
+	ended := permanent(cause) || request.Attempts+1 >= processing.MaxReprocessAttempts
 	err := r.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-		if permanent(cause) || request.Attempts+1 >= processing.MaxReprocessAttempts {
+		if ended {
 			return r.repository.FailReprocess(tx.Context(), tx, request, code)
 		}
 		now, err := r.clock.Now(tx.Context(), tx)
@@ -199,7 +200,23 @@ func (r *Runner) fail(ctx context.Context, request processing.ReprocessRequest, 
 	if errors.Is(err, authz.ErrRevisionConflict) {
 		return nil
 	}
+	if err == nil {
+		logStepFailure(request, cause, ended)
+	}
 	return err
+}
+
+// logStepFailure logs a recorded step failure: a warning when the request is rescheduled, an
+// error when it ends failed. It logs identifiers, the attempt count and the failure code only,
+// never the cause text, which may carry payload data.
+func logStepFailure(request processing.ReprocessRequest, cause error, ended bool) {
+	attributes := []any{"request", request.ID, "workflow", request.WorkflowID, "attempts", request.Attempts + 1,
+		"code", platform.FailureCode(cause)}
+	if ended {
+		slog.Error("reprocess request failed", attributes...)
+		return
+	}
+	slog.Warn("reprocess step failed; request rescheduled", attributes...)
 }
 
 // permanent reports whether a retry cannot overcome the failure: a failure created permanent, or
