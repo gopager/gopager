@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
@@ -46,7 +47,10 @@ func New(repository processing.PublicationRepository, source SourceOwner,
 // current candidates to its Message, appends their completion facts and refreshes the
 // Transmission's processing status, all in the caller's transaction. Candidates that are still
 // pending, running, failed or not selected are left alone; a candidate missing for a current
-// Workflow is not admitted here. Any failure requires rollback by the transaction owner.
+// Workflow is not admitted here. A completed candidate that a historical Reprocess readmitted
+// additionally retracts the earlier published results of its Workflow, also when it is not
+// selected, and its completion fact is marked historical so that Delivery does not fan it out.
+// Any failure requires rollback by the transaction owner.
 func (s *Service) Publish(ctx context.Context, tx platform.TransactionContext, transmission uuid.UUID) error {
 	if transmission == uuid.Nil {
 		return platform.NewFailure(platform.CodeInvalidInput, errors.New("missing publication source"))
@@ -85,6 +89,17 @@ func (s *Service) Publish(ctx context.Context, tx platform.TransactionContext, t
 			return err
 		}
 		if !item.Publishable() {
+			if item.ReplacesPublished() {
+				// Nothing new to attach, but the Reprocess still withdraws the earlier results.
+				retracted, err := s.repository.ReplacePublished(ctx, tx, item)
+				if err != nil {
+					return err
+				}
+				// No completion fact accompanies this withdrawal, so announce it.
+				if err := s.announceRetraction(ctx, tx, binding, item, retracted, now); err != nil {
+					return err
+				}
+			}
 			continue
 		}
 		encoded, err := json.Marshal(item)
@@ -102,18 +117,42 @@ func (s *Service) Publish(ctx context.Context, tx platform.TransactionContext, t
 		if err := s.repository.ApplyPublicationItem(ctx, tx, binding, item); err != nil {
 			return err
 		}
+		replaces := item.ReplacesPublished()
+		if replaces {
+			// Every withdrawal continues its result's aggregate with a fact, also when a
+			// replacement is published in the same transaction.
+			retracted, err := s.repository.ReplacePublished(ctx, tx, item)
+			if err != nil {
+				return err
+			}
+			if err := s.announceRetraction(ctx, tx, binding, item, retracted, now); err != nil {
+				return err
+			}
+		}
 		_, err = s.facts.AppendProcessingCompletion(ctx, tx, events.ProcessingCompletionFact{
 			ID: uuid.New(), TransmissionID: transmission, MessageID: binding.MessageID, MessageTime: binding.MessageTime,
 			WorkflowID: item.Candidate.WorkflowID, DefinitionVersionID: item.Candidate.DefinitionVersionID,
 			ResultID: item.Result.ID, ResultRevision: item.Result.Revision,
 			SourceRevision: binding.Source.SourceRevision, ContextRevision: binding.Source.ContextRevision,
-			OccurredAt: now, Outputs: item.Outputs, Result: item.Result.Evaluation,
+			OccurredAt: now, Outputs: item.Outputs, Result: item.Result.Evaluation, Historical: replaces,
 		})
 		if err != nil {
 			return err
 		}
 	}
 	return s.source.ApplyProcessingStatus(ctx, tx, binding)
+}
+
+// announceRetraction appends the retraction fact of one Transmission and Workflow when results were
+// withdrawn.
+func (s *Service) announceRetraction(ctx context.Context, tx platform.TransactionContext, binding processing.PublicationBinding,
+	item processing.PublicationItem, retracted []processing.RetractedResult, now time.Time) error {
+	if len(retracted) == 0 {
+		return nil
+	}
+	_, err := s.facts.AppendProcessingRetraction(ctx, tx, events.NewProcessingRetraction(item.Candidate.TransmissionID,
+		binding.MessageID, binding.MessageTime, item.Candidate.WorkflowID, retracted, now))
+	return err
 }
 
 // MissingSourceOwner is a placeholder publication source owner for deployments without the real

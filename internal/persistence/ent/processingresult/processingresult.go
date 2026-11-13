@@ -29,6 +29,8 @@ const (
 	FieldPublishedAt = "published_at"
 	// FieldMessageID holds the string denoting the message_id field in the database.
 	FieldMessageID = "message_id"
+	// FieldRetractedAt holds the string denoting the retracted_at field in the database.
+	FieldRetractedAt = "retracted_at"
 	// Table holds the table name of the processingresult in the database.
 	Table = "processing_results"
 )
@@ -44,6 +46,7 @@ var Columns = []string{
 	FieldCompletedAt,
 	FieldPublishedAt,
 	FieldMessageID,
+	FieldRetractedAt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -110,4 +113,9 @@ func ByPublishedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByMessageID orders the results by the message_id field.
 func ByMessageID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldMessageID, opts...).ToFunc()
+}
+
+// ByRetractedAt orders the results by the retracted_at field.
+func ByRetractedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRetractedAt, opts...).ToFunc()
 }

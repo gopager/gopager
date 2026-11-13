@@ -33,6 +33,10 @@ func writeManagementError(w http.ResponseWriter, err error) {
 		errors.Is(err, assignments.ErrInvalidRule), errors.Is(err, protocols.ErrInvalidTarget),
 		errors.Is(err, ingest.ErrInvalidSubmission), errors.Is(err, ingest.ErrInvalidGatewayStateReport):
 		code, fallback, status = "INVALID_INPUT", "Check the supplied values.", http.StatusBadRequest
+		var invalidField *authz.FieldError
+		if errors.As(err, &invalidField) {
+			parameters["field"] = invalidField.Field
+		}
 	case errors.Is(err, ingest.ErrSubmissionTooLarge):
 		code, fallback, status = "RESOURCE_LIMIT", "The operation exceeds a configured limit.", http.StatusRequestEntityTooLarge
 	case errors.Is(err, ingest.ErrSubmissionConflict), errors.Is(err, commands.ErrIdempotencyConflict):

@@ -279,6 +279,10 @@ func render(ctx context.Context, tx platform.TransactionContext, deps Dependenci
 	request := processing.LayoutRequest{LayoutID: subscription.LayoutID}
 	if subscription.LayoutID == nil {
 		request.OutputKind = descriptor.OutputKinds[0]
+		request.UnitIDs = make([]uuid.UUID, 0, len(current.units))
+		for _, unit := range current.units {
+			request.UnitIDs = append(request.UnitIDs, unit.UnitID)
+		}
 	}
 	resolved, err := deps.Layouts.ResolveLayout(ctx, tx, request)
 	if err != nil {

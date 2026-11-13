@@ -111,6 +111,8 @@ func buildActionScopes() map[string][]string {
 	add("attribute-schema.manage", "all", "agency")
 	add("notice.manage plugin.configure operations.manage saved-view.manage-global", "all")
 	add("audit.read", "all", "agency", "account")
+	// Preferences always belong to the caller's own account, so only the scope all is meaningful.
+	add("preference.manage-own", "all")
 	return out
 }
 

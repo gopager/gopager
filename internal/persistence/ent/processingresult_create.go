@@ -94,6 +94,20 @@ func (_c *ProcessingResultCreate) SetNillableMessageID(v *uuid.UUID) *Processing
 	return _c
 }
 
+// SetRetractedAt sets the "retracted_at" field.
+func (_c *ProcessingResultCreate) SetRetractedAt(v time.Time) *ProcessingResultCreate {
+	_c.mutation.SetRetractedAt(v)
+	return _c
+}
+
+// SetNillableRetractedAt sets the "retracted_at" field if the given value is not nil.
+func (_c *ProcessingResultCreate) SetNillableRetractedAt(v *time.Time) *ProcessingResultCreate {
+	if v != nil {
+		_c.SetRetractedAt(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *ProcessingResultCreate) SetID(v uuid.UUID) *ProcessingResultCreate {
 	_c.mutation.SetID(v)
@@ -255,6 +269,10 @@ func (_c *ProcessingResultCreate) createSpec() (*ProcessingResult, *sqlgraph.Cre
 	if value, ok := _c.mutation.MessageID(); ok {
 		_spec.SetField(processingresult.FieldMessageID, field.TypeUUID, value)
 		_node.MessageID = &value
+	}
+	if value, ok := _c.mutation.RetractedAt(); ok {
+		_spec.SetField(processingresult.FieldRetractedAt, field.TypeTime, value)
+		_node.RetractedAt = &value
 	}
 	return _node, _spec
 }

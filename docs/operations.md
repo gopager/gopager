@@ -121,7 +121,7 @@ Fixed values (not configurable):
 | Role | Runs |
 | --- | --- |
 | `api` | HTTP listener with health endpoints and all `/api/v1` routes (authentication, management, gateway intake and administration, processing). See [HTTP API](http-api.md). |
-| `worker` | Processing dispatcher (executes due workflow work), the assignment correction runner, the Gateway contact-loss monitor, the Delivery fan-out consumer (turns new facts into Deliveries) and the Delivery runner (attempts due Deliveries, polling every 5 s besides fact notifications). No listener. Without a configured Delivery target provider every Subscription target is unavailable and no Delivery starts. |
+| `worker` | Processing dispatcher (executes due workflow work), the assignment correction runner, the Reprocess runner (historical Reprocess requests, woken by a `gopager_processing_reprocess` notification, polling every second), the Gateway contact-loss monitor, the Delivery fan-out consumer (turns new facts into Deliveries) and the Delivery runner (attempts due Deliveries, polling every 5 s besides fact notifications). No listener. Without a configured Delivery target provider every Subscription target is unavailable and no Delivery starts. |
 
 Both roles load the plugin directory, if configured, because workflow management and preview on the API also execute plugins.
 
@@ -192,7 +192,7 @@ Bootstrap opens no listener, completes within 30 s, and can succeed only once pe
 | Master data | `unit.*`, `organization.*`, `unit-collection.*`, `unit-template.*` (each `read`, `create`, `update`, `delete`) |
 | Assignment | `address-rule.*`, `suppression.*` (each `read`, `create`, `update`, `delete`), `assignment-correction.read`, `assignment-correction.retry` |
 | Gateways | `gateway.*`, `network.*` (each `read`, `create`, `update`, `delete`), `grouping.configure` |
-| Accounts | `account.read`, `account.create`, `account.update`, `account.delete`, `account.delete-own`, `grant.manage`, `password.local`, `recovery.request`, `recovery.issue`, `recovery.consume`, `session.manage-own`, `key.create-own`, `key.manage-own`, `key.manage-technical` |
+| Accounts | `account.read`, `account.create`, `account.update`, `account.delete`, `account.delete-own`, `grant.manage`, `password.local`, `recovery.request`, `recovery.issue`, `recovery.consume`, `session.manage-own`, `key.create-own`, `key.manage-own`, `key.manage-technical`, `preference.manage-own` |
 | Subscriptions and delivery | `subscription.manage-own`, `subscription.manage-global`, `delivery.read`, `delivery.retry`, `delivery.redeliver` |
 | Processing | `workflow.read`, `workflow.create`, `workflow.update`, `workflow.delete`, `workflow.preview`, `workflow.activate`, `workflow.reprocess`, `presentation.manage`, `plugin.configure` |
 | Attribute schemas | `attribute-schema.manage` |
@@ -275,7 +275,7 @@ Logs are written to stderr by Go's default `log/slog` handler (`2026/11/05 23:54
 | `COMMIT_UNCERTAIN` | Connection lost during commit; outcome unknown |
 | `INTERNAL_ERROR` | Any other failure, including listener bind errors |
 
-Log lines in use: `platform started`, `API error response`, `platform readiness check failed`, `platform role stopped`, `GoPager exited`, the worker retry warnings `Processing dispatch selection failed; retrying` and `correction runner storage failure; retrying` and `Gateway contact monitor storage failure; retrying` with their recovery lines `Processing dispatch selection recovered`, `correction runner recovered` and `Gateway contact monitor recovered`, and the warning `operator approved a remote database connection without certificate-verified TLS`.
+Log lines in use: `platform started`, `API error response`, `platform readiness check failed`, `platform role stopped`, `GoPager exited`, the worker retry warnings `Processing dispatch selection failed; retrying` and `correction runner storage failure; retrying`, `reprocess runner failure; retrying` and `Gateway contact monitor storage failure; retrying` with their recovery lines `Processing dispatch selection recovered`, `correction runner recovered` and `Gateway contact monitor recovered`, and the warning `operator approved a remote database connection without certificate-verified TLS`.
 
 ## Database TLS
 

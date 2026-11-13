@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -723,7 +722,7 @@ func (p *WorkflowProgram) execute(ctx context.Context, steps []compiledStep, fra
 		}
 		if err != nil {
 			err = frame.budget.bound(err)
-			return fmt.Errorf("step %q: %w", step.definition.ID, platform.NewFailure(platform.FailureCode(err), err))
+			return &StepFailure{StepID: step.definition.ID, Err: platform.NewFailure(platform.FailureCode(err), err)}
 		}
 		if err := frame.budget.computeContext().Err(); err != nil {
 			return err

@@ -80,6 +80,63 @@ type ProcessingCompletionFact struct {
 	Result  processing.Evaluation
 }
 
+// ProcessingRetractionFact announces that a historical Reprocess withdrew published results of one
+// Workflow from a Message, with or without publishing a replacement, so readers of the Message must look
+// again. It is not a Delivery trigger.
+type ProcessingRetractionFact struct {
+	ID             uuid.UUID
+	TransmissionID uuid.UUID
+	MessageID      uuid.UUID
+	// MessageTime is the Message time (first observation) of MessageID; required.
+	MessageTime time.Time
+	WorkflowID  uuid.UUID
+	// ResultIDs are the withdrawn results; at least one. The first one is the aggregate.
+	ResultIDs []uuid.UUID
+	// ResultRevision is the revision the withdrawal gave the first result, higher than the
+	// revision of its completion fact.
+	ResultRevision int64
+	OccurredAt     time.Time
+}
+
+// NewProcessingRetraction returns the fact of a Reprocess that withdrew the results of one
+// Transmission and Workflow, in the order retracted lists them.
+// Its aggregate continues the first withdrawn result at the revision the retraction gave it.
+func NewProcessingRetraction(transmission, message uuid.UUID, messageTime time.Time, workflow uuid.UUID,
+	retracted []processing.RetractedResult, now time.Time) ProcessingRetractionFact {
+	fact := ProcessingRetractionFact{ID: uuid.New(), TransmissionID: transmission, MessageID: message,
+		MessageTime: messageTime, WorkflowID: workflow, ResultIDs: processing.RetractedIDs(retracted), OccurredAt: now}
+	if len(retracted) > 0 {
+		fact.ResultRevision = retracted[0].Revision
+	}
+	return fact
+}
+
+// Envelope validates the retraction and builds its envelope. The aggregate is the first withdrawn
+// result at the revision the withdrawal gave it, like processing.completed; the replay mode is always reprocess, because only a Reprocess retracts.
+func (f ProcessingRetractionFact) Envelope(recorded time.Time) (ProcessingEnvelope, error) {
+	if f.TransmissionID == uuid.Nil || f.MessageID == uuid.Nil || !validMessageTime(f.MessageTime) ||
+		f.WorkflowID == uuid.Nil || len(f.ResultIDs) == 0 || slices.Contains(f.ResultIDs, uuid.Nil) || f.ResultRevision <= 0 {
+		return ProcessingEnvelope{}, processingInvalid(errors.New("incomplete Processing retraction fact"))
+	}
+	envelope, err := processingFactEnvelope(f.ID, f.ResultIDs[0], f.ResultRevision, f.OccurredAt, recorded, nil, nil)
+	if err != nil {
+		return ProcessingEnvelope{}, err
+	}
+	envelope.Type, envelope.Classification, envelope.ReplayMode = "processing.retracted", "source-classified", ReplayReprocess
+	envelope.AggregateRef.Type = "processingResult"
+	envelope.Data, err = json.Marshal(struct {
+		TransmissionID uuid.UUID   `json:"transmissionId"`
+		MessageID      uuid.UUID   `json:"messageId"`
+		MessageTime    time.Time   `json:"messageTime"`
+		WorkflowID     uuid.UUID   `json:"workflowId"`
+		ResultIDs      []uuid.UUID `json:"resultIds"`
+	}{f.TransmissionID, f.MessageID, f.MessageTime.UTC(), f.WorkflowID, f.ResultIDs})
+	if err != nil {
+		return ProcessingEnvelope{}, processingInvalid(err)
+	}
+	return envelope, nil
+}
+
 // ProcessingEnvelope is the common versioned event envelope used for processing
 // facts; it is built only by the typed processing fact Envelope methods.
 // Data is generated only by the fact factories, not accepted as arbitrary caller JSON.
@@ -103,6 +160,7 @@ type ProcessingEnvelope struct {
 type ProcessingAppender interface {
 	AppendProcessingConfiguration(context.Context, platform.TransactionContext, ProcessingConfigurationFact) (uuid.UUID, error)
 	AppendProcessingCompletion(context.Context, platform.TransactionContext, ProcessingCompletionFact) (uuid.UUID, error)
+	AppendProcessingRetraction(context.Context, platform.TransactionContext, ProcessingRetractionFact) (uuid.UUID, error)
 }
 
 func processingInvalid(err error) error {

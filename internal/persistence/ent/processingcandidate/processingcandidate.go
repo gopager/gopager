@@ -53,6 +53,8 @@ const (
 	FieldFailureCode = "failure_code"
 	// FieldFailureStep holds the string denoting the failure_step field in the database.
 	FieldFailureStep = "failure_step"
+	// FieldReprocessID holds the string denoting the reprocess_id field in the database.
+	FieldReprocessID = "reprocess_id"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -83,6 +85,7 @@ var Columns = []string{
 	FieldDueAt,
 	FieldFailureCode,
 	FieldFailureStep,
+	FieldReprocessID,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -265,6 +268,11 @@ func ByFailureCode(opts ...sql.OrderTermOption) OrderOption {
 // ByFailureStep orders the results by the failure_step field.
 func ByFailureStep(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldFailureStep, opts...).ToFunc()
+}
+
+// ByReprocessID orders the results by the reprocess_id field.
+func ByReprocessID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReprocessID, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

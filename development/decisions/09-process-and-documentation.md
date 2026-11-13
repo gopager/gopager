@@ -161,6 +161,15 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Rationale:** Recording a clean review in the execution record changed the head and restarted the review loop although no reviewed code changed.
 - **Consequences:** Applies to every open AP from now on, first to the AP-12 pull request ([AP-12 record](../execution/ap-12.md)).
 
+<a id="d-167"></a>
+## D-167 Live merge and plugin start tests tolerate transient replays and exec failures
+
+- **Status:** accepted
+- **Date:** 2026-11-12
+- **Decision:** CI failed on two documentation-only heads of the [AP-13](../work-packages/ap-13-processing-presentation-integration.md) pull request in tests outside its write scope. The user approved fixing both. (1) `TestLiveStreamMergesResynchronizeWithoutDisclosingIDs` (AP-10) now skips replayed `upsert` frames of Messages the reader could already see before the expected `resync-required`: a stream position trails transactions still running anywhere in the cluster, so a creation committed shortly before the position may be replayed, which at-least-once delivery allows. The merge-chain subtest holds a transaction open to make that replay deterministic. Hidden Messages are never skipped, so a disclosure still fails. (2) `TestInstalledLoadDoesNotStartPlugin` (AP-08) retries the invocation up to five times when the marker script did not run, because on Linux executing a freshly written script can fail with `ETXTBSY` while a parallel test forks. Test-only, no behavior change.
+- **Rationale:** Both tests asserted a timing their subject does not guarantee; the live replay was reproduced locally with a held transaction, the exec failure only in CI.
+- **Consequences:** Follow-ups in the [AP-08](../execution/ap-08.md) and [AP-10](../execution/ap-10.md) records; the AP-13 record links this decision under Blockers and Deviations. No open AP changes.
+
 <a id="d-168"></a>
 ## D-168 Local security and code review before every code push
 
@@ -170,3 +179,20 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Rationale:** Each Copilot review round costs a paid review and a round trip; as many findings as possible should be found locally before Copilot reviews. `xhigh` with unlimited findings is the highest-recall level that does not start the many reviewer agents of `max` or `ultra`.
 - **Consequences:** Applies to every open AP from now on. The Copilot review gate of the pull request is unchanged.
 
+<a id="d-169"></a>
+## D-169 Live stream tests record what they received
+
+- **Status:** accepted
+- **Date:** 2026-11-12
+- **Decision:** CI failed `TestLiveStreamRemoveBasis` (AP-10) on the [AP-13](../work-packages/ap-13-processing-presentation-integration.md) pull request with a second `upsert` of a Message after its expected one (frame ID `1003-6`). The user chose to investigate it as a possible defect. It was not reproduced (55 runs under load, the CI shuffle seed), and no code path that sends one fact twice was found in the session, frame builder, stream handler or test client. The test SSE client in `cmd/gopager/live_http_test.go` now records every event it receives and prints that history, with each frame's fact position, when an assertion fails, so a recurrence shows both frames and the facts behind them. Test-only.
+- **Rationale:** Without the earlier frames' IDs the duplicate cannot be told apart from a second fact or a resent frame; changing the expectation without a cause would hide a possible delivery defect.
+- **Consequences:** Follow-up in the [AP-10](../execution/ap-10.md) record; the AP-13 record keeps the duplicate as an open point until a recurrence explains it or the user closes it. No open AP changes.
+
+<a id="d-171"></a>
+## D-171 One retry backoff for the runners
+
+- **Status:** accepted
+- **Date:** 2026-11-13
+- **Decision:** The local code review of the [AP-13](../work-packages/ap-13-processing-presentation-integration.md) pull request found the capped doubling retry delay three times: the correction runner (`internal/assignments`, AP-08 code), the Processing dispatcher and the Reprocess runner. The user approved one helper, `platform.Backoff(attempt, base, limit)` in `internal/platform`, used by all three with their delays unchanged (correction and Reprocess 1 s to 30 s, dispatcher from its poll interval to its cap).
+- **Rationale:** Three copies of one schedule can drift in their first delay or cap.
+- **Consequences:** Follow-up in the [AP-08](../execution/ap-08.md) record; the AP-13 record links this decision under Blockers and Deviations. No open AP changes.

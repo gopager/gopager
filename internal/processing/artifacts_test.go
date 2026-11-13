@@ -57,8 +57,12 @@ func writeManifest(t *testing.T, root *os.Root, manifest InstalledManifest) {
 	}
 }
 
+// TestInstalledLoadDoesNotStartPlugin runs outside the parallel phase: on Linux, executing a script
+// that was just written fails with "text file busy" while another test forks with the file still
+// open for writing, and then the script never runs.
+//
+//nolint:paralleltest // see above
 func TestInstalledLoadDoesNotStartPlugin(t *testing.T) {
-	t.Parallel()
 	ctx := context.Background()
 	host := NewPluginHost()
 	t.Cleanup(func() {

@@ -2,6 +2,7 @@ package events
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -131,5 +132,65 @@ func TestProcessingCompletionRejectsPartialHiddenUncorrelatedAndUnpublishedResul
 	fact.Result.TargetResults = []processing.TargetResult{{TargetPosition: 0, Fields: fields}, {TargetPosition: 2, Fields: fields}}
 	if _, err := fact.Envelope(time.Unix(101, 0)); err != nil {
 		t.Fatalf("ordered selected original targets were rejected: %v", err)
+	}
+}
+
+func TestProcessingRetractionEnvelopeCarriesTheRetractedResults(t *testing.T) {
+	t.Parallel()
+	first, second := uuid.New(), uuid.New()
+	fact := ProcessingRetractionFact{ID: uuid.New(), TransmissionID: uuid.New(), MessageID: uuid.New(),
+		MessageTime: time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC), WorkflowID: uuid.New(),
+		ResultIDs: []uuid.UUID{first, second}, ResultRevision: 4, OccurredAt: time.Unix(100, 0)}
+	envelope, err := fact.Envelope(time.Unix(101, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var data struct {
+		MessageID      uuid.UUID   `json:"messageId"`
+		MessageTime    time.Time   `json:"messageTime"`
+		TransmissionID uuid.UUID   `json:"transmissionId"`
+		WorkflowID     uuid.UUID   `json:"workflowId"`
+		ResultIDs      []uuid.UUID `json:"resultIds"`
+	}
+	if err := json.Unmarshal(envelope.Data, &data); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.AggregateRef.Type != "processingResult" || envelope.AggregateRef.ID != first || envelope.AggregateRevision != 4 ||
+		envelope.Type != "processing.retracted" || envelope.SchemaVersion != 1 || envelope.Producer.Domain != "processing" ||
+		envelope.ReplayMode != ReplayReprocess || data.MessageID != fact.MessageID || data.WorkflowID != fact.WorkflowID ||
+		data.TransmissionID != fact.TransmissionID || len(data.ResultIDs) != 2 || data.ResultIDs[0] != first ||
+		!data.MessageTime.Equal(fact.MessageTime) {
+		t.Fatalf("envelope = %+v, data = %+v", envelope, data)
+	}
+	for name, mutate := range map[string]func(*ProcessingRetractionFact){
+		"no revision":     func(f *ProcessingRetractionFact) { f.ResultRevision = 0 },
+		"no results":      func(f *ProcessingRetractionFact) { f.ResultIDs = nil },
+		"nil result":      func(f *ProcessingRetractionFact) { f.ResultIDs = []uuid.UUID{uuid.Nil} },
+		"no message":      func(f *ProcessingRetractionFact) { f.MessageID = uuid.Nil },
+		"no message time": func(f *ProcessingRetractionFact) { f.MessageTime = time.Time{} },
+		"no workflow":     func(f *ProcessingRetractionFact) { f.WorkflowID = uuid.Nil },
+		"no transmission": func(f *ProcessingRetractionFact) { f.TransmissionID = uuid.Nil },
+	} {
+		invalid := fact
+		invalid.ResultIDs = slices.Clone(fact.ResultIDs)
+		mutate(&invalid)
+		if _, err := invalid.Envelope(time.Unix(101, 0)); err == nil {
+			t.Errorf("%s accepted", name)
+		}
+	}
+}
+
+func TestNewProcessingRetractionCarriesTheWithdrawnResults(t *testing.T) {
+	t.Parallel()
+	first, second := uuid.New(), uuid.New()
+	now := time.Date(2026, 11, 13, 8, 0, 0, 0, time.UTC)
+	fact := NewProcessingRetraction(uuid.New(), uuid.New(), now.Add(-time.Hour), uuid.New(),
+		[]processing.RetractedResult{{ID: first, Revision: 4}, {ID: second, Revision: 2}}, now)
+	if fact.ID == uuid.Nil || len(fact.ResultIDs) != 2 || fact.ResultIDs[0] != first || fact.ResultIDs[1] != second ||
+		fact.ResultRevision != 4 || !fact.OccurredAt.Equal(now) {
+		t.Fatalf("fact = %+v", fact)
+	}
+	if _, err := fact.Envelope(now); err != nil {
+		t.Fatalf("envelope: %v", err)
 	}
 }

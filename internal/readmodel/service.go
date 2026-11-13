@@ -60,6 +60,7 @@ type Service struct {
 	store        Store
 	keys         TokenKeys
 	registry     FieldRegistry
+	cards        CardRenderer
 
 	mu       sync.Mutex
 	tokenKey []byte
@@ -67,12 +68,16 @@ type Service struct {
 
 // NewService composes the read side. It fails with authz.ErrInvalidInput on a missing dependency.
 func NewService(transactions identity.Transactions, resolver identity.AuthorityResolver, clock platform.Clock,
-	store Store, keys TokenKeys, registry FieldRegistry) (*Service, error) {
+	store Store, keys TokenKeys, registry FieldRegistry, options ...Option) (*Service, error) {
 	if transactions == nil || resolver == nil || clock == nil || store == nil || keys == nil || registry == nil {
 		return nil, authz.ErrInvalidInput
 	}
-	return &Service{transactions: transactions, resolver: resolver, clock: clock, store: store, keys: keys,
-		registry: registry}, nil
+	service := &Service{transactions: transactions, resolver: resolver, clock: clock, store: store, keys: keys,
+		registry: registry}
+	for _, option := range options {
+		option(service)
+	}
+	return service, nil
 }
 
 // access is everything one read needs to know about its caller.
@@ -210,6 +215,9 @@ func (s *Service) Feed(ctx context.Context, proof identity.Proof, request FeedRe
 		for _, record := range result.Items {
 			page.Items = append(page.Items, current.viewer.feedItem(record, false))
 		}
+		if err := s.attachCards(ctx, tx, current, result.Items, page.Items); err != nil {
+			return err
+		}
 		if result.HasMore && len(result.Items) > 0 {
 			last := result.Items[len(result.Items)-1]
 			page.NextPageToken = EncodePageToken(key, Cursor{Time: last.Time, ID: last.MessageID}, request.Filters, current.caller)
@@ -252,6 +260,9 @@ func (s *Service) evaluate(ctx context.Context, tx platform.TransactionContext, 
 	for _, record := range result.Items {
 		items = append(items, current.viewer.feedItem(record, false))
 	}
+	if err := s.attachCards(ctx, tx, current, result.Items, items); err != nil {
+		return nil, err
+	}
 	return items, nil
 }
 
@@ -284,7 +295,7 @@ func (s *Service) Detail(ctx context.Context, proof identity.Proof, id uuid.UUID
 			return err
 		}
 		item = current.viewer.detailItem(record)
-		return nil
+		return s.attachCard(ctx, tx, current, record.FeedRecord, &item.FeedItem)
 	})
 	return item, err
 }

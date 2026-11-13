@@ -3,6 +3,7 @@ package processing
 import (
 	"errors"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -220,27 +221,57 @@ func TestCandidateFailureSchedulesRemainingAttemptsAndKeepsExhaustionVisible(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	next, err := running.Fail(lease, platform.CodeAuthorityUnavailable, true, running.UpdatedAt)
+	next, err := running.Fail(lease, platform.CodeAuthorityUnavailable, "", true, running.UpdatedAt)
 	if err != nil || next.State != "pending" || next.AutomaticAttempts != 1 ||
 		next.Attempts != 1 || next.WorkerID != nil || next.LeaseUntil != nil ||
 		next.FailureCode == nil || *next.FailureCode != string(platform.CodeAuthorityUnavailable) ||
 		next.DueAt.Sub(next.UpdatedAt) < 24*time.Second || next.DueAt.Sub(next.UpdatedAt) > 36*time.Second {
 		t.Fatalf("invalid first retry schedule/history: %+v err=%v", next, err)
 	}
-	permanent, err := running.Fail(lease, platform.CodeInvalidInput, false, running.UpdatedAt)
+	permanent, err := running.Fail(lease, platform.CodeInvalidInput, "", false, running.UpdatedAt)
 	if err != nil || permanent.State != "failed" || permanent.AutomaticAttempts != 1 {
 		t.Fatalf("permanent failure was retried: %+v err=%v", permanent, err)
 	}
 	running.Attempts, running.AutomaticAttempts = 5, 5
-	exhausted, err := running.Fail(lease, platform.CodeAuthorityUnavailable, true, running.UpdatedAt)
+	exhausted, err := running.Fail(lease, platform.CodeAuthorityUnavailable, "", true, running.UpdatedAt)
 	if err != nil || exhausted.State != "failed" || exhausted.AutomaticAttempts != 5 || exhausted.Attempts != 5 {
 		t.Fatalf("exhausted failure hidden/reset: %+v err=%v", exhausted, err)
 	}
-	if _, err := running.Fail(lease, platform.ErrorCode("private guest stderr"), true, running.UpdatedAt); err == nil {
+	if _, err := running.Fail(lease, platform.ErrorCode("private guest stderr"), "", true, running.UpdatedAt); err == nil {
 		t.Fatal("arbitrary private failure escaped safe vocabulary")
 	}
-	if _, err := running.Fail(lease, platform.CodeInternalError, false, *running.LeaseUntil); !errors.Is(err, authz.ErrRevisionConflict) {
+	if _, err := running.Fail(lease, platform.CodeInternalError, "", false, *running.LeaseUntil); !errors.Is(err, authz.ErrRevisionConflict) {
 		t.Fatalf("expired worker recorded failure: %v", err)
+	}
+}
+
+func TestCandidateFailureStoresTheFailingStepAndRetryClearsIt(t *testing.T) {
+	t.Parallel()
+	pending := candidateFixture()
+	pending.State, pending.Attempts, pending.AutomaticAttempts = "pending", 0, 0
+	running, err := pending.Claim(pending.Revision, uuid.New(), pending.UpdatedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, err := running.Lease()
+	if err != nil {
+		t.Fatal(err)
+	}
+	failed, err := running.Fail(lease, platform.CodeInvalidInput, "extract-level", false, running.UpdatedAt)
+	if err != nil || failed.FailureStep == nil || *failed.FailureStep != "extract-level" {
+		t.Fatalf("failing step not stored: %+v err=%v", failed, err)
+	}
+	unnamed, err := running.Fail(lease, platform.CodeInvalidInput, "", false, running.UpdatedAt)
+	if err != nil || unnamed.FailureStep != nil {
+		t.Fatalf("empty step stored: %+v err=%v", unnamed, err)
+	}
+	oversized, err := running.Fail(lease, platform.CodeInvalidInput, strings.Repeat("s", MaxFailureStepBytes+1), false, running.UpdatedAt)
+	if err != nil || oversized.FailureStep != nil {
+		t.Fatalf("oversized step stored: %+v err=%v", oversized, err)
+	}
+	retried, err := failed.RetryFailed(failed.Revision, failed.UpdatedAt)
+	if err != nil || retried.FailureStep != nil || retried.FailureCode != nil {
+		t.Fatalf("retry kept the failure: %+v err=%v", retried, err)
 	}
 }
 

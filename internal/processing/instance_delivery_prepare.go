@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -44,7 +45,7 @@ func (r DeliveryAttemptRequest) validate() error {
 		(r.CorrelationID != nil && *r.CorrelationID == uuid.Nil) || len(r.Inputs) > maxDeliveryInputs {
 		return invalid(errors.New("invalid delivery attempt request"))
 	}
-	if r.OutputKind != LayoutText && r.OutputKind != LayoutMarkdown && r.OutputKind != LayoutJSON {
+	if !slices.Contains(deliveryOutputKinds, r.OutputKind) {
 		return invalid(errors.New("invalid delivery output kind"))
 	}
 	return nil

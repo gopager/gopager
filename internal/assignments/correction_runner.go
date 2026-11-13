@@ -20,7 +20,9 @@ const (
 	correctionLease            = 30 * time.Second
 	correctionPoll             = 500 * time.Millisecond
 	correctionMaxRetry         = 30 * time.Second
-	retryLimitCode             = "RETRY_LIMIT"
+	// correctionScopeRetryBase is the first delay before a failed scope is claimed again.
+	correctionScopeRetryBase = time.Second
+	retryLimitCode           = "RETRY_LIMIT"
 )
 
 // CorrectionMatcher re-matches stored targets against current rules inside the
@@ -94,7 +96,7 @@ func (r *CorrectionRunner) Run(ctx context.Context) error {
 				return err
 			}
 			failures++
-			wait = correctionRetryDelay(failures)
+			wait = platform.Backoff(failures, correctionPoll, correctionMaxRetry)
 			slog.Warn("correction runner storage failure; retrying", "code", platform.FailureCode(err),
 				"failures", failures, "retryIn", wait)
 		} else if failures > 0 {
@@ -119,15 +121,6 @@ func transientFailure(err error) bool {
 		return true
 	}
 	return false
-}
-
-// correctionRetryDelay doubles the poll interval per consecutive failure, bounded by correctionMaxRetry.
-func correctionRetryDelay(failures int) time.Duration {
-	delay := correctionPoll
-	for i := 1; i < failures && delay < correctionMaxRetry; i++ {
-		delay *= 2
-	}
-	return min(delay, correctionMaxRetry)
 }
 
 // RunOnce claims one due correction scope and processes it in batches of up to
@@ -273,7 +266,7 @@ func (r *CorrectionRunner) reresolve(tx platform.TransactionContext, lease Corre
 // Messages simply keep their correcting status until a later correction refreshes them.
 func (r *CorrectionRunner) fail(ctx context.Context, lease CorrectionLease, code string) error {
 	return r.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-		final, err := r.repository.FailCorrection(tx.Context(), tx, lease, code, correctionBackoff(lease.Attempts))
+		final, err := r.repository.FailCorrection(tx.Context(), tx, lease, code, platform.Backoff(lease.Attempts, correctionScopeRetryBase, correctionMaxRetry))
 		if err != nil || !final {
 			return err
 		}
@@ -294,20 +287,6 @@ func (r *CorrectionRunner) appendFailed(tx platform.TransactionContext, lease Co
 		Revision:  int64(lease.Attempts), OccurredAt: now, Reason: lease.Reason, FailureCode: code,
 	})
 	return err
-}
-
-func correctionBackoff(attempt int) time.Duration {
-	if attempt < 1 {
-		attempt = 1
-	}
-	delay := time.Second
-	for i := 1; i < attempt && delay < 30*time.Second; i++ {
-		delay *= 2
-	}
-	if delay > 30*time.Second {
-		delay = 30 * time.Second
-	}
-	return delay
 }
 
 var _ platform.Runner = (*CorrectionRunner)(nil)

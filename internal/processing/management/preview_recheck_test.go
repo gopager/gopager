@@ -93,3 +93,33 @@ func TestPreviewFinalFenceRechecksSourceAndRejectsChangedWorkflowOrAuthority(t *
 		t.Fatalf("revoked editor accepted: %v", err)
 	}
 }
+
+// TestAFailureRecheckRequiresEveryReadGroup expects the final check before a failure explanation
+// to require the editor to read every field group the definition reads, since even a failing
+// step can tell something about a value of a group the editor may not read.
+func TestAFailureRecheckRequiresEveryReadGroup(t *testing.T) {
+	t.Parallel()
+	principal := uuid.NewString()
+	authority := authz.Authority{PrincipalID: principal, Revision: 1, Active: true,
+		Grants: []authz.Grant{{ID: uuid.NewString(), SubjectID: principal, SubjectKind: "principal",
+			Actions: []string{"workflow.preview"}, Scope: authz.Scope{Kind: "all"}}},
+		FieldPermissions: []authz.FieldPermission{{ID: uuid.NewString(), Revision: 1, SubjectID: principal,
+			SubjectKind: "principal", Fields: []string{"payload"}}}}
+	workflow := processing.WorkflowConfiguration{ID: uuid.New(), Revision: 1,
+		Scope: processing.WorkflowScope{Agencies: []uuid.UUID{uuid.New()}}}
+	source := &previewRecheckSource{}
+	service := &PreviewService{management: &Service{repository: &previewRecheckRepository{workflow: workflow}, scopes: previewScopes{}},
+		sourceOwner: source}
+	binding := processing.ExecutionBinding{WorkflowID: workflow.ID, Source: processing.SourceIdentity{
+		TransmissionID: uuid.New(), NetworkID: uuid.New(), SourceRevision: 1, ContextRevision: 1, Synthetic: true}}
+	check := func(groups ...string) error {
+		return service.checkFailureContext(t.Context(), nil, authority, time.Now(), workflow, binding,
+			[]processing.SourceReference{{Field: processing.FieldRef{Namespace: "source", Path: []string{"x"}}, Groups: groups}})
+	}
+	if err := check("payload"); err != nil || source.calls != 1 {
+		t.Fatalf("readable groups: calls=%d err=%v", source.calls, err)
+	}
+	if err := check("payload", "unit"); !errors.Is(err, authz.ErrForbidden) {
+		t.Fatalf("an unreadable group = %v, want FORBIDDEN", err)
+	}
+}

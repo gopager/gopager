@@ -37,6 +37,8 @@ const (
 	maxLayoutTemplate     = 2048
 	maxLayoutURLFields    = 10
 	maxFallbackAlts       = 8
+	// minFallbackAlts is the fewest alternatives a fallback block needs to choose between.
+	minFallbackAlts = 2
 )
 
 // The block kinds of a Layout.
@@ -94,11 +96,16 @@ type LayoutURL struct {
 	Fields   []FieldRef `json:"fields"`
 }
 
-// LayoutRequest selects the layout a delivery needs: an explicitly configured layout, or the
-// built-in default for the output kind when LayoutID is nil.
+// LayoutRequest selects the layout a rendering needs: an explicitly configured layout, or, when
+// LayoutID is nil, the layout the installation, Organization and Unit layers choose for the
+// output kind and the Units, falling back to the built-in default of the output kind.
 type LayoutRequest struct {
 	LayoutID   *uuid.UUID
 	OutputKind string
+	// UnitIDs are the Units the rendering is for: a Delivery's relevant Units or a Message's
+	// eligible Unit appearances. Only these Units' layers take part, so a hidden Unit never
+	// chooses a layout.
+	UnitIDs []uuid.UUID
 }
 
 // ResolvedLayout is a layout together with its identity. ID uuid.Nil and Version 0 denote the
@@ -107,6 +114,9 @@ type ResolvedLayout struct {
 	ID      uuid.UUID
 	Version int64
 	Layout  Layout
+	// Conflict reports that the Units of the request chose different layouts, so that the
+	// installation default (or the built-in default) was used instead of any of them.
+	Conflict bool
 }
 
 // LayoutResolver loads the layout a delivery renders with. The delivery side implements it;
@@ -208,21 +218,8 @@ func checkLayoutText(value string, limit int, required bool) error {
 }
 
 func (b LayoutBlock) validate(depth int, count *int) error {
-	var allowed property
-	switch b.Kind {
-	case blockText:
-		allowed = propText
-	case blockField, blockChip:
-		allowed = propField | propLabel | propIcon
-	case blockLink:
-		allowed = propLabel | propURL
-	case blockSection:
-		allowed = propTitle | propBlocks
-	case blockConditional:
-		allowed = propWhen | propThen | propElse
-	case blockFallback:
-		allowed = propBlocks
-	default:
+	allowed, known := allowedProperties(b.Kind)
+	if !known {
 		return invalid(errors.New("unknown layout block kind"))
 	}
 	if b.properties()&^allowed != 0 {
@@ -261,7 +258,7 @@ func (b LayoutBlock) validate(depth int, count *int) error {
 		}
 		return validateLayoutBlocks(b.Else, depth+1, count)
 	default: // blockFallback
-		if len(b.Blocks) < 2 || len(b.Blocks) > maxFallbackAlts {
+		if len(b.Blocks) < minFallbackAlts || len(b.Blocks) > maxFallbackAlts {
 			return invalid(errors.New("fallback requires 2 to 8 alternatives"))
 		}
 		return validateLayoutBlocks(b.Blocks, depth+1, count)

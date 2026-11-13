@@ -154,3 +154,21 @@ Decisions of this topic in short form. IDs are stable and referenced from contra
 - **Decision:** The user decided that a plugin's safe reason code (for example `recipient-missing`, `destination-denied`, `rate-limited`) must be visible on the Delivery, not only in the node-local plugin status. Each attempt row stores `provider_code` (the `code` of the provider's result when it matches `[a-z0-9-]{1,64}`; none when the call failed or the code is invalid), the attempt view shows it as `providerCode`, and the Delivery carries the provider code of its latest finished attempt as `providerCode`. The enumerated `outcomeCode` set of the Delivery and its attempts is unchanged. This changes `delivery_attempts` and `deliveries` in `00013_events_delivery.sql`, `internal/delivery` and `deliverystore` (AP-11 code), outside the AP-12 write scope.
 - **Rationale:** Without it a subscriber or administrator sees only `permanent` or `transient` and cannot tell a missing personal key from a refused destination.
 - **Consequences:** [AP-11 record](../execution/ap-11.md) follow-up with rerun evidence; [C-09](../contracts/c-09-delivery.md) Core Binding (Outcome) and [HTTP API: Deliveries](../../docs/http-api.md#deliveries); [AP-15](../work-packages/ap-15-frontend.md) screens can show the code; the AP-12 record links this decision under Blockers and Deviations.
+
+<a id="d-164"></a>
+## D-164 AP-13 write scope: Units in the layout request and a shared Message field reader
+
+- **Status:** accepted
+- **Date:** 2026-11-12
+- **Decision:** The user approved two changes in `internal/delivery` (AP-11 code), outside the [AP-13](../work-packages/ap-13-processing-presentation-integration.md) write scope. (1) `processing.LayoutRequest` gains `UnitIDs`, and Delivery materialization fills it with the Delivery's relevant Units when the Subscription has no explicit Layout, so the installation, Organization and Unit layout layers that AP-13 binds into the `LayoutResolver` apply to Deliveries. (2) `delivery.MessageFieldReader` exports the existing Delivery value reader for one Message projection without event fields, so the GUI card model renders a Layout with exactly the Delivery value semantics.
+- **Rationale:** The resolver request carried only the Layout ID and output kind, so no layer below the Subscription could reach Delivery rendering; a second value reader for cards would drift from the Delivery one that the card/Delivery parity case compares against.
+- **Consequences:** [AP-11 record](../execution/ap-11.md) follow-up with rerun evidence of `internal/delivery` and the `cmd/gopager` Delivery tests; [C-11](../contracts/c-11-processing-presentation.md#ap-13-binding-planning-before-coding) precedence binding; [docs/architecture.md](../../docs/architecture.md) Delivery section; the AP-13 record links this decision under Blockers and Deviations. No open AP's assignment changes.
+
+<a id="d-166"></a>
+## D-166 Retracted Processing results notify live views
+
+- **Status:** accepted
+- **Date:** 2026-11-12
+- **Decision:** After the Copilot review of the [AP-13](../work-packages/ap-13-processing-presentation-integration.md) pull request the user approved a new fact `processing.retracted` (producer `processing`, not deliverable, Message projection; `data` carries `messageId`, `messageTime`, `transmissionId`, `workflowId` and the retracted result IDs). Historical Reprocess appends it in the transaction that retracts results without publishing a replacement (the Workflow no longer selects the Transmission, or the re-run is not selected), and live Message views re-evaluate the Message on it. This extends the `internal/events` catalog and the live fact handling in `internal/readmodel`, outside the AP-13 write scope.
+- **Rationale:** Without a fact an open live stream kept withdrawn attributes, cards and filter matches until reload; a replacement publication already appends `processing.completed`.
+- **Consequences:** [C-08](../contracts/c-08-events-jobs.md) fact list, [docs/architecture.md](../../docs/architecture.md) Domain events, [docs/workflows.md](../../docs/workflows.md); follow-ups in the [AP-10](../execution/ap-10.md) record (live views) and the [AP-11](../execution/ap-11.md) record (catalog, fan-out ignores it); the AP-13 record links this decision under Blockers and Deviations. No open AP's assignment changes.

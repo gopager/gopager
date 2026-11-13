@@ -107,8 +107,11 @@ type Owner struct {
 	scope    ScopeAuthorizer
 	// unitAttributes is nil when previews capture no Unit attributes.
 	unitAttributes UnitAttributeOwner
-	mu             sync.Mutex
-	active         map[uuid.UUID]captured
+	// stored and access are nil when previews of stored Transmissions are unavailable.
+	stored StoredTransmissionReader
+	access TransmissionAccess
+	mu     sync.Mutex
+	active map[uuid.UUID]captured
 }
 
 type captured struct {
@@ -120,6 +123,8 @@ type captured struct {
 	units         map[uuid.UUID]units.Context
 	identity      processing.SourceIdentity
 	eligibleUnits []uuid.UUID
+	// stored is set for a preview of a stored Transmission.
+	stored *storedOrigin
 }
 
 // NewOwner returns an Owner. matcher and clock are required and an invalid-input
@@ -174,6 +179,19 @@ func (o *Owner) CaptureSyntheticPreview(ctx context.Context, tx platform.Transac
 	if err != nil {
 		return management.PreviewCapture{}, err
 	}
+	return o.captureInput(ctx, tx, workflow, definition, input, observed, nil)
+}
+
+// captureInput resolves a validated input against the current Network and Assignment context,
+// projects it and retains its captured context. Synthetic and stored previews share it, so a
+// stored sample is evaluated exactly like a synthetic one. A stored sample passes the Units its
+// targets are persisted as assigned to: when the fresh matching differs, an address rule changed
+// since intake and no correction has caught up, so the editor's check against the persisted
+// context would not hold for what is evaluated; the preview is refused as a revision conflict.
+func (o *Owner) captureInput(ctx context.Context, tx platform.TransactionContext,
+	workflow processing.WorkflowConfiguration, definition processing.Definition, input Input, observed time.Time,
+	persisted *[]*uuid.UUID,
+) (management.PreviewCapture, error) {
 	network, err := o.networks.ReadSyntheticNetwork(ctx, tx, input.NetworkID)
 	if err != nil {
 		return management.PreviewCapture{}, err
@@ -188,6 +206,9 @@ func (o *Owner) CaptureSyntheticPreview(ctx context.Context, tx platform.Transac
 	}
 	if matched.Revision <= 0 || len(matched.Resolutions) != len(input.Targets) {
 		return management.PreviewCapture{}, unavailable(errors.New("current target matcher returned incomplete context"))
+	}
+	if persisted != nil && !sameAssignedUnits(matched.Resolutions, *persisted) {
+		return management.PreviewCapture{}, authz.ErrRevisionConflict
 	}
 	var unitAttributes declarations.UnitAttributes
 	if o.unitAttributes != nil {
@@ -218,13 +239,6 @@ func (o *Owner) CaptureSyntheticPreview(ctx context.Context, tx platform.Transac
 		units: cloneUnits(matched.UnitContext), identity: identity, eligibleUnits: eligibleUnits}
 	o.mu.Unlock()
 	return management.PreviewCapture{Projection: projection, Scope: scope}, nil
-}
-
-// CaptureStoredPreview always fails as unavailable: previews of stored Transmissions are
-// not supported by the synthetic owner.
-func (o *Owner) CaptureStoredPreview(context.Context, platform.TransactionContext, authz.Authority,
-	processing.WorkflowConfiguration, uuid.UUID) (management.PreviewCapture, error) {
-	return management.PreviewCapture{}, unavailable(errors.New("stored Transmission owner unavailable"))
 }
 
 // ReleaseSyntheticPreview forgets the captured context for a synthetic TransmissionID.
@@ -292,6 +306,12 @@ func (o *Owner) CheckInstalledSource(ctx context.Context, tx platform.Transactio
 	for _, unitID := range unitIDs {
 		if err := o.scope.CheckSyntheticPreviewScope(ctx, tx, authority, binding.WorkflowID,
 			network.ID, unitID, now); err != nil {
+			return err
+		}
+	}
+	if record.stored != nil {
+		if err := o.checkStoredVisible(ctx, tx, authority, now, record.stored.message, record.stored.transmission,
+			record.stored.targets); err != nil {
 			return err
 		}
 	}

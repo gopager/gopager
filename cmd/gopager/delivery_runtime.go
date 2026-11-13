@@ -13,6 +13,7 @@ import (
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/persistence/ent/deliverystore"
 	"github.com/gopager/gopager/internal/persistence/ent/layoutstore"
+	"github.com/gopager/gopager/internal/persistence/ent/presentationstore"
 	"github.com/gopager/gopager/internal/processing/presentation"
 )
 
@@ -38,6 +39,9 @@ type deliveryRuntime struct {
 	deliveries    *delivery.Deliveries
 	layouts       *presentation.Service
 	fanOut        *delivery.FanOut
+	// layoutStore and presentation are the persisted Layouts and their layers.
+	layoutStore  *layoutstore.Store
+	presentation *presentationstore.Store
 }
 
 // composeDelivery returns the process's Delivery side, composing it on first use. It is called
@@ -54,21 +58,18 @@ func composeDelivery(c *core) (*deliveryRuntime, error) {
 	if err != nil {
 		return nil, err
 	}
-	layouts, err := layoutstore.New(c.store)
+	composition, err := composeLayouts(c)
 	if err != nil {
 		return nil, err
 	}
-	resolver, err := presentation.NewResolver(layouts, delivery.DefaultLayouts())
-	if err != nil {
-		return nil, err
-	}
+	layouts, layers, resolver := composition.layouts, composition.layers, composition.resolver
 	targets := c.deliveryConfig.targets
 	if targets == nil {
 		targets = delivery.UnavailableTargets{}
 	}
 	deps := delivery.Dependencies{Store: store, Instances: c.processing, Targets: targets, Layouts: resolver,
 		Projector: side.service, Fields: c.fields, Facts: c.facts, Authority: c.resolver}
-	runtime := &deliveryRuntime{deps: deps}
+	runtime := &deliveryRuntime{deps: deps, layoutStore: layouts, presentation: layers}
 	if runtime.subscriptions, err = delivery.NewSubscriptions(deps, c.store, c.resolver, c.store, c.receipts,
 		c.identity, c.deliveryConfig.limits); err != nil {
 		return nil, err
@@ -77,7 +78,8 @@ func composeDelivery(c *core) (*deliveryRuntime, error) {
 		c.deliveryConfig.limits); err != nil {
 		return nil, err
 	}
-	if runtime.layouts, err = presentation.NewService(c.store, c.resolver, c.store, layouts, c.receipts, c.fields); err != nil {
+	if runtime.layouts, err = presentation.NewService(c.store, c.resolver, c.store, layouts, c.receipts, c.fields,
+		presentation.WithReferenceGuard(layers)); err != nil {
 		return nil, err
 	}
 	if runtime.fanOut, err = delivery.NewFanOut(deps, c.store); err != nil {

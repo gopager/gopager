@@ -5,7 +5,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
@@ -37,12 +36,11 @@ const createOperation = "layout.create"
 // Service manages layouts. Layouts write no Domain event. Create it with NewService; it is safe
 // for concurrent use.
 type Service struct {
-	transactions identity.Transactions
-	resolver     identity.AuthorityResolver
-	clock        platform.Clock
-	store        Store
-	receipts     commands.Repository
-	fields       FieldRegistry
+	callerScope
+	store    Store
+	receipts commands.Repository
+	fields   FieldRegistry
+	guard    ReferenceGuard
 }
 
 // FieldRegistry supplies the field registry visible in a transaction.
@@ -57,19 +55,16 @@ type FieldRegistry interface {
 // layout definition may reference when it is saved. It fails with authz.ErrInvalidInput on a
 // missing dependency.
 func NewService(transactions identity.Transactions, resolver identity.AuthorityResolver, clock platform.Clock,
-	store Store, receipts commands.Repository, fields FieldRegistry) (*Service, error) {
+	store Store, receipts commands.Repository, fields FieldRegistry, options ...ServiceOption) (*Service, error) {
 	if transactions == nil || resolver == nil || clock == nil || store == nil || receipts == nil || fields == nil {
 		return nil, authz.ErrInvalidInput
 	}
-	return &Service{transactions: transactions, resolver: resolver, clock: clock, store: store,
-		receipts: receipts, fields: fields}, nil
-}
-
-// caller is what a layout operation needs to know about its caller.
-type caller struct {
-	principal uuid.UUID
-	guest     bool
-	authority authz.Authority
+	service := &Service{callerScope: callerScope{transactions: transactions, resolver: resolver, clock: clock},
+		store: store, receipts: receipts, fields: fields}
+	for _, option := range options {
+		option(service)
+	}
+	return service, nil
 }
 
 // visibility returns the Agencies whose layouts the caller may see; authz.ErrForbidden when
@@ -78,36 +73,9 @@ func (c caller) visibility() (authz.AgencyVisibility, error) {
 	return authz.VisibleAgencies(c.authority, readerActions, false)
 }
 
-// within resolves the caller and runs operation in the same transaction.
-func (s *Service) within(ctx context.Context, proof identity.Proof, mutation bool, check func(identity.Authentication) error,
-	operation func(tx platform.TransactionContext, who caller, now time.Time) error) error {
-	var authentication identity.Authentication
-	remember := func(value identity.Authentication) error {
-		authentication = value
-		if check != nil {
-			return check(value)
-		}
-		return nil
-	}
-	return identity.WithAuthority(ctx, s.transactions, s.clock, s.resolver, proof, mutation, remember,
-		func(tx platform.TransactionContext, authority authz.Authority, now time.Time) error {
-			// PostgreSQL keeps microseconds; a response must equal what a later read returns.
-			now = now.Truncate(time.Microsecond)
-			principal, err := uuid.Parse(authority.PrincipalID)
-			if err != nil || principal == uuid.Nil {
-				return authz.ErrForbidden
-			}
-			who := caller{principal: principal, guest: authentication.Kind == identity.AnonymousProof, authority: authority}
-			if mutation && who.guest {
-				return identity.ErrLoginRequired
-			}
-			return operation(tx, who, now)
-		})
-}
-
 // validateName requires valid UTF-8 without NUL, non-blank after trimming and at most 256 bytes.
 func validateName(name string) error {
-	if !utf8.ValidString(name) || strings.ContainsRune(name, 0) || strings.TrimSpace(name) == "" || len(name) > maxNameBytes {
+	if !validText(name) || strings.TrimSpace(name) == "" || len(name) > maxNameBytes {
 		return authz.ErrInvalidInput
 	}
 	return nil
@@ -411,7 +379,8 @@ func (s *Service) Update(ctx context.Context, proof identity.Proof, id uuid.UUID
 }
 
 // Delete removes a layout at the expected revision and returns its ID with the revision it
-// reached. A layout that a subscription references is authz.ErrRevisionConflict.
+// reached. A layout that a subscription, a layout assignment or the installation default references
+// is authz.ErrRevisionConflict.
 func (s *Service) Delete(ctx context.Context, proof identity.Proof, id uuid.UUID, expected int64,
 	check func(identity.Authentication) error) (commands.Result, error) {
 	if id == uuid.Nil || expected <= 0 {
@@ -428,6 +397,9 @@ func (s *Service) Delete(ctx context.Context, proof identity.Proof, id uuid.UUID
 		}
 		next, err := commands.NextRevision(record.Revision, expected)
 		if err != nil {
+			return err
+		}
+		if err := s.checkUnreferenced(tx.Context(), tx, id); err != nil {
 			return err
 		}
 		if err := s.store.Delete(tx.Context(), tx, id, expected); err != nil {

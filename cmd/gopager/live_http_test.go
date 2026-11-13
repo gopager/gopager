@@ -10,8 +10,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -22,6 +24,7 @@ import (
 	"github.com/gopager/gopager/internal/fields"
 	"github.com/gopager/gopager/internal/identity"
 	"github.com/gopager/gopager/internal/platform"
+	"github.com/gopager/gopager/internal/platform/postgres"
 	"github.com/gopager/gopager/internal/processing"
 	"github.com/gopager/gopager/internal/readmodel"
 )
@@ -130,6 +133,33 @@ type sseEvent struct{ Event, ID, Data string }
 type sseClient struct {
 	events    chan sseEvent
 	heartbeat chan sseEvent
+
+	// received records every event as it arrived, so that a failed assertion can show the whole
+	// stream, including the fact position each frame ID carries.
+	mu       sync.Mutex
+	received []sseEvent
+}
+
+// record keeps an arrived event for history.
+func (c *sseClient) record(event sseEvent) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.received = append(c.received, event)
+}
+
+// history lists the events received so far as "event id messageId" lines.
+func (c *sseClient) history() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var out strings.Builder
+	for _, event := range c.received {
+		var data struct {
+			MessageID string `json:"messageId"`
+		}
+		_ = json.Unmarshal([]byte(event.Data), &data)
+		fmt.Fprintf(&out, "\n  %s %s %s", event.Event, event.ID, data.MessageID)
+	}
+	return out.String()
 }
 
 // openStream opens the stream and requires the 200 event-stream response.
@@ -181,6 +211,7 @@ func (f *liveFixture) tryStream(bearer, query string, headers ...string) (*sseCl
 			line = strings.TrimSuffix(line, "\n")
 			switch {
 			case line == "":
+				client.record(current)
 				if current.Event == "heartbeat" {
 					select {
 					case client.heartbeat <- current:
@@ -236,7 +267,7 @@ func (c *sseClient) quiet(t *testing.T) {
 	select {
 	case event, open := <-c.events:
 		if open {
-			t.Fatalf("unexpected event %+v", event)
+			t.Fatalf("unexpected event %+v; received:%s", event, c.history())
 		}
 		t.Fatal("stream closed unexpectedly")
 	case <-time.After(600 * time.Millisecond):
@@ -264,7 +295,7 @@ func (c *sseClient) expect(t *testing.T, kind string, message uuid.UUID) sseEven
 		MessageID string `json:"messageId"`
 	}
 	if event.Event != kind || json.Unmarshal([]byte(event.Data), &data) != nil || data.MessageID != message.String() {
-		t.Fatalf("event %+v, want %s of %s", event, kind, message)
+		t.Fatalf("event %+v, want %s of %s; received:%s", event, kind, message, c.history())
 	}
 	return event
 }
@@ -412,6 +443,18 @@ func TestLiveStreamRemoveBasis(t *testing.T) {
 				MessageID: message, MessageTime: base.Add(5 * time.Minute), DefinitionVersionID: uuid.New(), SourceRevision: 1,
 				ContextRevision: 1, OccurredAt: now, Outputs: fields.New().Declarations(fields.ScopeMessage, false),
 				Result: processing.Evaluation{Selected: true, Fields: map[string]map[string]processing.FieldValue{}}})
+			return err
+		})
+		stream.expect(t, "upsert", message)
+	})
+	t.Run("a retraction re-evaluates the Message", func(t *testing.T) {
+		message := f.newMessage(base.Add(6*time.Minute), "retracted", a)
+		stream.expect(t, "upsert", message)
+		now := microsecondNow()
+		f.appendFact(func(ctx context.Context, tx platform.TransactionContext) error {
+			_, err := f.core.facts.AppendProcessingRetraction(ctx, tx, events.ProcessingRetractionFact{
+				ID: uuid.New(), TransmissionID: uuid.New(), MessageID: message, MessageTime: base.Add(6 * time.Minute),
+				WorkflowID: uuid.New(), ResultIDs: []uuid.UUID{uuid.New()}, ResultRevision: 2, OccurredAt: now})
 			return err
 		})
 		stream.expect(t, "upsert", message)
@@ -637,13 +680,40 @@ func TestLiveStreamMergesResynchronizeWithoutDisclosingIDs(t *testing.T) {
 	base := microsecondNow().Add(-time.Hour)
 	reader, _ := f.caller([]string{"message.read"}, authz.Scope{Kind: "unit", References: []string{a.String()}}, []string{"payload", "unit"})
 	query := "?from=" + rfc(base.Add(-time.Hour))
+	// A stream may replay the creation of Messages committed shortly before its position (the
+	// position trails transactions still running anywhere in the cluster); such an upsert of an
+	// already loaded Message is harmless and skipped, every other event is checked.
+	// Only Messages the reader can see (Unit A) are skipped, so a disclosed hidden Message still fails.
+	known := map[uuid.UUID]bool{}
+	message := func(at time.Time, text string, unit uuid.UUID) uuid.UUID {
+		id := f.newMessage(at, text, unit)
+		known[id] = unit == a
+		return id
+	}
+	// next returns the next event other than a replayed upsert of a known Message; want is never
+	// skipped.
+	next := func(t *testing.T, stream *sseClient, want ...uuid.UUID) sseEvent {
+		t.Helper()
+		for {
+			event := stream.next(t)
+			var data struct {
+				MessageID uuid.UUID `json:"messageId"`
+			}
+			if event.Event != "upsert" || json.Unmarshal([]byte(event.Data), &data) != nil ||
+				!known[data.MessageID] || slices.Contains(want, data.MessageID) {
+				return event
+			}
+			// One replay per Message is tolerated; a second upsert of it is returned and fails.
+			known[data.MessageID] = false
+		}
+	}
 	open := func() *sseClient {
 		t.Helper()
 		return f.openStream(reader, query+"&position="+f.feed(reader, query, http.StatusOK).Data.Position)
 	}
 	expectResync := func(t *testing.T, stream *sseClient, hidden ...uuid.UUID) {
 		t.Helper()
-		event := stream.next(t)
+		event := next(t, stream)
 		if event.Event != "resync-required" {
 			t.Fatalf("event %+v, want resync-required", event)
 		}
@@ -656,33 +726,44 @@ func TestLiveStreamMergesResynchronizeWithoutDisclosingIDs(t *testing.T) {
 	}
 
 	t.Run("a visible merge resynchronizes", func(t *testing.T) {
-		survivor := f.newMessage(base, "survivor", a)
-		absorbed := f.newMessage(base.Add(time.Minute), "absorbed", a)
+		survivor := message(base, "survivor", a)
+		absorbed := message(base.Add(time.Minute), "absorbed", a)
 		stream := open()
 		f.appendIntake(f.mergeInto(survivor, absorbed, base))
 		expectResync(t, stream)
 	})
 	t.Run("a hidden absorbed Message is never named", func(t *testing.T) {
-		survivor := f.newMessage(base.Add(2*time.Minute), "readable", a)
-		hidden := f.newMessage(base.Add(3*time.Minute), "hidden", b)
+		survivor := message(base.Add(2*time.Minute), "readable", a)
+		hidden := message(base.Add(3*time.Minute), "hidden", b)
 		stream := open()
 		f.appendIntake(f.mergeInto(survivor, hidden, base.Add(2*time.Minute)))
 		expectResync(t, stream, hidden)
 	})
 	t.Run("a merge of hidden Messages yields nothing", func(t *testing.T) {
-		survivor := f.newMessage(base.Add(4*time.Minute), "hidden survivor", b)
-		absorbed := f.newMessage(base.Add(5*time.Minute), "hidden absorbed", c)
+		survivor := message(base.Add(4*time.Minute), "hidden survivor", b)
+		absorbed := message(base.Add(5*time.Minute), "hidden absorbed", c)
 		stream := open()
 		f.appendIntake(f.mergeInto(survivor, absorbed, base.Add(4*time.Minute)))
-		stream.quiet(t)
-		visible := f.newMessage(base.Add(6*time.Minute), "still live", a)
-		stream.expect(t, "upsert", visible)
+		visible := message(base.Add(6*time.Minute), "still live", a)
+		if event := next(t, stream, visible); event.Event != "upsert" || !strings.Contains(event.Data, visible.String()) {
+			t.Fatalf("event %+v, want only the upsert of %s after a hidden merge", event, visible)
+		}
 	})
 	t.Run("a chain of merges resolves to the final survivor", func(t *testing.T) {
-		loaded := f.newMessage(base.Add(7*time.Minute), "loaded", a)
-		middle := f.newMessage(base.Add(8*time.Minute), "middle", b)
-		final := f.newMessage(base.Add(9*time.Minute), "final", b)
+		// A transaction left open across the setup makes the stream position trail the
+		// creations, so the stream replays the loaded Message before the merges arrive.
+		release := holdTransaction(t, f.store)
+		defer release()
+		loaded := message(base.Add(7*time.Minute), "loaded", a)
+		middle := message(base.Add(8*time.Minute), "middle", b)
+		final := message(base.Add(9*time.Minute), "final", b)
 		stream := open()
+		release()
+		// The marker wakes the stream; its batch also replays the creations held back so far.
+		marker := message(base.Add(10*time.Minute), "marker", a)
+		if event := next(t, stream, marker); event.Event != "upsert" || !strings.Contains(event.Data, marker.String()) {
+			t.Fatalf("event %+v, want the upsert of the marker %s", event, marker)
+		}
 		// The middle Message absorbs the loaded one and is itself absorbed before the stream reads
 		// either fact, so the first fact's survivor no longer exists.
 		first := f.mergeInto(middle, loaded, base.Add(7*time.Minute))
@@ -732,4 +813,37 @@ func (f *liveFixture) tokenKey() []byte {
 		f.t.Fatal(err)
 	}
 	return key
+}
+
+// holdTransaction keeps a transaction with an assigned ID open until the returned function is
+// called (at most once has an effect), so that snapshots taken meanwhile have it as their xmin.
+func holdTransaction(t *testing.T, store *postgres.Store) func() {
+	t.Helper()
+	started, done := make(chan error, 1), make(chan struct{})
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		var once sync.Once
+		_ = store.WithinTransaction(context.Background(), func(tx platform.TransactionContext) error {
+			executor, err := store.Resolve(tx)
+			if err == nil {
+				_, err = executor.ExecContext(tx.Context(), `SELECT pg_current_xact_id()`)
+			}
+			once.Do(func() { started <- err })
+			<-done
+			return errors.New("release the held transaction")
+		})
+	}()
+	var once sync.Once
+	release := func() {
+		once.Do(func() {
+			close(done)
+			<-finished
+		})
+	}
+	if err := <-started; err != nil {
+		release()
+		t.Fatal(err)
+	}
+	return release
 }

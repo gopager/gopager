@@ -263,13 +263,22 @@ func (c Candidate) Complete(lease CandidateLease, selected bool, primaryNow time
 	return c, nil
 }
 
-// Fail records a bounded safe error and schedules only remaining automatic attempts.
-// The caller derives retryability from the actual failure, never from a public request.
-func (c Candidate) Fail(lease CandidateLease, code platform.ErrorCode, retryable bool, primaryNow time.Time) (Candidate, error) {
+// Fail records a bounded safe error and schedules only remaining automatic attempts. step is the
+// ID of the failing Workflow step, or empty when the failure belongs to no step; an ID longer than
+// MaxFailureStepBytes is not stored. The caller derives retryability from the actual failure,
+// never from a public request.
+func (c Candidate) Fail(lease CandidateLease, code platform.ErrorCode, step string, retryable bool, primaryNow time.Time) (Candidate, error) {
 	if err := c.CheckLease(lease, primaryNow); err != nil {
 		return Candidate{}, err
 	}
-	return c.recordFailure(code, retryable, primaryNow)
+	next, err := c.recordFailure(code, retryable, primaryNow)
+	if err != nil {
+		return Candidate{}, err
+	}
+	if step != "" && len(step) <= MaxFailureStepBytes && validLocalName(step) {
+		next.FailureStep = &step
+	}
+	return next, nil
 }
 
 // RecoverExpired fences a lost pure-compute claim and schedules only remaining automatic attempts.
@@ -327,7 +336,8 @@ func (c Candidate) recordFailure(code platform.ErrorCode, retryable bool, primar
 
 // CandidateFailureRepository records failures only under a current unexpired claim.
 type CandidateFailureRepository interface {
-	FailCandidate(context.Context, platform.TransactionContext, CandidateLease, platform.ErrorCode, bool) (Candidate, error)
+	FailCandidate(ctx context.Context, tx platform.TransactionContext, lease CandidateLease, code platform.ErrorCode,
+		step string, retryable bool) (Candidate, error)
 }
 
 // CandidateRecoveryRepository recovers expired pure computation after current source/role checks.
@@ -353,7 +363,10 @@ type CandidateWorkRepository interface {
 }
 
 // Supersede permanently ends this execution revision without deleting private evidence or attempts.
-// Only an unpublished candidate may be superseded; a changed current selection uses Reselect.
+// It checks the expected revision and accepts any candidate state, including a published one, because
+// reconciliation supersedes a candidate whose binding is no longer current; a published result stays
+// attached to its Message (see docs/workflows.md). A candidate that is already superseded is returned
+// unchanged. A changed current selection uses Reselect.
 func (c Candidate) Supersede(expected int64, primaryNow time.Time) (Candidate, error) {
 	if err := c.Validate(); err != nil {
 		return Candidate{}, err

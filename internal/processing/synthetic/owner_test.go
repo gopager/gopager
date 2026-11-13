@@ -233,7 +233,7 @@ func TestSyntheticOwnerCapturesEveryFieldRegardlessOfEditorRightsAndFailsClosedW
 		t.Fatalf("missing Network owner was not explicit: %v", err)
 	}
 	_, err = owner.CaptureStoredPreview(context.Background(), tx, authority,
-		testWorkflow(nil), uuid.New())
+		testWorkflow(nil), processing.Definition{}, uuid.New())
 	if platform.FailureCode(err) != platform.CodeAuthorityUnavailable {
 		t.Fatalf("stored source was substituted: %v", err)
 	}

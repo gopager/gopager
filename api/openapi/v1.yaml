@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: GoPager API
-  version: 1.12.0
+  version: 1.13.0
   description: |
     GoPager application API. Human guide: docs/http-api.md.
 
@@ -80,6 +80,14 @@ tags:
     means the provider accepted the input, not that anyone read it; an acceptance cannot be recalled.
 - name: Layouts
   description: Named, versioned arrangements of fields that Subscriptions render Domain events with.
+- name: Layout assignments
+  description: Layouts assigned to Units and Organizations per output kind. The Layout a rendering uses for a set of
+    Units comes from these layers, then the installation default, then the built-in default.
+- name: Installation
+  description: The installation title, notice banner and default Layout. Reading is public.
+- name: Preferences
+  description: The calling account's own display preferences (locale, time zone, time gap). Only an interactive
+    account acting through its own Session may use them.
 - name: Attribute schemas
   description: Administrator-defined, typed field declarations for Message and Unit attributes, assigned to Agencies.
 paths:
@@ -3354,10 +3362,17 @@ paths:
         fields the caller may read. If the Workflow changes during evaluation the request fails with
         409 `REVISION_CONFLICT`. A `syntheticJson` input is evaluated against the current Network named
         by its `networkId`: an unknown Network is 404 `NOT_FOUND`; a deleted Network, or one whose
-        Protocol differs from the input, is 503 `AUTHORITY_UNAVAILABLE`. `storedTransmissionId` is not
-        supported and returns 503 `AUTHORITY_UNAVAILABLE` after validation and authorization.
+        Protocol differs from the input, is 503 `AUTHORITY_UNAVAILABLE`. `storedTransmissionId` evaluates
+        the stored Payload, observation time, Network and original targets of an accepted Transmission
+        with the current matching and Unit attributes, like a synthetic sample. The caller must be able
+        to read the Transmission (a supporting readable Transmission of its Message, else 404
+        `NOT_FOUND`) and every field group the projection carries and the definition reads (else 403
+        `FORBIDDEN`; also 403 when an original target of the Transmission is not visible to the caller), so a
+        preview never shows a hidden field; nothing is written.
         An `installed` step is called in preview mode; a plugin whose manifest does not declare
-        `supportsPreview` is not called and the request is 503 `AUTHORITY_UNAVAILABLE`.
+        `supportsPreview` is not called and its step fails with `AUTHORITY_UNAVAILABLE`. A failed
+        evaluation (a failing step, a processing limit) is answered with 200 and a `failure` instead of
+        an evaluation; request, authorization and infrastructure errors stay HTTP errors.
          The body is limited to 1 MiB and is decoded strictly: unknown fields, duplicate object keys and trailing data are 400.
       security:
       - sessionCookie: []
@@ -3542,6 +3557,132 @@ paths:
           $ref: '#/components/responses/RevisionConflict'
         '413':
           $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /workflows/{id}/reprocess:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    post:
+      operationId: requestWorkflowReprocess
+      tags:
+      - Workflows
+      summary: Request a historical Reprocess
+      description: |
+        Requires `workflow.reprocess` over the whole Workflow scope. Asks the worker role to judge the
+        Transmissions whose Message time lies in the half-open range `[messageTimeFrom, messageTimeTo)`
+        again with the active version, current access, targets and Workflow selection. `versionId` must
+        be the active version and `expectedRevision` the Workflow revision; otherwise, or when the
+        Workflow is disabled, the answer is 409 `REVISION_CONFLICT`. An empty or reversed range or a
+        malformed time is 400 `INVALID_INPUT`. The request advances the Workflow revision and fixes a
+        cutoff: only Transmissions accepted at or before it are scanned. Results replaced by the run
+        are retracted and not sent again; the replacement facts carry replay mode `reprocess`.
+        The body is limited to 1 MiB and is decoded strictly: unknown fields, duplicate object keys and trailing data are 400.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReprocessRequestBody'
+      responses:
+        '202':
+          description: Request stored; the worker role runs it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReprocessResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /workflows/{id}/reprocesses:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    get:
+      operationId: listWorkflowReprocesses
+      tags:
+      - Workflows
+      summary: List Reprocess requests
+      description: Requires `workflow.read` on the Workflow. Newest first.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      parameters:
+      - $ref: '#/components/parameters/Offset'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of requests.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReprocessPageResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /workflows/{id}/reprocesses/{request}:
+    parameters:
+    - $ref: '#/components/parameters/ID'
+    - name: request
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Reprocess request ID.
+    get:
+      operationId: readWorkflowReprocess
+      tags:
+      - Workflows
+      summary: Read a Reprocess request
+      description: Requires `workflow.read` on the Workflow. Reports the progress of the run.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      responses:
+        '200':
+          description: The request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReprocessResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
         '503':
@@ -4668,6 +4809,36 @@ paths:
           $ref: '#/components/responses/InternalError'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /layouts/editor-metadata:
+    get:
+      operationId: readLayoutEditorMetadata
+      tags:
+      - Layouts
+      summary: Read what a layout editor may offer
+      description: |
+        Requires `presentation.manage`, `subscription.manage-own` or `subscription.manage-global` (any scope); otherwise
+        403. Returns the block kinds with their allowed and required properties, the output kinds, the bounds a
+        definition and its rendering obey, and the registry fields of scope `delivery` that the caller's field
+        permissions let them read, sorted by path.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      responses:
+        '200':
+          description: The editor metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LayoutEditorMetadataResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /layouts/{id}:
     parameters:
     - $ref: '#/components/parameters/ID'
@@ -4751,7 +4922,7 @@ paths:
       summary: Delete a layout
       description: |
         Requires `presentation.manage` in every Agency of the layout. Removes the layout and its versions at `expectedRevision`. A layout that a
-        Subscription still references is 409 `REVISION_CONFLICT`, like a stale revision.
+        Subscription, a layout assignment or the installation default still references is 409 `REVISION_CONFLICT`, like a stale revision.
       security:
       - sessionCookie: []
         csrfToken: []
@@ -4816,6 +4987,285 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /layout-assignments:
+    get:
+      operationId: listLayoutAssignments
+      tags:
+      - Layout assignments
+      summary: List layout assignments
+      description: |
+        Requires `presentation.manage` somewhere (else 403) and lists only the assignments the caller may change: for a
+        Unit, `presentation.manage` on the Unit; for an Organization, in every Agency of the assigned Layout. Ordered by
+        scope kind, scope ID and output kind. Offset paging; `scopeKind` and `scopeId` filter, any other query
+        parameter is 400.
+      security:
+      - sessionCookie: []
+      - accessKey: []
+      - {}
+      parameters:
+      - name: scopeKind
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/LayoutAssignmentScopeKind'
+      - name: scopeId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Offset'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A page of layout assignments.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LayoutAssignmentPageResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /layout-assignments/{scopeKind}/{scopeId}/{outputKind}:
+    parameters:
+    - name: scopeKind
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/LayoutAssignmentScopeKind'
+    - name: scopeId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Unit or Organization ID (not the nil UUID); a malformed value is 400.
+    - name: outputKind
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/LayoutOutputKind'
+    put:
+      operationId: putLayoutAssignment
+      tags:
+      - Layout assignments
+      summary: Assign a layout to a Unit or Organization
+      description: |
+        Creates the assignment with `expectedRevision` `"0"` (or absent) and replaces it with the current revision; a
+        stale revision, or a create over an existing assignment, is 409 `REVISION_CONFLICT`. The layout must exist
+        and have the path's output kind, and for a Unit it must be assigned to the Unit's Agency; otherwise 400
+        `INVALID_INPUT` with `parameters.field` `layoutId`. Needs `presentation.manage` on the Unit, or in every Agency
+        of the layout for an Organization (403 otherwise). An unknown or deleted Unit or Organization is 404. Replacing
+        needs the right for the layout currently assigned too.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PutLayoutAssignmentRequest'
+      responses:
+        '200':
+          description: The assignment at its new revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LayoutAssignmentResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    delete:
+      operationId: deleteLayoutAssignment
+      tags:
+      - Layout assignments
+      summary: Remove a layout assignment
+      description: |
+        Removes the assignment at `expectedRevision` (stale: 409 `REVISION_CONFLICT`); an absent assignment is 404.
+        Needs the same right as replacing it.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteRequest'
+      responses:
+        '200':
+          description: The scope ID and the revision the assignment reached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /installation:
+    get:
+      operationId: readInstallation
+      tags:
+      - Installation
+      summary: Read the installation settings
+      description: |
+        Public: needs no credential, so signed-out visitors and the guest can show the title and banner. A credential
+        sent with the request is ignored.
+      security: []
+      responses:
+        '200':
+          description: The installation settings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallationResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    put:
+      operationId: updateInstallation
+      tags:
+      - Installation
+      summary: Replace the installation settings
+      description: |
+        Requires `notice.manage` (scope `all`). Replaces every field at `expectedRevision` (stale: 409
+        `REVISION_CONFLICT`); a missing `banner`, `severity` or `defaultLayoutId` clears it. The banner and severity are
+        set together. The default layout must exist (400 `INVALID_INPUT`, `parameters.field` `defaultLayoutId`). Any
+        other invalid field is named in `parameters.field` as well. A banner change appends no fact.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      - accessKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateInstallationRequest'
+      responses:
+        '200':
+          description: The settings at their new revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallationResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /me/preferences:
+    get:
+      operationId: readPreferences
+      tags:
+      - Preferences
+      summary: Read the caller's preferences
+      description: |
+        Returns the stored preferences, or the defaults at revision `"0"` when none were saved. Only an interactive
+        account acting through its own Session with `preference.manage-own` may read them: an access key or a
+        technical account is 403, the anonymous guest 401.
+      security:
+      - sessionCookie: []
+      responses:
+        '200':
+          description: The preferences.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreferencesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    put:
+      operationId: updatePreferences
+      tags:
+      - Preferences
+      summary: Replace the caller's preferences
+      description: |
+        Replaces all values at `expectedRevision` (`"0"` or absent for the first save; stale: 409 `REVISION_CONFLICT`).
+        An invalid value is 400 `INVALID_INPUT` with `parameters.field` `locale`, `timeZone` or `timeGapMinutes`. The
+        same session and right requirements as reading apply.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePreferencesRequest'
+      responses:
+        '200':
+          description: The preferences at their new revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreferencesResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/RevisionConflict'
+        '413':
+          $ref: '#/components/responses/ResourceLimit'
         '500':
           $ref: '#/components/responses/InternalError'
         '503':
@@ -8503,7 +8953,39 @@ components:
         schemaVersion:
           $ref: '#/components/schemas/SchemaVersion'
         data:
-          $ref: '#/components/schemas/Evaluation'
+          oneOf:
+          - $ref: '#/components/schemas/Evaluation'
+          - $ref: '#/components/schemas/PreviewFailureResult'
+    PreviewFailureResult:
+      type: object
+      description: The explanation of a preview whose evaluation failed. It carries no raw error text.
+      required:
+      - failure
+      properties:
+        failure:
+          type: object
+          required:
+          - code
+          - reason
+          properties:
+            code:
+              type: string
+              description: Error code of the failure, for example `INVALID_INPUT` or `RESOURCE_LIMIT`.
+            reason:
+              $ref: '#/components/schemas/ProcessingFailureReason'
+            stepId:
+              type: string
+              description: The ID of the failing Workflow step, when a step failed.
+    ProcessingFailureReason:
+      type: string
+      description: The text key `processing.<reason>` explains a failure with. `resource-limit` for `RESOURCE_LIMIT`;
+        `capability-unavailable` for `AUTHORITY_UNAVAILABLE`, `DEPENDENCY_UNAVAILABLE` and `INCOMPATIBLE_VERSION`;
+        `conversion-failed` for `INVALID_INPUT`; `evaluation-failed` otherwise.
+      enum:
+      - resource-limit
+      - capability-unavailable
+      - conversion-failed
+      - evaluation-failed
     Candidate:
       type: object
       required:
@@ -8538,6 +9020,11 @@ components:
           - AUTHORITY_UNAVAILABLE
           - INTERNAL_ERROR
           description: Present only for some `failed` candidates.
+        failureReason:
+          $ref: '#/components/schemas/ProcessingFailureReason'
+        failureStep:
+          type: string
+          description: The ID of the Workflow step that failed, when a step did. Present only with `failureCode`.
         updatedAt:
           type: string
           format: date-time
@@ -8602,6 +9089,39 @@ components:
         networkUnresolved:
           type: boolean
           description: Present (true) only where `network.read` reaches the Network's Agency.
+        card:
+          $ref: '#/components/schemas/MessageCard'
+    MessageCard:
+      type: object
+      description: The GUI card of the Message, the `json` rendering of the Layout that applies to it. It is built
+        from what the caller may read and never shows more than the rest of the item; a field the caller cannot read
+        is absent from it. Present in feed items, details and live `upsert` frames.
+      required:
+      - layoutVersion
+      - layoutConflict
+      - fallback
+      - items
+      properties:
+        layoutId:
+          type: string
+          format: uuid
+          description: The Layout the card was rendered with; absent for the built-in default.
+        layoutVersion:
+          type: integer
+          format: int64
+          description: The revision of the Layout, 0 for the built-in default.
+        layoutConflict:
+          type: boolean
+          description: The Message's Units are assigned different Layouts, so the installation default applies.
+        fallback:
+          type: boolean
+          description: The chosen Layout could not render for this caller, so the built-in default was rendered.
+        items:
+          type: array
+          description: The ordered items of the rendering, as a Delivery with a `json` Layout renders them.
+          items:
+            type: object
+            additionalProperties: true
     MessageUnit:
       type: object
       required:
@@ -9241,6 +9761,132 @@ components:
               format: uuid
             revision:
               $ref: '#/components/schemas/Revision'
+    ReprocessRequestBody:
+      type: object
+      description: '`expectedRevision` is the Workflow revision; `versionId` must be the active version.'
+      required:
+      - schemaVersion
+      - versionId
+      - expectedRevision
+      - messageTimeFrom
+      - messageTimeTo
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        versionId:
+          type: string
+          format: uuid
+        expectedRevision:
+          $ref: '#/components/schemas/Revision'
+        messageTimeFrom:
+          type: string
+          format: date-time
+          description: Inclusive start of the Message-time range.
+        messageTimeTo:
+          type: string
+          format: date-time
+          description: Exclusive end of the Message-time range; later than `messageTimeFrom`.
+      additionalProperties: false
+    Reprocess:
+      type: object
+      required:
+      - id
+      - workflowId
+      - versionId
+      - messageTimeFrom
+      - messageTimeTo
+      - cutoffAt
+      - state
+      - scanned
+      - readmitted
+      - retracted
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        workflowId:
+          type: string
+          format: uuid
+        versionId:
+          type: string
+          format: uuid
+        messageTimeFrom:
+          type: string
+          format: date-time
+        messageTimeTo:
+          type: string
+          format: date-time
+        cutoffAt:
+          type: string
+          format: date-time
+          description: Primary-clock time of the request; later accepted Transmissions are not scanned.
+        state:
+          type: string
+          enum:
+          - pending
+          - running
+          - completed
+          - superseded
+          - failed
+          description: '`superseded` means the Workflow changed after the request; `failed` that a step failed permanently or kept failing for 20 consecutive attempts (see `failureCode`).'
+        scanned:
+          type: integer
+          minimum: 0
+          description: Transmissions handled so far, each counted once. A Transmission the Workflow already processed as fresh is counted here but not in `readmitted` or `retracted`.
+        readmitted:
+          type: integer
+          minimum: 0
+          description: Transmissions counted once each, at most one per Transmission, that had current candidates of the Workflow marked for replacement. Not a count of candidates.
+        retracted:
+          type: integer
+          minimum: 0
+          description: Published results withdrawn because the Workflow no longer selects the Transmission. Counts results, not Transmissions, so one Transmission can contribute several.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        failureCode:
+          type: string
+          description: Code of the last failed step. Present while the request retries after a failure and kept when it ends `failed`; absent when the last step succeeded.
+        attempts:
+          type: integer
+          minimum: 0
+          description: Consecutive failed steps; 0 when the last step succeeded. The request ends `failed` at 20.
+    ReprocessResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          $ref: '#/components/schemas/Reprocess'
+    ReprocessPageResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          type: object
+          required:
+          - items
+          - total
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Reprocess'
+            total:
+              type: integer
+              minimum: 0
     ProvisionedArtifact:
       type: object
       required:
@@ -10576,6 +11222,322 @@ components:
             total:
               type: integer
               minimum: 0
+    LayoutEditorMetadataResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          $ref: '#/components/schemas/LayoutEditorMetadata'
+    LayoutEditorMetadata:
+      type: object
+      required:
+      - blockKinds
+      - outputKinds
+      - bounds
+      - fields
+      properties:
+        blockKinds:
+          type: array
+          items:
+            type: object
+            required:
+            - kind
+            - properties
+            - required
+            properties:
+              kind:
+                type: string
+                enum:
+                - chip
+                - conditional
+                - fallback
+                - field
+                - link
+                - section
+                - text
+              properties:
+                type: array
+                description: The block properties the kind allows, sorted.
+                items:
+                  type: string
+              required:
+                type: array
+                description: The properties that must be present, a subset of `properties`.
+                items:
+                  type: string
+        outputKinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/LayoutOutputKind'
+        bounds:
+          type: object
+          description: The limits a definition and its rendering obey; sizes are in bytes.
+          required:
+          - blocks
+          - depth
+          - literalBytes
+          - labelBytes
+          - templateBytes
+          - urlFields
+          - fallbackMin
+          - fallbackMax
+          - outputBytes
+          properties:
+            blocks:
+              type: integer
+            depth:
+              type: integer
+            literalBytes:
+              type: integer
+            labelBytes:
+              type: integer
+            templateBytes:
+              type: integer
+            urlFields:
+              type: integer
+            fallbackMin:
+              type: integer
+            fallbackMax:
+              type: integer
+            outputBytes:
+              type: integer
+        fields:
+          type: array
+          description: The registry fields of scope `delivery` the caller may read, sorted by path.
+          items:
+            type: object
+            required:
+            - ref
+            - type
+            - label
+            - deprecated
+            properties:
+              ref:
+                $ref: '#/components/schemas/DeliveryFieldRef'
+              type:
+                $ref: '#/components/schemas/FieldSchema'
+              group:
+                type: string
+                description: The field group a reader needs; absent when no field permission is needed.
+              label:
+                type: string
+              icon:
+                type: string
+              deprecated:
+                type: boolean
+                description: Still renders in saved layouts but cannot be referenced in new ones.
+    LayoutAssignmentScopeKind:
+      type: string
+      enum:
+      - unit
+      - organization
+    LayoutAssignment:
+      type: object
+      required:
+      - scopeKind
+      - scopeId
+      - outputKind
+      - layoutId
+      - revision
+      - updatedAt
+      properties:
+        scopeKind:
+          $ref: '#/components/schemas/LayoutAssignmentScopeKind'
+        scopeId:
+          type: string
+          format: uuid
+        outputKind:
+          $ref: '#/components/schemas/LayoutOutputKind'
+        layoutId:
+          type: string
+          format: uuid
+        revision:
+          $ref: '#/components/schemas/Revision'
+        updatedAt:
+          type: string
+          format: date-time
+    LayoutAssignmentResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          $ref: '#/components/schemas/LayoutAssignment'
+    LayoutAssignmentPageResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          type: object
+          required:
+          - items
+          - total
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/LayoutAssignment'
+            total:
+              type: integer
+              minimum: 0
+    PutLayoutAssignmentRequest:
+      type: object
+      required:
+      - schemaVersion
+      - layoutId
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        expectedRevision:
+          type: string
+          pattern: ^(0|[1-9][0-9]*)$
+          description: '`"0"` or absent creates; the current revision replaces.'
+        layoutId:
+          type: string
+          format: uuid
+      additionalProperties: false
+    Installation:
+      type: object
+      required:
+      - title
+      - revision
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 128
+        banner:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          description: Plain text. Present together with `severity`.
+        severity:
+          type: string
+          enum:
+          - info
+          - warning
+          - critical
+        defaultLayoutId:
+          type: string
+          format: uuid
+          description: Applies to the output kind of that layout.
+        revision:
+          $ref: '#/components/schemas/Revision'
+    InstallationResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          $ref: '#/components/schemas/Installation'
+    UpdateInstallationRequest:
+      type: object
+      required:
+      - schemaVersion
+      - expectedRevision
+      - title
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        expectedRevision:
+          $ref: '#/components/schemas/Revision'
+        title:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Valid UTF-8, not blank, at most 128 characters.
+        banner:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 2048
+        severity:
+          type: string
+          nullable: true
+          enum:
+          - info
+          - warning
+          - critical
+          description: Required with a `banner` and forbidden without one.
+        defaultLayoutId:
+          type: string
+          format: uuid
+          nullable: true
+      additionalProperties: false
+    Preferences:
+      type: object
+      required:
+      - locale
+      - timeZone
+      - timeGapMinutes
+      - revision
+      properties:
+        locale:
+          type: string
+          maxLength: 35
+          description: Canonical BCP 47 language tag.
+        timeZone:
+          type: string
+          description: IANA time zone name.
+        timeGapMinutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+        revision:
+          type: string
+          pattern: ^(0|[1-9][0-9]*)$
+          description: '`"0"` until the first save.'
+    PreferencesResponse:
+      type: object
+      required:
+      - schemaVersion
+      - data
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        data:
+          $ref: '#/components/schemas/Preferences'
+    UpdatePreferencesRequest:
+      type: object
+      required:
+      - schemaVersion
+      - locale
+      - timeZone
+      - timeGapMinutes
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        expectedRevision:
+          type: string
+          pattern: ^(0|[1-9][0-9]*)$
+          description: '`"0"` or absent for the first save; later saves send the current revision.'
+        locale:
+          type: string
+          minLength: 1
+          maxLength: 35
+        timeZone:
+          type: string
+          minLength: 1
+          description: An IANA name; `Local` is refused.
+        timeGapMinutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+      additionalProperties: false
     CreateLayoutRequest:
       type: object
       required:
@@ -10903,7 +11865,11 @@ components:
               type: string
               enum:
               - delivery
-          description: '`{}`, except: with `CAPABILITY_UNDECLARED`, `capability` names the plugin capability whose
+            field:
+              type: string
+              description: The JSON name of the request field an `INVALID_INPUT` is about, when the server can pin it to
+                one.
+          description: '`{}`, except: with `INVALID_INPUT`, `field` names the invalid request field when known; with `CAPABILITY_UNDECLARED`, `capability` names the plugin capability whose
             manifest declares access it does not grant; with `AUTHORITY_UNAVAILABLE` for a Subscription target or redelivery whose instance
             is missing, disabled or without a provider, `status` is `unavailable` and `instanceId` names the instance;
             with `DEPENDENCY_UNAVAILABLE`, `dependency` names what is missing; with `EXTERNAL_UNCERTAIN`, `deliveryId`

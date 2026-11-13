@@ -294,7 +294,7 @@ Patterns are checked when the definition is compiled, so an inadmissible pattern
   - Any other reason, or a malformed response → `INVALID_INPUT`
   - A plugin error, crash or broken connection during the call → `INVALID_INPUT`
   - A plugin process that cannot be started or does not complete its handshake → `AUTHORITY_UNAVAILABLE`
-- During preview the instance's plugin is called with `mode: "preview"` and must answer without effects outside its process. If its manifest does not declare `supportsPreview`, the plugin is not called and the step fails with `AUTHORITY_UNAVAILABLE`.
+- During preview the instance's plugin is called with `mode: "preview"` and must answer without effects outside its process. If its manifest does not declare `supportsPreview`, the plugin is not called and the step fails with `AUTHORITY_UNAVAILABLE`; a preview explains it as a `capability-unavailable` [failure](#failure-explanations).
 - The plugin process of an instance revision is long-lived and shared by all runs and previews that use it, one call at a time; see [Plugins](plugins.md#1-runtime-model).
 - Plugins whose configuration policy declares a secret, or user-scoped configuration, cannot be used: `AUTHORITY_UNAVAILABLE`.
 
@@ -398,6 +398,7 @@ Management operations (see [HTTP API](http-api.md) for the routes and envelopes)
 | Preview | `workflow.preview` | See [Preview](#preview). | — |
 | List / read candidate status, read result metadata | `workflow.read` | See [Status reads](#status-reads). | — |
 | Retry failed candidate | `workflow.reprocess` | See [Retries](#retries). | — |
+| Reprocess | `workflow.reprocess` | See [Historical Reprocess](#historical-reprocess). Bumps the revision. | `updated` |
 
 Common rules:
 
@@ -462,7 +463,7 @@ Preview evaluates one definition against one source without persisting anything.
 | --- | --- |
 | `versionId` or `definition` | Exactly one. `definition` is an unsaved draft and is compiled like a save. |
 | `syntheticJson` | A synthetic transmission (see below). |
-| `storedTransmissionId` | Accepted by the schema, but stored-transmission preview is not available and returns `AUTHORITY_UNAVAILABLE`. |
+| `storedTransmissionId` | An accepted Transmission (see [Stored samples](#stored-samples)). |
 
 Synthetic transmission:
 
@@ -487,7 +488,21 @@ Rules:
 - An unsaved draft that references a field the editor may not read is rejected with `INVALID_INPUT`, exactly as on save. A saved version is evaluated in full, and its result is released only if the editor may read every group of its [classification](#classification).
 - Installed steps call the instance's plugin in preview mode, and only if its manifest declares `supportsPreview`. Each call checks both the execution principal and the editor.
 - After evaluation, the workflow revision and source authority are checked again. If the workflow changed, the request fails with `REVISION_CONFLICT`.
-- The response is the [result shape](#result-shape).
+- The response is the [result shape](#result-shape), or, when the evaluation fails, the [failure explanation](#failure-explanations).
+
+#### Stored samples
+
+`storedTransmissionId` previews an accepted Transmission: its stored Payload and Protocol, observation time (to the second), Network and original targets are evaluated with the current matching and the current Unit attributes, exactly like a synthetic sample. Nothing is persisted: no candidate, result, fact or processing status changes, and installed steps run in preview mode. The editor needs `workflow.preview` on the Workflow scope and must be able to read the Transmission, that is, it must be one of the supporting readable Transmissions that the detail of its Message lists for the editor (`message.read` and `message.detail` on an eligible appearance); otherwise the request is `404 NOT_FOUND`, as for a missing Transmission. The editor must also read every field group the preview carries (`payload`, `address` and `unit`, and the groups of the source fields the definition reads); otherwise the request is `403 FORBIDDEN`, A Transmission with an original target the editor cannot see (a suppressed one, or one assigned to a Unit outside the editor's grants) is refused with `403 FORBIDDEN` as a whole, never evaluated without that target, because an extracted output could expose it. The Units the targets are persisted as assigned to must equal the Units the current matching resolves: when an address rule changed since intake and no correction has caught up, the persisted context the editor was checked against is stale, so the request is `409 REVISION_CONFLICT` (retry after the correction) and returns nothing of the other Unit. Readability is checked again when the result is rechecked, so a grant change during the preview is fenced. A preview therefore never shows a hidden or foreign field.
+
+#### Failure explanations
+
+An evaluation that fails (a failing step, a processing limit) does not fail the request. The preview answers `200` with
+
+```json
+{"failure": {"code": "INVALID_INPUT", "reason": "conversion-failed", "stepId": "extract-level"}}
+```
+
+`code` is the error code, `reason` is one of `resource-limit` (`RESOURCE_LIMIT`), `capability-unavailable` (`AUTHORITY_UNAVAILABLE`, `DEPENDENCY_UNAVAILABLE`, `INCOMPATIBLE_VERSION`), `conversion-failed` (`INVALID_INPUT`) and `evaluation-failed` (anything else), the keys `processing.<reason>` of the text catalog, and `stepId` is the ID of the failing step (the innermost one for steps nested in a branch), omitted when no step failed. No raw error text is returned. Only the codes `INVALID_INPUT`, `RESOURCE_LIMIT`, `INCOMPATIBLE_VERSION` and, when an installed plugin capability is unavailable, `AUTHORITY_UNAVAILABLE` are explained (an authority outage stays a retryable HTTP error); an `INTERNAL_ERROR` is a server fault and stays an HTTP error; request, authorization, session, storage and concurrency failures, and anything after the caller cancelled or its deadline passed, stay HTTP errors with their status and retry semantics, also when a step raised them. An explanation is returned only after the same final check of the editor's current rights and the source that a result passes, and only when the editor may read every field group the definition reads (a failing step can tell something about such a value); otherwise the request fails with that error.
 
 ### From transmission to candidate
 
@@ -563,6 +578,31 @@ Each delay has uniform ±20 % jitter. After the fifth automatic attempt the cand
 
 A transmission with a `failed` candidate for a current workflow stays unpublished until the candidate is retried successfully, or until it becomes obsolete. A candidate becomes obsolete when the workflow is disabled, deleted, re-scoped, or another version is activated. The candidate is then superseded the next time the transmission is reconciled.
 
+### Historical Reprocess
+
+Activating a version changes only what is processed from then on: results already published stay as they are. A historical Reprocess is the explicit request to judge existing Transmissions again, `POST /api/v1/workflows/{id}/reprocess` ([HTTP API](http-api.md#processing-workflows-versions-candidates)). It names the active version, the workflow revision the caller saw and a half-open Message-time range, and it needs `workflow.reprocess` over the whole workflow scope.
+
+The request transaction advances the workflow revision (so every existing candidate of the workflow is reselected when it is re-admitted, even at the same version), appends the same `configuration.changed` fact (`updated`) as a workflow update and stores a `processing_reprocess_requests` row. The row is the complete durable state: the pins (workflow revision and active version), the cutoff, a cursor and the counts. The **cutoff** is the primary-clock time of the request; only Transmissions with `accepted_at` at or before it are scanned, because later ones are admitted at the active version anyway.
+
+The runner (worker role) claims a due request with `FOR UPDATE SKIP LOCKED` and a lease. Per step, in one transaction, it first checks the pins under the shared Processing-control lock: when the workflow was changed since the request (revision or active version), disabled or deleted, the request becomes `superseded` and nothing more is re-admitted (candidates already marked still finish). Otherwise it takes the next Transmission in ID order after the cursor whose Message time (`messages.first_observed_at`) lies in the range and that either arrives on a Network of an Agency assigned to the workflow or holds a published result of the workflow, first asks whether the Transmission is fresh intake, then calls the source owner's `ReadmitProcessing` (current access, targets and workflow selection; Payload, membership and time stay untouched) and then
+
+- marks the workflow's current candidate of the Transmission with the request (`reprocess_id`), or,
+- when the workflow no longer selects the Transmission, **retracts** its published results of that Transmission: `processing_results.retracted_at` is set, `published_at` and `message_id` are cleared and the result's `message_attribute_values` rows are deleted, so feeds no longer show it and it never publishes again.
+
+The cursor and counts advance in the same transaction, so a rollback leaves no partial step and a restarted runner resumes after the cursor purely from the row. A failed step, including a revision conflict caused by an open correction, rolls back and reschedules the request with the backoff of the correction runner (1 s doubling up to 30 s). When no Transmission is left the request is `completed`.
+
+**Other workflows on the same Transmission.** Readmission re-judges every workflow of the Transmission, not only the Reprocessed one. While a Transmission has a non-superseded marked candidate, a re-run of another workflow that already has history for it (an earlier completed or failed candidate, or a published or retracted result) is historical as well: the runner marks such candidates after readmission, and candidate admission copies the mark whenever it creates or re-pends one for a workflow with history (for example when a configuration change lands before the marked candidate is dispatched). They replace that workflow's older results and append `reprocess` facts, so Delivery sends nothing. A workflow's first run (fresh intake) stays unmarked and `normal`.
+
+**A superseded marked candidate hands its mark on.** When a marked candidate is superseded before it publishes (another version was activated, or the assignment context moved), candidate admission moves the mark to the candidate that replaces it for the same Transmission and workflow and clears it on the superseded one, so the replacement still retracts the earlier results and appends a `reprocess` fact.
+
+**Fresh intake is not history.** A Transmission whose non-superseded candidate of the workflow carries the request's pinned workflow revision and was created at or after the request was admitted by intake after the request, even if its `accepted_at` lies before the cutoff (intake takes its acceptance time before it waits for the request's configuration lock). The runner counts it as scanned, still advances the cursor, but does not mark it, so its fact stays `normal`. It is fresh only when it is the workflow's first work on the Transmission: a candidate that replaced earlier work (a new version, for instance) is a historical re-run however recently it was admitted. Because a correction's readmission or another workflow's dispatch can create such a candidate before the runner reaches the Transmission, candidate admission marks any created or re-pended candidate whose workflow has history for the Transmission with a pending or running request that covers it (accepted by the cutoff, Message time in the range), preferring the candidate's own workflow's request and otherwise taking the newest request of any workflow that has a candidate on the Transmission, so the outcome does not depend on the order in which reconciliation reaches the workflows. Candidates that existed before the request (older revision, reselected by readmission) and candidates the runner's own readmission creates for never-admitted Transmissions are marked as described.
+
+**Stalled requests.** A step that fails, including a revision conflict while a Transmission's stored targets differ from the current matching and no correction has run yet, rolls back and is retried with backoff; the request view reports the last `failureCode` and the consecutive `attempts` (both cleared by the next successful step). A stalled request resumes by itself when the conflict clears. A failure ends the request in the terminal state `failed` at once, keeping its `failureCode`, only when it is clearly permanent: a failure marked permanent, or invalid input, `FORBIDDEN`, `NOT_FOUND`, `LOGIN_REQUIRED` or `IDEMPOTENCY_CONFLICT`. Every other failure (a storage or authority outage, a revision conflict, a resource limit, an incompatible version during a rolling upgrade, an uncertain commit, an `INTERNAL_ERROR`, which stores also use for a transient driver error, an unclassified error) is retried with the capped backoff of at most 30 s, and after 20 consecutive failed attempts (about seven and a half minutes) the request ends `failed` with the last code; a successful step resets the count. marks already placed on candidates stay and those candidates finish. There is no cancel route: any change of the workflow (revision or active version) supersedes the request, and that is how it is abandoned.
+
+**A Transmission stays under Reprocess until its replacement publishes.** The mark is not tied to the request's lifetime. It survives the request's completion or supersession, a failed run of the candidate and the candidate's own supersession (admission moves it to the candidate that replaces it), and meanwhile re-runs of the transmission's other workflows that have history inherit it. It is cleared only when the marked candidate's replacement publishes (or, for a not-selected run, retracts the older results).
+
+A marked candidate runs like any candidate. When it completes, publication does in one transaction: retract every other published result of the same Transmission and workflow, publish the new result if the candidate selected the Transmission, append `processing.completed` with `replayMode` `reprocess`, append `processing.retracted` for the withdrawn results (when there were any) and clear the mark. A not-selected marked candidate retracts the others, clears the mark and appends a `processing.retracted` fact (only when it retracted something). A failed marked candidate replaces nothing, so the old results stay visible until a retry succeeds ([Retries](#retries)); the mark survives the retry. Reprocessed results are visible in feeds at once but are not sent: Delivery fan-out ignores every fact whose `replayMode` is not `normal`, and redelivery stays a separately confirmed Delivery operation. Retrying a failed candidate does not start a Reprocess: an unmarked candidate's retry appends `normal` facts, while a candidate that still carries a Reprocess mark completes that Reprocess on a successful retry.
+
 ### Candidate states
 
 ```mermaid
@@ -583,7 +623,7 @@ stateDiagram-v2
 | --- | --- | --- |
 | `pending` | no | Waiting until `due_at`. |
 | `running` | no | Claimed under a lease and fencing token. |
-| `completed` | yes | `selected` is set. A result is stored only if `selected=true`; a stored result is published in the same transaction. |
+| `completed` | yes | `selected` is set. A result is stored only if `selected=true`; a stored result is published in the same transaction. A candidate marked by a Reprocess also retracts the earlier results ([Historical Reprocess](#historical-reprocess)). |
 | `failed` | until retried | `failureCode` holds one of `INVALID_INPUT`, `INCOMPATIBLE_VERSION`, `RESOURCE_LIMIT`, `STORAGE_UNAVAILABLE`, `AUTHORITY_UNAVAILABLE`, `INTERNAL_ERROR`. |
 | `superseded` | yes | The binding is no longer current. Evidence is retained. |
 
@@ -617,19 +657,20 @@ All processing events use schema version 1 and producer version `processing-kern
 | --- | --- | --- | --- |
 | `configuration.changed` | `workflow` (ID, revision) | `configuration` | `{"changeKind": "created" \| "updated" \| "version-saved" \| "activated" \| "deleted"}` |
 | `configuration.changed` | `processing-instance` (ID, revision) | `configuration` | `{"changeKind": "created" \| "updated"}`. Paths, configuration values and the principal are not included. |
+| `processing.retracted` | `processingResult` (first withdrawn result, at the revision the withdrawal gave it, higher than its completion's) | `source-classified` | `transmissionId`, `messageId`, `messageTime`, `workflowId`, `resultIds`. Replay mode `reprocess`; not deliverable. |
 | `processing.completed` | `processingResult` (result ID, result revision) | `source-classified` | `transmissionId`, `messageId`, `workflowId`, `definitionVersionId`, `resultId`, `resultRevision`, `sourceRevision`, `contextRevision`, `status: "completed"`, `result` (the [result shape](#result-shape)). |
 
-`processing.completed` is emitted only for selected results, when the result is published. Not-selected outcomes and failures emit no event; a failure is visible as the transmission's `failed` processing status. Replay mode is `normal`, or `reprocess` for a historical Reprocess; Delivery fan-out ignores every fact whose replay mode is not `normal`.
+`processing.completed` is emitted only for selected results, when the result is published. Not-selected outcomes and failures emit no `processing.completed`; every withdrawal of published results by a historical Reprocess appends `processing.retracted` (with or without a replacement) so live Message views look again; a failure is visible as the transmission's `failed` processing status. Replay mode is `normal`, or `reprocess` for a result published by a [historical Reprocess](#historical-reprocess); Delivery fan-out ignores every fact whose replay mode is not `normal`.
 
 ### Status reads
 
 Candidate status reads require `workflow.read` on the workflow and are permission-filtered. Their response contains only:
 
 ```json
-{"id": "…", "revision": "4", "state": "failed", "selected": true, "failureCode": "RESOURCE_LIMIT", "updatedAt": "…"}
+{"id": "…", "revision": "4", "state": "failed", "failureCode": "RESOURCE_LIMIT", "failureReason": "resource-limit", "failureStep": "extract-level", "updatedAt": "…"}
 ```
 
-`selected` and `failureCode` appear only when set.
+`selected`, `failureCode`, `failureReason` and `failureStep` appear only when set. `failureReason` explains `failureCode` as for a [preview failure](#failure-explanations); `failureStep` is the ID of the step that failed, which the worker stores with the failure and a retry clears.
 
 Result metadata returns `{"id", "revision", "completedAt"}`. Source identity, execution pins, lease data and result fields are not exposed through these routes.
 
