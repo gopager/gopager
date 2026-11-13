@@ -127,14 +127,24 @@ func (s *AssignmentService) authorizeScope(ctx context.Context, tx platform.Tran
 		if !exists {
 			return uuid.Nil, authz.ErrNotFound
 		}
-		return uuid.Nil, requireManage(who.authority, now, layoutAgencies)
+		return uuid.Nil, scopeRule(who, now, scopeKind, scopeID, UnitContext{}, layoutAgencies)
 	}
 	unit, err := s.store.ReadUnit(ctx, tx, scopeID)
 	if err != nil {
 		return uuid.Nil, err
 	}
+	return unit.AgencyID, scopeRule(who, now, scopeKind, scopeID, unit, layoutAgencies)
+}
+
+// scopeRule is the one rule for managing an assignment of a scope, given what the scope needs:
+// presentation.manage in every Agency of the Layout for an Organization, presentation.manage on
+// the Unit (its Agency, the Unit and its collections) for a Unit.
+func scopeRule(who caller, now time.Time, scopeKind string, scopeID uuid.UUID, unit UnitContext, layoutAgencies []uuid.UUID) error {
+	if scopeKind == ScopeOrganization {
+		return requireManage(who.authority, now, layoutAgencies)
+	}
 	target := authz.Target{AgencyID: unit.AgencyID, UnitID: scopeID, UnitCollections: unit.CollectionIDs}
-	return unit.AgencyID, authz.Authorize(who.authority, ManageAction, nil, target, now)
+	return authz.Authorize(who.authority, ManageAction, nil, target, now)
 }
 
 // List returns the assignments the caller may manage, optionally for one scope kind and scope ID,
@@ -175,14 +185,9 @@ func (s *AssignmentService) List(ctx context.Context, proof identity.Proof, scop
 	return result, err
 }
 
-// authorizeListed applies the rule of authorizeScope to a listed assignment, whose context the
-// store already read: every Agency of the Layout for an Organization, the Unit for a Unit.
+// authorizeListed applies scopeRule to a listed assignment, whose context the store already read.
 func authorizeListed(who caller, now time.Time, listed ListedAssignment) error {
-	if listed.ScopeKind == ScopeOrganization {
-		return requireManage(who.authority, now, listed.LayoutAgencies)
-	}
-	target := authz.Target{AgencyID: listed.Unit.AgencyID, UnitID: listed.ScopeID, UnitCollections: listed.Unit.CollectionIDs}
-	return authz.Authorize(who.authority, ManageAction, nil, target, now)
+	return scopeRule(who, now, listed.ScopeKind, listed.ScopeID, listed.Unit, listed.LayoutAgencies)
 }
 
 // authorizeAssignment requires the right to manage an existing assignment.
