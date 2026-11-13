@@ -22,7 +22,7 @@ const (
 )
 
 // MaxReprocessAttempts is the number of consecutive failed steps after which a Reprocess request
-// ends as failed instead of being retried; at the backoff cap that is about ten minutes.
+// ends as failed instead of being retried; with the backoff from 1 s doubling to its 30 s cap that is about seven and a half minutes.
 const MaxReprocessAttempts = 20
 
 // ReprocessLeaseDuration is how long a runner may hold a Reprocess request before another runner
