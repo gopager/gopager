@@ -36,9 +36,17 @@ func sortedAgencies(agencies []uuid.UUID) []uuid.UUID {
 }
 
 // requireManage requires ManageAction in every one of the Agencies, so nobody can change a
-// layout that also belongs to an Agency they do not manage.
+// layout that also belongs to an Agency they do not manage. It fails closed: no sets, or an
+// empty set, is authz.ErrForbidden, because a layout without Agencies must not be manageable
+// by everyone.
 func requireManage(authority authz.Authority, now time.Time, agencies ...[]uuid.UUID) error {
+	if len(agencies) == 0 {
+		return authz.ErrForbidden
+	}
 	for _, set := range agencies {
+		if len(set) == 0 {
+			return authz.ErrForbidden
+		}
 		for _, agency := range set {
 			if err := authz.Authorize(authority, ManageAction, nil, authz.Target{AgencyID: agency}, now); err != nil {
 				return err
