@@ -81,10 +81,20 @@ const workflowHistory = `(EXISTS (SELECT 1 FROM processing_results r JOIN proces
 	OR EXISTS (SELECT 1 FROM processing_candidates h WHERE h.transmission_id = c.transmission_id
 		AND h.workflow_id = c.workflow_id AND h.id <> c.id AND h.state IN ('completed', 'failed')))`
 
+// reprocessMarkPossibleQuery asks whether any mark could apply to a candidate: its Transmission
+// has a marked candidate, or some Reprocess request is still pending or running. Ordinary intake,
+// with no Reprocess anywhere, stops here and issues no further mark statement. The second term
+// is served by the (state, due_at, id) index of the requests, the first by the candidate key.
+const reprocessMarkPossibleQuery = `SELECT EXISTS (SELECT 1 FROM processing_candidates
+		WHERE transmission_id = (SELECT transmission_id FROM processing_candidates WHERE id = $1)
+			AND reprocess_id IS NOT NULL)
+	OR EXISTS (SELECT 1 FROM processing_reprocess_requests WHERE state IN ('pending', 'running'))`
+
 // transferOutstandingMark moves the mark of another candidate of the same Transmission and
 // Workflow, typically one just superseded by a new version or context revision before it could
-// publish, onto the given candidate and clears it on the donor, in one statement. The
-// replacement thereby still retracts the earlier results and stays historical.
+// publish, onto the given candidate and clears it on the donor. It is a locking SELECT and two
+// UPDATEs, atomic only inside the caller's transaction. The replacement thereby still retracts
+// the earlier results and stays historical.
 func (s *Store) transferOutstandingMark(ctx context.Context, tx platform.TransactionContext, candidate uuid.UUID) error {
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {
@@ -116,11 +126,15 @@ func (s *Store) transferOutstandingMark(ctx context.Context, tx platform.Transac
 // historical re-run, whereas a first run (fresh intake) stays unmarked.
 func (s *Store) inheritReprocessMark(ctx context.Context, tx platform.TransactionContext,
 	candidate uuid.UUID, repended bool) error {
-	if err := s.transferOutstandingMark(ctx, tx, candidate); err != nil {
-		return err
-	}
 	executor, err := s.primary.Resolve(tx)
 	if err != nil {
+		return err
+	}
+	var possible bool
+	if err := executor.QueryRowContext(ctx, reprocessMarkPossibleQuery, candidate).Scan(&possible); err != nil || !possible {
+		return err
+	}
+	if err := s.transferOutstandingMark(ctx, tx, candidate); err != nil {
 		return err
 	}
 	if _, err = executor.ExecContext(ctx, `UPDATE processing_candidates c SET reprocess_id = m.reprocess_id
