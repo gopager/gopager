@@ -222,31 +222,56 @@ func TestRunnerAppendsOneRetractionFactPerStepThatWithdrewResults(t *testing.T) 
 	}
 }
 
-func TestRunnerEndsTheRequestOnAFailureThatIsNotRetryable(t *testing.T) {
+// stepFailure runs a request whose first step fails with cause, after the given number of earlier
+// consecutive failures, and returns what the runner did with it.
+func stepFailure(t *testing.T, cause error, earlierAttempts int) *fakeWork {
+	t.Helper()
+	work := newWork(2)
+	work.request.Attempts = earlierAttempts
+	readmission := &fakeReadmission{failOn: work.transmissions[0], err: cause}
+	if _, err := newRunner(t, work, readmission).RunOnce(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	return work
+}
+
+func TestRunnerEndsTheRequestAtOnceOnAPermanentFailure(t *testing.T) {
 	t.Parallel()
 	for name, cause := range map[string]error{
-		"invalid input": platform.NewFailure(platform.CodeInvalidInput, errors.New("bad")),
-		"internal":      errors.New("not classified"),
+		"invalid input":      platform.NewFailure(platform.CodeInvalidInput, errors.New("bad")),
+		"internal":           platform.NewFailure(platform.CodeInternalError, errors.New("bug")),
+		"forbidden":          platform.NewFailure(platform.CodeForbidden, errors.New("no")),
+		"not found":          platform.NewFailure(platform.CodeNotFound, errors.New("gone")),
+		"login required":     platform.NewFailure(platform.CodeLoginRequired, errors.New("no session")),
+		"idempotency":        platform.NewFailure(platform.CodeIdempotencyConflict, errors.New("again")),
+		"permanent conflict": platform.NewPermanentFailure(platform.CodeRevisionConflict, errors.New("unique")),
+		"permanent storage":  platform.NewPermanentFailure(platform.CodeStorageUnavailable, errors.New("constraint")),
 	} {
-		work := newWork(2)
-		cause := cause
-		readmission := &fakeReadmission{failOn: work.transmissions[0], err: cause}
-		if name == "internal" {
-			readmission.err = platform.NewFailure(platform.CodeInternalError, cause)
-		}
-		if _, err := newRunner(t, work, readmission).RunOnce(t.Context()); err != nil {
-			t.Fatal(err)
-		}
+		work := stepFailure(t, cause, 0)
 		if work.state != processing.ReprocessFailed || work.failureCode == "" || !work.rescheduledAt.IsZero() {
 			t.Errorf("%s: state=%q code=%q rescheduled=%v, want a terminal failed request that keeps its code", name, work.state, work.failureCode, work.rescheduledAt)
 		}
 	}
-	work := newWork(2)
-	readmission := &fakeReadmission{failOn: work.transmissions[0], err: platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("down"))}
-	if _, err := newRunner(t, work, readmission).RunOnce(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-	if work.state == processing.ReprocessFailed || work.rescheduledAt.IsZero() || work.failureCode != string(platform.CodeAuthorityUnavailable) {
-		t.Fatalf("retryable failure: state=%q code=%q rescheduled=%v, want a backoff reschedule", work.state, work.failureCode, work.rescheduledAt)
+}
+
+func TestRunnerRetriesEveryOtherFailureUntilTheAttemptLimit(t *testing.T) {
+	t.Parallel()
+	for name, cause := range map[string]error{
+		"storage":      platform.NewFailure(platform.CodeStorageUnavailable, errors.New("down")),
+		"authority":    platform.NewFailure(platform.CodeAuthorityUnavailable, errors.New("down")),
+		"conflict":     platform.NewFailure(platform.CodeRevisionConflict, errors.New("correction")),
+		"resource":     platform.NewFailure(platform.CodeResourceLimit, errors.New("connections")),
+		"incompatible": platform.NewFailure(platform.CodeIncompatibleVersion, errors.New("rolling upgrade")),
+		"uncertain":    platform.NewFailure(platform.CodeCommitUncertain, errors.New("commit")),
+		"unclassified": errors.New("plain"),
+	} {
+		retried := stepFailure(t, cause, processing.MaxReprocessAttempts-2)
+		if retried.state == processing.ReprocessFailed || retried.rescheduledAt.IsZero() || retried.failureCode == "" {
+			t.Errorf("%s: state=%q rescheduled=%v, want a backoff reschedule before the limit", name, retried.state, retried.rescheduledAt)
+		}
+		last := stepFailure(t, cause, processing.MaxReprocessAttempts-1)
+		if last.state != processing.ReprocessFailed || last.failureCode == "" || !last.rescheduledAt.IsZero() {
+			t.Errorf("%s: state=%q code=%q, want failed on the %dth consecutive failure keeping the last code", name, last.state, last.failureCode, processing.MaxReprocessAttempts)
+		}
 	}
 }

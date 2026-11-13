@@ -9830,7 +9830,7 @@ components:
           - completed
           - superseded
           - failed
-          description: '`superseded` means the Workflow changed after the request; `failed` that a step failed in a way a retry cannot overcome (see `failureCode`).'
+          description: '`superseded` means the Workflow changed after the request; `failed` that a step failed permanently or kept failing for 20 consecutive attempts (see `failureCode`).'
         scanned:
           type: integer
           minimum: 0
@@ -9851,11 +9851,11 @@ components:
           format: date-time
         failureCode:
           type: string
-          description: Code of the last failed step while the request keeps retrying; absent when the last step succeeded.
+          description: Code of the last failed step. Present while the request retries after a failure and kept when it ends `failed`; absent when the last step succeeded.
         attempts:
           type: integer
           minimum: 0
-          description: Consecutive failed steps; 0 when the last step succeeded.
+          description: Consecutive failed steps; 0 when the last step succeeded. The request ends `failed` at 20.
     ReprocessResponse:
       type: object
       required:

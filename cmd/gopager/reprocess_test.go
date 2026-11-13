@@ -439,3 +439,35 @@ func TestReprocessAnnouncesARetractionThatPublishesNoReplacement(t *testing.T) {
 		t.Fatalf("retraction facts for a Transmission without results = %v, want none", got)
 	}
 }
+
+// TestReprocessEndsAfterTheAttemptLimit expects a plain step error to be classified by the real
+// store as a retryable failure, counted, and to end the request as failed on the last allowed
+// attempt, keeping the code.
+func TestReprocessEndsAfterTheAttemptLimit(t *testing.T) {
+	t.Parallel()
+	f := newReprocessFixture(t)
+	from, to, firstTime, _, _ := reprocessWindow()
+	v1 := f.saveVersion("3")
+	f.activate(v1)
+	transmission := f.submit("stuck", firstTime)
+	f.runWorker()
+	request := f.requestReprocess(v1, from, to)
+
+	failing := func() *failingReadmission {
+		return &failingReadmission{inner: f.runtime.readmission(), failOn: transmission}
+	}
+	if _, err := f.reprocessRunner(failing()).RunOnce(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if view := f.request(request); view.State != processing.ReprocessPending || view.Attempts != 1 || view.FailureCode != "STORAGE_UNAVAILABLE" {
+		t.Fatalf("request = %+v, want a retried request with one counted attempt", view)
+	}
+	f.exec(`UPDATE processing_reprocess_requests SET attempts = $2, due_at = now() WHERE id = $1`,
+		request, processing.MaxReprocessAttempts-1)
+	if _, err := f.reprocessRunner(failing()).RunOnce(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if view := f.request(request); view.State != processing.ReprocessFailed || view.FailureCode != "STORAGE_UNAVAILABLE" {
+		t.Fatalf("request = %+v, want failed with the last code after the attempt limit", view)
+	}
+}

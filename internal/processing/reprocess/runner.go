@@ -174,9 +174,9 @@ func (r *Runner) announceRetraction(tx platform.TransactionContext, request proc
 	return err
 }
 
-// fail ends the request after a failure a retry cannot overcome and otherwise releases it for a
-// later attempt with backoff. An open correction on the Transmission is a revision conflict and is
-// retried. A lost claim or a cancelled context leaves the request to its new owner or to lease
+// fail ends the request after a permanent failure or the MaxReprocessAttempts-th consecutive
+// failure, keeping the last code, and otherwise releases it for a later attempt with backoff. An
+// open correction on the Transmission is a revision conflict and is retried. A lost claim or a cancelled context leaves the request to its new owner or to lease
 // expiry.
 func (r *Runner) fail(ctx context.Context, request processing.ReprocessRequest, cause error) error {
 	if ctx.Err() != nil {
@@ -187,7 +187,7 @@ func (r *Runner) fail(ctx context.Context, request processing.ReprocessRequest, 
 		code = stepFailedCode
 	}
 	err := r.transactions.WithinTransaction(ctx, func(tx platform.TransactionContext) error {
-		if !retryable(cause) {
+		if permanent(cause) || request.Attempts+1 >= processing.MaxReprocessAttempts {
 			return r.repository.FailReprocess(tx.Context(), tx, request, code)
 		}
 		now, err := r.clock.Now(tx.Context(), tx)
@@ -202,15 +202,24 @@ func (r *Runner) fail(ctx context.Context, request processing.ReprocessRequest, 
 	return err
 }
 
-// retryable reports whether a later attempt can overcome the failure: storage and authority
-// outages, an uncertain commit (a step resumes at the cursor) and a revision conflict, which an
-// open correction causes and its completion clears. Any other failure ends the request.
-func retryable(err error) bool {
+// permanent reports whether a retry cannot overcome the failure: a failure created permanent, or
+// one of the codes of a request that is wrong or unauthorized rather than unlucky. Everything else
+// (outages, revision conflicts that an open correction causes, resource limits, an incompatible
+// version during a rolling upgrade, an uncertain commit, an unclassified error) may pass, so it is
+// retried up to processing.MaxReprocessAttempts times.
+func permanent(err error) bool {
 	var failure *platform.Failure
 	if !errors.As(err, &failure) {
 		return false
 	}
-	return failure.Retryable() || failure.Code() == platform.CodeCommitUncertain
+	switch failure.Code() {
+	case platform.CodeInvalidInput, platform.CodeInternalError, platform.CodeForbidden, platform.CodeNotFound,
+		platform.CodeLoginRequired, platform.CodeIdempotencyConflict:
+		return true
+	case platform.CodeStorageUnavailable, platform.CodeAuthorityUnavailable, platform.CodeRevisionConflict:
+		return !failure.Retryable()
+	}
+	return false
 }
 
 var _ platform.Runner = (*Runner)(nil)

@@ -21,6 +21,10 @@ const (
 	ReprocessFailed     = "failed"
 )
 
+// MaxReprocessAttempts is the number of consecutive failed steps after which a Reprocess request
+// ends as failed instead of being retried; at the backoff cap that is about ten minutes.
+const MaxReprocessAttempts = 20
+
 // ReprocessLeaseDuration is how long a runner may hold a Reprocess request before another runner
 // may take it over, measured on the primary clock.
 const ReprocessLeaseDuration = 30 * time.Second
