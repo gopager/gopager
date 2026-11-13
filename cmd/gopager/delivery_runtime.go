@@ -43,7 +43,7 @@ type deliveryRuntime struct {
 	layoutStore  *layoutstore.Store
 	presentation *presentationstore.Store
 	// layoutResolver is the layered Layout resolver of Delivery, built by composeLayouts like the
-	// card renderer's, so that a card and a Delivery choose the same Layout.
+	// card renderer's, so that a card and a Delivery choose the same Layout for the same Units.
 	layoutResolver *presentation.LayeredResolver
 }
 

@@ -76,15 +76,15 @@ func RegisterLayoutAssignmentRoutes(mux *http.ServeMux, transport *identity.HTTP
 	}, http.StatusOK))
 }
 
-// assignmentRequest checks the path Unit or Organization ID and the body's schema version of a
-// change, naming the offending field.
+// assignmentRequest checks the path Unit or Organization ID of a change, naming it when invalid,
+// and the body's schema version, which like on every other route is unnamed invalid input.
 func assignmentRequest(r *http.Request, schemaVersion int) (uuid.UUID, error) {
 	scopeID, err := managementPathID(r, "scopeId")
 	if err != nil {
 		return uuid.Nil, authz.InvalidField("scopeId")
 	}
-	if checkSchemaVersion(schemaVersion) != nil {
-		return uuid.Nil, authz.InvalidField("schemaVersion")
+	if err := checkSchemaVersion(schemaVersion); err != nil {
+		return uuid.Nil, err
 	}
 	return scopeID, nil
 }

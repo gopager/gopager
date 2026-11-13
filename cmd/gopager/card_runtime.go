@@ -10,7 +10,8 @@ import (
 
 // layoutComposition is the Layout persistence and the layered resolver of one renderer of
 // Messages. Every renderer builds it with composeLayouts; the resolvers hold no state, so a GUI
-// card and a Delivery of the same Message choose the same Layout.
+// card and a Delivery choose the same Layout for the same Units (a Delivery split by Unit asks
+// for its one Unit, a card for the caller's eligible Units).
 type layoutComposition struct {
 	layouts  *layoutstore.Store
 	layers   *presentationstore.Store
