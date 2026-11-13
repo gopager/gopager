@@ -45,7 +45,12 @@ func WithCards(renderer CardRenderer) Option {
 // projection builds the Delivery view of a record the way the caller reads it: the feed item,
 // the eligible appearances and the readable groups, sorted.
 func (v viewer) projection(record FeedRecord, groups []string) DeliveryProjection {
-	return DeliveryProjection{Item: v.feedItem(record, false), Units: slices.Clone(record.Units),
+	return withItem(record, v.feedItem(record, false), groups)
+}
+
+// withItem builds the Delivery view of a record from its already built feed item.
+func withItem(record FeedRecord, item FeedItem, groups []string) DeliveryProjection {
+	return DeliveryProjection{Item: item, Units: slices.Clone(record.Units),
 		WithoutUnit: slices.Clone(record.WithoutUnit), Groups: groups, ResultVisible: record.ResultVisible}
 }
 
@@ -67,10 +72,13 @@ func (s *Service) attachCards(ctx context.Context, tx platform.TransactionContex
 	if s.cards == nil || len(records) == 0 {
 		return nil
 	}
+	if len(records) != len(items) {
+		return platform.NewFailure(platform.CodeInternalError, nil)
+	}
 	projections := make([]DeliveryProjection, 0, len(records))
 	groups := current.viewer.sortedGroups()
-	for _, record := range records {
-		projections = append(projections, current.viewer.projection(record, groups))
+	for i, record := range records {
+		projections = append(projections, withItem(record, items[i], groups))
 	}
 	cards, err := s.cards.RenderCards(ctx, tx, projections)
 	if err != nil {
@@ -82,5 +90,16 @@ func (s *Service) attachCards(ctx context.Context, tx platform.TransactionContex
 	for i := range items {
 		items[i].Card = cards[i]
 	}
+	return nil
+}
+
+// attachCard renders the card of one record and sets it on its item.
+func (s *Service) attachCard(ctx context.Context, tx platform.TransactionContext, current access,
+	record FeedRecord, item *FeedItem) error {
+	items := []FeedItem{*item}
+	if err := s.attachCards(ctx, tx, current, []FeedRecord{record}, items); err != nil {
+		return err
+	}
+	item.Card = items[0].Card
 	return nil
 }

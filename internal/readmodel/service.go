@@ -295,12 +295,7 @@ func (s *Service) Detail(ctx context.Context, proof identity.Proof, id uuid.UUID
 			return err
 		}
 		item = current.viewer.detailItem(record)
-		cards := []FeedItem{item.FeedItem}
-		if err := s.attachCards(ctx, tx, current, []FeedRecord{record.FeedRecord}, cards); err != nil {
-			return err
-		}
-		item.FeedItem = cards[0]
-		return nil
+		return s.attachCard(ctx, tx, current, record.FeedRecord, &item.FeedItem)
 	})
 	return item, err
 }
