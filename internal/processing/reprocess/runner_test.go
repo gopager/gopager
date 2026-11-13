@@ -243,7 +243,6 @@ func TestRunnerEndsTheRequestAtOnceOnAPermanentFailure(t *testing.T) {
 	t.Parallel()
 	for name, cause := range map[string]error{
 		"invalid input":      platform.NewFailure(platform.CodeInvalidInput, errors.New("bad")),
-		"internal":           platform.NewFailure(platform.CodeInternalError, errors.New("bug")),
 		"forbidden":          platform.NewFailure(platform.CodeForbidden, errors.New("no")),
 		"not found":          platform.NewFailure(platform.CodeNotFound, errors.New("gone")),
 		"login required":     platform.NewFailure(platform.CodeLoginRequired, errors.New("no session")),
@@ -267,6 +266,7 @@ func TestRunnerRetriesEveryOtherFailureUntilTheAttemptLimit(t *testing.T) {
 		"resource":     platform.NewFailure(platform.CodeResourceLimit, errors.New("connections")),
 		"incompatible": platform.NewFailure(platform.CodeIncompatibleVersion, errors.New("rolling upgrade")),
 		"uncertain":    platform.NewFailure(platform.CodeCommitUncertain, errors.New("commit")),
+		"internal":     platform.NewFailure(platform.CodeInternalError, errors.New("driver error wrapped by a store")),
 		"unclassified": errors.New("plain"),
 	} {
 		retried := stepFailure(t, cause, processing.MaxReprocessAttempts-2)

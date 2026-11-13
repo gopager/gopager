@@ -222,7 +222,8 @@ func logStepFailure(request processing.ReprocessRequest, cause error, ended bool
 // permanent reports whether a retry cannot overcome the failure: a failure created permanent, or
 // one of the codes of a request that is wrong or unauthorized rather than unlucky. Everything else
 // (outages, revision conflicts that an open correction causes, resource limits, an incompatible
-// version during a rolling upgrade, an uncertain commit, an unclassified error) may pass, so it is
+// version during a rolling upgrade, an uncertain commit, an internal error that a store wraps around a transient driver error, an
+// unclassified error) may pass, so it is
 // retried up to processing.MaxReprocessAttempts times.
 func permanent(err error) bool {
 	var failure *platform.Failure
@@ -230,7 +231,7 @@ func permanent(err error) bool {
 		return false
 	}
 	switch failure.Code() {
-	case platform.CodeInvalidInput, platform.CodeInternalError, platform.CodeForbidden, platform.CodeNotFound,
+	case platform.CodeInvalidInput, platform.CodeForbidden, platform.CodeNotFound,
 		platform.CodeLoginRequired, platform.CodeIdempotencyConflict:
 		return true
 	case platform.CodeStorageUnavailable, platform.CodeAuthorityUnavailable, platform.CodeRevisionConflict:
