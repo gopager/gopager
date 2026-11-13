@@ -78,7 +78,7 @@ func (r *CardRenderer) RenderCards(ctx context.Context, tx platform.TransactionC
 	if err != nil {
 		return nil, err
 	}
-	run := &cardRun{renderer: r, tx: tx, declarations: registry.Declarations(fields.ScopeDelivery, false),
+	run := &cardRun{renderer: r, tx: tx, declarations: registry.Declarations(fields.ScopeDelivery, true),
 		programs: map[programKey]cardProgram{}}
 	resolutions, err := r.resolveLayouts(ctx, tx, projections)
 	if err != nil {

@@ -574,7 +574,7 @@ default), `layoutConflict`, `fallback` and `items`, the ordered items
 `{kind, label?, icon?, value | text | url | items}`. The values are those a Delivery of the Message
 to the same reader would carry, without event fields: the card reads the caller's projection, so a
 field the caller cannot read is absent and the card never widens field rights. `fallback` is true
-when the Layout could not render for this caller (a limit, an invalid or deleted Layout) and the
+when the Layout could not render for this caller (a limit, an invalid or deleted Layout, or a Layout that references a deprecated field, which Delivery also treats as unusable) and the
 built-in default was rendered instead; a bad Layout never hides a Message or fails the read.
 The Layout is chosen by the [layout layers](#layout-assignments) for the Message's eligible Units
 (the caller's Unit appearances, so a hidden Unit never chooses); `layoutConflict` is true when

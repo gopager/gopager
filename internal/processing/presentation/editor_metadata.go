@@ -35,7 +35,9 @@ type EditorField struct {
 	Group string                 `json:"group,omitempty"`
 	Label string                 `json:"label"`
 	Icon  string                 `json:"icon,omitempty"`
-	// Deprecated fields still render in saved Layouts but cannot be newly referenced.
+	// A deprecated field stays listed, flagged, but a Layout that references it is unusable:
+	// Delivery and cards both compile Layouts strictly, so Delivery marks such a Layout invalid
+	// and a card falls back to the built-in default.
 	Deprecated bool `json:"deprecated"`
 }
 

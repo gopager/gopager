@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/gopager/gopager/internal/attributes"
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/delivery"
 	"github.com/gopager/gopager/internal/fields"
@@ -150,6 +151,31 @@ func TestCardFallsBackToTheDefaultWhenTheLayoutCannotRender(t *testing.T) {
 	}
 	if !strings.Contains(string(card.Items), "xxx") {
 		t.Fatalf("items = %s", card.Items)
+	}
+}
+
+// customRegistry serves a fixed field registry.
+type customRegistry struct{ registry *fields.Registry }
+
+func (c customRegistry) Registry(context.Context, platform.TransactionContext) (*fields.Registry, error) {
+	return c.registry, nil
+}
+
+func TestCardFallsBackForALayoutWithADeprecatedField(t *testing.T) {
+	t.Parallel()
+	schema := attributes.Schema{Key: "incident", Subject: attributes.SubjectMessage, Fields: map[string]attributes.Field{
+		"old": {Kind: processing.IntegerValue, Deprecated: true},
+	}}
+	registry := fields.New(fields.Builtin(), attributes.NewProvider([]attributes.Schema{schema}, 1))
+	layouts := &stubLayouts{resolved: processing.ResolvedLayout{ID: uuid.New(), Version: 2, Layout: jsonLayout(
+		processing.LayoutBlock{Kind: "field", Field: &processing.FieldRef{Namespace: "attributes", Path: []string{"incident", "old"}}})}}
+	renderer, err := NewCardRenderer(layouts, customRegistry{registry}, delivery.DefaultLayouts())
+	if err != nil {
+		t.Fatal(err)
+	}
+	card := renderOne(t, renderer, projectionOf("FIRE", "payload", "unit"))
+	if !card.Fallback || card.LayoutID != nil {
+		t.Fatalf("card = %+v, want the built-in default marked as fallback, as Delivery treats the Layout as unusable", card)
 	}
 }
 
