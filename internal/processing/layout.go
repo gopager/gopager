@@ -37,6 +37,8 @@ const (
 	maxLayoutTemplate     = 2048
 	maxLayoutURLFields    = 10
 	maxFallbackAlts       = 8
+	// minFallbackAlts is the fewest alternatives a fallback block needs to choose between.
+	minFallbackAlts = 2
 )
 
 // The block kinds of a Layout.
@@ -256,7 +258,7 @@ func (b LayoutBlock) validate(depth int, count *int) error {
 		}
 		return validateLayoutBlocks(b.Else, depth+1, count)
 	default: // blockFallback
-		if len(b.Blocks) < 2 || len(b.Blocks) > maxFallbackAlts {
+		if len(b.Blocks) < minFallbackAlts || len(b.Blocks) > maxFallbackAlts {
 			return invalid(errors.New("fallback requires 2 to 8 alternatives"))
 		}
 		return validateLayoutBlocks(b.Blocks, depth+1, count)

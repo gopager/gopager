@@ -3,6 +3,7 @@ package processing
 import (
 	"errors"
 	"fmt"
+	"github.com/gopager/gopager/internal/platform"
 )
 
 // The reasons a failed evaluation is explained with. They are the suffixes of the
@@ -51,16 +52,20 @@ func FailedStep(err error) (string, bool) {
 	return step, found
 }
 
+// codeDependencyUnavailable is the Delivery code of an unavailable dependency; the platform has no
+// constant for it because only Delivery produces it.
+const codeDependencyUnavailable platform.ErrorCode = "DEPENDENCY_UNAVAILABLE"
+
 // FailureReason maps an error code (RESOURCE_LIMIT, AUTHORITY_UNAVAILABLE, DEPENDENCY_UNAVAILABLE,
 // INCOMPATIBLE_VERSION, INVALID_INPUT, …) to the reason an editor or a status read explains a
 // failure with. It never exposes the raw error text.
 func FailureReason(code string) string {
-	switch code {
-	case "RESOURCE_LIMIT":
+	switch platform.ErrorCode(code) {
+	case platform.CodeResourceLimit:
 		return ReasonResourceLimit
-	case "AUTHORITY_UNAVAILABLE", "DEPENDENCY_UNAVAILABLE", "INCOMPATIBLE_VERSION":
+	case platform.CodeAuthorityUnavailable, codeDependencyUnavailable, platform.CodeIncompatibleVersion:
 		return ReasonCapabilityUnavailable
-	case "INVALID_INPUT":
+	case platform.CodeInvalidInput:
 		return ReasonConversionFailed
 	default:
 		return ReasonEvaluationFailed

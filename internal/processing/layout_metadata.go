@@ -105,10 +105,10 @@ type LayoutBounds struct {
 func LayoutLimits() LayoutBounds {
 	return LayoutBounds{Blocks: maxLayoutBlocks, Depth: maxLayoutDepth, LiteralBytes: maxLayoutLiteralBytes,
 		LabelBytes: maxLayoutLabelBytes, TemplateBytes: maxLayoutTemplate, URLFields: maxLayoutURLFields,
-		FallbackMin: 2, FallbackMax: maxFallbackAlts, OutputBytes: MaxLayoutOutputBytes}
+		FallbackMin: minFallbackAlts, FallbackMax: maxFallbackAlts, OutputBytes: MaxLayoutOutputBytes}
 }
 
 // LayoutOutputKinds returns the output kinds a layout can render to.
 func LayoutOutputKinds() []string {
-	return []string{LayoutText, LayoutMarkdown, LayoutJSON}
+	return slices.Clone(deliveryOutputKinds)
 }
