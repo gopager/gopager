@@ -29,6 +29,10 @@ type callerScope struct {
 // mutate (identity.ErrLoginRequired).
 func (s callerScope) within(ctx context.Context, proof identity.Proof, mutation bool, check func(identity.Authentication) error,
 	operation func(tx platform.TransactionContext, who caller, now time.Time) error) error {
+	// The wrapper below is never nil, so WithAuthority cannot see a missing check itself.
+	if mutation && check == nil {
+		return authz.ErrInvalidInput
+	}
 	var authentication identity.Authentication
 	remember := func(value identity.Authentication) error {
 		authentication = value

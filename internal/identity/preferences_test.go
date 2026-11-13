@@ -125,3 +125,13 @@ func TestPreferencesValidationNamesTheField(t *testing.T) {
 		t.Fatalf("canonical locale = %+v, %v", saved, err)
 	}
 }
+
+// TestSavingPreferencesNeedsTheTransportCheck expects a save without the state-change check of
+// the transport to be refused before anything runs, as identity.WithAuthority requires.
+func TestSavingPreferencesNeedsTheTransportCheck(t *testing.T) {
+	t.Parallel()
+	service, _ := preferencesFor(t, SessionProof, PreferenceAction)
+	if _, err := service.Save(t.Context(), Proof{}, 0, PreferencesInput{Locale: "en", TimeZone: "UTC"}, nil); !errors.Is(err, authz.ErrInvalidInput) {
+		t.Fatalf("save without a check = %v, want INVALID_INPUT", err)
+	}
+}

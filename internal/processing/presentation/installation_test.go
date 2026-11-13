@@ -111,3 +111,13 @@ func TestInstallationUpdateValidatesFields(t *testing.T) {
 		t.Fatalf("valid: %v", err)
 	}
 }
+
+// TestAMutationNeedsTheTransportCheck expects a change without the state-change check of the
+// transport to be refused before anything runs, as identity.WithAuthority requires.
+func TestAMutationNeedsTheTransportCheck(t *testing.T) {
+	t.Parallel()
+	service, _ := installationFor(t, identity.SessionProof, NoticeAction)
+	if _, err := service.Update(context.Background(), identity.Proof{}, 1, InstallationInput{Title: "x"}, nil); !errors.Is(err, authz.ErrInvalidInput) {
+		t.Fatalf("update without a check = %v, want INVALID_INPUT", err)
+	}
+}

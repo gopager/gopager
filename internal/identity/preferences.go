@@ -84,6 +84,10 @@ func NewPreferenceService(transactions Transactions, resolver AuthorityResolver,
 // preference.manage-own action.
 func (s *PreferenceService) run(ctx context.Context, proof Proof, mutation bool, check func(Authentication) error,
 	operation func(tx platform.TransactionContext, account uuid.UUID, now time.Time) error) error {
+	// The wrapper below is never nil, so WithAuthority cannot see a missing check itself.
+	if mutation && check == nil {
+		return authz.ErrInvalidInput
+	}
 	var kind ProofKind
 	remember := func(authentication Authentication) error {
 		kind = authentication.Kind
