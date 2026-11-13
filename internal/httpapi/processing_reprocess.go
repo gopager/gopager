@@ -29,8 +29,11 @@ func (api processingWorkflowAPI) registerReprocess(mux *http.ServeMux) {
 			return nil, err
 		}
 		workflow, err := managementID(r)
-		if err != nil || input.SchemaVersion != 1 {
+		if err != nil {
 			return nil, authz.ErrInvalidInput
+		}
+		if err := checkSchemaVersion(input.SchemaVersion); err != nil {
+			return nil, err
 		}
 		return api.reprocess.Request(r.Context(), proof, workflow, processing.ReprocessInput{
 			VersionID: input.VersionID, ExpectedRevision: input.ExpectedRevision,
