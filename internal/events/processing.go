@@ -81,7 +81,7 @@ type ProcessingCompletionFact struct {
 }
 
 // ProcessingRetractionFact announces that a historical Reprocess withdrew published results of one
-// Workflow from a Message without publishing a replacement, so readers of the Message must look
+// Workflow from a Message, with or without publishing a replacement, so readers of the Message must look
 // again. It is not a Delivery trigger.
 type ProcessingRetractionFact struct {
 	ID             uuid.UUID
@@ -99,7 +99,7 @@ type ProcessingRetractionFact struct {
 }
 
 // NewProcessingRetraction returns the fact of a Reprocess that withdrew the results of one
-// Transmission and Workflow without publishing a replacement, in the order retracted lists them.
+// Transmission and Workflow, in the order retracted lists them.
 // Its aggregate continues the first withdrawn result at the revision the retraction gave it.
 func NewProcessingRetraction(transmission, message uuid.UUID, messageTime time.Time, workflow uuid.UUID,
 	retracted []processing.RetractedResult, now time.Time) ProcessingRetractionFact {

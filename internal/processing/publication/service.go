@@ -119,9 +119,13 @@ func (s *Service) Publish(ctx context.Context, tx platform.TransactionContext, t
 		}
 		replaces := item.ReplacesPublished()
 		if replaces {
-			// The completion fact below announces the replacement, so live views re-read the
-			// Message; processing.retracted is only for withdrawals that publish nothing new.
-			if _, err := s.repository.ReplacePublished(ctx, tx, item); err != nil {
+			// Every withdrawal continues its result's aggregate with a fact, also when a
+			// replacement is published in the same transaction.
+			retracted, err := s.repository.ReplacePublished(ctx, tx, item)
+			if err != nil {
+				return err
+			}
+			if err := s.announceRetraction(ctx, tx, binding, item, retracted, now); err != nil {
 				return err
 			}
 		}

@@ -129,8 +129,8 @@ func TestPublishReplacesEarlierResultsForMarkedCandidate(t *testing.T) {
 	if len(facts.completions) != 1 || !facts.completions[0].Historical {
 		t.Fatalf("completions = %+v, want one historical fact", facts.completions)
 	}
-	if len(facts.retractions) != 0 {
-		t.Fatal("a replacement is announced by its completion fact, not by a retraction fact")
+	if len(facts.retractions) != 1 {
+		t.Fatalf("retractions = %+v, want one: every withdrawal continues its result's aggregate with a fact", facts.retractions)
 	}
 }
 
