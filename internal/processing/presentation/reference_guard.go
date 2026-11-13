@@ -8,10 +8,11 @@ import (
 	"github.com/gopager/gopager/internal/platform"
 )
 
-// ReferenceGuard reports references to a Layout that the Layout store does not know about.
+// ReferenceGuard reports whether a layout assignment or the installation default references a Layout.
 type ReferenceGuard interface {
-	// LayoutReferenced locks the Layout against concurrent assignment until the transaction
-	// ends and reports whether a layout assignment or the installation default uses it.
+	// LayoutReferenced locks the Layout row until the transaction ends, so a concurrent assignment
+	// cannot add a reference while the Layout is deleted, and reports whether a layout assignment
+	// or the installation default references the Layout. A missing Layout counts as unreferenced.
 	LayoutReferenced(ctx context.Context, tx platform.TransactionContext, id uuid.UUID) (bool, error)
 }
 
