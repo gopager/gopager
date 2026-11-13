@@ -10,6 +10,7 @@ import (
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/platform"
 	"github.com/gopager/gopager/internal/processing"
+	"github.com/gopager/gopager/internal/processing/presentation"
 )
 
 // presentationEnvelope is the response envelope of the presentation routes.
@@ -238,7 +239,8 @@ func TestLayeredResolverIsComposed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if runtime.deps.Layouts != runtime.layoutResolver {
+	resolver, ok := runtime.deps.Layouts.(*presentation.LayeredResolver)
+	if !ok {
 		t.Fatal("Delivery does not use the layered resolver")
 	}
 	unit := f.unit("Engine 1", nil)
@@ -250,7 +252,7 @@ func TestLayeredResolverIsComposed(t *testing.T) {
 		var resolved processing.ResolvedLayout
 		if err := f.store.WithinTransaction(t.Context(), func(tx platform.TransactionContext) error {
 			var err error
-			resolved, err = runtime.layoutResolver.ResolveLayout(tx.Context(), tx, processing.LayoutRequest{OutputKind: "text", UnitIDs: units})
+			resolved, err = resolver.ResolveLayout(tx.Context(), tx, processing.LayoutRequest{OutputKind: "text", UnitIDs: units})
 			return err
 		}); err != nil {
 			t.Fatal(err)

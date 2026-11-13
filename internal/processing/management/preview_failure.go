@@ -79,8 +79,8 @@ func explained(code platform.ErrorCode, err error) bool {
 // fence a successful result also passes, so an editor who lost the right or the source during the
 // evaluation gets that error instead of an explanation.
 func explainAfterRecheck(caller context.Context, err error, recheck func() error) (*PreviewFailure, error) {
-	failure, explained := previewFailure(caller, err)
-	if !explained {
+	failure, ok := previewFailure(caller, err)
+	if !ok {
 		return nil, err
 	}
 	if err := recheck(); err != nil {

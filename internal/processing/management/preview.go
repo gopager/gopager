@@ -174,7 +174,7 @@ func (s *PreviewService) preview(ctx context.Context, proof identity.Proof, inpu
 		switch mode {
 		case previewSynthetic:
 			capture, readErr = s.sourceOwner.CaptureSyntheticPreview(tx.Context(), tx, authority,
-				workflow, definition, append(json.RawMessage(nil), input.SyntheticJSON...))
+				workflow, definition, input.SyntheticJSON)
 		case previewStored:
 			capture, readErr = s.sourceOwner.CaptureStoredPreview(tx.Context(), tx, authority,
 				workflow, definition, input.StoredTransmissionID)

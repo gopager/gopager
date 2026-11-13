@@ -42,9 +42,6 @@ type deliveryRuntime struct {
 	// layoutStore and presentation are the persisted Layouts and their layers.
 	layoutStore  *layoutstore.Store
 	presentation *presentationstore.Store
-	// layoutResolver is the layered Layout resolver of Delivery, built by composeLayouts like the
-	// card renderer's, so that a card and a Delivery choose the same Layout for the same Units.
-	layoutResolver *presentation.LayeredResolver
 }
 
 // composeDelivery returns the process's Delivery side, composing it on first use. It is called
@@ -72,7 +69,7 @@ func composeDelivery(c *core) (*deliveryRuntime, error) {
 	}
 	deps := delivery.Dependencies{Store: store, Instances: c.processing, Targets: targets, Layouts: resolver,
 		Projector: side.service, Fields: c.fields, Facts: c.facts, Authority: c.resolver}
-	runtime := &deliveryRuntime{deps: deps, layoutStore: layouts, presentation: layers, layoutResolver: resolver}
+	runtime := &deliveryRuntime{deps: deps, layoutStore: layouts, presentation: layers}
 	if runtime.subscriptions, err = delivery.NewSubscriptions(deps, c.store, c.resolver, c.store, c.receipts,
 		c.identity, c.deliveryConfig.limits); err != nil {
 		return nil, err
