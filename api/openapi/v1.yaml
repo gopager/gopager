@@ -9834,15 +9834,15 @@ components:
         scanned:
           type: integer
           minimum: 0
-          description: Transmissions handled so far.
+          description: Transmissions handled so far, each counted once. A Transmission the Workflow already processed as fresh is counted here but not in `readmitted` or `retracted`.
         readmitted:
           type: integer
           minimum: 0
-          description: Transmissions whose candidate was marked for replacement.
+          description: Transmissions counted once each, at most one per Transmission, that had current candidates of the Workflow marked for replacement. Not a count of candidates.
         retracted:
           type: integer
           minimum: 0
-          description: Published results withdrawn because the Workflow no longer selects the Transmission.
+          description: Published results withdrawn because the Workflow no longer selects the Transmission. Counts results, not Transmissions, so one Transmission can contribute several.
         createdAt:
           type: string
           format: date-time

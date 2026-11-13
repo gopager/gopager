@@ -1069,7 +1069,10 @@ an empty or reversed range, a malformed time or another `schemaVersion` is `400 
 like the other workflow commands. The call advances the workflow revision, answers `202` and returns the request as
 `{"id","workflowId","versionId","messageTimeFrom","messageTimeTo","cutoffAt","state","scanned","readmitted","retracted","createdAt","updatedAt","failureCode","attempts"}`.
 `state` is `pending`, `running`, `completed`, `superseded` or `failed` (a permanent failure, or 20 consecutive failed attempts; `failureCode` keeps its code); the counts grow while the worker role runs the request
-([Workflows](workflows.md#historical-reprocess)). `failureCode` (omitted when none) and `attempts` report a step that keeps
+([Workflows](workflows.md#historical-reprocess)). The counters have fixed units: `scanned` counts Transmissions, each
+once, including those the Workflow already processed as fresh; `readmitted` counts Transmissions, at most one each, whose
+current candidates were marked for replacement (not candidates); `retracted` counts withdrawn published results, so one
+Transmission can contribute several. `failureCode` (omitted when none) and `attempts` report a step that keeps
 failing and is retried with backoff, for example a revision conflict while stored targets await their correction; both are
 cleared by the next successful step. There is no cancel route: change the workflow to supersede a request. The read routes return the same view.
 

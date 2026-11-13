@@ -363,7 +363,10 @@ type CandidateWorkRepository interface {
 }
 
 // Supersede permanently ends this execution revision without deleting private evidence or attempts.
-// Only an unpublished candidate may be superseded; a changed current selection uses Reselect.
+// It checks the expected revision and accepts any candidate state, including a published one, because
+// reconciliation supersedes a candidate whose binding is no longer current; a published result stays
+// attached to its Message (see docs/workflows.md). A candidate that is already superseded is returned
+// unchanged. A changed current selection uses Reselect.
 func (c Candidate) Supersede(expected int64, primaryNow time.Time) (Candidate, error) {
 	if err := c.Validate(); err != nil {
 		return Candidate{}, err
