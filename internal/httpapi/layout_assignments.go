@@ -55,9 +55,9 @@ func RegisterLayoutAssignmentRoutes(mux *http.ServeMux, transport *identity.HTTP
 		if err := decodeManagementJSON(r, &input); err != nil {
 			return nil, err
 		}
-		scopeID, err := managementPathID(r, "scopeId")
-		if err != nil || checkSchemaVersion(input.SchemaVersion) != nil {
-			return nil, authz.ErrInvalidInput
+		scopeID, err := assignmentRequest(r, input.SchemaVersion)
+		if err != nil {
+			return nil, err
 		}
 		return assignments.Put(r.Context(), proof, r.PathValue("scopeKind"), scopeID, r.PathValue("outputKind"),
 			input.LayoutID, input.ExpectedRevision, check)
@@ -67,11 +67,24 @@ func RegisterLayoutAssignmentRoutes(mux *http.ServeMux, transport *identity.HTTP
 		if err := decodeManagementJSON(r, &input); err != nil {
 			return nil, err
 		}
-		scopeID, err := managementPathID(r, "scopeId")
-		if err != nil || checkSchemaVersion(input.SchemaVersion) != nil {
-			return nil, authz.ErrInvalidInput
+		scopeID, err := assignmentRequest(r, input.SchemaVersion)
+		if err != nil {
+			return nil, err
 		}
 		return assignments.Delete(r.Context(), proof, r.PathValue("scopeKind"), scopeID, r.PathValue("outputKind"),
 			input.ExpectedRevision, check)
 	}, http.StatusOK))
+}
+
+// assignmentRequest checks the path Unit or Organization ID and the body's schema version of a
+// change, naming the offending field.
+func assignmentRequest(r *http.Request, schemaVersion int) (uuid.UUID, error) {
+	scopeID, err := managementPathID(r, "scopeId")
+	if err != nil {
+		return uuid.Nil, authz.InvalidField("scopeId")
+	}
+	if checkSchemaVersion(schemaVersion) != nil {
+		return uuid.Nil, authz.InvalidField("schemaVersion")
+	}
+	return scopeID, nil
 }

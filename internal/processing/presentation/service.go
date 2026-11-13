@@ -5,7 +5,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/gopager/gopager/internal/authz"
@@ -76,7 +75,7 @@ func (c caller) visibility() (authz.AgencyVisibility, error) {
 
 // validateName requires valid UTF-8 without NUL, non-blank after trimming and at most 256 bytes.
 func validateName(name string) error {
-	if !utf8.ValidString(name) || strings.ContainsRune(name, 0) || strings.TrimSpace(name) == "" || len(name) > maxNameBytes {
+	if !validText(name) || strings.TrimSpace(name) == "" || len(name) > maxNameBytes {
 		return authz.ErrInvalidInput
 	}
 	return nil

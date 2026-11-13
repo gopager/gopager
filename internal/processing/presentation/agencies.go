@@ -31,7 +31,7 @@ func validateAgencies(agencies []uuid.UUID) error {
 // sortedAgencies returns a sorted copy, the order the store returns and fingerprints use.
 func sortedAgencies(agencies []uuid.UUID) []uuid.UUID {
 	out := slices.Clone(agencies)
-	slices.SortFunc(out, func(a, b uuid.UUID) int { return slices.Compare(a[:], b[:]) })
+	slices.SortFunc(out, compareUUID)
 	return out
 }
 

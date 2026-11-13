@@ -1,6 +1,8 @@
 package management
 
 import (
+	"slices"
+
 	"github.com/gopager/gopager/internal/authz"
 	"github.com/gopager/gopager/internal/processing"
 )
@@ -9,12 +11,13 @@ import (
 // definition reads, so that a preview of a stored Transmission never shows a field the editor
 // could not read on the Transmission itself. The failure is authz.ErrForbidden.
 func requireReadableGroups(authority authz.Authority, references []processing.SourceReference) error {
+	var groups []string
 	for _, reference := range references {
-		for _, group := range reference.Groups {
-			if err := authz.AuthorizeFields(authority, []string{group}); err != nil {
-				return err
-			}
-		}
+		groups = append(groups, reference.Groups...)
 	}
-	return nil
+	if len(groups) == 0 {
+		return nil
+	}
+	slices.Sort(groups)
+	return authz.AuthorizeFields(authority, slices.Compact(groups))
 }

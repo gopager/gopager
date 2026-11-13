@@ -14,6 +14,8 @@ type blockShape struct {
 	required property
 }
 
+// blockShapes lists every block kind with its allowed and required properties. Validation reads
+// the allowed sets; the editor metadata reports both.
 var blockShapes = []blockShape{
 	{blockText, propText, propText},
 	{blockField, propField | propLabel | propIcon, propField},

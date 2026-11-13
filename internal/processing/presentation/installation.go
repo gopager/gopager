@@ -138,5 +138,11 @@ func validateInstallation(input InstallationInput) error {
 
 // plainText reports valid UTF-8 without NUL of at most limit characters.
 func plainText(value string, limit int) bool {
-	return utf8.ValidString(value) && !strings.ContainsRune(value, 0) && utf8.RuneCountInString(value) <= limit
+	return validText(value) && utf8.RuneCountInString(value) <= limit
+}
+
+// validText reports whether a text is valid UTF-8 without NUL, the rule for every stored text of
+// this package.
+func validText(value string) bool {
+	return utf8.ValidString(value) && !strings.ContainsRune(value, 0)
 }
